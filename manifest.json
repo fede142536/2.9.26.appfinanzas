@@ -1,6 +1,6 @@
 {
-  "name": "MisGastos",
-  "short_name": "MisGastos",
+  "name": "Enola",
+  "short_name": "Enola",
   "description": "App de finanzas personales",
   "start_url": "./index.html",
   "scope": "./",
