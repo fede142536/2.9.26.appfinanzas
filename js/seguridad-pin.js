@@ -171,7 +171,7 @@ async function checkPin(){
       }catch(err){
         console.error("Error al descifrar datos:", err);
         encKey=null; encCache=null;
-        document.getElementById("pin-error").textContent="Error al descifrar. Probá de nuevo.";
+        document.getElementById("pin-error").textContent=`Error al descifrar: ${err.name||""} ${err.message||err}`;
         pinBuffer="";
         setTimeout(updatePinDisplay, 300);
         return; // NO resolvemos: la pantalla de bloqueo sigue esperando
@@ -195,7 +195,7 @@ async function checkPin(){
       }catch(err){
         console.error("Error al migrar a cifrado:", err);
         encKey=null; encCache=null;
-        document.getElementById("pin-error").textContent="Error al activar el cifrado. Probá de nuevo.";
+        document.getElementById("pin-error").textContent=`Error al cifrar: ${err.name||""} ${err.message||err}`;
         pinBuffer="";
         setTimeout(updatePinDisplay, 300);
         return; // NO resolvemos: la pantalla de bloqueo sigue esperando
