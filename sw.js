@@ -2,7 +2,7 @@
 // Estrategia: network-first para index.html (busca actualizaciones),
 // cache-first para los demás assets (íconos, manifest).
 
-const CACHE_VERSION = "enola-v73";
+const CACHE_VERSION = "enola-v74";
 const ASSETS = [
   "./",
   "./index.html",
