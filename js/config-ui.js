@@ -354,7 +354,7 @@ function restaurarBackup(input){
   const file=input.files[0];
   if(!file) return;
   const reader=new FileReader();
-  reader.onload=(e)=>{
+  reader.onload=async (e)=>{
     try{
       const backup=JSON.parse(e.target.result);
       if(!backup.datos||!Array.isArray(backup.datos.movs)){
@@ -364,7 +364,7 @@ function restaurarBackup(input){
       }
       const cant=backup.datos.movs.length;
       const cantTc=(backup.datos.tcs||[]).length;
-      if(!confirm(`Restaurar backup del ${(backup.fecha||"").slice(0,10)}?\n\n• ${cant} movimientos\n• ${cantTc} tarjetas\n\nEsto reemplaza TODOS los datos actuales.`)){
+      if(!await mostrarConfirm(`Restaurar backup del ${(backup.fecha||"").slice(0,10)}?\n\n• ${cant} movimientos\n• ${cantTc} tarjetas\n\nEsto reemplaza TODOS los datos actuales.`, {textoOk:"Restaurar", peligroso:true})){
         input.value="";
         return;
       }

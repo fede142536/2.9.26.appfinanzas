@@ -22,12 +22,12 @@ function renderImportHistory(){
 // Elimina una entrada del historial de importación.
 // Si la importación tiene movimientos asociados (importId), pregunta si también
 // se quieren borrar esos movimientos de la app.
-function eliminarImport(idx){
+async function eliminarImport(idx){
   const h=importHistory[idx];
   if(!h) return;
   const vivos=h.id ? movs.filter(m=>m._importId===h.id).length : 0;
   if(vivos>0){
-    const op=confirm(`"${h.nombre}" importó ${vivos} movimientos que siguen en la app.\n\nAceptar = borrar la importación Y esos ${vivos} movimientos.\nCancelar = solo quitar del historial (los movimientos quedan).`);
+    const op=await mostrarConfirm(`"${h.nombre}" importó ${vivos} movimientos que siguen en la app.\n\n¿Querés borrar también esos ${vivos} movimientos?`, {titulo:"Eliminar importación", textoOk:`Borrar los ${vivos}`, textoCancelar:"Solo el historial", peligroso:true});
     if(op){
       // Borrar movimientos asociados + entrada del historial
       movs=movs.filter(m=>m._importId!==h.id);
@@ -39,10 +39,10 @@ function eliminarImport(idx){
       return;
     }
     // Si cancela, igual preguntamos si quiere quitar del historial
-    if(!confirm("¿Querés quitar solo la entrada del historial? Los movimientos se mantienen.")) return;
+    if(!await mostrarConfirm("¿Querés quitar solo la entrada del historial? Los movimientos se mantienen.", {textoOk:"Quitar del historial"})) return;
   } else {
     // Sin movimientos asociados (import viejo sin tracking, o ya borrados)
-    if(!confirm(`"${h.nombre}" es una importación anterior al sistema de seguimiento, así que no puedo identificar exactamente qué movimientos trajo.\n\nPara borrar esos movimientos usá "Borrar movimientos por rango de fechas" más abajo.\n\n¿Querés quitar igual esta entrada del historial?`)) return;
+    if(!await mostrarConfirm(`"${h.nombre}" es una importación anterior al sistema de seguimiento, así que no puedo identificar exactamente qué movimientos trajo.\n\nPara borrar esos movimientos usá "Borrar movimientos por rango de fechas" más abajo.\n\n¿Querés quitar igual esta entrada del historial?`, {textoOk:"Quitar del historial"})) return;
   }
   importHistory.splice(idx,1);
   setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
@@ -52,14 +52,14 @@ function eliminarImport(idx){
 
 // Borra TODOS los movimientos que fueron importados (los que tienen _importId).
 // Preserva los cargados manualmente. Los imports viejos sin tracking no se tocan acá.
-function borrarMovsImportados(){
+async function borrarMovsImportados(){
   const importados=movs.filter(m=>m._importId);
   if(!importados.length){
-    alert("No hay movimientos con seguimiento de importación.\n\nLos movimientos importados antes de la última actualización no quedaron marcados. Usá 'Borrar por rango de fechas' para esos.");
+    await mostrarAlerta("No hay movimientos con seguimiento de importación.\n\nLos movimientos importados antes de la última actualización no quedaron marcados. Usá 'Borrar por rango de fechas' para esos.");
     return;
   }
-  if(!confirm(`Se van a borrar ${importados.length} movimientos importados (los cargados a mano se mantienen).\n\n¿Continuar?`)) return;
-  if(!confirm("⚠️ Esta acción no se puede deshacer. ¿Confirmás?")) return;
+  if(!await mostrarConfirm(`Se van a borrar ${importados.length} movimientos importados (los cargados a mano se mantienen).\n\n¿Continuar?`, {textoOk:"Continuar", peligroso:true})) return;
+  if(!await mostrarConfirm("⚠️ Esta acción no se puede deshacer. ¿Confirmás?", {textoOk:"Sí, borrar", peligroso:true})) return;
   movs=movs.filter(m=>!m._importId);
   // Vaciar también el historial de importaciones (ya no tienen movimientos)
   importHistory=[];
@@ -71,28 +71,30 @@ function borrarMovsImportados(){
 }
 
 // Borra movimientos en un rango de meses (sirve para limpiar imports viejos).
-function borrarMovsPorRango(){
-  const desde=prompt("Borrar movimientos DESDE el mes (formato AAAA-MM, ej: 2026-01):");
+async function borrarMovsPorRango(){
+  // tipoInput "month" da el selector de mes nativo del celular: se evita que el usuario
+  // tenga que tipear el formato a mano (y los errores de formato de abajo).
+  const desde=await mostrarPrompt("Borrar movimientos DESDE el mes:", {titulo:"Borrar por rango", tipoInput:"month", textoOk:"Siguiente"});
   if(!desde) return;
-  if(!/^\d{4}-\d{2}$/.test(desde.trim())){alert("Formato inválido. Usá AAAA-MM, por ejemplo 2026-01");return;}
-  const hasta=prompt("HASTA el mes (formato AAAA-MM, ej: 2026-05):", desde.trim());
+  if(!/^\d{4}-\d{2}$/.test(desde.trim())){await mostrarAlerta("Formato inválido. Usá AAAA-MM, por ejemplo 2026-01");return;}
+  const hasta=await mostrarPrompt("HASTA el mes:", {titulo:"Borrar por rango", tipoInput:"month", valorInicial:desde.trim(), textoOk:"Siguiente"});
   if(!hasta) return;
-  if(!/^\d{4}-\d{2}$/.test(hasta.trim())){alert("Formato inválido. Usá AAAA-MM, por ejemplo 2026-05");return;}
+  if(!/^\d{4}-\d{2}$/.test(hasta.trim())){await mostrarAlerta("Formato inválido. Usá AAAA-MM, por ejemplo 2026-05");return;}
   const d=desde.trim(), h=hasta.trim();
-  if(d>h){alert("El mes 'desde' no puede ser posterior al 'hasta'");return;}
+  if(d>h){await mostrarAlerta("El mes 'desde' no puede ser posterior al 'hasta'");return;}
   // Filtra TODOS los movimientos con fecha en el rango, incluyendo frecuentes.
   // El frecuente se evalúa por su fecha original (cuando fue creado), no por sus apariciones mensuales.
   const afectados=movs.filter(m=>{
     const ym=String(m.fecha||"").slice(0,7);
     return ym>=d && ym<=h;
   });
-  if(!afectados.length){alert(`No hay movimientos entre ${d} y ${h}.`);return;}
+  if(!afectados.length){await mostrarAlerta(`No hay movimientos entre ${d} y ${h}.`);return;}
   const cantFrec=afectados.filter(m=>m.frecuente).length;
   const aviso=cantFrec>0
     ? `Se van a borrar ${afectados.length} movimientos entre ${d} y ${h}.\n\n⚠️ Incluye ${cantFrec} gasto${cantFrec===1?"":"s"} frecuente${cantFrec===1?"":"s"} (con todo su historial). ¿Continuar?`
     : `Se van a borrar ${afectados.length} movimientos entre ${d} y ${h}.\n\n¿Continuar?`;
-  if(!confirm(aviso)) return;
-  if(!confirm("⚠️ Esta acción no se puede deshacer. ¿Confirmás?")) return;
+  if(!await mostrarConfirm(aviso, {textoOk:"Continuar", peligroso:true})) return;
+  if(!await mostrarConfirm("⚠️ Esta acción no se puede deshacer. ¿Confirmás?", {textoOk:"Sí, borrar", peligroso:true})) return;
   const ids=new Set(afectados.map(m=>m.id));
   movs=movs.filter(m=>!ids.has(m.id));
   save();
@@ -103,9 +105,9 @@ function borrarMovsPorRango(){
 // Detecta gastos con importes inusualmente altos (probables pruebas o errores de carga).
 // Calcula la mediana de los gastos y muestra los que superan 10x ese valor.
 // Incluye gastos frecuentes (para detectar también los que se cargaron como prueba).
-function detectarMovsAtipicos(){
+async function detectarMovsAtipicos(){
   const gastos=movs.filter(m=>m.tipo==="Gasto" && !m.usaAhorro && (m.importe||0)>0);
-  if(!gastos.length){alert("No hay gastos cargados.");return;}
+  if(!gastos.length){await mostrarAlerta("No hay gastos cargados.");return;}
   // La mediana se calcula sobre los NO frecuentes para no sesgarla con valores extraños
   const noFrec=gastos.filter(m=>!m.frecuente);
   const importesBase=noFrec.length ? noFrec.map(m=>m.importe).sort((a,b)=>a-b) : gastos.map(m=>m.importe).sort((a,b)=>a-b);
@@ -114,7 +116,7 @@ function detectarMovsAtipicos(){
   const umbral = Math.max(mediana*10, 5_000_000);
   const atipicos = gastos.filter(m=>m.importe >= umbral).sort((a,b)=>b.importe-a.importe);
   if(!atipicos.length){
-    alert(`No se encontraron gastos atípicos.\n\nMediana de gastos: ${fmtS(mediana)}\nUmbral usado: ${fmtS(umbral)}`);
+    await mostrarAlerta(`No se encontraron gastos atípicos.\n\nMediana de gastos: ${fmtS(mediana)}\nUmbral usado: ${fmtS(umbral)}`);
     return;
   }
   // Mostrar lista y ofrecer borrarlos
@@ -124,11 +126,12 @@ function detectarMovsAtipicos(){
     return `${i+1}. ${fmtS(m.importe)} · ${desc} · ${fecha}${m.nota?" · "+m.nota.slice(0,20):""}`;
   }).join("\n");
   const masTexto = atipicos.length>15?`\n\n...y ${atipicos.length-15} más`:"";
-  const confirma = confirm(
-    `Encontré ${atipicos.length} gastos atípicos (mayores a ${fmtS(umbral)}):\n\n${lista}${masTexto}\n\n¿Querés borrar TODOS estos gastos?\n\nCancelar = no borrar nada.`
+  const confirma = await mostrarConfirm(
+    `Encontré ${atipicos.length} gastos atípicos (mayores a ${fmtS(umbral)}):\n\n${lista}${masTexto}\n\n¿Querés borrar TODOS estos gastos?`,
+    {titulo:"Gastos atípicos", textoOk:"Borrarlos", peligroso:true}
   );
   if(!confirma) return;
-  if(!confirm(`⚠️ Vas a eliminar ${atipicos.length} gastos. Esta acción no se puede deshacer. ¿Confirmás?`)) return;
+  if(!await mostrarConfirm(`⚠️ Vas a eliminar ${atipicos.length} gastos. Esta acción no se puede deshacer. ¿Confirmás?`, {textoOk:"Sí, borrar", peligroso:true})) return;
   const ids=new Set(atipicos.map(m=>m.id));
   movs=movs.filter(m=>!ids.has(m.id));
   save();
@@ -137,11 +140,11 @@ function detectarMovsAtipicos(){
 }
 
 // Botón nuclear: borra TODOS los movimientos. Útil para resetear todo.
-function borrarTodosMovimientos(){
-  if(!movs.length){alert("No hay movimientos para borrar.");return;}
+async function borrarTodosMovimientos(){
+  if(!movs.length){await mostrarAlerta("No hay movimientos para borrar.");return;}
   const total=movs.length;
-  if(!confirm(`⚠️ Vas a eliminar TODOS los ${total} movimientos cargados (incluyendo frecuentes e importados).\n\nEsta acción no se puede deshacer.\n\n¿Continuar?`)) return;
-  if(!confirm(`Última confirmación. ¿Eliminar los ${total} movimientos?`)) return;
+  if(!await mostrarConfirm(`⚠️ Vas a eliminar TODOS los ${total} movimientos cargados (incluyendo frecuentes e importados).\n\nEsta acción no se puede deshacer.\n\n¿Continuar?`, {titulo:"Borrar todo", textoOk:"Continuar", peligroso:true})) return;
+  if(!await mostrarConfirm(`Última confirmación. ¿Eliminar los ${total} movimientos?`, {titulo:"Borrar todo", textoOk:`Eliminar ${total}`, peligroso:true})) return;
   movs=[];
   importHistory=[];
   save();
@@ -151,8 +154,18 @@ function borrarTodosMovimientos(){
   renderImportHistory();
 }
 
+// La librería XLSX se carga con defer desde un CDN: puede no estar todavía (recién abriste
+// la app) o no estar nunca (sin internet, CDN caído). Sin este chequeo el usuario tocaba
+// "Importar" y no pasaba absolutamente nada, sin ninguna explicación.
+function xlsxDisponible(){
+  if(typeof XLSX!=="undefined") return true;
+  showToast("La librería de Excel todavía no cargó. Revisá tu conexión y probá de nuevo en unos segundos.");
+  return false;
+}
+
 function handleXlsx(input){
   const file=input.files[0];if(!file)return;
+  if(!xlsxDisponible()){ setXlsxStatus("❌ Librería de Excel no disponible (sin conexión?)","var(--danger)"); input.value=""; return; }
   setXlsxStatus("⏳ Leyendo archivo...","var(--muted)");
   const reader=new FileReader();
   reader.onload=e=>{
@@ -281,7 +294,7 @@ function renderImportPreviewList(){
       </div>
     </div>`).join("");
 }
-function confirmarImport(){
+async function confirmarImport(){
   if(!importPreview.length)return;
   const nombre=document.getElementById("import-modal-title").textContent;
   // Detectar duplicados: mismo tipo, fecha, importe (con margen de centavos), categoría, nota
@@ -300,7 +313,7 @@ function confirmarImport(){
       document.getElementById("xlsx-status").textContent="";
       return;
     }
-    if(!confirm(msg)){return;}
+    if(!await mostrarConfirm(msg, {titulo:"Importar", textoOk:"Importar"})){return;}
   }
   const cantidad=nuevos.length;
   if(!cantidad){closeImportModal();return;}
@@ -332,6 +345,7 @@ function renderExportStats(){
     </div>`;
 }
 function exportarExcel(rangoAbierto){
+  if(!xlsxDisponible()) return;
   try {
   let desde=document.getElementById("exp-desde").value;
   let hasta=document.getElementById("exp-hasta").value;

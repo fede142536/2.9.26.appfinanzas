@@ -461,7 +461,7 @@ function importeParaceAbsurdo(importe, tipoMov, moneda){
   return importe > mediana*30 && importe > mediana+1000;
 }
 
-function guardar(){
+async function guardar(){
   if(tipo==="Tarjeta"){
     const desc=document.getElementById("tc-desc").value.trim();
     const total=parseFloat(limpiarImporte(document.getElementById("tc-total").value))||0;
@@ -519,7 +519,7 @@ function guardar(){
   if(importe<=0){showToast("Ingresá un importe válido");return;}
   const moneda=document.getElementById("inp-moneda").value;
   if(importeParaceAbsurdo(importe, tipo, moneda)){
-    if(!confirm(`El monto ${fmtS(importe)} es mucho más alto que tus ${tipo==="Gasto"?"gastos":"ingresos"} habituales.\n\n¿Es correcto? (revisá que no sobre algún cero)`)) return;
+    if(!await mostrarConfirm(`El monto ${fmtS(importe)} es mucho más alto que tus ${tipo==="Gasto"?"gastos":"ingresos"} habituales.\n\n¿Es correcto? (revisá que no sobre algún cero)`, {textoOk:"Sí, es correcto"})) return;
   }
   // En ARS: importe va a `importe` y `importeOrig` queda null
   // En USD: importe queda como `importeOrig` (nativo USD); `importe` se setea a 0

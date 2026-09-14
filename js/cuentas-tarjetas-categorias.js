@@ -24,8 +24,8 @@ function buildCuentaSelect(selectId, valorActual){
   sel.innerHTML=opts.join("");
 }
 // Pide el nombre de una cuenta nueva, la guarda y actualiza el select indicado
-function agregarCuentaRapida(selectId){
-  const nombre=prompt("Nombre de la cuenta nueva (ej: Mercado Pago, Ualá, Brubank):");
+async function agregarCuentaRapida(selectId){
+  const nombre=await mostrarPrompt("Nombre de la cuenta nueva:", {titulo:"Nueva cuenta", placeholder:"Ej: Mercado Pago, Ualá, Brubank", textoOk:"Agregar"});
   if(!nombre) return;
   const limpio=nombre.trim();
   if(!limpio) return;
@@ -40,9 +40,9 @@ function agregarCuentaRapida(selectId){
   buildCuentaSelect(selectId, limpio);
 }
 // Elimina una cuenta custom (no se puede borrar una cuenta default)
-function borrarCuentaCustom(nombre){
+async function borrarCuentaCustom(nombre){
   if(!cuentasCustom.includes(nombre)) return;
-  if(!confirm(`¿Eliminar la cuenta "${nombre}" de la lista? (los movimientos que ya la tienen asignada no se modifican)`)) return;
+  if(!await mostrarConfirm(`¿Eliminar la cuenta "${nombre}" de la lista? (los movimientos que ya la tienen asignada no se modifican)`, {textoOk:"Eliminar", peligroso:true})) return;
   cuentasCustom=cuentasCustom.filter(c=>c!==nombre);
   saveCuentasCustom();
   showToast("Cuenta eliminada de la lista");
@@ -89,8 +89,8 @@ function buildTarjetaSelect(selectId, valorActual){
   sel.innerHTML=opts.join("");
 }
 // Pide el nombre de una tarjeta nueva, la guarda y actualiza el select indicado
-function agregarTarjetaRapida(selectId){
-  const nombre=prompt("Nombre de la tarjeta (ej: Visa Santander, Mastercard Black BBVA):");
+async function agregarTarjetaRapida(selectId){
+  const nombre=await mostrarPrompt("Nombre de la tarjeta:", {titulo:"Nueva tarjeta", placeholder:"Ej: Visa Santander, Mastercard BBVA", textoOk:"Agregar"});
   if(!nombre) return;
   const limpio=nombre.trim();
   if(!limpio) return;
@@ -105,13 +105,13 @@ function agregarTarjetaRapida(selectId){
   buildTarjetaSelect(selectId, limpio);
 }
 // Elimina una tarjeta custom de la lista (no se puede borrar si hay gastos usándola)
-function borrarTarjetaCustom(nombre){
+async function borrarTarjetaCustom(nombre){
   if(!tarjetasCustom.includes(nombre)) return;
   if(tcs.some(t=>t.tarjeta===nombre)){
     showToast("No se puede borrar: hay gastos cargados con esa tarjeta. Renombrala en su lugar.");
     return;
   }
-  if(!confirm(`¿Eliminar "${nombre}" de la lista de tarjetas?`)) return;
+  if(!await mostrarConfirm(`¿Eliminar "${nombre}" de la lista de tarjetas?`, {textoOk:"Eliminar", peligroso:true})) return;
   tarjetasCustom=tarjetasCustom.filter(t=>t!==nombre);
   saveTarjetasCustom();
   showToast("Tarjeta eliminada de la lista");
@@ -120,8 +120,8 @@ function borrarTarjetaCustom(nombre){
 }
 // Renombra una tarjeta en TODOS los gastos que ya la usan (propaga el cambio),
 // y actualiza también la lista de tarjetas custom si corresponde.
-function renombrarTarjeta(nombreActual){
-  const nuevo=prompt(`Nuevo nombre para "${nombreActual}":`, nombreActual);
+async function renombrarTarjeta(nombreActual){
+  const nuevo=await mostrarPrompt(`Nuevo nombre para "${nombreActual}":`, {titulo:"Renombrar tarjeta", valorInicial:nombreActual, textoOk:"Renombrar"});
   if(nuevo===null) return;
   const limpio=nuevo.trim();
   if(!limpio || limpio===nombreActual) return;
@@ -229,8 +229,8 @@ function renderCatManager(){
 }
 
 // Pide al usuario una nueva subcategoría y la agrega a la categoría indicada
-function agregarSubcat(tipo, cat){
-  const nombre=prompt(`Nueva subcategoría para "${cat}":`);
+async function agregarSubcat(tipo, cat){
+  const nombre=await mostrarPrompt(`Nueva subcategoría para "${cat}":`, {titulo:"Nueva subcategoría", textoOk:"Agregar"});
   if(!nombre) return;
   const limpio=nombre.trim();
   if(!limpio) return;
@@ -251,9 +251,9 @@ function agregarSubcat(tipo, cat){
 }
 
 // Borra una subcategoría custom (solo las que agregó el usuario, no las default)
-function borrarSubcat(tipo, cat, sub){
+async function borrarSubcat(tipo, cat, sub){
   if(!custom[tipo]||!custom[tipo][cat]) return;
-  if(!confirm(`¿Eliminar subcategoría "${sub}" de "${cat}"?`)) return;
+  if(!await mostrarConfirm(`¿Eliminar subcategoría "${sub}" de "${cat}"?`, {textoOk:"Eliminar", peligroso:true})) return;
   custom[tipo][cat]=custom[tipo][cat].filter(s=>s!==sub);
   // Si la cat custom queda vacía y NO es default, conservar (puede ser cat nueva sin subs)
   // Si la cat es default y custom queda vacío, eliminar la entry

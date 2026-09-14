@@ -610,17 +610,17 @@ function closeCuentaDetail(){
 }
 // Elimina (o da de baja, si es frecuente) un movimiento desde el detalle de cuenta.
 // Reusa la misma mecánica de confirmación que ya existe para frecuentes en Movimientos.
-function borrarMovDesdeCuenta(id, cuentaNombre, btn){
+async function borrarMovDesdeCuenta(id, cuentaNombre, btn){
   const m=movs.find(x=>x.id===id);
   if(!m) return;
   if(m.tipo==="Gasto" && m.frecuente){
     const mesDeBaja=mesActual;
-    if(confirm(`Este es un gasto frecuente mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`)){
+    if(await mostrarConfirm(`Este es un gasto frecuente mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`, {textoOk:"Dar de baja", textoCancelar:"Eliminar todo"})){
       m.mesFin=addMonths(mesDeBaja,-1);
       save();
       showToast(`Gasto frecuente dado de baja desde ${mesLbl(mesDeBaja)} ✓`);
     } else {
-      if(!confirm("⚠️ Vas a eliminar el gasto frecuente y todos sus meses (incluyendo el historial). ¿Confirmás?")) return;
+      if(!await mostrarConfirm("⚠️ Vas a eliminar el gasto frecuente y todos sus meses (incluyendo el historial). ¿Confirmás?", {textoOk:"Eliminar todo", peligroso:true})) return;
       movs=movs.filter(x=>x.id!==id);
       save();
       showToast("Gasto frecuente eliminado");

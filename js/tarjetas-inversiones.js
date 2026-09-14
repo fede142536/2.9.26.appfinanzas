@@ -338,10 +338,10 @@ function calcTotalFrecuente(tc, mesDesde, mesHasta){
   return Math.round(total*100)/100;
 }
 
-function borrarTc(id){
+async function borrarTc(id){
   const t=tcs.find(x=>x.id===id);
   if(!t) return;
-  if(confirm(`¿Eliminar "${t.desc}"?`)){
+  if(await mostrarConfirm(`¿Eliminar "${t.desc}"?`, {textoOk:"Eliminar", peligroso:true})){
     tcs=tcs.filter(x=>x.id!==id);
     save();
     renderTarjetas();
@@ -803,12 +803,12 @@ function borrarCambio(idx){
 
 // Cierra un gasto frecuente de tarjeta poniendo mesFin = mes actual.
 // Preserva todos los movimientos anteriores (siguen apareciendo en sus meses).
-function darDeBajaFrec(id){
+async function darDeBajaFrec(id){
   const t=tcs.find(x=>x.id===id);
   if(!t||!t.frecuente){return;}
   // Usa el mes que el usuario está viendo en la pestaña Tarjetas
   const mesDeBaja = (typeof mesTc==="string" && mesTc) ? mesTc : currentYM();
-  if(!confirm(`¿Dar de baja "${t.desc}" desde ${mesLbl(mesDeBaja)} en adelante?\n\nLos meses anteriores se mantienen en el historial.`)){return;}
+  if(!await mostrarConfirm(`¿Dar de baja "${t.desc}" desde ${mesLbl(mesDeBaja)} en adelante?\n\nLos meses anteriores se mantienen en el historial.`, {textoOk:"Dar de baja"})){return;}
   // mesFin es el último mes INCLUIDO: dar de baja desde X significa mesFin = X-1
   t.mesFin = addMonths(mesDeBaja, -1);
   save();
@@ -819,12 +819,12 @@ function darDeBajaFrec(id){
 }
 
 // Versión para GASTO frecuente (movs[], no tcs[])
-function darDeBajaFrecGasto(id){
+async function darDeBajaFrecGasto(id){
   const m=movs.find(x=>x.id===id);
   if(!m||!m.frecuente){return;}
   // Usa el mes que el usuario está viendo en la pestaña Movimientos
   const mesDeBaja = (typeof mesActual==="string" && mesActual) ? mesActual : currentYM();
-  if(!confirm(`¿Dar de baja este gasto frecuente desde ${mesLbl(mesDeBaja)} en adelante?\n\nLos meses anteriores se mantienen en el historial.`)){return;}
+  if(!await mostrarConfirm(`¿Dar de baja este gasto frecuente desde ${mesLbl(mesDeBaja)} en adelante?\n\nLos meses anteriores se mantienen en el historial.`, {textoOk:"Dar de baja"})){return;}
   m.mesFin = addMonths(mesDeBaja, -1);
   save();
   showToast(`Gasto frecuente dado de baja desde ${mesLbl(mesDeBaja)} ✓`);

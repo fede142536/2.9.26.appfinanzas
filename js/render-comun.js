@@ -100,3 +100,106 @@ function animarNumero(elemento, valorFinal, duracion, formatoFn){
 function vibrar(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
 function showToast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
 
+// ═══════════════════════════════════════════
+// DIÁLOGOS PROPIOS (reemplazan alert/confirm/prompt nativos)
+// ═══════════════════════════════════════════
+// Los diálogos nativos del navegador pueden no tener dónde renderizarse en una PWA
+// instalada (modo standalone, sin barra de navegador): quedan bloqueando la ejecución a la
+// espera de una interacción imposible y la app se cuelga sin mostrar nada. Nos pasó con el
+// alert() de la migración del PIN y dejó al usuario sin poder entrar a su propia app.
+//
+// A diferencia de los nativos, estos NO son bloqueantes: devuelven una Promesa. Por eso
+// quien los llama tiene que ser `async` y usar `await`.
+//   await mostrarAlerta("Listo")                 → undefined
+//   await mostrarConfirm("¿Seguro?")             → true / false
+//   await mostrarPrompt("¿Nombre?")              → texto / null (igual que prompt nativo)
+const _dialogo={resolver:null, tipo:"alert"};
+
+function _dialogoValorCancelado(){
+  if(_dialogo.tipo==="prompt") return null;   // prompt nativo devuelve null al cancelar
+  if(_dialogo.tipo==="confirm") return false;
+  return undefined;
+}
+
+function _dialogoCerrar(valor){
+  const ov=document.getElementById("modal-dialogo");
+  if(ov) ov.classList.remove("open");
+  document.removeEventListener("keydown", _dialogoTecla);
+  const r=_dialogo.resolver;
+  _dialogo.resolver=null;
+  if(r) r(valor);
+}
+
+function _dialogoCancelar(){ _dialogoCerrar(_dialogoValorCancelado()); }
+
+function _dialogoAceptar(){
+  if(_dialogo.tipo==="prompt"){
+    _dialogoCerrar(document.getElementById("dialogo-input").value);
+  } else {
+    _dialogoCerrar(_dialogo.tipo==="confirm" ? true : undefined);
+  }
+}
+
+function _dialogoTecla(e){
+  if(e.key==="Escape"){ e.preventDefault(); _dialogoCancelar(); }
+  else if(e.key==="Enter"){ e.preventDefault(); _dialogoAceptar(); }
+}
+
+function _dialogoAbrir(opts){
+  const ov=document.getElementById("modal-dialogo");
+  // Si por lo que sea el modal no está en el HTML, es preferible caer a los diálogos
+  // nativos antes que dejar al usuario sin ninguna forma de responder.
+  if(!ov){
+    if(opts.tipo==="prompt") return Promise.resolve(prompt(opts.mensaje, opts.valorInicial||""));
+    if(opts.tipo==="confirm") return Promise.resolve(confirm(opts.mensaje));
+    alert(opts.mensaje);
+    return Promise.resolve(undefined);
+  }
+  // Si quedaba otro abierto, se cancela para no dejar su promesa colgada para siempre
+  if(_dialogo.resolver) _dialogoCancelar();
+
+  _dialogo.tipo=opts.tipo;
+  const elTitulo=document.getElementById("dialogo-titulo");
+  elTitulo.textContent=opts.titulo||"";
+  elTitulo.style.display=opts.titulo?"block":"none";
+  document.getElementById("dialogo-mensaje").textContent=opts.mensaje||"";
+
+  const grupo=document.getElementById("dialogo-input-group");
+  const input=document.getElementById("dialogo-input");
+  if(opts.tipo==="prompt"){
+    grupo.style.display="block";
+    input.type=opts.tipoInput||"text";
+    input.inputMode=opts.inputMode||"text";
+    input.placeholder=opts.placeholder||"";
+    input.value=opts.valorInicial!==undefined&&opts.valorInicial!==null?String(opts.valorInicial):"";
+  } else {
+    grupo.style.display="none";
+  }
+
+  const btnOk=document.getElementById("dialogo-btn-ok");
+  btnOk.textContent=opts.textoOk||"Aceptar";
+  btnOk.style.background=opts.peligroso?"var(--danger)":"var(--accent)";
+  btnOk.style.color="#fff";
+  const btnCancel=document.getElementById("dialogo-btn-cancelar");
+  btnCancel.textContent=opts.textoCancelar||"Cancelar";
+  btnCancel.style.display=(opts.tipo==="alert")?"none":"block";
+
+  ov.classList.add("open");
+  document.addEventListener("keydown", _dialogoTecla);
+  // El foco va después de la animación de entrada del modal (250ms): en el celular es lo
+  // que levanta el teclado sin que el modal "salte" mientras se está moviendo.
+  if(opts.tipo==="prompt") setTimeout(()=>{ input.focus(); input.select(); }, 250);
+
+  return new Promise(resolve=>{ _dialogo.resolver=resolve; });
+}
+
+function mostrarAlerta(mensaje, titulo){
+  return _dialogoAbrir({tipo:"alert", mensaje, titulo:titulo||"", textoOk:"Entendido"});
+}
+function mostrarConfirm(mensaje, opts){
+  return _dialogoAbrir(Object.assign({tipo:"confirm", mensaje}, opts||{}));
+}
+function mostrarPrompt(mensaje, opts){
+  return _dialogoAbrir(Object.assign({tipo:"prompt", mensaje}, opts||{}));
+}
+
