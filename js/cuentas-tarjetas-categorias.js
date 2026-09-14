@@ -57,7 +57,7 @@ function renderCuentasManager(){
   if(!el) return;
   const html=getCuentas().map(c=>{
     const esCustom=cuentasCustom.includes(c);
-    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:${esCustom?'var(--accent-light)':'var(--bg)'};color:${esCustom?'var(--accent)':'var(--muted)'};padding:4px 10px;border-radius:12px;margin:3px">💳 ${escapeHtml(c)}${esCustom?`<button onclick="borrarCuentaCustom('${c.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0;line-height:1">×</button>`:''}</span>`;
+    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:${esCustom?'var(--accent-light)':'var(--bg)'};color:${esCustom?'var(--accent)':'var(--muted)'};padding:4px 10px;border-radius:12px;margin:3px">💳 ${escapeHtml(c)}${esCustom?`<button onclick="borrarCuentaCustom(${attrJS(c)})" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0;line-height:1">×</button>`:''}</span>`;
   }).join("");
   el.innerHTML=html+`<div style="margin-top:10px"><button class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')">+ Agregar cuenta</button></div>`;
 }
@@ -148,12 +148,12 @@ function renderTarjetasManager(){
   const html=getTarjetas().map(t=>{
     const esCustom=tarjetasCustom.includes(t);
     const esDefault=TARJETAS_DEFAULT.includes(t);
-    const tEsc=t.replace(/'/g,"\\'");
+    const tEsc=attrJS(t);
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:13px">💳 ${escapeHtml(t)}${esDefault?"":' <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px">custom</span>'}</span>
       <div style="display:flex;gap:10px">
-        <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0" onclick="renombrarTarjeta('${tEsc}')" title="Renombrar">✎</button>
-        ${esCustom?`<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:0" onclick="borrarTarjetaCustom('${tEsc}')" title="Eliminar">×</button>`:""}
+        <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0" onclick="renombrarTarjeta(${tEsc})" title="Renombrar">✎</button>
+        ${esCustom?`<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:0" onclick="borrarTarjetaCustom(${tEsc})" title="Eliminar">×</button>`:""}
       </div>
     </div>`;
   }).join("");
@@ -193,14 +193,14 @@ function renderCatManager(){
     nombresOrdenados.forEach((cat,idx)=>{
       const subs=cats[cat];
       const esDefault=DEFAULT_CATS[t]&&DEFAULT_CATS[t][cat];
-      const catEsc=cat.replace(/'/g,"\\'");
+      const catEsc=attrJS(cat);
       const subsDefault=esDefault?DEFAULT_CATS[t][cat]:[];
       const subsCustom=(custom[t]&&custom[t][cat])||[];
       // Render subs como chips, marcando cuáles son del usuario (se pueden borrar)
       const subsHtml=subs.map(s=>{
         const esSubCustom=subsCustom.includes(s)&&!subsDefault.includes(s);
         if(esSubCustom){
-          return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:10px;margin:2px">${escapeHtml(s)}<button onclick="borrarSubcat('${t}','${catEsc}','${s.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0;line-height:1">×</button></span>`;
+          return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:10px;margin:2px">${escapeHtml(s)}<button onclick="borrarSubcat('${t}',${catEsc},${attrJS(s)})" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0;line-height:1">×</button></span>`;
         }
         return `<span style="display:inline-block;font-size:11px;background:var(--bg);color:var(--muted);padding:2px 8px;border-radius:10px;margin:2px">${escapeHtml(s)}</span>`;
       }).join("");
@@ -209,15 +209,15 @@ function renderCatManager(){
         <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
           <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:0">
             <div style="display:flex;flex-direction:column">
-              <button class="btn-sm" style="padding:1px 6px;font-size:10px;line-height:1;${esPrimera?'opacity:.3;pointer-events:none':''}" onclick="moverCategoriaOrden('${t}','${catEsc}',-1)" title="Subir">▲</button>
-              <button class="btn-sm" style="padding:1px 6px;font-size:10px;line-height:1;${esUltima?'opacity:.3;pointer-events:none':''}" onclick="moverCategoriaOrden('${t}','${catEsc}',1)" title="Bajar">▼</button>
+              <button class="btn-sm" style="padding:1px 6px;font-size:10px;line-height:1;${esPrimera?'opacity:.3;pointer-events:none':''}" onclick="moverCategoriaOrden('${t}',${catEsc},-1)" title="Subir">▲</button>
+              <button class="btn-sm" style="padding:1px 6px;font-size:10px;line-height:1;${esUltima?'opacity:.3;pointer-events:none':''}" onclick="moverCategoriaOrden('${t}',${catEsc},1)" title="Bajar">▼</button>
             </div>
-            <button type="button" onclick="openIconPicker({mode:'edit',cat:'${catEsc}'})" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;flex-shrink:0" title="Cambiar ícono">${getIcon(cat)}</button>
+            <button type="button" onclick="openIconPicker({mode:'edit',cat:${catEsc}})" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;flex-shrink:0" title="Cambiar ícono">${getIcon(cat)}</button>
             <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(cat)}${esDefault?'':' <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px">custom</span>'}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn-sm" onclick="agregarSubcat('${t}','${catEsc}')">+ Sub</button>
-            ${esDefault?'':`<button class="btn-sm" style="color:var(--danger)" onclick="borrarCat('${t}','${catEsc}')">×</button>`}
+            <button class="btn-sm" onclick="agregarSubcat('${t}',${catEsc})">+ Sub</button>
+            ${esDefault?'':`<button class="btn-sm" style="color:var(--danger)" onclick="borrarCat('${t}',${catEsc})">×</button>`}
           </div>
         </div>
         <div style="margin-top:6px">${subsHtml||'<span style="font-size:11px;color:var(--muted)">Sin subcategorías</span>'}</div>

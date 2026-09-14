@@ -77,8 +77,8 @@ function renderPresupManager(){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div style="font-size:13px;font-weight:600">${getIcon(cat)} ${escapeHtml(cat)}</div>
         <div style="display:flex;gap:6px">
-          <button class="btn-sm" onclick="openPresupModal('${cat.replace(/'/g,"\\'")}')">Editar</button>
-          <button class="btn-sm" style="color:var(--danger)" onclick="borrarPresup('${cat.replace(/'/g,"\\'")}')">×</button>
+          <button class="btn-sm" onclick="openPresupModal(${attrJS(cat)})">Editar</button>
+          <button class="btn-sm" style="color:var(--danger)" onclick="borrarPresup(${attrJS(cat)})">×</button>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">

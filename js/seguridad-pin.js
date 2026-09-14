@@ -13,7 +13,36 @@ const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","f
 let encKey=null;   // CryptoKey en memoria, solo durante la sesión desbloqueada (nunca se persiste)
 let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: valorJSONstring, ...}
 
-function isEncActive(){ return !!localStorage.getItem("fencsalt"); }
+// El cifrado está activo si existe el sobre (formato nuevo) o el salt suelto (formato viejo,
+// ver guardarSobre): mientras exista cualquiera de los dos, los datos NO están en claro.
+function isEncActive(){
+  return !!(localStorage.getItem("fencblob") || localStorage.getItem("fencsalt"));
+}
+
+// ── El sobre cifrado ──
+// El salt va DENTRO del blob, no en una clave aparte. Esto no es cosmético: localStorage no
+// tiene transacciones, así que dos escrituras separadas se pueden cortar por la mitad. Con
+// salt y blob separados, quedarse sin espacio entre una y otra dejaba dos escenarios feos:
+//   · migración: quedaba el salt sin blob → al abrir, la app se desbloqueaba VACÍA y el
+//     primer guardado pisaba los datos buenos;
+//   · cambio de PIN: el salt nuevo con el blob viejo → ningún PIN podía descifrar nunca más.
+// Con una sola escritura eso no puede pasar: o entró el sobre completo, o no entró nada y
+// queda el anterior intacto.
+function leerSobre(){
+  const crudo=localStorage.getItem("fencblob");
+  if(!crudo) return null;
+  const sobre=JSON.parse(crudo);
+  // Formato viejo (v1): el salt vivía aparte, en "fencsalt"
+  if(!sobre.salt) sobre.salt=localStorage.getItem("fencsalt");
+  return sobre;
+}
+
+async function guardarSobre(clave, salt, cache){
+  const {iv, data}=await encryptBlob(clave, cache);
+  localStorage.setItem("fencblob", JSON.stringify({v:2, salt, iv, data}));
+  // El sobre nuevo ya se basta solo: el salt suelto del formato viejo sobra.
+  localStorage.removeItem("fencsalt");
+}
 
 // Convierte bytes a base64 de a bloques. NO usar String.fromCharCode(...bytes): el spread
 // pasa CADA byte como un argumento distinto, así que con un blob grande (años de
@@ -59,12 +88,22 @@ async function decryptBlob(key, blob){
 // para usuarios sin PIN). Si está activo, leen/escriben en encCache (memoria) y programan
 // la persistencia cifrada conjunta en "fencblob".
 function getSensitiveRaw(key, fallback){
-  if(isEncActive() && encCache) return (key in encCache) ? encCache[key] : fallback;
+  if(isEncActive()){
+    // Con el cifrado activo los datos SOLO viven en el sobre. Si todavía no se descifró
+    // (app bloqueada), no hay nada que devolver: leer localStorage acá devolvería restos.
+    if(!encCache) return fallback;
+    return (key in encCache) ? encCache[key] : fallback;
+  }
   return localStorage.getItem(key) || fallback;
 }
 let encSaveTimer=null;
 function setSensitiveRaw(key, value){
-  if(isEncActive() && encCache){
+  if(isEncActive()){
+    // Con el cifrado activo y la app todavía bloqueada, escribir en localStorage guardaría
+    // los datos EN CLARO, y además quedarían invisibles (al desbloquear se lee el sobre, no
+    // estas claves). Pasaba, por ejemplo, soltando un backup sobre la pantalla del PIN.
+    // Mejor fallar fuerte que guardar mal en silencio.
+    if(!encCache) throw new Error("La app está bloqueada: ingresá el PIN antes de guardar cambios.");
     encCache[key]=value;
     clearTimeout(encSaveTimer);
     encSaveTimer=setTimeout(persistEncBlobNow, 400);
@@ -73,10 +112,33 @@ function setSensitiveRaw(key, value){
   }
 }
 async function persistEncBlobNow(){
+  encSaveTimer=null;
   if(!encKey || !encCache) return;
-  const blob=await encryptBlob(encKey, encCache);
-  localStorage.setItem("fencblob", JSON.stringify(blob));
+  const sobre=leerSobre();
+  try{
+    await guardarSobre(encKey, (sobre && sobre.salt) || randomSaltB64(), encCache);
+  }catch(err){
+    // Sin esto el fallo quedaba como promesa rechazada sin dueño: los cambios no se
+    // guardaban y el usuario no se enteraba nunca.
+    console.error("No se pudo guardar el sobre cifrado:", err);
+    mostrarErrorGlobal("No se pudieron guardar tus cambios", `${err.name||""}: ${err.message||err}`);
+  }
 }
+
+// El guardado cifrado se difiere 400 ms para no re-cifrar todo en cada tecla. Si la app se
+// cierra dentro de esa ventana, ese último cambio se perdía: antes la escritura era
+// sincrónica y esto no pasaba. Se fuerza el guardado al ocultarse la app (que en un celular
+// es lo que ocurre al cambiar de app o bloquear la pantalla).
+function flushGuardadoPendiente(){
+  if(encSaveTimer){
+    clearTimeout(encSaveTimer);
+    persistEncBlobNow();
+  }
+}
+window.addEventListener("pagehide", flushGuardadoPendiente);
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="hidden") flushGuardadoPendiente();
+});
 
 // Puebla las variables globales en memoria (movs, tcs, custom, etc.) con los datos reales:
 // en claro si el cifrado no está activo, o desde encCache (ya descifrado por checkPin) si
@@ -172,13 +234,17 @@ async function checkPin(){
   let migracionRecien=false; // true solo si ESTA llamada acaba de migrar un PIN legado a cifrado
   if(hash===stored){
     if(isEncActive()){
-      // Cifrado ya activo: derivar la clave con el PIN recién validado y descifrar el blob.
+      // Cifrado ya activo: derivar la clave con el PIN recién validado y descifrar el sobre.
       try{
-        const salt=localStorage.getItem("fencsalt");
-        encKey=await deriveKey(pinIngresado, salt);
-        const blobRaw=localStorage.getItem("fencblob");
-        const blob=blobRaw?JSON.parse(blobRaw):{iv:"",data:""};
-        encCache=blobRaw ? await decryptBlob(encKey, blob) : {};
+        const sobre=leerSobre();
+        // Si hay salt pero no sobre, algo quedó a medias. ANTES esto desbloqueaba con datos
+        // vacíos y el primer guardado pisaba todo; ahora se avisa y no se entra, que deja
+        // los datos donde están y da chance de restaurar un backup.
+        if(!sobre || !sobre.salt || !sobre.data){
+          throw new Error("Los datos cifrados están incompletos. Restaurá un backup desde otra copia de la app.");
+        }
+        encKey=await deriveKey(pinIngresado, sobre.salt);
+        encCache=await decryptBlob(encKey, sobre);
       }catch(err){
         console.error("Error al descifrar datos:", err);
         encKey=null; encCache=null;
@@ -198,9 +264,9 @@ async function checkPin(){
           const v=localStorage.getItem(k);
           if(v!==null) encCache[k]=v;
         });
-        const blob=await encryptBlob(encKey, encCache);
-        localStorage.setItem("fencsalt", salt);
-        localStorage.setItem("fencblob", JSON.stringify(blob));
+        // Una sola escritura: o queda el sobre entero, o no queda nada y los datos en claro
+        // siguen intactos (isEncActive() sigue en false y la app abre normal).
+        await guardarSobre(encKey, salt, encCache);
         ENC_KEYS.forEach(k=>localStorage.removeItem(k));
         migracionRecien=true;
       }catch(err){
@@ -259,28 +325,41 @@ async function setupPin(){
     return;
   }
   const hash=await hashPin(pin);
-  if(esActivacionNueva){
-    // Activación nueva: cifrar todos los datos sensibles (hoy en claro) y ligarlos al PIN.
-    const salt=randomSaltB64();
-    encKey=await deriveKey(pin, salt);
-    encCache={};
-    ENC_KEYS.forEach(k=>{
-      const v=localStorage.getItem(k);
-      if(v!==null) encCache[k]=v;
-    });
-    const blob=await encryptBlob(encKey, encCache);
-    localStorage.setItem("fencsalt", salt);
-    localStorage.setItem("fencblob", JSON.stringify(blob));
-    ENC_KEYS.forEach(k=>localStorage.removeItem(k));
-  } else {
-    // Cambio de PIN (llamado desde changePin(), que ya validó el PIN actual): re-cifrar
-    // el encCache existente (sigue en memoria desde que se desbloqueó la sesión) con clave nueva.
-    const salt=randomSaltB64();
-    encKey=await deriveKey(pin, salt);
-    localStorage.setItem("fencsalt", salt);
-    await persistEncBlobNow();
+  const salt=randomSaltB64();
+  const claveNueva=await deriveKey(pin, salt);
+  // Se guarda el sobre anterior para poder volver atrás: si el guardado entra pero el hash
+  // del PIN no, quedaría un sobre que ningún PIN puede abrir. Es improbable (el hash son 64
+  // caracteres contra ~1 MB del sobre), pero el costo de equivocarse es perder todo.
+  const sobreAnterior=localStorage.getItem("fencblob");
+  try{
+    if(esActivacionNueva){
+      // Activación nueva: cifrar todos los datos sensibles (hoy en claro) y ligarlos al PIN.
+      const cache={};
+      ENC_KEYS.forEach(k=>{
+        const v=localStorage.getItem(k);
+        if(v!==null) cache[k]=v;
+      });
+      await guardarSobre(claveNueva, salt, cache);
+      localStorage.setItem("fpinhash", hash);
+      // Recién con el sobre y el hash ya escritos se pasa a estado cifrado y se borra el claro.
+      encKey=claveNueva; encCache=cache;
+      ENC_KEYS.forEach(k=>localStorage.removeItem(k));
+    } else {
+      // Cambio de PIN (desde changePin(), que ya validó el actual): re-cifrar el encCache
+      // que sigue en memoria desde que se desbloqueó la sesión.
+      await guardarSobre(claveNueva, salt, encCache);
+      localStorage.setItem("fpinhash", hash);
+      encKey=claveNueva;
+    }
+  }catch(err){
+    console.error("Error al guardar el PIN:", err);
+    // Dejar todo como estaba: sin esto, un sobre nuevo con el hash viejo (o al revés) deja
+    // los datos inaccesibles para siempre.
+    if(sobreAnterior!==null) localStorage.setItem("fencblob", sobreAnterior);
+    else localStorage.removeItem("fencblob");
+    await mostrarAlerta(`No se pudo guardar el PIN: ${err.message||err}\n\nTus datos quedaron como estaban.`, "Error");
+    return;
   }
-  localStorage.setItem("fpinhash", hash);
   showToast("✓ PIN configurado. Se va a pedir al abrir la app.");
   renderPinStatus();
 }
@@ -308,10 +387,18 @@ async function removePin(){
     // Volcar los datos sensibles de vuelta a texto plano en localStorage antes de
     // desactivar el cifrado (a partir de acá getSensitiveRaw/setSensitiveRaw vuelven a
     // comportarse como localStorage.getItem/setItem de siempre).
-    if(encCache){
-      ENC_KEYS.forEach(k=>{
-        if(k in encCache) localStorage.setItem(k, encCache[k]);
-      });
+    try{
+      if(encCache){
+        ENC_KEYS.forEach(k=>{
+          if(k in encCache) localStorage.setItem(k, encCache[k]);
+        });
+      }
+    }catch(err){
+      // Si el volcado a claro se corta por la mitad (sin espacio), borrar el sobre acá
+      // perdería lo que no llegó a escribirse. Se deja todo cifrado y como estaba.
+      console.error("Error al pasar los datos a texto plano:", err);
+      await mostrarAlerta(`No se pudo desactivar el PIN: ${err.message||err}\n\nTus datos siguen cifrados y accesibles con tu PIN actual.`, "Error");
+      return;
     }
     localStorage.removeItem("fpinhash");
     localStorage.removeItem("fencsalt");

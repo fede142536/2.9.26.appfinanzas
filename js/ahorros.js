@@ -261,8 +261,8 @@ function renderAhorroRanking(){
     const c=it.saldoArs>=0?"var(--save)":"var(--danger)";
     const cUsd=it.saldoUsd>=0?"var(--save)":"var(--danger)";
     const icon=getIcon(it.cat,"🏦");
-    const catEsc=it.cat.replace(/'/g,"\\'");
-    return `<div role="button" tabindex="0" style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);cursor:pointer" onclick="showAhorroCatDetail('${catEsc}')">
+    const catEsc=attrJS(it.cat);
+    return `<div role="button" tabindex="0" style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);cursor:pointer" onclick="showAhorroCatDetail(${catEsc})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
         <div style="font-size:13px;font-weight:600">${icon} ${escapeHtml(it.cat)}</div>
         <div style="text-align:right">
@@ -332,7 +332,7 @@ function showAhorroCatDetail(cat){
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${signo}${montoTxt}</div>
         <button class="tx-edit" onclick="closeAhorroCatDetail();openEditModal(${m.id})" title="Editar">✎</button>
-        <button class="tx-del" onclick="borrarMovDesdeAhorroCat(${m.id},'${cat.replace(/'/g,"\\'")}',this)" title="Eliminar">×</button>
+        <button class="tx-del" onclick="borrarMovDesdeAhorroCat(${m.id},${attrJS(cat)},this)" title="Eliminar">×</button>
       </div>
     </div>`;
   }).join("");
