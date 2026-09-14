@@ -1044,8 +1044,8 @@ const ICONS={"Casa":"🏠","Supermercado":"🛒","Tarjeta de crédito":"💳","A
 // ═══════════════════════════════════════════
 // El usuario puede elegir un ícono propio para cualquier categoría (default o custom).
 // Se guarda aparte de ICONS (que son los emojis de fábrica) para no tocar el objeto fuente.
-let iconsCustom = JSON.parse(localStorage.getItem("ficons")||"{}");
-function saveIconsCustom(){ localStorage.setItem("ficons", JSON.stringify(iconsCustom)); marcarDatosSucios(); }
+let iconsCustom = {};
+function saveIconsCustom(){ setSensitiveRaw("ficons", JSON.stringify(iconsCustom)); marcarDatosSucios(); }
 // Devuelve el ícono efectivo de una categoría: el elegido por el usuario si existe,
 // si no el de fábrica, si no un fallback (por defecto "•").
 function getIcon(cat, fallback){
@@ -1085,6 +1085,9 @@ let nuevoCatIcono=null; // ícono elegido para la categoría que se está por cr
 let tipo="Gasto";
 // Migrate data from older storage keys if present
 function migrateStorage(){
+  // Si el cifrado ligado al PIN ya está activo, "fmovs3" en texto plano no existe
+  // (se migró/nunca existió en claro), así que no hay nada para migrar acá.
+  if(isEncActive()) return;
   const oldKeys = ["fmovs2","fmovs","ftcs2","ftcs"];
   const oldMovs = localStorage.getItem("fmovs2")||localStorage.getItem("fmovs")||"[]";
   const oldTcs  = localStorage.getItem("ftcs2") ||localStorage.getItem("ftcs") ||"[]";
@@ -1098,13 +1101,17 @@ function migrateStorage(){
   }
 }
 migrateStorage();
-let movs=JSON.parse(localStorage.getItem("fmovs3")||"[]");
-let tcs=JSON.parse(localStorage.getItem("ftcs3")||"[]");
-let custom=JSON.parse(localStorage.getItem("fcustom3")||'{"Gasto":{},"Ingreso":{},"Inversion":{},"Tarjeta":{}}');
+// NOTA: estos arrancan con valores por defecto vacíos, NO leyendo localStorage acá.
+// Los datos reales (en claro o descifrados desde el blob cifrado) se cargan recién en
+// loadSensitiveIntoMemory(), llamada desde bootApp() después de que checkLock() resuelve
+// (es decir, después de que no hay PIN o de que el PIN correcto ya se ingresó).
+let movs=[];
+let tcs=[];
+let custom={"Gasto":{},"Ingreso":{},"Inversion":{},"Tarjeta":{}};
 // Migración: si custom existe pero no tiene la clave Tarjeta, la agregamos
 if(!custom.Tarjeta) custom.Tarjeta={};
-let metas=JSON.parse(localStorage.getItem("fmetas")||"[]");
-let importHistory=JSON.parse(localStorage.getItem("fimphist3")||"[]");
+let metas=[];
+let importHistory=[];
 // Arrancar en el último mes con datos, o el mes actual si no hay datos
 let mesActual = currentYM(); // mes seleccionado en pestaña Movimientos (arranca en el mes actual real)
 let mesTc = currentYM(); // mes seleccionado en pestaña Tarjetas
@@ -1124,14 +1131,14 @@ const MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","
 // El usuario puede reordenar las categorías a su gusto desde Config.
 // Se guarda por tipo: { Gasto:[...nombres en orden], Ingreso:[...], Inversion:[...], Tarjeta:[...] }
 // Las categorías que no están en la lista (nuevas) se agregan al final automáticamente.
-let catOrder = JSON.parse(localStorage.getItem("fcatorder")||"{}");
-function saveCatOrder(){ localStorage.setItem("fcatorder", JSON.stringify(catOrder)); marcarDatosSucios(); }
+let catOrder = {};
+function saveCatOrder(){ setSensitiveRaw("fcatorder", JSON.stringify(catOrder)); marcarDatosSucios(); }
 
 // Presupuestos mensuales por categoría — formato: { "Supermercado": 300000, ... }
 // Se declara ACÁ (y no junto a sus funciones, más abajo) porque renderMovs() la lee: al
 // declararla con `let` más abajo, el primer render tiraba ReferenceError por temporal dead
 // zone y cortaba la función entera, dejando la pantalla de Movimientos completamente vacía.
-let presupuestos = JSON.parse(localStorage.getItem("fpresup")||"{}");
+let presupuestos = {};
 
 // Devuelve los nombres de categoría de `catsObj` en el orden guardado por el usuario.
 // Si no hay orden guardado para ese tipo, devuelve el orden natural del objeto.
@@ -1189,7 +1196,7 @@ function migrarCategoriasHuerfanas(){
     });
   });
   if(cambios){
-    localStorage.setItem("fcustom3", JSON.stringify(custom));
+    setSensitiveRaw("fcustom3", JSON.stringify(custom));
     console.log("Categorías huérfanas migradas a custom");
   }
 }
@@ -1296,10 +1303,10 @@ function marcarDatosSucios(){ datosVersion++; }
 let paginaVersionRenderizada={};
 
 function save(){
-  localStorage.setItem("fmovs3",JSON.stringify(movs));
-  localStorage.setItem("ftcs3",JSON.stringify(tcs));
-  localStorage.setItem("fcustom3",JSON.stringify(custom));
-  localStorage.setItem("fmetas",JSON.stringify(metas));
+  setSensitiveRaw("fmovs3",JSON.stringify(movs));
+  setSensitiveRaw("ftcs3",JSON.stringify(tcs));
+  setSensitiveRaw("fcustom3",JSON.stringify(custom));
+  setSensitiveRaw("fmetas",JSON.stringify(metas));
   marcarDatosSucios();
 }
 // Vibración nativa (haptic feedback). No todos los dispositivos/navegadores lo soportan
@@ -5595,7 +5602,7 @@ function eliminarImport(idx){
       movs=movs.filter(m=>m._importId!==h.id);
       importHistory.splice(idx,1);
       save();
-      localStorage.setItem("fimphist3",JSON.stringify(importHistory));
+      setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
       showToast(`Importación y ${vivos} movimientos eliminados`);
       renderImportHistory();
       return;
@@ -5607,7 +5614,7 @@ function eliminarImport(idx){
     if(!confirm(`"${h.nombre}" es una importación anterior al sistema de seguimiento, así que no puedo identificar exactamente qué movimientos trajo.\n\nPara borrar esos movimientos usá "Borrar movimientos por rango de fechas" más abajo.\n\n¿Querés quitar igual esta entrada del historial?`)) return;
   }
   importHistory.splice(idx,1);
-  localStorage.setItem("fimphist3",JSON.stringify(importHistory));
+  setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
   showToast("Entrada eliminada del historial");
   renderImportHistory();
 }
@@ -5626,7 +5633,7 @@ function borrarMovsImportados(){
   // Vaciar también el historial de importaciones (ya no tienen movimientos)
   importHistory=[];
   save();
-  localStorage.setItem("fimphist3",JSON.stringify(importHistory));
+  setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
   showToast(`${importados.length} movimientos importados eliminados`);
   renderImportHistory();
   renderMovs();
@@ -5707,7 +5714,7 @@ function borrarTodosMovimientos(){
   movs=[];
   importHistory=[];
   save();
-  localStorage.setItem("fimphist3", JSON.stringify(importHistory));
+  setSensitiveRaw("fimphist3", JSON.stringify(importHistory));
   showToast(`${total} movimientos eliminados`);
   renderMovs();
   renderImportHistory();
@@ -5872,7 +5879,7 @@ function confirmarImport(){
   const histLabel=duplicados>0?`${nombre} (${duplicados} dup. omitidos)`:nombre;
   importHistory.unshift({id:importId, nombre:histLabel, fecha:new Date().toLocaleDateString("es-AR"), registros:cantidad});
   if(importHistory.length>20)importHistory=importHistory.slice(0,20);
-  save();localStorage.setItem("fimphist3",JSON.stringify(importHistory));
+  save();setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
   closeImportModal();showToast(`${cantidad} registros importados ✓`);
   document.getElementById("xlsx-status").textContent="";
   renderImportHistory();
@@ -6140,8 +6147,8 @@ function exportarExcel(rangoAbierto){
 // CUENTAS (default + agregadas por el usuario)
 // ═══════════════════════════════════════════
 const CUENTAS_DEFAULT=["Cuentas","Efectivo","Tarjetas de crédito","Balanz","Cuenta DNI","Galicia","Naranja X","BPat","MODO"];
-let cuentasCustom = JSON.parse(localStorage.getItem("fcuentas")||"[]");
-function saveCuentasCustom(){ localStorage.setItem("fcuentas", JSON.stringify(cuentasCustom)); marcarDatosSucios(); }
+let cuentasCustom = [];
+function saveCuentasCustom(){ setSensitiveRaw("fcuentas", JSON.stringify(cuentasCustom)); marcarDatosSucios(); }
 // Devuelve la lista completa de cuentas: default + las agregadas por el usuario (sin duplicar)
 function getCuentas(){
   const todas=[...CUENTAS_DEFAULT];
@@ -6204,8 +6211,8 @@ function renderCuentasManager(){
 // NOMBRES DE TARJETAS (default + agregadas por el usuario + renombrado con propagación)
 // ═══════════════════════════════════════════
 const TARJETAS_DEFAULT=["Visa","Mastercard","Amex","Cabal","Naranja","Otra"];
-let tarjetasCustom = JSON.parse(localStorage.getItem("ftarjetas")||"[]");
-function saveTarjetasCustom(){ localStorage.setItem("ftarjetas", JSON.stringify(tarjetasCustom)); marcarDatosSucios(); }
+let tarjetasCustom = [];
+function saveTarjetasCustom(){ setSensitiveRaw("ftarjetas", JSON.stringify(tarjetasCustom)); marcarDatosSucios(); }
 // Devuelve todos los nombres de tarjeta: default + agregados por el usuario + cualquiera que
 // ya esté en uso en gastos cargados (por si vino de un import viejo con un nombre no listado)
 function getTarjetas(){
@@ -6738,8 +6745,13 @@ function exportarBackup(){
       movs,
       tcs,
       custom,
-      metas: JSON.parse(localStorage.getItem("fmetas")||"[]"),
-      importHistory
+      metas, // ya está en memoria (loadSensitiveIntoMemory), no hace falta releer localStorage
+      importHistory,
+      cuentasCustom,
+      tarjetasCustom,
+      presupuestos,
+      catOrder,
+      iconsCustom
     }
   };
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
@@ -6781,10 +6793,33 @@ function restaurarBackup(input){
       importHistory=backup.datos.importHistory||[];
       // Metas (van a su propia key)
       if(Array.isArray(backup.datos.metas)){
-        localStorage.setItem("fmetas",JSON.stringify(backup.datos.metas));
+        metas=backup.datos.metas;
+        setSensitiveRaw("fmetas",JSON.stringify(metas));
+      }
+      // Campos agregados junto con el cifrado ligado al PIN: pueden no estar presentes
+      // en backups viejos, en cuyo caso se conservan los valores actuales.
+      if(Array.isArray(backup.datos.cuentasCustom)){
+        cuentasCustom=backup.datos.cuentasCustom;
+        saveCuentasCustom();
+      }
+      if(Array.isArray(backup.datos.tarjetasCustom)){
+        tarjetasCustom=backup.datos.tarjetasCustom;
+        saveTarjetasCustom();
+      }
+      if(backup.datos.catOrder && typeof backup.datos.catOrder==="object"){
+        catOrder=backup.datos.catOrder;
+        saveCatOrder();
+      }
+      if(backup.datos.presupuestos && typeof backup.datos.presupuestos==="object"){
+        presupuestos=backup.datos.presupuestos;
+        setSensitiveRaw("fpresup", JSON.stringify(presupuestos));
+      }
+      if(backup.datos.iconsCustom && typeof backup.datos.iconsCustom==="object"){
+        iconsCustom=backup.datos.iconsCustom;
+        setSensitiveRaw("ficons", JSON.stringify(iconsCustom));
       }
       save();
-      localStorage.setItem("fimphist3",JSON.stringify(importHistory));
+      setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
       showToast(`✓ Restaurados ${cant} movimientos`);
       // Refrescar vistas
       renderExportStats();
@@ -6809,7 +6844,7 @@ function restaurarBackup(input){
 // porque renderMovs() la usa y necesita existir antes del primer render de la app.
 
 function savePresup(){
-  localStorage.setItem("fpresup", JSON.stringify(presupuestos));
+  setSensitiveRaw("fpresup", JSON.stringify(presupuestos));
   marcarDatosSucios();
 }
 
@@ -6962,9 +6997,96 @@ function confirmarBorrarTodo(){
   tcs = [];
   importHistory = [];
   save();
-  localStorage.setItem("fimphist3", JSON.stringify([]));
+  setSensitiveRaw("fimphist3", JSON.stringify([]));
   showToast("Todos los movimientos eliminados");
   renderExportStats();
+}
+
+// ═══════════════════════════════════════════
+// CIFRADO DE DATOS SENSIBLES LIGADO AL PIN
+// ═══════════════════════════════════════════
+// Cuando el usuario activa un PIN, los datos financieros (las 10 claves de ENC_KEYS) dejan
+// de guardarse en texto plano en localStorage: se cifran con AES-GCM usando una clave
+// derivada del PIN (PBKDF2) y se guardan como un único blob en "fencblob" (+ "fencsalt").
+// Mientras la app está bloqueada esos datos NO existen en memoria (ver checkLock/checkPin
+// más abajo y loadSensitiveIntoMemory) — antes, la pantalla de PIN era solo una capa visual
+// mientras todo ya estaba cargado en JS. Si el usuario NUNCA activó un PIN, isEncActive()
+// da false siempre y getSensitiveRaw/setSensitiveRaw se comportan exactamente igual que
+// localStorage.getItem/setItem de toda la vida: cero cambio de comportamiento ni overhead.
+const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons"];
+let encKey=null;   // CryptoKey en memoria, solo durante la sesión desbloqueada (nunca se persiste)
+let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: valorJSONstring, ...}
+
+function isEncActive(){ return !!localStorage.getItem("fencsalt"); }
+
+function randomSaltB64(){
+  const arr=crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...arr));
+}
+
+async function deriveKey(pin, saltB64){
+  const salt=Uint8Array.from(atob(saltB64), c=>c.charCodeAt(0));
+  const baseKey=await crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt, iterations:150000, hash:"SHA-256"},
+    baseKey, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]
+  );
+}
+
+async function encryptBlob(key, obj){
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const data=new TextEncoder().encode(JSON.stringify(obj));
+  const cipher=await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, data);
+  return {iv: btoa(String.fromCharCode(...iv)), data: btoa(String.fromCharCode(...new Uint8Array(cipher)))};
+}
+
+async function decryptBlob(key, blob){
+  const iv=Uint8Array.from(atob(blob.iv), c=>c.charCodeAt(0));
+  const data=Uint8Array.from(atob(blob.data), c=>c.charCodeAt(0));
+  const plain=await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, data);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+// Lectura/escritura de las 10 claves sensibles. Si el cifrado NO está activo, se comportan
+// exactamente igual que localStorage.getItem/setItem de siempre (cero cambio de comportamiento
+// para usuarios sin PIN). Si está activo, leen/escriben en encCache (memoria) y programan
+// la persistencia cifrada conjunta en "fencblob".
+function getSensitiveRaw(key, fallback){
+  if(isEncActive() && encCache) return (key in encCache) ? encCache[key] : fallback;
+  return localStorage.getItem(key) || fallback;
+}
+let encSaveTimer=null;
+function setSensitiveRaw(key, value){
+  if(isEncActive() && encCache){
+    encCache[key]=value;
+    clearTimeout(encSaveTimer);
+    encSaveTimer=setTimeout(persistEncBlobNow, 400);
+  } else {
+    localStorage.setItem(key, value);
+  }
+}
+async function persistEncBlobNow(){
+  if(!encKey || !encCache) return;
+  const blob=await encryptBlob(encKey, encCache);
+  localStorage.setItem("fencblob", JSON.stringify(blob));
+}
+
+// Puebla las variables globales en memoria (movs, tcs, custom, etc.) con los datos reales:
+// en claro si el cifrado no está activo, o desde encCache (ya descifrado por checkPin) si
+// lo está. Se llama desde bootApp() DESPUÉS de que checkLock() resuelve — es decir, después
+// de que no hace falta PIN, o de que el PIN correcto ya fue ingresado y descifrado.
+function loadSensitiveIntoMemory(){
+  movs = JSON.parse(getSensitiveRaw("fmovs3","[]"));
+  tcs = JSON.parse(getSensitiveRaw("ftcs3","[]"));
+  custom = JSON.parse(getSensitiveRaw("fcustom3",'{"Gasto":{},"Ingreso":{},"Inversion":{},"Tarjeta":{}}'));
+  if(!custom.Tarjeta) custom.Tarjeta={};
+  metas = JSON.parse(getSensitiveRaw("fmetas","[]"));
+  importHistory = JSON.parse(getSensitiveRaw("fimphist3","[]"));
+  catOrder = JSON.parse(getSensitiveRaw("fcatorder","{}"));
+  presupuestos = JSON.parse(getSensitiveRaw("fpresup","{}"));
+  cuentasCustom = JSON.parse(getSensitiveRaw("fcuentas","[]"));
+  tarjetasCustom = JSON.parse(getSensitiveRaw("ftarjetas","[]"));
+  iconsCustom = JSON.parse(getSensitiveRaw("ficons","{}"));
 }
 
 // ═══════════════════════════════════════════
@@ -6984,20 +7106,32 @@ let pinSetupStep=0; // 0=ingresar, 1=confirmar (en setup)
 let pinSetupFirst=""; // primer PIN ingresado durante setup
 const PIN_LEN=4;
 
-// Decide si hay que mostrar la pantalla de bloqueo al iniciar
-async function checkLock(){
-  const hash=localStorage.getItem("fpinhash");
-  if(!hash){
-    // No hay PIN configurado: app abierta sin bloqueo
-    document.getElementById("lock-screen").style.display="none";
-    return;
-  }
-  // Hay PIN: mostrar pantalla
-  pinBuffer="";
-  pinSetupStep=0;
-  updatePinDisplay();
-  document.getElementById("pin-error").textContent="";
-  document.getElementById("lock-screen").style.display="flex";
+// Resuelve la promise de checkLock() cuando el PIN correcto fue ingresado (y ya se
+// descifraron/cargaron los datos). Ver checkPin().
+let _unlockResolve=null;
+// Decide si hay que mostrar la pantalla de bloqueo al iniciar. Devuelve una Promise que
+// se resuelve inmediatamente si no hay PIN configurado, o recién cuando el PIN correcto
+// se ingresa (y, si el cifrado está activo, los datos ya quedaron descifrados en memoria).
+// bootApp() espera (await) esta promise ANTES de cargar los datos sensibles y renderizar,
+// así que mientras la pantalla de bloqueo está visible los datos financieros no existen
+// todavía en JS (antes se cargaban igual, en paralelo, y el PIN era solo una capa visual).
+function checkLock(){
+  return new Promise((resolve)=>{
+    const hash=localStorage.getItem("fpinhash");
+    if(!hash){
+      // No hay PIN configurado: app abierta sin bloqueo
+      document.getElementById("lock-screen").style.display="none";
+      resolve();
+      return;
+    }
+    // Hay PIN: mostrar pantalla y esperar a que checkPin() la resuelva
+    _unlockResolve=resolve;
+    pinBuffer="";
+    pinSetupStep=0;
+    updatePinDisplay();
+    document.getElementById("pin-error").textContent="";
+    document.getElementById("lock-screen").style.display="flex";
+  });
 }
 
 function updatePinDisplay(){
@@ -7025,12 +7159,49 @@ function pinBackspace(){
 }
 
 async function checkPin(){
-  const hash=await hashPin(pinBuffer);
+  const pinIngresado=pinBuffer;
+  const hash=await hashPin(pinIngresado);
   const stored=localStorage.getItem("fpinhash");
   if(hash===stored){
+    if(isEncActive()){
+      // Cifrado ya activo: derivar la clave con el PIN recién validado y descifrar el blob.
+      try{
+        const salt=localStorage.getItem("fencsalt");
+        encKey=await deriveKey(pinIngresado, salt);
+        const blobRaw=localStorage.getItem("fencblob");
+        const blob=blobRaw?JSON.parse(blobRaw):{iv:"",data:""};
+        encCache=blobRaw ? await decryptBlob(encKey, blob) : {};
+      }catch(err){
+        console.error("Error al descifrar datos:", err);
+        encKey=null; encCache=null;
+        document.getElementById("pin-error").textContent="Error al descifrar. Probá de nuevo.";
+        pinBuffer="";
+        setTimeout(updatePinDisplay, 300);
+        return; // NO resolvemos: la pantalla de bloqueo sigue esperando
+      }
+    } else {
+      // PIN configurado desde una versión anterior a esta funcionalidad: todavía sin cifrar.
+      // Migramos ahora mismo, usando el PIN recién validado.
+      const salt=randomSaltB64();
+      encKey=await deriveKey(pinIngresado, salt);
+      encCache={};
+      ENC_KEYS.forEach(k=>{
+        const v=localStorage.getItem(k);
+        if(v!==null) encCache[k]=v;
+      });
+      const blob=await encryptBlob(encKey, encCache);
+      localStorage.setItem("fencsalt", salt);
+      localStorage.setItem("fencblob", JSON.stringify(blob));
+      ENC_KEYS.forEach(k=>localStorage.removeItem(k));
+      if(!localStorage.getItem("fencmigrado")){
+        localStorage.setItem("fencmigrado","1");
+        alert("Tus datos ahora están cifrados y ligados a tu PIN. Te recomendamos descargar un backup desde Configuración por si alguna vez olvidás el PIN.");
+      }
+    }
     document.getElementById("lock-screen").style.display="none";
     pinBuffer="";
     updatePinDisplay();
+    if(_unlockResolve){ const r=_unlockResolve; _unlockResolve=null; r(); }
   } else {
     document.getElementById("pin-error").textContent="PIN incorrecto";
     pinBuffer="";
@@ -7044,7 +7215,16 @@ async function checkPin(){
 }
 
 // ── Setup del PIN desde Config ──
+// Activar el PIN por primera vez cifra todos los datos sensibles y los liga a él: si en el
+// futuro se olvida el PIN, esos datos ya no son recuperables desde el dispositivo. Por eso,
+// antes de pedir el PIN nuevo, forzamos la descarga de un backup (única red de salvación).
 async function setupPin(){
+  const esActivacionNueva = !localStorage.getItem("fpinhash");
+  if(esActivacionNueva){
+    if(!confirm("Antes de activar el PIN vamos a descargar un backup de tus datos. Si en el futuro olvidás el PIN, es la única forma de recuperarlos. ¿Continuamos?")) return;
+    exportarBackup();
+    if(!confirm("¿Ya guardaste el archivo de backup en un lugar seguro (Drive, mail, etc.)? Confirmá para terminar de activar el PIN.")) return;
+  }
   const pin=prompt("Elegí un PIN de 4 dígitos para proteger la app:");
   if(pin===null) return;
   if(!/^\d{4}$/.test(pin)){
@@ -7057,6 +7237,27 @@ async function setupPin(){
     return;
   }
   const hash=await hashPin(pin);
+  if(esActivacionNueva){
+    // Activación nueva: cifrar todos los datos sensibles (hoy en claro) y ligarlos al PIN.
+    const salt=randomSaltB64();
+    encKey=await deriveKey(pin, salt);
+    encCache={};
+    ENC_KEYS.forEach(k=>{
+      const v=localStorage.getItem(k);
+      if(v!==null) encCache[k]=v;
+    });
+    const blob=await encryptBlob(encKey, encCache);
+    localStorage.setItem("fencsalt", salt);
+    localStorage.setItem("fencblob", JSON.stringify(blob));
+    ENC_KEYS.forEach(k=>localStorage.removeItem(k));
+  } else {
+    // Cambio de PIN (llamado desde changePin(), que ya validó el PIN actual): re-cifrar
+    // el encCache existente (sigue en memoria desde que se desbloqueó la sesión) con clave nueva.
+    const salt=randomSaltB64();
+    encKey=await deriveKey(pin, salt);
+    localStorage.setItem("fencsalt", salt);
+    await persistEncBlobNow();
+  }
   localStorage.setItem("fpinhash", hash);
   showToast("✓ PIN configurado. Se va a pedir al abrir la app.");
   renderPinStatus();
@@ -7082,7 +7283,19 @@ async function removePin(){
     return;
   }
   if(window.confirm("¿Seguro que querés desactivar el bloqueo? Cualquiera con tu celular va a poder abrir la app.")){
+    // Volcar los datos sensibles de vuelta a texto plano en localStorage antes de
+    // desactivar el cifrado (a partir de acá getSensitiveRaw/setSensitiveRaw vuelven a
+    // comportarse como localStorage.getItem/setItem de siempre).
+    if(encCache){
+      ENC_KEYS.forEach(k=>{
+        if(k in encCache) localStorage.setItem(k, encCache[k]);
+      });
+    }
     localStorage.removeItem("fpinhash");
+    localStorage.removeItem("fencsalt");
+    localStorage.removeItem("fencblob");
+    encKey=null;
+    encCache=null;
     showToast("PIN desactivado");
     renderPinStatus();
   }
@@ -7188,17 +7401,26 @@ function procesarArchivoSoltado(file){
   }
 }
 
-checkLock();
-init();
-// Arranca mostrando Movimientos en vez de Cargar.
-// IMPORTANTE: se llama renderMovs() explícitamente DESPUÉS de showPage(). showPage() tiene
-// un caché de vistas (paginaVersionRenderizada vs datosVersion) que saltea el render si cree
-// que la pestaña ya está al día — y en el arranque esa comparación puede dar "al día" cuando
-// en realidad nunca se pintó nada, dejando la lista en blanco. El render inicial no puede
-// depender de ese caché.
-showPage('mov', document.querySelector('.nav-btn[onclick*="\'mov\'"]'));
-renderMovs();
-checkOnboarding();
+// Arranque de la app. checkLock() muestra (si corresponde) la pantalla de PIN y devuelve
+// una Promise que recién se resuelve cuando no hace falta PIN o cuando el correcto ya fue
+// ingresado (y, si el cifrado está activo, los datos ya quedaron descifrados en memoria).
+// Los datos sensibles NO se cargan a memoria (loadSensitiveIntoMemory) hasta ese momento:
+// antes del PIN no hay nada de movs/tcs/etc. cargado, ni init()/renderMovs() corren todavía.
+async function bootApp(){
+  await checkLock();
+  loadSensitiveIntoMemory();
+  init();
+  // Arranca mostrando Movimientos en vez de Cargar.
+  // IMPORTANTE: se llama renderMovs() explícitamente DESPUÉS de showPage(). showPage() tiene
+  // un caché de vistas (paginaVersionRenderizada vs datosVersion) que saltea el render si cree
+  // que la pestaña ya está al día — y en el arranque esa comparación puede dar "al día" cuando
+  // en realidad nunca se pintó nada, dejando la lista en blanco. El render inicial no puede
+  // depender de ese caché.
+  showPage('mov', document.querySelector('.nav-btn[onclick*="\'mov\'"]'));
+  renderMovs();
+  checkOnboarding();
+}
+bootApp();
 
 // ═══════════════════════════════════════════
 // VERSIÓN DE LA APP (diagnóstico de caché)
