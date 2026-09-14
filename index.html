@@ -7231,8 +7231,8 @@ async function setupPin(){
     showToast("El PIN debe ser de 4 dígitos numéricos");
     return;
   }
-  const confirm=prompt("Confirmá el PIN:");
-  if(confirm!==pin){
+  const pinConfirmado=prompt("Confirmá el PIN:");
+  if(pinConfirmado!==pin){
     showToast("Los PINs no coinciden");
     return;
   }
