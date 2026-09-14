@@ -9,7 +9,7 @@ function renderDash(){
   // Default to latest year
   if(!years.includes(dashYear)) dashYear = years[years.length-1];
   document.getElementById("year-tabs").innerHTML=years.map(y=>
-    `<div class="year-tab${y===dashYear?" active":""}" onclick="setDashYear(${y},this)">${y}</div>`
+    `<div role="button" tabindex="0" class="year-tab${y===dashYear?" active":""}" onclick="setDashYear(${y},this)">${y}</div>`
   ).join("");
   renderDashYear();
 }
@@ -189,7 +189,7 @@ function renderDashYear(){
         } else if(val>0){
           comp=`<span style="font-size:10px;color:var(--muted);margin-left:6px">nuevo</span>`;
         }
-        return `<div class="bar-row" style="cursor:pointer" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}')">
+        return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}')">
           <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxVal*100)}%;background:#a32d2d"></div></div>
           <div class="bar-val">${fmtAbbr(val)}</div>
@@ -215,7 +215,7 @@ function renderDashYear(){
         } else if(val>0){
           comp=`<span style="font-size:10px;color:var(--muted);margin-left:6px">nuevo</span>`;
         }
-        return `<div class="bar-row" style="cursor:pointer" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}','Ingreso')">
+        return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}','Ingreso')">
           <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxValIng*100)}%;background:#2d7a3a"></div></div>
           <div class="bar-val">${fmtAbbr(val)}</div>
@@ -280,7 +280,7 @@ function renderDashCuentas(){
     const balColor=c.balance>=0?"var(--success)":"var(--danger)";
     const sign=c.balance>=0?"+":"";
     const cuentaEsc=c.cuenta.replace(/'/g,"\\'");
-    return `<div style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showCuentaDetail('${cuentaEsc}')">
+    return `<div role="button" tabindex="0" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showCuentaDetail('${cuentaEsc}')">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <div style="font-size:13px;font-weight:600">💳 ${escapeHtml(c.cuenta)}</div>
         <div style="font-size:13px;font-weight:600;color:${balColor}">${sign}${fmtS(c.balance)}</div>

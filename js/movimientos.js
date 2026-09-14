@@ -534,8 +534,8 @@ function renderMovs(){
     const subFiltroEl=document.getElementById("mov-tarjeta-filtro");
     if(tarjetasUnicas.length>1){
       subFiltroEl.innerHTML=`
-        <span class="filter-chip ${filtroTarjeta===''?'active':''}" onclick="setFiltroTarjeta('')">Todas</span>
-        ${tarjetasUnicas.map(t=>`<span class="filter-chip ${filtroTarjeta===t?'active':''}" onclick="setFiltroTarjeta('${t.replace(/'/g,"\\'")}')">${escapeHtml(t)}</span>`).join("")}`;
+        <span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===''?'active':''}" onclick="setFiltroTarjeta('')">Todas</span>
+        ${tarjetasUnicas.map(t=>`<span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===t?'active':''}" onclick="setFiltroTarjeta('${t.replace(/'/g,"\\'")}')">${escapeHtml(t)}</span>`).join("")}`;
       subFiltroEl.style.display="flex";
     } else {
       subFiltroEl.style.display="none";
@@ -587,8 +587,8 @@ function renderMovs(){
     const catFilterEl=document.getElementById("mov-cat-filtro");
     if(catsUnicas.length>1){
       catFilterEl.innerHTML=`
-        <span class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
-        ${catsUnicas.map(c=>`<span class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
+        <span role="button" tabindex="0" class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
+        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
       catFilterEl.style.display="flex";
     } else {
       catFilterEl.style.display="none";
@@ -646,8 +646,8 @@ function renderMovs(){
     const catFilterEl=document.getElementById("mov-cat-filtro");
     if(catsUnicas.length>1){
       catFilterEl.innerHTML=`
-        <span class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
-        ${catsUnicas.map(c=>`<span class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
+        <span role="button" tabindex="0" class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
+        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
       catFilterEl.style.display="flex";
     } else {
       catFilterEl.style.display="none";

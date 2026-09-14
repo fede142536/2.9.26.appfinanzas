@@ -262,7 +262,7 @@ function renderAhorroRanking(){
     const cUsd=it.saldoUsd>=0?"var(--save)":"var(--danger)";
     const icon=getIcon(it.cat,"🏦");
     const catEsc=it.cat.replace(/'/g,"\\'");
-    return `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);cursor:pointer" onclick="showAhorroCatDetail('${catEsc}')">
+    return `<div role="button" tabindex="0" style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);cursor:pointer" onclick="showAhorroCatDetail('${catEsc}')">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
         <div style="font-size:13px;font-weight:600">${icon} ${escapeHtml(it.cat)}</div>
         <div style="text-align:right">

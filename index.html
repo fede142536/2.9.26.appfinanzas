@@ -27,14 +27,14 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <!-- AVISO DE ERROR NO ATRAPADO.
      En una PWA en el celular no hay consola: hasta ahora, si algo fallaba, la app
      simplemente no hacía nada y no había forma de saber por qué (nos costó varias rondas
      a ciegas diagnosticar el bug del PIN). Esto hace que cualquier falla futura sea
      legible y copiable desde el propio teléfono. -->
-<div id="error-banner" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:400;background:var(--danger-light);border-top:2px solid var(--danger);padding:12px 14px;max-height:55vh;overflow-y:auto">
+<div id="error-banner" role="alert" aria-live="assertive" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:400;background:var(--danger-light);border-top:2px solid var(--danger);padding:12px 14px;max-height:55vh;overflow-y:auto">
   <div style="display:flex;align-items:flex-start;gap:10px">
     <span style="font-size:16px;line-height:1.3">⚠️</span>
     <div style="flex:1;min-width:0">
@@ -56,12 +56,12 @@
      que nunca llega — es exactamente el bug que trababa la pantalla de PIN. z-index 300
      para quedar por encima de los demás modales (200), que están en 200. -->
 <div class="modal-overlay" id="modal-dialogo" style="z-index:300" onclick="if(event.target===this)_dialogoCancelar()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title" id="dialogo-titulo"></div>
     <p id="dialogo-mensaje" style="font-size:14px;color:var(--text);line-height:1.5;margin-bottom:14px;white-space:pre-line"></p>
     <div class="form-group" id="dialogo-input-group" style="display:none">
-      <input type="text" id="dialogo-input" class="form-input" autocomplete="off">
+      <input type="text" id="dialogo-input" class="form-input" autocomplete="off" aria-labelledby="dialogo-mensaje">
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn-sm" style="flex:1" id="dialogo-btn-cancelar" onclick="_dialogoCancelar()">Cancelar</button>
@@ -91,7 +91,7 @@
     <button class="pin-key" onclick="pinPress('9')">9</button>
     <button class="pin-key" style="visibility:hidden"></button>
     <button class="pin-key" onclick="pinPress('0')">0</button>
-    <button class="pin-key" onclick="pinBackspace()" style="font-size:18px">⌫</button>
+    <button class="pin-key" onclick="pinBackspace()" style="font-size:18px" aria-label="Borrar último dígito">⌫</button>
   </div>
 </div>
 
@@ -142,10 +142,10 @@
 
 <!-- MODAL NUEVA CATEGORÍA -->
 <div class="modal-overlay" id="modal-cat" onclick="if(event.target===this)closeCatModal()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title">Nueva categoría</div>
-    <div class="form-group"><label class="form-label">Tipo</label>
+    <div class="form-group"><label class="form-label" for="new-cat-tipo">Tipo</label>
       <select id="new-cat-tipo" class="form-select"><option value="Gasto">Gasto</option><option value="Ingreso">Ingreso</option><option value="Inversion">Inversión</option><option value="Tarjeta">Tarjeta</option></select>
     </div>
     <div class="form-group"><label class="form-label">Ícono</label>
@@ -153,15 +153,15 @@
         <span id="new-cat-icon-preview">📦</span> <span style="font-size:13px">Elegir ícono</span>
       </button>
     </div>
-    <div class="form-group"><label class="form-label">Nombre</label><input type="text" id="new-cat-name" class="form-input" placeholder="Ej: Mascotas"></div>
-    <div class="form-group"><label class="form-label">Subcategorías (separadas por coma)</label><input type="text" id="new-cat-subs" class="form-input" placeholder="Ej: Veterinario, Alimento, Otros"></div>
+    <div class="form-group"><label class="form-label" for="new-cat-name">Nombre</label><input type="text" id="new-cat-name" class="form-input" placeholder="Ej: Mascotas"></div>
+    <div class="form-group"><label class="form-label" for="new-cat-subs">Subcategorías (separadas por coma)</label><input type="text" id="new-cat-subs" class="form-input" placeholder="Ej: Veterinario, Alimento, Otros"></div>
     <button class="btn-primary" style="background:var(--accent);color:#fff" onclick="guardarNuevaCat()">Agregar</button>
   </div>
 </div>
 
 <!-- MODAL SELECTOR DE ÍCONO (reutilizado para crear categoría y para editar el ícono de una existente) -->
 <div class="modal-overlay" id="modal-icon-picker" onclick="if(event.target===this)closeIconPicker()">
-  <div class="modal" style="max-height:80vh">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:80vh">
     <div class="modal-handle"></div>
     <div class="modal-title">Elegí un ícono</div>
     <div id="icon-picker-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;overflow-y:auto;max-height:55vh"></div>
@@ -171,13 +171,13 @@
 
 <!-- MODAL PRESUPUESTO -->
 <div class="modal-overlay" id="modal-presup" onclick="if(event.target===this)closePresupModal()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title" id="presup-modal-title">Nuevo presupuesto</div>
-    <div class="form-group"><label class="form-label">Categoría de gasto</label>
+    <div class="form-group"><label class="form-label" for="presup-cat">Categoría de gasto</label>
       <select id="presup-cat" class="form-select"></select>
     </div>
-    <div class="form-group"><label class="form-label">Tope mensual ($)</label>
+    <div class="form-group"><label class="form-label" for="presup-monto">Tope mensual ($)</label>
       <div class="amount-wrap"><span class="amount-prefix">$</span>
         <input type="number" id="presup-monto" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any">
       </div>
@@ -191,15 +191,15 @@
 
 <!-- MODAL RENOMBRAR CATEGORÍA -->
 <div class="modal-overlay" id="modal-rename" onclick="if(event.target===this)closeRenameModal()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title">Renombrar categoría</div>
     <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Esto reemplaza el nombre en TODOS los movimientos existentes.</p>
-    <div class="form-group"><label class="form-label">Categoría actual</label>
+    <div class="form-group"><label class="form-label" for="rename-cat-from">Categoría actual</label>
       <select id="rename-cat-from" class="form-select" onchange="updateRenameInfo()"></select>
     </div>
     <div id="rename-info" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
-    <div class="form-group"><label class="form-label">Nuevo nombre</label>
+    <div class="form-group"><label class="form-label" for="rename-cat-to">Nuevo nombre</label>
       <input type="text" id="rename-cat-to" class="form-input" placeholder="Nuevo nombre">
     </div>
     <div style="display:flex;gap:8px;margin-top:14px">
@@ -211,7 +211,7 @@
 
 <!-- MODAL DETALLE DE CATEGORÍA (dashboard interactivo) -->
 <div class="modal-overlay" id="modal-cat-detail" onclick="if(event.target===this)closeCatDetail()">
-  <div class="modal" style="max-height:92vh">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
     <div class="modal-handle"></div>
     <div class="modal-title" id="cat-detail-title">Detalle</div>
     <div id="cat-detail-content" style="overflow-y:auto;max-height:60vh"></div>
@@ -221,7 +221,7 @@
 
 <!-- MODAL DETALLE DE INSTRUMENTO (Cartera → tocar un ticker) -->
 <div class="modal-overlay" id="modal-instrumento-detail" onclick="if(event.target===this)closeInstrumentoDetail()">
-  <div class="modal" style="max-height:92vh">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
     <div class="modal-handle"></div>
     <div class="modal-title" id="instrumento-detail-title">Detalle</div>
     <div id="instrumento-detail-content" style="overflow-y:auto;max-height:65vh"></div>
@@ -231,7 +231,7 @@
 
 <!-- MODAL FILTRO POR FECHA (Movimientos → botón 📅) -->
 <div class="modal-overlay" id="modal-filtro-fecha" onclick="if(event.target===this)closeFiltroFechaModal()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title">📅 Buscar por fecha</div>
     <div class="type-toggle" style="margin-bottom:14px">
@@ -241,27 +241,27 @@
       <button type="button" class="type-btn" id="ff-tab-anio" onclick="setFiltroFechaTab('anio')">Año</button>
     </div>
     <div id="ff-panel-dia" class="ff-panel">
-      <div class="form-group"><label class="form-label">Fecha exacta</label>
+      <div class="form-group"><label class="form-label" for="ff-dia">Fecha exacta</label>
         <input type="date" id="ff-dia" class="form-input">
       </div>
     </div>
     <div id="ff-panel-rango" class="ff-panel" style="display:none">
       <div class="two-col">
-        <div class="form-group"><label class="form-label">Desde</label>
+        <div class="form-group"><label class="form-label" for="ff-rango-desde">Desde</label>
           <input type="date" id="ff-rango-desde" class="form-input">
         </div>
-        <div class="form-group"><label class="form-label">Hasta</label>
+        <div class="form-group"><label class="form-label" for="ff-rango-hasta">Hasta</label>
           <input type="date" id="ff-rango-hasta" class="form-input">
         </div>
       </div>
     </div>
     <div id="ff-panel-mes" class="ff-panel" style="display:none">
-      <div class="form-group"><label class="form-label">Mes</label>
+      <div class="form-group"><label class="form-label" for="ff-mes">Mes</label>
         <input type="month" id="ff-mes" class="form-input">
       </div>
     </div>
     <div id="ff-panel-anio" class="ff-panel" style="display:none">
-      <div class="form-group"><label class="form-label">Año</label>
+      <div class="form-group"><label class="form-label" for="ff-anio">Año</label>
         <select id="ff-anio" class="form-select"></select>
       </div>
     </div>
@@ -272,7 +272,7 @@
 
 <!-- MODAL DETALLE DE CUENTA (Dashboard → Saldo por cuenta → tocar una cuenta) -->
 <div class="modal-overlay" id="modal-cuenta-detail" onclick="if(event.target===this)closeCuentaDetail()">
-  <div class="modal" style="max-height:92vh">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
     <div class="modal-handle"></div>
     <div class="modal-title" id="cuenta-detail-title">Detalle</div>
     <div id="cuenta-detail-content" style="overflow-y:auto;max-height:65vh"></div>
@@ -282,7 +282,7 @@
 
 <!-- MODAL DETALLE DE CATEGORÍA DE AHORRO (Ahorros → Ranking → tocar una categoría) -->
 <div class="modal-overlay" id="modal-ahorrocat-detail" onclick="if(event.target===this)closeAhorroCatDetail()">
-  <div class="modal" style="max-height:92vh">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
     <div class="modal-handle"></div>
     <div class="modal-title" id="ahorrocat-detail-title">Detalle</div>
     <div id="ahorrocat-detail-content" style="overflow-y:auto;max-height:65vh"></div>
@@ -292,7 +292,7 @@
 
 <!-- MODAL EDITAR MOVIMIENTO -->
 <div class="modal-overlay" id="modal-edit" onclick="if(event.target===this)closeEditModal()">
-  <div class="modal" style="max-height:92vh">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
     <div class="modal-handle"></div>
     <div class="modal-title">Editar movimiento</div>
     <div id="edit-form-content"></div>
@@ -305,7 +305,7 @@
 
 <!-- MODAL IMPORT PREVIEW -->
 <div class="modal-overlay" id="modal-import" onclick="if(event.target===this)closeImportModal()">
-  <div class="modal" style="max-height:92vh">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
     <div class="modal-handle"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div class="modal-title" style="margin:0" id="import-modal-title">Vista previa</div>
@@ -340,31 +340,31 @@
       <div class="amount-hero-label" id="inp-importe-label">Importe (ARS)</div>
       <div class="form-group">
         <div class="amount-wrap amount-hero"><span class="amount-prefix" id="inp-importe-prefix">$</span>
-          <input type="text" id="inp-importe" class="form-input amount-input" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearConMiles);updateImporteCalc()">
+          <input type="text" id="inp-importe" class="form-input amount-input" aria-label="Importe" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearConMiles);updateImporteCalc()">
         </div>
         <div id="importe-calc-preview" style="font-size:11px;color:var(--accent);margin-top:4px;display:none;text-align:center"></div>
       </div>
-      <div class="form-group"><label class="form-label">Moneda</label>
+      <div class="form-group"><label class="form-label" for="inp-moneda">Moneda</label>
         <select id="inp-moneda" class="form-select" onchange="toggleUSD()">
           <option value="ARS">🇦🇷 Pesos (ARS)</option>
           <option value="USD">🇺🇸 Dólares (USD)</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Categoría</label>
-        <div id="sugerencia-cat" style="display:none;font-size:12px;background:var(--accent-light);color:var(--accent);padding:7px 10px;border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="aplicarSugerenciaCat()"></div>
+      <div class="form-group"><label class="form-label" for="inp-cat">Categoría</label>
+        <div id="sugerencia-cat" role="button" tabindex="0" style="display:none;font-size:12px;background:var(--accent-light);color:var(--accent);padding:7px 10px;border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="aplicarSugerenciaCat()"></div>
         <div style="display:flex;gap:8px"><select id="inp-cat" class="form-select" style="flex:1" onchange="updateSubcats()"></select>
           <button class="btn-sm" onclick="openCatModal()">+ Cat.</button>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Subcategoría</label><select id="inp-subcat" class="form-select" onchange="autoSeleccionarCuenta()"></select></div>
-      <div class="form-group"><label class="form-label">Cuenta</label>
+      <div class="form-group"><label class="form-label" for="inp-subcat">Subcategoría</label><select id="inp-subcat" class="form-select" onchange="autoSeleccionarCuenta()"></select></div>
+      <div class="form-group"><label class="form-label" for="inp-cuenta">Cuenta</label>
         <div style="display:flex;gap:8px">
           <select id="inp-cuenta" class="form-select" style="flex:1"></select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Fecha</label>
+        <label class="form-label" for="inp-fecha">Fecha</label>
         <input type="date" id="inp-fecha" class="form-input">
         <div style="display:flex;gap:6px;margin-top:8px">
           <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('inp-fecha',0)">Hoy</button>
@@ -391,71 +391,71 @@
         <p style="font-size:11px;color:var(--muted);margin-top:4px">Ej: alquiler, ABL, expensas. Se va a registrar todos los meses con el mismo monto. Después podés cargar aumentos o darlo de baja.</p>
       </div>
       <div class="form-group" id="recuperable-group" style="display:none">
-        <label class="form-label">Monto recuperable (opcional)</label>
+        <label class="form-label" for="inp-recup">Monto recuperable (opcional)</label>
         <div class="amount-wrap"><span class="amount-prefix">$</span>
           <input type="number" id="inp-recup" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any">
         </div>
         <p style="font-size:11px;color:var(--muted);margin-top:4px">💡 Para gastos compartidos: ej. cena con amigos por $10.000 donde te devuelven $7.500.</p>
       </div>
-      <div class="form-group"><label class="form-label">Nota (opcional)</label><textarea id="inp-nota" class="form-textarea" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()"></textarea></div>
+      <div class="form-group"><label class="form-label" for="inp-nota">Nota (opcional)</label><textarea id="inp-nota" class="form-textarea" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()"></textarea></div>
     </div>
     <!-- INVERSIÓN -->
     <div id="campos-inv" style="display:none">
       <div class="amount-hero-label">Importe</div>
       <div style="display:flex;justify-content:center;gap:18px">
         <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">$</span>
-          <input type="text" id="inv-ars" class="form-input amount-input" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
+          <input type="text" id="inv-ars" class="form-input amount-input" aria-label="Importe en pesos" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
         </div>
         <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix" style="font-size:12px">USD</span>
-          <input type="text" id="inv-usd" class="form-input amount-input" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
+          <input type="text" id="inv-usd" class="form-input amount-input" aria-label="Importe en dólares" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
         </div>
       </div>
       <div class="form-group" style="margin-top:4px"></div>
       <div class="two-col">
-        <div class="form-group"><label class="form-label">Categoría</label>
+        <div class="form-group"><label class="form-label" for="inv-cat">Categoría</label>
           <select id="inv-cat" class="form-select" onchange="updateInvSubcats()"></select>
         </div>
-        <div class="form-group"><label class="form-label">Operación</label>
+        <div class="form-group"><label class="form-label" for="inv-subcat">Operación</label>
           <select id="inv-subcat" class="form-select" onchange="autoSeleccionarCuenta()"></select>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Ticker / Fondo</label><input type="text" id="inv-ticker" class="form-input" placeholder="BCMMA, AL30, SPY, IRCFO…"></div>
-      <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="inv-fecha" class="form-input"></div>
-      <div class="form-group"><label class="form-label">Cuenta</label>
+      <div class="form-group"><label class="form-label" for="inv-ticker">Ticker / Fondo</label><input type="text" id="inv-ticker" class="form-input" placeholder="BCMMA, AL30, SPY, IRCFO…"></div>
+      <div class="form-group"><label class="form-label" for="inv-fecha">Fecha</label><input type="date" id="inv-fecha" class="form-input"></div>
+      <div class="form-group"><label class="form-label" for="inv-cuenta">Cuenta</label>
         <div style="display:flex;gap:8px">
           <select id="inv-cuenta" class="form-select" style="flex:1"></select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('inv-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Nota (opcional)</label><textarea id="inv-nota" class="form-textarea" placeholder="Descripción..."></textarea></div>
+      <div class="form-group"><label class="form-label" for="inv-nota">Nota (opcional)</label><textarea id="inv-nota" class="form-textarea" placeholder="Descripción..."></textarea></div>
     </div>
     <!-- TARJETA -->
     <div id="campos-tc" style="display:none">
       <div class="amount-hero-label" id="tc-total-label">Monto total ($)</div>
       <div class="form-group">
         <div class="amount-wrap amount-hero"><span class="amount-prefix" id="tc-amount-prefix">$</span>
-          <input type="text" id="tc-total" class="form-input amount-input" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcCuota()">
+          <input type="text" id="tc-total" class="form-input amount-input" aria-label="Monto total" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcCuota()">
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Descripción del gasto</label><input type="text" id="tc-desc" class="form-input" placeholder="Ej: Cuotas celular, Netflix"></div>
+      <div class="form-group"><label class="form-label" for="tc-desc">Descripción del gasto</label><input type="text" id="tc-desc" class="form-input" placeholder="Ej: Cuotas celular, Netflix"></div>
       <div class="two-col">
-        <div class="form-group"><label class="form-label">Tarjeta</label>
+        <div class="form-group"><label class="form-label" for="tc-tarjeta">Tarjeta</label>
           <div style="display:flex;gap:6px">
             <select id="tc-tarjeta" class="form-select" style="flex:1"></select>
-            <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')" title="Agregar tarjeta nueva">+</button>
+            <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')" title="Agregar tarjeta nueva" aria-label="Agregar tarjeta nueva">+</button>
           </div>
         </div>
-        <div class="form-group"><label class="form-label">Categoría</label>
+        <div class="form-group"><label class="form-label" for="tc-cat">Categoría</label>
           <select id="tc-cat" class="form-select" onchange="autoSeleccionarCuenta()"></select>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Cuenta</label>
+      <div class="form-group"><label class="form-label" for="tc-cuenta">Cuenta</label>
         <div style="display:flex;gap:8px">
           <select id="tc-cuenta" class="form-select" style="flex:1"></select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Moneda</label>
+      <div class="form-group"><label class="form-label" for="tc-moneda">Moneda</label>
         <select id="tc-moneda" class="form-select" onchange="toggleTcMoneda()">
           <option value="ARS">🇦🇷 Pesos (ARS)</option>
           <option value="USD">🇺🇸 Dólares (USD)</option>
@@ -468,12 +468,12 @@
         </label>
       </div>
       <div class="two-col" id="tc-cuotas-row">
-        <div class="form-group"><label class="form-label">Cuotas totales</label><input type="number" id="tc-cuotas" class="form-input" placeholder="1" min="1" inputmode="numeric" oninput="calcCuota()"></div>
-        <div class="form-group"><label class="form-label">1ª cuota en</label><input type="month" id="tc-mes-inicio" class="form-input"></div>
+        <div class="form-group"><label class="form-label" for="tc-cuotas">Cuotas totales</label><input type="number" id="tc-cuotas" class="form-input" placeholder="1" min="1" inputmode="numeric" oninput="calcCuota()"></div>
+        <div class="form-group"><label class="form-label" for="tc-mes-inicio">1ª cuota en</label><input type="month" id="tc-mes-inicio" class="form-input"></div>
       </div>
       <div class="two-col" id="tc-frec-row" style="display:none">
-        <div class="form-group"><label class="form-label">Mes de inicio</label><input type="month" id="tc-mes-inicio-frec" class="form-input"></div>
-        <div class="form-group"><label class="form-label">Mes de fin (opcional)</label><input type="month" id="tc-mes-fin" class="form-input"></div>
+        <div class="form-group"><label class="form-label" for="tc-mes-inicio-frec">Mes de inicio</label><input type="month" id="tc-mes-inicio-frec" class="form-input"></div>
+        <div class="form-group"><label class="form-label" for="tc-mes-fin">Mes de fin (opcional)</label><input type="month" id="tc-mes-fin" class="form-input"></div>
       </div>
       <div id="tc-preview" style="display:none;margin-bottom:12px">
         <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
@@ -481,8 +481,8 @@
           <span style="font-size:20px;font-weight:600;color:var(--warning)" id="tc-cuota-val">$0</span>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Fecha</label><input type="date" id="tc-fecha" class="form-input"></div>
-      <div class="form-group"><label class="form-label">Nota (opcional)</label><textarea id="tc-nota" class="form-textarea" placeholder="Descripción adicional..."></textarea></div>
+      <div class="form-group"><label class="form-label" for="tc-fecha">Fecha</label><input type="date" id="tc-fecha" class="form-input"></div>
+      <div class="form-group"><label class="form-label" for="tc-nota">Nota (opcional)</label><textarea id="tc-nota" class="form-textarea" placeholder="Descripción adicional..."></textarea></div>
     </div>
     <button id="btn-guardar" class="btn-primary btn-gasto" onclick="guardar()">Guardar gasto</button>
   </div>
@@ -494,19 +494,19 @@
 <div id="page-mov" class="page">
   <div class="header"><h1>Movimientos</h1></div>
   <div class="month-nav">
-    <button onclick="cambiarMes(-1)" id="btn-mes-prev">‹</button>
-    <span id="mes-label" onclick="if(filtroFecha)limpiarFiltroFecha()" style="cursor:pointer"></span>
-    <button onclick="cambiarMes(1)" id="btn-mes-next">›</button>
-    <button onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" style="margin-left:4px">📅</button>
+    <button onclick="cambiarMes(-1)" id="btn-mes-prev" aria-label="Mes anterior">‹</button>
+    <span id="mes-label" role="button" tabindex="0" aria-label="Mes mostrado. Tocá para limpiar el filtro de fecha" onclick="if(filtroFecha)limpiarFiltroFecha()" style="cursor:pointer"></span>
+    <button onclick="cambiarMes(1)" id="btn-mes-next" aria-label="Mes siguiente">›</button>
+    <button onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha" style="margin-left:4px">📅</button>
   </div>
 
   <div class="filter-row">
-    <div class="filter-chip active" onclick="setFiltro('Todos',this)">Todos</div>
-    <div class="filter-chip" onclick="setFiltro('Gasto',this)">Gastos</div>
-    <div class="filter-chip" onclick="setFiltro('Ingreso',this)">Ingresos</div>
-    <div class="filter-chip" onclick="setFiltro('Tarjeta',this)">Tarjetas</div>
+    <div class="filter-chip active" role="button" tabindex="0" onclick="setFiltro('Todos',this)">Todos</div>
+    <div class="filter-chip" role="button" tabindex="0" onclick="setFiltro('Gasto',this)">Gastos</div>
+    <div class="filter-chip" role="button" tabindex="0" onclick="setFiltro('Ingreso',this)">Ingresos</div>
+    <div class="filter-chip" role="button" tabindex="0" onclick="setFiltro('Tarjeta',this)">Tarjetas</div>
   </div>
-  <div style="padding:0 16px 8px"><input type="search" id="mov-search" class="form-input" placeholder="🔍 Buscar por nota, categoría, ticker..." style="font-size:13px;padding:8px 12px" oninput="onSearchMovs()"></div>
+  <div style="padding:0 16px 8px"><input type="search" id="mov-search" class="form-input" aria-label="Buscar movimientos" placeholder="🔍 Buscar por nota, categoría, ticker..." style="font-size:13px;padding:8px 12px" oninput="onSearchMovs()"></div>
   <div id="mov-arrastre" style="padding:8px 16px 0;font-size:11px;color:var(--muted);text-align:center;display:none"></div>
   <div id="mov-tarjeta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
   <div id="mov-cat-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
@@ -521,7 +521,7 @@
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-tc" class="page">
   <div class="header"><h1>Tarjetas de crédito</h1><p>No afecta el balance mensual</p></div>
-  <div class="month-nav"><button onclick="cambiarMesTc(-1)">‹</button><span id="tc-mes-label"></span><button onclick="cambiarMesTc(1)">›</button></div>
+  <div class="month-nav"><button onclick="cambiarMesTc(-1)" aria-label="Mes anterior">‹</button><span id="tc-mes-label"></span><button onclick="cambiarMesTc(1)" aria-label="Mes siguiente">›</button></div>
   <div class="summary-row" id="tc-summary"></div>
   <div style="height:4px"></div>
   <div class="card"><div class="card-title">Balance del mes</div><div id="tc-balance"></div></div>
@@ -534,7 +534,7 @@
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-inv" class="page">
   <div class="header"><h1>Inversiones</h1><p>Cartera y movimientos</p></div>
-  <div class="month-nav"><button onclick="cambiarMesInv(-1)">‹</button><span id="inv-mes-label"></span><button onclick="cambiarMesInv(1)">›</button></div>
+  <div class="month-nav"><button onclick="cambiarMesInv(-1)" aria-label="Mes anterior">‹</button><span id="inv-mes-label"></span><button onclick="cambiarMesInv(1)" aria-label="Mes siguiente">›</button></div>
   <div class="summary-row" id="inv-summary"></div>
   <div style="height:4px"></div>
   <div class="card"><div class="card-title">Balance del mes</div><div id="inv-balance"></div></div>
@@ -633,8 +633,8 @@
   <!-- Depósito a meta -->
   <div class="card" id="depositar-card" style="display:none">
     <div class="card-title">Depositar en meta</div>
-    <div class="form-group"><label class="form-label">Meta</label><select id="dep-meta" class="form-select"></select></div>
-    <div class="form-group"><label class="form-label">Monto ($)</label>
+    <div class="form-group"><label class="form-label" for="dep-meta">Meta</label><select id="dep-meta" class="form-select"></select></div>
+    <div class="form-group"><label class="form-label" for="dep-monto">Monto ($)</label>
       <div class="amount-wrap"><span class="amount-prefix">$</span><input type="number" id="dep-monto" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any"></div>
     </div>
     <button class="btn-primary" style="background:var(--save);color:#fff" onclick="depositarMeta()">Depositar</button>
@@ -643,14 +643,14 @@
 
 <!-- MODAL NUEVA META -->
 <div class="modal-overlay" id="modal-meta" onclick="if(event.target===this)closeMetaModal()">
-  <div class="modal">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title">Nueva meta de ahorro</div>
-    <div class="form-group"><label class="form-label">Nombre</label><input type="text" id="meta-nombre" class="form-input" placeholder="Ej: Vacaciones, Auto, Emergencias"></div>
-    <div class="form-group"><label class="form-label">Objetivo ($)</label>
+    <div class="form-group"><label class="form-label" for="meta-nombre">Nombre</label><input type="text" id="meta-nombre" class="form-input" placeholder="Ej: Vacaciones, Auto, Emergencias"></div>
+    <div class="form-group"><label class="form-label" for="meta-objetivo">Objetivo ($)</label>
       <div class="amount-wrap"><span class="amount-prefix">$</span><input type="number" id="meta-objetivo" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any"></div>
     </div>
-    <div class="form-group"><label class="form-label">Emoji</label>
+    <div class="form-group"><label class="form-label" for="meta-emoji">Emoji</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap" id="emoji-picker">
         🎯🏖️🚗🏠💊✈️🎓💍📱🐶💰🏋️🎸🌍
         <script>
@@ -752,8 +752,8 @@
   <div class="card">
     <div class="card-title">Exportar a Excel</div>
     <div class="two-col">
-      <div class="form-group"><label class="form-label">Desde</label><input type="month" id="exp-desde" class="form-input"></div>
-      <div class="form-group"><label class="form-label">Hasta</label><input type="month" id="exp-hasta" class="form-input"></div>
+      <div class="form-group"><label class="form-label" for="exp-desde">Desde</label><input type="month" id="exp-desde" class="form-input"></div>
+      <div class="form-group"><label class="form-label" for="exp-hasta">Hasta</label><input type="month" id="exp-hasta" class="form-input"></div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <button class="btn-primary" style="background:var(--accent);color:#fff;flex:1" onclick="exportarExcel()">⬇ Excel del rango</button>
@@ -809,7 +809,7 @@
 <!-- FAB de acceso rápido a Cargar. DEBE quedar ANTES del bloque de código de abajo: el
      arranque llama showPage(), que lee este elemento — si estuviera después, todavía no
      existiría y showPage() se cortaría con un TypeError dejando la pantalla a medio pintar. -->
-<button id="fab-cargar" onclick="abrirCarga()">+</button>
+<button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento">+</button>
 
 <script src="js/estado-categorias.js"></script>
 <script src="js/render-comun.js"></script>
