@@ -16,12 +16,38 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<!-- defer es IMPORTANTE, no cosmético: sin él, un <script> externo bloquea el parseo del
+     HTML hasta que termina de descargar. Si el CDN está caído, bloqueado por un DNS
+     filtrado o simplemente lento, el navegador nunca llega a parsear el <body> y la app
+     NO ABRE: pantalla en blanco, ni siquiera la lista de movimientos. Con defer, la app
+     carga siempre y estas librerías llegan cuando puedan (los gráficos y el Excel se
+     protegen solos si todavía no están; ver renderChartMensualBI y handleXlsx). -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div id="toast" class="toast"></div>
+
+<!-- DIÁLOGO GENÉRICO (reemplaza alert/confirm/prompt nativos del navegador).
+     Los diálogos nativos pueden no tener dónde renderizarse en una PWA instalada (modo
+     standalone, sin barra de navegador) y dejan la app colgada esperando una interacción
+     que nunca llega — es exactamente el bug que trababa la pantalla de PIN. z-index 300
+     para quedar por encima de los demás modales (200), que están en 200. -->
+<div class="modal-overlay" id="modal-dialogo" style="z-index:300" onclick="if(event.target===this)_dialogoCancelar()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="dialogo-titulo"></div>
+    <p id="dialogo-mensaje" style="font-size:14px;color:var(--text);line-height:1.5;margin-bottom:14px;white-space:pre-line"></p>
+    <div class="form-group" id="dialogo-input-group" style="display:none">
+      <input type="text" id="dialogo-input" class="form-input" autocomplete="off">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-sm" style="flex:1" id="dialogo-btn-cancelar" onclick="_dialogoCancelar()">Cancelar</button>
+      <button class="btn-primary" style="flex:2;padding:11px" id="dialogo-btn-ok" onclick="_dialogoAceptar()">Aceptar</button>
+    </div>
+  </div>
+</div>
 
 <!-- PANTALLA DE BLOQUEO -->
 <div id="lock-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:30px">

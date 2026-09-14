@@ -39,8 +39,8 @@ function guardarPresup(){
   renderMovs();
   showToast("Presupuesto guardado ✓");
 }
-function borrarPresup(cat){
-  if(!confirm(`¿Eliminar el presupuesto de "${cat}"?`)) return;
+async function borrarPresup(cat){
+  if(!await mostrarConfirm(`¿Eliminar el presupuesto de "${cat}"?`, {textoOk:"Eliminar", peligroso:true})) return;
   delete presupuestos[cat];
   savePresup();
   renderPresupManager();

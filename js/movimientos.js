@@ -819,13 +819,13 @@ function renderMovs(){
   }
   renderTxListaLazy(show);
 }
-function borrarMov(id, btn){
+async function borrarMov(id, btn){
   const m=movs.find(x=>x.id===id);
   // Si es un gasto frecuente, en lugar de borrar todo el historial, ofrecemos darlo de baja
   // desde el MES QUE EL USUARIO ESTÁ VIENDO (mesActual), no el calendario real
   if(m && m.frecuente){
     const mesDeBaja=mesActual; // usa el mes seleccionado en la pestaña Movs
-    if(confirm(`Este es un gasto frecuente mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`)){
+    if(await mostrarConfirm(`Este es un gasto frecuente mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`, {textoOk:"Dar de baja", textoCancelar:"Eliminar todo"})){
       // mesFin es el último mes INCLUIDO. Para "dar de baja desde X", mesFin = mes anterior a X.
       m.mesFin = addMonths(mesDeBaja, -1);
       save();
@@ -834,7 +834,7 @@ function borrarMov(id, btn){
       return;
     }
     // Si dijo cancelar, ofrecemos borrado total con segunda confirmación
-    if(!confirm(`⚠️ Vas a eliminar el gasto frecuente y todos sus meses (incluyendo el historial). ¿Confirmás?`)) return;
+    if(!await mostrarConfirm(`⚠️ Vas a eliminar el gasto frecuente y todos sus meses (incluyendo el historial). ¿Confirmás?`, {textoOk:"Eliminar todo", peligroso:true})) return;
     movs=movs.filter(x=>x.id!==id);
     save();
     showToast("Gasto frecuente eliminado");
@@ -856,10 +856,10 @@ function borrarMov(id, btn){
   save();
   renderMovs();
 }
-function confirmarBorrarTc(id){
+async function confirmarBorrarTc(id){
   const t=tcs.find(x=>x.id===id);
   if(!t) return;
-  if(confirm(`¿Eliminar "${t.desc}" (${t.cuotasTotal} cuotas, ${fmt(t.total)})?`)){
+  if(await mostrarConfirm(`¿Eliminar "${t.desc}" (${t.cuotasTotal} cuotas, ${fmt(t.total)})?`, {textoOk:"Eliminar", peligroso:true})){
     tcs=tcs.filter(x=>x.id!==id);
     save();
     showToast("Tarjeta eliminada");

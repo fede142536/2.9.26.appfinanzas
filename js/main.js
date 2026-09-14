@@ -100,6 +100,24 @@ async function bootApp(){
 }
 bootApp();
 
+// Chart.js se carga con defer (ver el comentario en index.html), así que cuando se pinta
+// la primera pantalla puede no estar disponible todavía. Los gráficos se saltean solos en
+// ese caso, pero el caché de vistas (paginaVersionRenderizada) daría la pestaña por "al
+// día" y los dejaría vacíos hasta que el usuario cambiara de pestaña y volviera. Cuando
+// termina de cargar todo, se invalida ese caché y se repinta la pestaña activa.
+window.addEventListener("load", () => {
+  if(typeof Chart==="undefined") return; // no llegó (sin conexión): los gráficos quedan vacíos, el resto anda
+  const lock=document.getElementById("lock-screen");
+  if(lock && getComputedStyle(lock).display!=="none") return; // todavía bloqueada: no hay datos en memoria
+  ["dash","inv","ahorro"].forEach(p=>{ delete paginaVersionRenderizada[p]; });
+  const activa=document.querySelector(".page.active");
+  if(!activa) return;
+  const id=activa.id.replace(/^page-/,"");
+  if(id==="dash") renderDash();
+  else if(id==="inv") renderInv();
+  else if(id==="ahorro") renderAhorro();
+});
+
 // ═══════════════════════════════════════════
 // VERSIÓN DE LA APP (diagnóstico de caché)
 // ═══════════════════════════════════════════

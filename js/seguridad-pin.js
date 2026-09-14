@@ -243,17 +243,17 @@ async function checkPin(){
 async function setupPin(){
   const esActivacionNueva = !localStorage.getItem("fpinhash");
   if(esActivacionNueva){
-    if(!confirm("Antes de activar el PIN vamos a descargar un backup de tus datos. Si en el futuro olvidás el PIN, es la única forma de recuperarlos. ¿Continuamos?")) return;
+    if(!await mostrarConfirm("Antes de activar el PIN vamos a descargar un backup de tus datos. Si en el futuro olvidás el PIN, es la única forma de recuperarlos. ¿Continuamos?", {titulo:"🔐 Activar PIN", textoOk:"Descargar backup"})) return;
     exportarBackup();
-    if(!confirm("¿Ya guardaste el archivo de backup en un lugar seguro (Drive, mail, etc.)? Confirmá para terminar de activar el PIN.")) return;
+    if(!await mostrarConfirm("¿Ya guardaste el archivo de backup en un lugar seguro (Drive, mail, etc.)? Confirmá para terminar de activar el PIN.", {titulo:"🔐 Activar PIN", textoOk:"Ya lo guardé"})) return;
   }
-  const pin=prompt("Elegí un PIN de 4 dígitos para proteger la app:");
+  const pin=await mostrarPrompt("Elegí un PIN de 4 dígitos para proteger la app:", {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"numeric", placeholder:"4 dígitos"});
   if(pin===null) return;
   if(!/^\d{4}$/.test(pin)){
     showToast("El PIN debe ser de 4 dígitos numéricos");
     return;
   }
-  const pinConfirmado=prompt("Confirmá el PIN:");
+  const pinConfirmado=await mostrarPrompt("Confirmá el PIN:", {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"numeric", placeholder:"Repetí el PIN"});
   if(pinConfirmado!==pin){
     showToast("Los PINs no coinciden");
     return;
@@ -286,7 +286,7 @@ async function setupPin(){
 }
 
 async function changePin(){
-  const actual=prompt("Ingresá tu PIN actual:");
+  const actual=await mostrarPrompt("Ingresá tu PIN actual:", {titulo:"Cambiar PIN", tipoInput:"password", inputMode:"numeric"});
   if(actual===null) return;
   const hashActual=await hashPin(actual);
   if(hashActual!==localStorage.getItem("fpinhash")){
@@ -297,14 +297,14 @@ async function changePin(){
 }
 
 async function removePin(){
-  const actual=prompt("Para desactivar el PIN, ingresalo:");
+  const actual=await mostrarPrompt("Para desactivar el PIN, ingresalo:", {titulo:"Desactivar PIN", tipoInput:"password", inputMode:"numeric"});
   if(actual===null) return;
   const hashActual=await hashPin(actual);
   if(hashActual!==localStorage.getItem("fpinhash")){
     showToast("PIN incorrecto");
     return;
   }
-  if(window.confirm("¿Seguro que querés desactivar el bloqueo? Cualquiera con tu celular va a poder abrir la app.")){
+  if(await mostrarConfirm("¿Seguro que querés desactivar el bloqueo? Cualquiera con tu celular va a poder abrir la app.", {textoOk:"Desactivar", peligroso:true})){
     // Volcar los datos sensibles de vuelta a texto plano en localStorage antes de
     // desactivar el cifrado (a partir de acá getSensitiveRaw/setSensitiveRaw vuelven a
     // comportarse como localStorage.getItem/setItem de siempre).
