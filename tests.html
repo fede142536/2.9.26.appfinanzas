@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tests — Enola</title>
+
+<!-- ═══════════════════════════════════════════════════════════
+     ⚠️ AISLAMIENTO DE DATOS — TIENE QUE IR ANTES QUE TODO
+     ═══════════════════════════════════════════════════════════
+     Esta página se sirve desde el MISMO origen que la app, así que comparte su
+     localStorage. Sin este reemplazo, correr los tests pisaría los datos financieros
+     REALES del usuario. Todo lo que la app escriba durante los tests va a un objeto en
+     memoria que se descarta al cerrar la pestaña. -->
+<script>
+(function(){
+  const mem = Object.create(null);
+  const falso = {
+    getItem(k){ return Object.prototype.hasOwnProperty.call(mem,k) ? mem[k] : null; },
+    setItem(k,v){ mem[k] = String(v); },
+    removeItem(k){ delete mem[k]; },
+    clear(){ for(const k of Object.keys(mem)) delete mem[k]; },
+    key(i){ return Object.keys(mem)[i] ?? null; },
+    get length(){ return Object.keys(mem).length; }
+  };
+  // Se guarda el real para poder verificar al final que quedó intacto
+  window.__localStorageReal = window.localStorage;
+  window.__clavesRealesAlEmpezar = (function(){
+    try { return Object.keys(window.localStorage).sort().join(","); } catch(e){ return "(inaccesible)"; }
+  })();
+  Object.defineProperty(window, "localStorage", { value: falso, configurable: true });
+
+  // La app, al cargarse, toca elementos del DOM que esta página no tiene. Se devuelve un
+  // elemento descartable en vez de null para que ese código de arranque no explote: acá
+  // interesa probar la lógica, no la interfaz.
+  const getRealId = document.getElementById.bind(document);
+  document.getElementById = function(id){
+    return getRealId(id) || document.createElement("div");
+  };
+})();
+</script>
+
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:16px;background:#f7f6f2;color:#1a1a18;max-width:760px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{font-size:12px;color:#6e6d65;margin-bottom:16px;line-height:1.5}
+  #resumen{position:sticky;top:0;background:#f7f6f2;padding:10px 0;border-bottom:1px solid #e8e5df;font-weight:600;font-size:15px;z-index:5}
+  .grupo{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#6e6d65;margin:18px 0 6px;font-weight:600}
+  .t{padding:7px 10px;border-radius:7px;margin-bottom:4px;font-size:13px;display:flex;gap:9px;align-items:flex-start;background:#fff;border:1px solid #e8e5df}
+  .t.ok{border-left:3px solid #2d7a3a}
+  .t.fail{border-left:3px solid #a32d2d;background:#fcebeb}
+  .t .ico{font-weight:700}
+  .t.ok .ico{color:#2d7a3a}
+  .t.fail .ico{color:#a32d2d}
+  .detalle{font-size:11px;color:#a32d2d;white-space:pre-wrap;margin-top:3px;font-family:ui-monospace,monospace}
+  .ms{margin-left:auto;font-size:10px;color:#9a9890;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<h1>Tests — Enola</h1>
+<div class="sub">
+  Verifica la lógica crítica de la app. Tus datos reales <strong>no se tocan</strong>:
+  los tests corren contra un almacenamiento en memoria aislado.<br>
+  Abrí esta página después de cualquier cambio, antes de publicarlo.
+</div>
+<div id="resumen">Corriendo…</div>
+<div id="salida"></div>
+
+<!-- La app real. NO se carga js/main.js a propósito: ese archivo arranca la app
+     (bootApp), y acá solo queremos las funciones, no la aplicación andando. -->
+<script src="js/estado-categorias.js"></script>
+<script src="js/render-comun.js"></script>
+<script src="js/form-cargar.js"></script>
+<script src="js/movimientos.js"></script>
+<script src="js/editar-movimiento.js"></script>
+<script src="js/tarjetas-inversiones.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/ahorros.js"></script>
+<script src="js/graficos-interactivos.js"></script>
+<script src="js/importar-exportar.js"></script>
+<script src="js/cuentas-tarjetas-categorias.js"></script>
+<script src="js/config-ui.js"></script>
+<script src="js/presupuestos.js"></script>
+<script src="js/seguridad-pin.js"></script>
+
+<script>
+// ═══════════════════════════════════════════
+// Runner mínimo
+// ═══════════════════════════════════════════
+const pruebas=[]; let grupoActual="";
+function grupo(n){ grupoActual=n; }
+function test(nombre, fn){ pruebas.push({nombre, fn, grupo:grupoActual}); }
+
+function igual(a, b, msg){
+  const sa=JSON.stringify(a), sb=JSON.stringify(b);
+  if(sa!==sb) throw new Error(`${msg||"valores distintos"}\n  esperado: ${sb}\n  obtenido: ${sa}`);
+}
+function cierto(v, msg){ if(!v) throw new Error(msg||"se esperaba algo verdadero"); }
+
+// ── Datos de prueba ──
+function movsDePrueba(n){
+  const cats=["Supermercado","Transporte","Servicios","Salud","Ocio"];
+  const out=[];
+  for(let i=0;i<n;i++){
+    out.push({id:"m"+i, tipo:i%7===0?"Ingreso":"Gasto", importe:Math.round(Math.random()*500000)/100,
+      cat:cats[i%cats.length], subcat:"Otros", cuenta:"Efectivo",
+      fecha:`202${(i%4)+2}-0${(i%9)+1}-1${i%9}`,
+      nota:"Movimiento de prueba "+i+" con una nota de largo razonable", moneda:"ARS"});
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════
+// SEGURIDAD
+// ═══════════════════════════════════════════
+grupo("Seguridad");
+
+test("escapeHtml neutraliza HTML inyectado", ()=>{
+  const r=escapeHtml('<img src=x onerror="alert(1)">');
+  cierto(!r.includes("<") && !r.includes(">"), "quedaron < o > sin escapar: "+r);
+  cierto(r.includes("&lt;"), "no se escapó a &lt;");
+});
+
+test("escapeHtml escapa comillas y ampersand", ()=>{
+  igual(escapeHtml(`a&b"c'd`), "a&amp;b&quot;c&#39;d");
+});
+
+test("escapeHtml tolera null y undefined", ()=>{
+  igual(escapeHtml(null), ""); igual(escapeHtml(undefined), "");
+});
+
+test("cifrar y descifrar devuelve los mismos datos", async ()=>{
+  const clave=await deriveKey("1234", randomSaltB64());
+  const original={fmovs3:JSON.stringify(movsDePrueba(5)), fcuentas:'["Galicia"]'};
+  const descifrado=await decryptBlob(clave, await encryptBlob(clave, original));
+  igual(descifrado, original);
+});
+
+// Este es EL test que faltaba: el bug que dejó al usuario sin poder entrar a la app era
+// un desborde de pila al pasar a base64 un cifrado grande. Con pocos datos nunca aparecía.
+test("cifrar 4000 movimientos (~800 KB) no desborda la pila", async ()=>{
+  const movsGrande=movsDePrueba(4000);
+  const json=JSON.stringify(movsGrande);
+  cierto(json.length>500000, "los datos de prueba deberían superar los 500 KB, son "+json.length);
+  const clave=await deriveKey("1234", randomSaltB64());
+  const descifrado=await decryptBlob(clave, await encryptBlob(clave, {fmovs3:json}));
+  igual(JSON.parse(descifrado.fmovs3).length, 4000, "no volvieron los 4000 movimientos");
+  igual(JSON.parse(descifrado.fmovs3)[3999].nota, movsGrande[3999].nota, "el último movimiento no coincide");
+});
+
+test("bytesToB64 soporta medio millón de bytes", ()=>{
+  const b=new Uint8Array(500000).map((_,i)=>i%256);
+  const s=bytesToB64(b);
+  cierto(s.length>600000, "el base64 salió sospechosamente corto: "+s.length);
+});
+
+test("un PIN incorrecto no puede descifrar", async ()=>{
+  const salt=randomSaltB64();
+  const blob=await encryptBlob(await deriveKey("1234", salt), {fmovs3:'[{"id":"secreto"}]'});
+  let fallo=false;
+  try { await decryptBlob(await deriveKey("9999", salt), blob); }
+  catch(e){ fallo=true; }
+  cierto(fallo, "¡se descifró con el PIN equivocado!");
+});
+
+// ═══════════════════════════════════════════
+// PLATA
+// ═══════════════════════════════════════════
+grupo("Plata");
+
+test("evalImporte lee un número simple", ()=>{ igual(evalImporte("1500"), 1500); });
+test("evalImporte suma", ()=>{ igual(evalImporte("1500+750+300"), 2550); });
+test("evalImporte resta", ()=>{ igual(evalImporte("1500-200"), 1300); });
+test("evalImporte ignora el punto de miles", ()=>{ igual(evalImporte("1.500"), 1500); });
+test("evalImporte toma la coma como decimal", ()=>{ igual(evalImporte("1500,50"), 1500.5); });
+test("evalImporte combina miles y operación", ()=>{ igual(evalImporte("1.500+2.500"), 4000); });
+test("evalImporte con texto vacío da 0", ()=>{ igual(evalImporte(""), 0); });
+
+// ═══════════════════════════════════════════
+// FECHAS Y CUOTAS
+// ═══════════════════════════════════════════
+grupo("Fechas y cuotas");
+
+test("addMonths avanza un mes", ()=>{ igual(addMonths("2026-01",1), "2026-02"); });
+test("addMonths cruza el fin de año", ()=>{ igual(addMonths("2026-12",1), "2027-01"); });
+test("addMonths retrocede cruzando el año", ()=>{ igual(addMonths("2026-01",-1), "2025-12"); });
+test("addMonths salta 24 meses", ()=>{ igual(addMonths("2026-01",24), "2028-01"); });
+
+test("getCuotaEnMes numera las cuotas", ()=>{
+  const tc={mesInicio:"2026-01", cuotasTotal:3};
+  igual(getCuotaEnMes(tc,"2026-01"), 1, "la primera cuota debería ser 1");
+  igual(getCuotaEnMes(tc,"2026-03"), 3, "la última cuota debería ser 3");
+});
+test("getCuotaEnMes da 0 fuera del rango", ()=>{
+  const tc={mesInicio:"2026-01", cuotasTotal:3};
+  igual(getCuotaEnMes(tc,"2026-04"), 0, "un mes posterior al plan debería dar 0");
+  igual(getCuotaEnMes(tc,"2025-12"), 0, "un mes anterior al inicio debería dar 0");
+});
+test("getCuotaEnMes respeta la baja de un frecuente", ()=>{
+  const frec={mesInicio:"2026-01", frecuente:true, mesFin:"2026-03"};
+  igual(getCuotaEnMes(frec,"2026-03"), 3, "el mes de baja todavía cuenta");
+  igual(getCuotaEnMes(frec,"2026-04"), 0, "después de la baja debería dar 0");
+});
+
+// ═══════════════════════════════════════════
+// DATOS
+// ═══════════════════════════════════════════
+grupo("Datos");
+
+test("extraerTags saca hashtags sin repetir y en minúscula", ()=>{
+  igual(extraerTags("pagué en #Super y #super, después #Casa"), ["super","casa"]);
+});
+test("extraerTags devuelve vacío sin hashtags", ()=>{ igual(extraerTags("sin etiquetas"), []); });
+
+// El backup es la única red de salvación si se olvida el PIN: si le falta un campo, esos
+// datos no se pueden recuperar. Este test existe porque justamente le faltaban varios.
+test("el backup incluye TODOS los datos del usuario", ()=>{
+  const BlobReal=window.Blob;
+  let capturado=null;
+  window.Blob=function(partes){ capturado=partes[0]; return new BlobReal(partes,{type:"application/json"}); };
+  try { exportarBackup(); } finally { window.Blob=BlobReal; }
+  cierto(capturado, "no se pudo capturar el contenido del backup");
+  const datos=JSON.parse(capturado).datos;
+  for(const campo of ["movs","tcs","custom","metas","importHistory","cuentasCustom","tarjetasCustom","presupuestos","catOrder","iconsCustom"]){
+    cierto(campo in datos, `al backup le falta "${campo}"`);
+  }
+});
+
+test("ENC_KEYS cubre todas las claves sensibles conocidas", ()=>{
+  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons"]){
+    cierto(ENC_KEYS.includes(k), `ENC_KEYS no incluye "${k}": esos datos quedarían sin cifrar`);
+  }
+});
+
+// ═══════════════════════════════════════════
+// DIÁLOGOS
+// ═══════════════════════════════════════════
+grupo("Diálogos");
+
+test("no queda ningún diálogo nativo del navegador en la app", async ()=>{
+  const archivos=["estado-categorias","render-comun","form-cargar","movimientos","editar-movimiento",
+    "tarjetas-inversiones","dashboard","ahorros","graficos-interactivos","importar-exportar",
+    "cuentas-tarjetas-categorias","config-ui","presupuestos","seguridad-pin","main"];
+  const sospechosos=[];
+  for(const a of archivos){
+    const txt=await (await fetch(`js/${a}.js`)).text();
+    txt.split("\n").forEach((linea,i)=>{
+      const limpia=linea.trim();
+      if(limpia.startsWith("//")) return;                 // comentarios
+      if(a==="render-comun" && limpia.includes("opts.")) return; // el respaldo intencional
+      if(/(^|[^A-Za-z0-9_.])(prompt|confirm|alert)\s*\(/.test(linea)) sospechosos.push(`js/${a}.js:${i+1}`);
+    });
+  }
+  igual(sospechosos, [], "quedaron diálogos nativos (pueden colgar la app instalada)");
+});
+
+test("mostrarConfirm devuelve una promesa que se resuelve", async ()=>{
+  const p=mostrarConfirm("¿test?");
+  cierto(typeof p.then==="function", "no devolvió una promesa");
+  _dialogoCancelar();
+  igual(await p, false, "cancelar debería dar false");
+});
+
+test("mostrarPrompt cancelado devuelve null, como el nativo", async ()=>{
+  const p=mostrarPrompt("¿test?");
+  _dialogoCancelar();
+  igual(await p, null);
+});
+
+// ═══════════════════════════════════════════
+// AISLAMIENTO
+// ═══════════════════════════════════════════
+grupo("Aislamiento de los tests");
+
+test("los datos reales de la app siguen intactos", ()=>{
+  const ahora=(function(){
+    try { return Object.keys(window.__localStorageReal).sort().join(","); } catch(e){ return "(inaccesible)"; }
+  })();
+  igual(ahora, window.__clavesRealesAlEmpezar,
+    "¡LOS TESTS MODIFICARON EL ALMACENAMIENTO REAL! Revisá el aislamiento del principio de tests.html");
+});
+
+// ═══════════════════════════════════════════
+// Ejecución
+// ═══════════════════════════════════════════
+(async function correr(){
+  const salida=document.querySelector("#salida");
+  let ok=0, fail=0, ultimoGrupo="";
+  for(const pr of pruebas){
+    if(pr.grupo!==ultimoGrupo){
+      ultimoGrupo=pr.grupo;
+      const h=document.createElement("div");
+      h.className="grupo"; h.textContent=ultimoGrupo;
+      salida.appendChild(h);
+    }
+    const t0=performance.now();
+    let error=null;
+    try { await pr.fn(); } catch(e){ error=e; }
+    const ms=Math.round(performance.now()-t0);
+    const div=document.createElement("div");
+    div.className="t "+(error?"fail":"ok");
+    div.innerHTML=`<span class="ico">${error?"✕":"✓"}</span><div style="flex:1;min-width:0">${
+      pr.nombre.replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))
+    }${error?`<div class="detalle"></div>`:""}</div><span class="ms">${ms} ms</span>`;
+    if(error) div.querySelector(".detalle").textContent=error.message;
+    salida.appendChild(div);
+    error?fail++:ok++;
+  }
+  const r=document.querySelector("#resumen");
+  r.textContent=fail===0 ? `✓ Pasaron los ${ok} tests` : `✕ ${fail} fallaron · ${ok} pasaron`;
+  r.style.color=fail===0?"#2d7a3a":"#a32d2d";
+  window.__resultado={ok, fail};   // para poder correrlo automatizado
+})();
+</script>
+</body>
+</html>
