@@ -101,6 +101,58 @@ function vibrar(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
 function showToast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
 
 // ═══════════════════════════════════════════
+// ERRORES VISIBLES
+// ═══════════════════════════════════════════
+// En el celular no hay consola: sin esto, un error no atrapado se traduce en "la app no
+// hace nada" y no hay manera de saber por qué. Cualquier falla queda acá, legible y
+// copiable, para poder diagnosticarla sin adivinar.
+let _ultimoError="";
+
+function mostrarErrorGlobal(titulo, detalle){
+  _ultimoError=`${titulo}\n\n${detalle||""}`.trim();
+  const el=document.getElementById("error-banner");
+  if(!el){ console.error(titulo, detalle); return; }
+  document.getElementById("error-banner-msg").textContent=titulo;
+  const pre=document.getElementById("error-banner-detalle");
+  pre.textContent=detalle||"(sin detalle)";
+  pre.style.display="none";
+  document.getElementById("error-banner-toggle").textContent="Ver detalle";
+  el.style.display="block";
+}
+function toggleErrorDetalle(){
+  const pre=document.getElementById("error-banner-detalle");
+  const abierto=pre.style.display!=="none";
+  pre.style.display=abierto?"none":"block";
+  document.getElementById("error-banner-toggle").textContent=abierto?"Ver detalle":"Ocultar detalle";
+}
+function cerrarErrorBanner(){
+  const el=document.getElementById("error-banner");
+  if(el) el.style.display="none";
+}
+function copiarError(){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(_ultimoError).then(
+      ()=>showToast("Error copiado al portapapeles"),
+      ()=>showToast("No se pudo copiar")
+    );
+  } else {
+    showToast("Este navegador no permite copiar automáticamente");
+  }
+}
+
+window.addEventListener("error", (e)=>{
+  // Sin `message` es un recurso que no cargó (por ejemplo un CDN caído), no un error de
+  // código: eso ya se maneja aparte y no tiene sentido alarmar al usuario.
+  if(!e.message) return;
+  mostrarErrorGlobal(e.message, `${e.filename||"?"}:${e.lineno||"?"}:${e.colno||"?"}\n\n${(e.error&&e.error.stack)||""}`);
+});
+window.addEventListener("unhandledrejection", (e)=>{
+  const r=e.reason;
+  const titulo=(r && (r.message||typeof r==="string")) ? String(r.message||r) : "Una operación falló sin dar motivo";
+  mostrarErrorGlobal(titulo, (r && r.stack) ? r.stack : "");
+});
+
+// ═══════════════════════════════════════════
 // DIÁLOGOS PROPIOS (reemplazan alert/confirm/prompt nativos)
 // ═══════════════════════════════════════════
 // Los diálogos nativos del navegador pueden no tener dónde renderizarse en una PWA
