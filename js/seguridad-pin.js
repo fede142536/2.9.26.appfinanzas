@@ -15,9 +15,20 @@ let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: v
 
 function isEncActive(){ return !!localStorage.getItem("fencsalt"); }
 
+// Convierte bytes a base64 de a bloques. NO usar String.fromCharCode(...bytes): el spread
+// pasa CADA byte como un argumento distinto, así que con un blob grande (años de
+// movimientos = cientos de miles de bytes) revienta con "Maximum call stack size exceeded".
+function bytesToB64(bytes){
+  const CHUNK=0x8000;
+  let bin="";
+  for(let i=0;i<bytes.length;i+=CHUNK){
+    bin+=String.fromCharCode.apply(null, bytes.subarray(i, i+CHUNK));
+  }
+  return btoa(bin);
+}
+
 function randomSaltB64(){
-  const arr=crypto.getRandomValues(new Uint8Array(16));
-  return btoa(String.fromCharCode(...arr));
+  return bytesToB64(crypto.getRandomValues(new Uint8Array(16)));
 }
 
 async function deriveKey(pin, saltB64){
@@ -33,7 +44,7 @@ async function encryptBlob(key, obj){
   const iv=crypto.getRandomValues(new Uint8Array(12));
   const data=new TextEncoder().encode(JSON.stringify(obj));
   const cipher=await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, data);
-  return {iv: btoa(String.fromCharCode(...iv)), data: btoa(String.fromCharCode(...new Uint8Array(cipher)))};
+  return {iv: bytesToB64(iv), data: bytesToB64(new Uint8Array(cipher))};
 }
 
 async function decryptBlob(key, blob){
