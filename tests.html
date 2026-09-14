@@ -155,6 +155,48 @@ test("bytesToB64 soporta medio millón de bytes", ()=>{
   cierto(s.length>600000, "el base64 salió sospechosamente corto: "+s.length);
 });
 
+// El escape viejo de los onclick solo cubría la comilla simple, pero el atributo va entre
+// comillas DOBLES: un nombre de cuenta con " cerraba el atributo e inyectaba HTML.
+test("attrJS neutraliza comillas dobles en los onclick", ()=>{
+  const r=attrJS('Visa" onmouseover="alert(1)');
+  cierto(!r.includes('"'), "quedó una comilla doble cruda: "+r);
+  cierto(r.includes("&quot;"), "no se escapó a &quot;");
+});
+
+test("attrJS sobrevive a la ida y vuelta por el atributo", ()=>{
+  // Se simula lo que hace el navegador: decodificar el atributo y evaluar el JS de adentro.
+  // El "<\/script>" va con la barra escapada a propósito: escrito tal cual cerraría la
+  // etiqueta <script> de esta misma página.
+  for(const valor of ['Visa "Oro"', "O'Brien", 'a\\b', 'Ñandú & Cía', '<\/script>']){
+    const enAtributo=attrJS(valor);
+    const doc=new DOMParser().parseFromString(`<i data-x="${enAtributo}"></i>`,"text/html");
+    const literalJS=doc.querySelector("i").getAttribute("data-x");
+    igual(JSON.parse(literalJS), valor, `no volvió igual: ${valor}`);
+  }
+});
+
+// Chequeo autoritativo: lo que importa no es si el TEXTO del atributo contiene "onmouseover"
+// (puede ser parte del dato), sino si el navegador terminó creando un atributo de más.
+test("un nombre hostil no agrega atributos al elemento", ()=>{
+  const hostil='Banco " onmouseover="alert(1)';
+  const html=`<div role="button" tabindex="0" onclick="showCuentaDetail(${attrJS(hostil)})"></div>`;
+  const el=new DOMParser().parseFromString(html,"text/html").querySelector("div");
+  igual(el.getAttributeNames().sort(), ["onclick","role","tabindex"], "apareció un atributo inyectado");
+  // Y además el valor tiene que llegar entero a la función.
+  const literal=el.getAttribute("onclick").replace(/^showCuentaDetail\(/,"").replace(/\)$/,"");
+  igual(JSON.parse(literal), hostil, "el nombre no llegó intacto al handler");
+});
+
+test("no queda el escape viejo de comillas en ningún onclick", async ()=>{
+  const archivos=["ahorros","cuentas-tarjetas-categorias","dashboard","movimientos","presupuestos","tarjetas-inversiones"];
+  const malos=[];
+  for(const a of archivos){
+    const txt=await (await fetch(`js/${a}.js`)).text();
+    txt.split("\n").forEach((l,i)=>{ if(l.includes("replace(/'/g")) malos.push(`js/${a}.js:${i+1}`); });
+  }
+  igual(malos, [], "volvió el patrón que dejaba pasar comillas dobles; usá attrJS()");
+});
+
 test("un PIN incorrecto no puede descifrar", async ()=>{
   const salt=randomSaltB64();
   const blob=await encryptBlob(await deriveKey("1234", salt), {fmovs3:'[{"id":"secreto"}]'});
@@ -162,6 +204,63 @@ test("un PIN incorrecto no puede descifrar", async ()=>{
   try { await decryptBlob(await deriveKey("9999", salt), blob); }
   catch(e){ fallo=true; }
   cierto(fallo, "¡se descifró con el PIN equivocado!");
+});
+
+// localStorage acá es el falso en memoria, así que se puede ensuciar sin miedo.
+function limpiarEstadoCifrado(){
+  ["fencblob","fencsalt","fpinhash"].forEach(k=>localStorage.removeItem(k));
+  ENC_KEYS.forEach(k=>localStorage.removeItem(k));
+  encKey=null; encCache=null;
+}
+
+// El salt y el blob eran dos escrituras separadas. Si la segunda fallaba (sin espacio),
+// quedaba un salt sin sobre: la app se desbloqueaba VACÍA y el primer guardado pisaba
+// todo. Ahora es una sola escritura: o entra entera o no entra.
+test("el sobre cifrado se guarda en UNA sola clave, con el salt adentro", async ()=>{
+  limpiarEstadoCifrado();
+  const salt=randomSaltB64();
+  const clave=await deriveKey("1234", salt);
+  await guardarSobre(clave, salt, {fmovs3:'[{"id":"x"}]'});
+  igual(localStorage.getItem("fencsalt"), null, "el salt no debería seguir en una clave aparte");
+  const sobre=JSON.parse(localStorage.getItem("fencblob"));
+  cierto(sobre.salt===salt, "el salt tiene que viajar dentro del sobre");
+  cierto(!!sobre.iv && !!sobre.data, "al sobre le faltan iv o data");
+  limpiarEstadoCifrado();
+});
+
+test("se sigue leyendo el formato viejo (salt aparte)", async ()=>{
+  limpiarEstadoCifrado();
+  const salt=randomSaltB64();
+  const clave=await deriveKey("1234", salt);
+  const {iv,data}=await encryptBlob(clave, {fmovs3:'[{"id":"viejo"}]'});
+  // Se escribe a mano tal como lo dejaba la versión anterior
+  localStorage.setItem("fencsalt", salt);
+  localStorage.setItem("fencblob", JSON.stringify({iv,data}));
+  const sobre=leerSobre();
+  igual(sobre.salt, salt, "no tomó el salt de la clave vieja");
+  igual(JSON.parse((await decryptBlob(await deriveKey("1234", sobre.salt), sobre)).fmovs3)[0].id, "viejo");
+  limpiarEstadoCifrado();
+});
+
+test("con la app bloqueada NO se puede guardar en texto plano", ()=>{
+  limpiarEstadoCifrado();
+  // Cifrado activo (hay sobre) pero sin descifrar todavía: es el estado "bloqueada".
+  localStorage.setItem("fencblob", JSON.stringify({v:2,salt:"x",iv:"y",data:"z"}));
+  encCache=null;
+  let fallo=false;
+  try { setSensitiveRaw("fmovs3", '[{"id":"secreto"}]'); } catch(e){ fallo=true; }
+  cierto(fallo, "dejó guardar estando bloqueada");
+  igual(localStorage.getItem("fmovs3"), null, "¡escribió los datos EN CLARO!");
+  limpiarEstadoCifrado();
+});
+
+test("con la app bloqueada no se leen restos en claro", ()=>{
+  limpiarEstadoCifrado();
+  localStorage.setItem("fencblob", JSON.stringify({v:2,salt:"x",iv:"y",data:"z"}));
+  localStorage.setItem("fmovs3", '[{"id":"resto-viejo"}]');  // resto de una versión anterior
+  encCache=null;
+  igual(getSensitiveRaw("fmovs3","[]"), "[]", "devolvió datos en claro estando bloqueada");
+  limpiarEstadoCifrado();
 });
 
 // ═══════════════════════════════════════════

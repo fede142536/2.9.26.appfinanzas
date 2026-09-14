@@ -110,7 +110,7 @@ function migrateStorage(){
   // (se migró/nunca existió en claro), así que no hay nada para migrar acá.
   // (Se usa localStorage.getItem directo en vez de isEncActive() porque esta función
   // corre antes de que se cargue el módulo de cifrado — ver js/seguridad-pin.js.)
-  if(localStorage.getItem("fencsalt")) return;
+  if(localStorage.getItem("fencblob") || localStorage.getItem("fencsalt")) return;
   const oldKeys = ["fmovs2","fmovs","ftcs2","ftcs"];
   const oldMovs = localStorage.getItem("fmovs2")||localStorage.getItem("fmovs")||"[]";
   const oldTcs  = localStorage.getItem("ftcs2") ||localStorage.getItem("ftcs") ||"[]";
@@ -263,6 +263,21 @@ function getCats(t){
 }
 
 // ── SEGURIDAD ──
+// Devuelve un valor listo para usar como ARGUMENTO dentro de un onclick="...".
+// Hay DOS contextos anidados y hay que respetar los dos: el atributo HTML (delimitado por
+// comillas dobles) y, adentro, el literal de JavaScript. El patrón viejo
+//     onclick="f('${valor.replace(/'/g,"\\'")}')"
+// solo escapaba la comilla simple, así que un nombre de cuenta o categoría con comilla
+// DOBLE cerraba el atributo antes de tiempo y permitía inyectar otros (onerror=, etc.).
+// JSON.stringify produce un literal JS válido con cualquier contenido, y escapeHtml lo
+// vuelve seguro como atributo; el navegador decodifica las entidades antes de evaluar el JS,
+// así que el valor llega entero a la función.
+//    attrJS(`Visa "Oro"`)  →  &quot;Visa \&quot;Oro\&quot;&quot;
+// Uso: onclick="setFiltroTarjeta(${attrJS(t)})"   ← sin comillas alrededor, ya las trae
+function attrJS(valor){
+  return escapeHtml(JSON.stringify(String(valor==null?"":valor)));
+}
+
 // Escapa caracteres especiales de HTML para evitar XSS al interpolar texto libre
 // ingresado por el usuario (notas, nombres custom, tickers, etc.) dentro de innerHTML.
 function escapeHtml(str){

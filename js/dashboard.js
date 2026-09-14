@@ -189,7 +189,7 @@ function renderDashYear(){
         } else if(val>0){
           comp=`<span style="font-size:10px;color:var(--muted);margin-left:6px">nuevo</span>`;
         }
-        return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}')">
+        return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail(${attrJS(cat)})">
           <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxVal*100)}%;background:#a32d2d"></div></div>
           <div class="bar-val">${fmtAbbr(val)}</div>
@@ -215,7 +215,7 @@ function renderDashYear(){
         } else if(val>0){
           comp=`<span style="font-size:10px;color:var(--muted);margin-left:6px">nuevo</span>`;
         }
-        return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}','Ingreso')">
+        return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail(${attrJS(cat)},'Ingreso')">
           <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxValIng*100)}%;background:#2d7a3a"></div></div>
           <div class="bar-val">${fmtAbbr(val)}</div>
@@ -279,8 +279,8 @@ function renderDashCuentas(){
   el.innerHTML=cuentas.map(c=>{
     const balColor=c.balance>=0?"var(--success)":"var(--danger)";
     const sign=c.balance>=0?"+":"";
-    const cuentaEsc=c.cuenta.replace(/'/g,"\\'");
-    return `<div role="button" tabindex="0" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showCuentaDetail('${cuentaEsc}')">
+    const cuentaEsc=attrJS(c.cuenta);
+    return `<div role="button" tabindex="0" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showCuentaDetail(${cuentaEsc})">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <div style="font-size:13px;font-weight:600">💳 ${escapeHtml(c.cuenta)}</div>
         <div style="font-size:13px;font-weight:600;color:${balColor}">${sign}${fmtS(c.balance)}</div>
@@ -487,7 +487,7 @@ function showInstrumentoDetail(ticker){
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${montoTxt}</div>
         <button class="tx-edit" onclick="closeInstrumentoDetail();openEditModal(${m.id})" title="Editar">✎</button>
-        <button class="tx-del" onclick="borrarMovDesdeInstrumento(${m.id},'${ticker.replace(/'/g,"\\'")}',this)" title="Eliminar">×</button>
+        <button class="tx-del" onclick="borrarMovDesdeInstrumento(${m.id},${attrJS(ticker)},this)" title="Eliminar">×</button>
       </div>
     </div>`;
   }).join("");
@@ -598,7 +598,7 @@ function showCuentaDetail(cuentaNombre){
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${signo}${fmtS(m.importe||0)}</div>
         <button class="tx-edit" onclick="closeCuentaDetail();openEditModal(${m.id})" title="Editar">✎</button>
-        <button class="tx-del" onclick="borrarMovDesdeCuenta(${m.id},'${cuentaNombre.replace(/'/g,"\\'")}',this)" title="Eliminar">×</button>
+        <button class="tx-del" onclick="borrarMovDesdeCuenta(${m.id},${attrJS(cuentaNombre)},this)" title="Eliminar">×</button>
       </div>
     </div>`;
   }).join("");

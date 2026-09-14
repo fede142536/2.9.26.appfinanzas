@@ -522,8 +522,8 @@ function renderInv(){
     let html=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${items.length} ${items.length===1?"posición":"posiciones"} · balance acumulado</div>`;
     html+=items.map(p=>{
       const arsColor=p.ars>=0?"var(--success)":"var(--danger)";
-      const tickerEsc=p.ticker.replace(/'/g,"\\'");
-      return `<div role="button" tabindex="0" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showInstrumentoDetail('${tickerEsc}')">
+      const tickerEsc=attrJS(p.ticker);
+      return `<div role="button" tabindex="0" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showInstrumentoDetail(${tickerEsc})">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600">${escapeHtml(p.ticker)}</div>
           <div style="font-size:11px;color:var(--muted)">${escapeHtml(p.cat)} · ${p.count} ${p.count===1?"mov":"movs"}</div>

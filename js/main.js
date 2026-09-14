@@ -44,7 +44,16 @@ function cerrarOnboarding(){
 // esas funciones solo usan input.files[0] (y a veces input.value=""), así que no hace falta
 // tocarlas para nada.
 let dragCounter=0;
+// Estos listeners se registran al cargar el archivo, o sea ANTES de que el usuario ingrese
+// el PIN. Sin este chequeo se podía soltar un backup sobre la pantalla de bloqueo: se
+// importaba sin haber desbloqueado y, con el cifrado activo, los datos terminaban guardados
+// en texto plano y encima invisibles (al desbloquear se lee el sobre cifrado, no esas claves).
+function appBloqueada(){
+  const lock=document.getElementById("lock-screen");
+  return !!(lock && getComputedStyle(lock).display!=="none");
+}
 document.addEventListener("dragenter", (e)=>{
+  if(appBloqueada()) return;
   if(!e.dataTransfer || !Array.from(e.dataTransfer.types||[]).includes("Files")) return;
   e.preventDefault();
   dragCounter++;
@@ -59,6 +68,7 @@ document.addEventListener("dragleave", (e)=>{
   if(dragCounter===0) document.getElementById("drop-overlay").style.display="none";
 });
 document.addEventListener("drop", (e)=>{
+  if(appBloqueada()) return;
   if(!e.dataTransfer) return;
   e.preventDefault();
   dragCounter=0;

@@ -535,7 +535,7 @@ function renderMovs(){
     if(tarjetasUnicas.length>1){
       subFiltroEl.innerHTML=`
         <span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===''?'active':''}" onclick="setFiltroTarjeta('')">Todas</span>
-        ${tarjetasUnicas.map(t=>`<span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===t?'active':''}" onclick="setFiltroTarjeta('${t.replace(/'/g,"\\'")}')">${escapeHtml(t)}</span>`).join("")}`;
+        ${tarjetasUnicas.map(t=>`<span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===t?'active':''}" onclick="setFiltroTarjeta(${attrJS(t)})">${escapeHtml(t)}</span>`).join("")}`;
       subFiltroEl.style.display="flex";
     } else {
       subFiltroEl.style.display="none";
@@ -588,7 +588,7 @@ function renderMovs(){
     if(catsUnicas.length>1){
       catFilterEl.innerHTML=`
         <span role="button" tabindex="0" class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
-        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
+        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria(${attrJS(c)})">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
       catFilterEl.style.display="flex";
     } else {
       catFilterEl.style.display="none";
@@ -647,7 +647,7 @@ function renderMovs(){
     if(catsUnicas.length>1){
       catFilterEl.innerHTML=`
         <span role="button" tabindex="0" class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
-        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
+        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria(${attrJS(c)})">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
       catFilterEl.style.display="flex";
     } else {
       catFilterEl.style.display="none";
