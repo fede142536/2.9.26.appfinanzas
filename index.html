@@ -1217,6 +1217,18 @@ function getCats(t){
   return merged;
 }
 
+// ── SEGURIDAD ──
+// Escapa caracteres especiales de HTML para evitar XSS al interpolar texto libre
+// ingresado por el usuario (notas, nombres custom, tickers, etc.) dentro de innerHTML.
+function escapeHtml(str){
+  if(str===undefined||str===null) return "";
+  return String(str)
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
 // ── FORMAT ──
 function fmt(n){
   if(n===undefined||n===null||isNaN(n))return "$0,00";
@@ -1416,7 +1428,7 @@ function renderAlertasFrecuentes(){
   const total=movsMes.reduce((s,m)=>s+m.importe,0);
   el.innerHTML=`<div style="background:var(--warning-light);color:var(--warning);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px">
     <strong>🔁 Gastos frecuentes este mes:</strong> ${movsMes.length} ${movsMes.length===1?"servicio":"servicios"} por un total de <strong>${fmtS(total)}</strong>
-    <div style="font-size:11px;margin-top:4px;color:var(--muted)">${movsMes.map(m=>`${m.desc} (${fmtAbbr(m.importe)})`).join(" · ")}</div>
+    <div style="font-size:11px;margin-top:4px;color:var(--muted)">${movsMes.map(m=>`${escapeHtml(m.desc)} (${fmtAbbr(m.importe)})`).join(" · ")}</div>
   </div>`;
 }
 
@@ -1445,7 +1457,7 @@ function buildCats(){
   });
   document.getElementById("inp-cat").innerHTML=sorted.map(c=>{
     const star=(useCount[c]||0)>=5?" ⭐":"";
-    return `<option value="${c}">${getIcon(c)} ${c}${star}</option>`;
+    return `<option value="${escapeHtml(c)}">${getIcon(c)} ${escapeHtml(c)}${star}</option>`;
   }).join("");
   updateSubcats();
 }
@@ -1455,7 +1467,7 @@ function buildTcCats(){
   const sel=document.getElementById("tc-cat");
   if(!sel) return;
   const valActual=sel.value;
-  sel.innerHTML=ordenarCats("Tarjeta", cats).map(c=>`<option>${c}</option>`).join("");
+  sel.innerHTML=ordenarCats("Tarjeta", cats).map(c=>`<option>${escapeHtml(c)}</option>`).join("");
   if(valActual && cats[valActual]) sel.value=valActual;
   autoSeleccionarCuenta();
 }
@@ -1465,7 +1477,7 @@ function buildInvCats(){
   const sel=document.getElementById("inv-cat");
   if(!sel) return;
   const valActual=sel.value;
-  sel.innerHTML=ordenarCats("Inversion", cats).map(c=>`<option>${c}</option>`).join("");
+  sel.innerHTML=ordenarCats("Inversion", cats).map(c=>`<option>${escapeHtml(c)}</option>`).join("");
   if(valActual && cats[valActual]) sel.value=valActual;
   updateInvSubcats();
 }
@@ -1535,12 +1547,12 @@ function autoSeleccionarCuenta(){
 function updateInvSubcats(){
   const cat=document.getElementById("inv-cat").value;
   const subList=getCats("Inversion")[cat]||["Otros"];
-  document.getElementById("inv-subcat").innerHTML=subList.map(s=>`<option>${s}</option>`).join("");
+  document.getElementById("inv-subcat").innerHTML=subList.map(s=>`<option>${escapeHtml(s)}</option>`).join("");
   autoSeleccionarCuenta();
 }
 function updateSubcats(){
   const cat=document.getElementById("inp-cat").value;
-  document.getElementById("inp-subcat").innerHTML=(getCats(tipo)[cat]||["Otros"]).map(s=>`<option>${s}</option>`).join("");
+  document.getElementById("inp-subcat").innerHTML=(getCats(tipo)[cat]||["Otros"]).map(s=>`<option>${escapeHtml(s)}</option>`).join("");
   autoSeleccionarCuenta();
 }
 
@@ -1653,7 +1665,7 @@ function sugerirCategoria(){
   el._sugerencia=sug;
   const icon=getIcon(sug.cat,"💡");
   const fuenteLabel=sug.fuente==="historial"?"según tu historial":"sugerido";
-  el.innerHTML=`💡 <strong>${icon} ${sug.cat}${sug.subcat?" / "+sug.subcat:""}</strong> <span style="opacity:.7;font-size:11px">· ${fuenteLabel} · tocá para aplicar</span>`;
+  el.innerHTML=`💡 <strong>${icon} ${escapeHtml(sug.cat)}${sug.subcat?" / "+escapeHtml(sug.subcat):""}</strong> <span style="opacity:.7;font-size:11px">· ${fuenteLabel} · tocá para aplicar</span>`;
   el.style.display="block";
 }
 
@@ -2252,31 +2264,31 @@ function construirCuerpoTxItem(m){
     else amt=`${isTc||m.tipo==="Gasto"?"-":"+"}${fmtS(m.importe)}`;
     let cat,sub;
     if(isTc){
-      cat=m.desc;
+      cat=escapeHtml(m.desc);
       const monedaPref=m.moneda==="USD"?"USD ":"";
       const monedaBadge=m.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">USD</span>`:"";
       cat+=monedaBadge;
       if(m.frecuente){
-        sub=`${m.subcat} · 🔁 Mensual fijo · ${(m.fecha||"").split("-").reverse().join("/")}`;
+        sub=`${escapeHtml(m.subcat)} · 🔁 Mensual fijo · ${(m.fecha||"").split("-").reverse().join("/")}`;
       } else {
         const tot=m.moneda==="USD"?`USD ${m.importeTotal.toFixed(2)}`:fmtS(m.importeTotal);
-        sub=`${m.subcat} · Cuota ${m.nCuota}/${m.cuotasTotal} · ${tot} total`;
+        sub=`${escapeHtml(m.subcat)} · Cuota ${m.nCuota}/${m.cuotasTotal} · ${tot} total`;
       }
     } else if(isInv){
       // Badge de cash flow para diferenciar rescate vs suscripción
       const invBadge=invEsIngreso
         ?` <span style="font-size:9px;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:8px;font-weight:500">📥 INGRESO</span>`
         :` <span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500">📤 GASTO</span>`;
-      cat=`${m.cat}<span class="inv-badge">${m.ticker||"?"}</span>${invBadge}`;
-      sub=`${m.subcat} · ${(m.fecha||"").split("-").reverse().join("/")}`;
+      cat=`${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${invBadge}`;
+      sub=`${escapeHtml(m.subcat)} · ${(m.fecha||"").split("-").reverse().join("/")}`;
     } else {
       let badge="";
       if(isAhorro) badge=` <span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">AHORRO</span>`;
       else if(isRetiro) badge=` <span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">DE AHORROS</span>`;
       else if(m.frecuente) badge=` <span style="font-size:9px;background:var(--warning-light);color:var(--warning);padding:1px 6px;border-radius:8px;font-weight:500">🔁 FRECUENTE</span>`;
-      cat=`${m.cat}${badge}`;
+      cat=`${escapeHtml(m.cat)}${badge}`;
       if(m.recuperable>0) cat+=` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">🔁 ${fmtAbbr(m.recuperable)}</span>`;
-      sub=`${m.subcat||""} · ${(m.fecha||"").split("-").reverse().join("/")}`;
+      sub=`${escapeHtml(m.subcat||"")} · ${(m.fecha||"").split("-").reverse().join("/")}`;
     }
     // Ícono e iconClass siguen la misma lógica de color
     let icon, iconClass;
@@ -2289,7 +2301,7 @@ function construirCuerpoTxItem(m){
     return `<div class="tx-icon ${iconClass}">${icon}</div>
       <div class="tx-info">
         <div class="tx-cat">${cat}</div>
-        <div class="tx-sub">${sub}${!isTc&&m.nota?" · "+m.nota.slice(0,18):""}</div>
+        <div class="tx-sub">${sub}${!isTc&&m.nota?" · "+escapeHtml(m.nota.slice(0,18)):""}</div>
         ${!isTc?renderTagsChips(m):""}
       </div>
       <div class="tx-amount ${amtClass}">${amt}</div>`;
@@ -2513,7 +2525,7 @@ function renderMovs(){
     if(tarjetasUnicas.length>1){
       subFiltroEl.innerHTML=`
         <span class="filter-chip ${filtroTarjeta===''?'active':''}" onclick="setFiltroTarjeta('')">Todas</span>
-        ${tarjetasUnicas.map(t=>`<span class="filter-chip ${filtroTarjeta===t?'active':''}" onclick="setFiltroTarjeta('${t.replace(/'/g,"\\'")}')">${t}</span>`).join("")}`;
+        ${tarjetasUnicas.map(t=>`<span class="filter-chip ${filtroTarjeta===t?'active':''}" onclick="setFiltroTarjeta('${t.replace(/'/g,"\\'")}')">${escapeHtml(t)}</span>`).join("")}`;
       subFiltroEl.style.display="flex";
     } else {
       subFiltroEl.style.display="none";
@@ -2541,11 +2553,11 @@ function renderMovs(){
     const nFrec=mesTcsFiltrados.filter(m=>m.frecuente).length;
     const nCuotas=mesTcsFiltrados.length-nFrec;
     if(mesTcsFiltrados.length){
-      const tarjLbl=filtroTarjeta?` · ${filtroTarjeta}`:"";
+      const tarjLbl=filtroTarjeta?` · ${escapeHtml(filtroTarjeta)}`:"";
       arrastreEl.innerHTML=`💳 ${nCuotas} ${nCuotas===1?"cuota":"cuotas"} · 🔁 ${nFrec} ${nFrec===1?"frecuente":"frecuentes"}${tarjLbl} · No impacta el saldo`;
       arrastreEl.style.display="block";
     } else {
-      arrastreEl.innerHTML=filtroTarjeta?`Sin movimientos de ${filtroTarjeta} en ${mesLbl(mesActual)}`:`Sin movimientos de tarjeta en ${mesLbl(mesActual)}`;
+      arrastreEl.innerHTML=filtroTarjeta?`Sin movimientos de ${escapeHtml(filtroTarjeta)} en ${mesLbl(mesActual)}`:`Sin movimientos de tarjeta en ${mesLbl(mesActual)}`;
       arrastreEl.style.display="block";
     }
     document.getElementById("mov-cat-filtro").style.display="none";
@@ -2566,7 +2578,7 @@ function renderMovs(){
     if(catsUnicas.length>1){
       catFilterEl.innerHTML=`
         <span class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
-        ${catsUnicas.map(c=>`<span class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${c}</span>`).join("")}`;
+        ${catsUnicas.map(c=>`<span class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
       catFilterEl.style.display="flex";
     } else {
       catFilterEl.style.display="none";
@@ -2586,10 +2598,10 @@ function renderMovs(){
     const gastosTotalARS=gastosPurosARS+suscripcionesARS;
     const gastosTotalUSD=gastosPurosUSD+suscripcionesUSD;
 
-    let labelARS=filtroCategoria?`${filtroCategoria} ARS`:"Gastos ARS";
+    let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Gastos ARS";
     let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val negative">${fmtS(gastosTotalARS)}</div></div>`;
     if(gastosTotalUSD>0){
-      chipsHtml+=`<div class="chip"><div class="chip-label">${filtroCategoria?filtroCategoria+" USD":"Gastos USD"}</div><div class="chip-val negative">USD ${gastosTotalUSD.toFixed(2)}</div></div>`;
+      chipsHtml+=`<div class="chip"><div class="chip-label">${filtroCategoria?escapeHtml(filtroCategoria)+" USD":"Gastos USD"}</div><div class="chip-val negative">USD ${gastosTotalUSD.toFixed(2)}</div></div>`;
     }
     chipsHtml+=`<div class="chip"><div class="chip-label">Cantidad</div><div class="chip-val">${todoGastos.length}</div></div>`;
     // Chips informativos cuando no hay sub-filtro de categoría (desglose de qué compone el total)
@@ -2625,7 +2637,7 @@ function renderMovs(){
     if(catsUnicas.length>1){
       catFilterEl.innerHTML=`
         <span class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
-        ${catsUnicas.map(c=>`<span class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${c}</span>`).join("")}`;
+        ${catsUnicas.map(c=>`<span class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria('${c.replace(/'/g,"\\'")}')">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
       catFilterEl.style.display="flex";
     } else {
       catFilterEl.style.display="none";
@@ -2642,10 +2654,10 @@ function renderMovs(){
       if(m.moneda==="USD" && m.importeOrig) return s+m.importeOrig;
       return s;
     }, 0);
-    let labelARS=filtroCategoria?`${filtroCategoria} ARS`:"Ingresos ARS";
+    let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Ingresos ARS";
     let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val positive">${fmtS(ingTotalARS)}</div></div>`;
     if(ingTotalUSD>0){
-      chipsHtml+=`<div class="chip"><div class="chip-label">${filtroCategoria?filtroCategoria+" USD":"Ingresos USD"}</div><div class="chip-val positive">USD ${ingTotalUSD.toFixed(2)}</div></div>`;
+      chipsHtml+=`<div class="chip"><div class="chip-label">${filtroCategoria?escapeHtml(filtroCategoria)+" USD":"Ingresos USD"}</div><div class="chip-val positive">USD ${ingTotalUSD.toFixed(2)}</div></div>`;
     }
     chipsHtml+=`<div class="chip"><div class="chip-label">Cantidad</div><div class="chip-val">${todoIngresos.length}</div></div>`;
     // Chip informativo: resultado neto de inversiones del mes (rescates - suscripciones)
@@ -2746,7 +2758,7 @@ function renderMovs(){
       else if(pct>=80) color="var(--warning)";
       html+=`<div style="margin-bottom:6px">
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
-          <span>${getIcon(cat)} ${cat}</span>
+          <span>${getIcon(cat)} ${escapeHtml(cat)}</span>
           <span style="color:${color};font-weight:600">${pct}%</span>
         </div>
         <div style="background:var(--bg);height:5px;border-radius:3px;overflow:hidden">
@@ -2790,7 +2802,7 @@ function renderMovs(){
   if(searchQuery) show=show.filter(matchSearch);
   const list=document.getElementById("tx-list");
   if(!show.length){
-    if(searchQuery) list.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div>Sin resultados para "${searchQuery}"</div>`;
+    if(searchQuery) list.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div>Sin resultados para "${escapeHtml(searchQuery)}"</div>`;
     else if(filtroFecha) list.innerHTML=`<div class="empty"><div class="empty-icon">📅</div>Sin movimientos en ${filtroFecha.label}</div>`;
     else list.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>Sin movimientos este mes</div>`;
     return;
@@ -2927,8 +2939,8 @@ function renderEditForm(m){
       <div class="form-group"><label class="form-label">Cuenta</label>
         <div style="display:flex;gap:8px">
           <select id="edit-cuenta" class="form-select" style="flex:1">
-            ${getCuentas().map(c=>`<option ${m.cuenta===c?'selected':''}>${c}</option>`).join("")}
-            ${m.cuenta && !getCuentas().includes(m.cuenta)?`<option selected>${m.cuenta}</option>`:""}
+            ${getCuentas().map(c=>`<option ${m.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
+            ${m.cuenta && !getCuentas().includes(m.cuenta)?`<option selected>${escapeHtml(m.cuenta)}</option>`:""}
           </select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
@@ -2976,7 +2988,7 @@ function renderEditForm(m){
         <input type="date" id="edit-fecha" class="form-input" value="${(m.fecha||'').slice(0,10)}">
       </div>`}
       <div class="form-group"><label class="form-label">Nota</label>
-        <textarea id="edit-nota" class="form-textarea">${(m.nota||'').replace(/</g,'&lt;')}</textarea>
+        <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
       ${m.tipo==="Gasto" && !esFrec?`
       <div class="form-group">
@@ -2999,9 +3011,9 @@ function renderEditForm(m){
   }
   if(m.tipo==="Inversion"){
     return `
-      <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--invest-light);color:var(--invest);margin-bottom:10px">INVERSIÓN · ${m.subcat||''}</div>
+      <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--invest-light);color:var(--invest);margin-bottom:10px">INVERSIÓN · ${escapeHtml(m.subcat)}</div>
       <div class="form-group"><label class="form-label">Ticker / Fondo</label>
-        <input type="text" id="edit-ticker" class="form-input" value="${(m.ticker||'').replace(/"/g,'&quot;')}">
+        <input type="text" id="edit-ticker" class="form-input" value="${escapeHtml(m.ticker)}">
       </div>
       <div class="two-col">
         <div class="form-group"><label class="form-label">Importe ARS</label>
@@ -3021,14 +3033,14 @@ function renderEditForm(m){
       <div class="form-group"><label class="form-label">Cuenta</label>
         <div style="display:flex;gap:8px">
           <select id="edit-cuenta" class="form-select" style="flex:1">
-            ${getCuentas().map(c=>`<option ${m.cuenta===c?'selected':''}>${c}</option>`).join("")}
-            ${m.cuenta && !getCuentas().includes(m.cuenta)?`<option selected>${m.cuenta}</option>`:""}
+            ${getCuentas().map(c=>`<option ${m.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
+            ${m.cuenta && !getCuentas().includes(m.cuenta)?`<option selected>${escapeHtml(m.cuenta)}</option>`:""}
           </select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
       <div class="form-group"><label class="form-label">Nota</label>
-        <textarea id="edit-nota" class="form-textarea">${(m.nota||'').replace(/</g,'&lt;')}</textarea>
+        <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
     `;
   }
@@ -3037,17 +3049,17 @@ function renderEditForm(m){
 function populateEditCatSelect(tipoMov,currentCat,currentSubcat){
   const cats=getCats(tipoMov);
   const keys=ordenarCats(tipoMov, cats);
-  let opts=keys.map(c=>`<option value="${c}" ${c===currentCat?"selected":""}>${getIcon(c)} ${c}</option>`);
+  let opts=keys.map(c=>`<option value="${escapeHtml(c)}" ${c===currentCat?"selected":""}>${getIcon(c)} ${escapeHtml(c)}</option>`);
   // Si la categoría actual no está en las opciones (ej: vino del Excel con otro nombre), agregarla
   if(currentCat && !cats[currentCat]){
-    opts.unshift(`<option value="${currentCat}" selected>${currentCat}</option>`);
+    opts.unshift(`<option value="${escapeHtml(currentCat)}" selected>${escapeHtml(currentCat)}</option>`);
   }
   document.getElementById("edit-cat").innerHTML=opts.join("");
   // Subcategorías
   const subList=cats[currentCat]||[];
-  let subOpts=subList.map(s=>`<option ${s===currentSubcat?"selected":""}>${s}</option>`);
+  let subOpts=subList.map(s=>`<option ${s===currentSubcat?"selected":""}>${escapeHtml(s)}</option>`);
   if(currentSubcat && !subList.includes(currentSubcat)){
-    subOpts.unshift(`<option selected>${currentSubcat}</option>`);
+    subOpts.unshift(`<option selected>${escapeHtml(currentSubcat)}</option>`);
   }
   if(!subOpts.length) subOpts.push("<option>Otros</option>");
   document.getElementById("edit-subcat").innerHTML=subOpts.join("");
@@ -3058,7 +3070,7 @@ function updateEditSubcats(){
   const cat=document.getElementById("edit-cat").value;
   const cats=getCats(m.tipo);
   const subList=cats[cat]||["Otros"];
-  document.getElementById("edit-subcat").innerHTML=subList.map(s=>`<option>${s}</option>`).join("");
+  document.getElementById("edit-subcat").innerHTML=subList.map(s=>`<option>${escapeHtml(s)}</option>`).join("");
 }
 function guardarEdit(){
   const m=movs.find(x=>x.id===editingId);
@@ -3301,7 +3313,7 @@ function renderTarjetas(){
         const fmt=moneda==="USD"?`USD ${val.toFixed(2)}`:fmtS(val);
         const monedaBadge=moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:6px">USD</span>`:"";
         return `<div class="bar-row" style="margin-bottom:6px">
-          <div class="bar-label">💳 ${tarj}${monedaBadge}</div>
+          <div class="bar-label">💳 ${escapeHtml(tarj)}${monedaBadge}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxV*100)}%;background:var(--warning)"></div></div>
           <div class="bar-val">${fmt}</div>
         </div>`;
@@ -3317,7 +3329,7 @@ function renderTarjetas(){
         const tag=m.frecuente?"🔁":`${m.nCuota}/${m.cuotasTotal}`;
         const monto=m.moneda==="USD"?`USD ${m.importe.toFixed(2)}`:fmtS(m.importe);
         html+=`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
-          <span><span style="color:var(--muted);font-size:10px">${tag}</span> ${m.desc}</span>
+          <span><span style="color:var(--muted);font-size:10px">${tag}</span> ${escapeHtml(m.desc)}</span>
           <strong>${monto}</strong>
         </div>`;
       });
@@ -3366,8 +3378,8 @@ function renderTarjetas(){
       return `<div class="tc-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
           <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:600">${t.desc} <span style="font-size:11px">🔁</span>${t.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:6px">USD</span>`:""}</div>
-            <div style="font-size:11px;color:var(--muted)">${t.tarjeta} · ${t.cat} · Desde ${mesLbl(t.mesInicio)}</div>
+            <div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)} <span style="font-size:11px">🔁</span>${t.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:6px">USD</span>`:""}</div>
+            <div style="font-size:11px;color:var(--muted)">${escapeHtml(t.tarjeta)} · ${escapeHtml(t.cat)} · Desde ${mesLbl(t.mesInicio)}</div>
           </div>
           <span class="tc-badge" style="background:var(--warning-light);color:var(--warning)">FRECUENTE</span>
         </div>
@@ -3414,8 +3426,8 @@ function renderTarjetas(){
     return `<div class="tc-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600">${t.desc}${t.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:6px">USD</span>`:""}</div>
-          <div style="font-size:11px;color:var(--muted)">${t.tarjeta} · ${t.cat}${t.fecha?" · "+t.fecha.split("-").reverse().join("/"):""}</div>
+          <div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)}${t.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:6px">USD</span>`:""}</div>
+          <div style="font-size:11px;color:var(--muted)">${escapeHtml(t.tarjeta)} · ${escapeHtml(t.cat)}${t.fecha?" · "+t.fecha.split("-").reverse().join("/"):""}</div>
         </div>
         <span class="tc-badge">Cuota ${nActual}/${t.cuotasTotal}</span>
       </div>
@@ -3449,11 +3461,11 @@ function renderTarjetas(){
   if(!completas.length){doneEl.innerHTML=`<p style="font-size:13px;color:var(--muted)">Sin historial aún</p>`;return;}
   doneEl.innerHTML=completas.map(t=>{
     const subInfo=t.frecuente
-      ? `${t.tarjeta} · 🔁 Mensual · ${mesLbl(t.mesInicio)}–${t.mesFin?mesLbl(t.mesFin):""}`
-      : `${t.tarjeta} · ${t.cuotasTotal} cuotas · ${fmtMoneda(t.total,t.moneda)}`;
+      ? `${escapeHtml(t.tarjeta)} · 🔁 Mensual · ${mesLbl(t.mesInicio)}–${t.mesFin?mesLbl(t.mesFin):""}`
+      : `${escapeHtml(t.tarjeta)} · ${t.cuotasTotal} cuotas · ${fmtMoneda(t.total,t.moneda)}`;
     return `<div class="tc-card" style="opacity:.75">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-size:14px;font-weight:600">${t.desc}</div>
+        <div><div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)}</div>
           <div style="font-size:11px;color:var(--muted)">${subInfo}</div>
         </div>
         <span class="tc-badge" style="background:var(--success-light);color:var(--success)">✓</span>
@@ -3583,7 +3595,7 @@ function renderInv(){
       html+=catEntries.map(([cat,val])=>{
         const c=val>=0?"var(--success)":"var(--danger)";
         return `<div class="bar-row" style="margin-bottom:6px">
-          <div class="bar-label">◈ ${cat}</div>
+          <div class="bar-label">◈ ${escapeHtml(cat)}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(val)/maxV*100)}%;background:${c}"></div></div>
           <div class="bar-val" style="color:${c}">${fmtS(val)}</div>
         </div>`;
@@ -3603,7 +3615,7 @@ function renderInv(){
       html+=tickerEntries.map(([ticker,val])=>{
         const c=val>=0?"var(--success)":"var(--danger)";
         return `<div class="bar-row" style="margin-bottom:6px">
-          <div class="bar-label">${ticker}</div>
+          <div class="bar-label">${escapeHtml(ticker)}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(val)/maxV*100)}%;background:${c}"></div></div>
           <div class="bar-val" style="color:${c}">${fmtS(val)}</div>
         </div>`;
@@ -3624,7 +3636,7 @@ function renderInv(){
       let amt;
       if(m.importeUSD>0) amt=`${sign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`;
       else amt=`${sign}${fmtS(m.importe||0)}`;
-      const sub=`${m.subcat||m.cat} · ${(m.fecha||"").split("-").reverse().join("/")}`;
+      const sub=`${escapeHtml(m.subcat||m.cat)} · ${(m.fecha||"").split("-").reverse().join("/")}`;
       const badge=esIngreso
         ?`<span style="font-size:9px;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:8px;font-weight:500;margin-left:4px">📥 INGRESO</span>`
         :`<span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500;margin-left:4px">📤 GASTO</span>`;
@@ -3632,8 +3644,8 @@ function renderInv(){
       return `<div class="tx-item">
         <div class="tx-icon ${esIngreso?'ingreso':'gasto'}">${esIngreso?"📥":"📤"}</div>
         <div class="tx-info">
-          <div class="tx-cat">${m.cat}<span class="inv-badge">${m.ticker||"?"}</span>${badge}</div>
-          <div class="tx-sub">${sub}${m.nota?" · "+m.nota.slice(0,18):""}</div>
+          <div class="tx-cat">${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${badge}</div>
+          <div class="tx-sub">${sub}${m.nota?" · "+escapeHtml(m.nota.slice(0,18)):""}</div>
         </div>
         <div class="tx-amount" style="color:${amtColor}">${amt}</div>
         <div class="tx-actions">
@@ -3667,8 +3679,8 @@ function renderInv(){
       const tickerEsc=p.ticker.replace(/'/g,"\\'");
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showInstrumentoDetail('${tickerEsc}')">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${p.ticker}</div>
-          <div style="font-size:11px;color:var(--muted)">${p.cat} · ${p.count} ${p.count===1?"mov":"movs"}</div>
+          <div style="font-size:13px;font-weight:600">${escapeHtml(p.ticker)}</div>
+          <div style="font-size:11px;color:var(--muted)">${escapeHtml(p.cat)} · ${p.count} ${p.count===1?"mov":"movs"}</div>
         </div>
         <div style="text-align:right">
           ${p.ars!==0?`<div style="font-size:13px;font-weight:600;color:${arsColor}">${fmtS(p.ars)}</div>`:""}
@@ -3751,7 +3763,7 @@ function renderInvHistorico(){
     html+=topItems.map(p=>{
       const c=p.ars>=0?"var(--success)":"var(--danger)";
       return `<div class="bar-row" style="margin-bottom:6px">
-        <div class="bar-label">${p.ticker}</div>
+        <div class="bar-label">${escapeHtml(p.ticker)}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(p.ars)/maxV*100)}%;background:${c}"></div></div>
         <div class="bar-val" style="color:${c}">${fmtAbbr(p.ars)}</div>
       </div>`;
@@ -3802,20 +3814,20 @@ function renderEditTcForm(t){
     return `
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--warning-light);color:var(--warning);margin-bottom:10px">🔁 GASTO FRECUENTE</div>
       <div class="form-group"><label class="form-label">Descripción</label>
-        <input type="text" id="edit-tc-desc" class="form-input" value="${(t.desc||'').replace(/"/g,'&quot;')}">
+        <input type="text" id="edit-tc-desc" class="form-input" value="${escapeHtml(t.desc)}">
       </div>
       <div class="two-col">
         <div class="form-group"><label class="form-label">Tarjeta</label>
           <div style="display:flex;gap:6px">
             <select id="edit-tc-tarj" class="form-select" style="flex:1">
-              ${getTarjetas().map(nm=>`<option ${t.tarjeta===nm?'selected':''}>${nm}</option>`).join("")}
-              ${t.tarjeta && !getTarjetas().includes(t.tarjeta)?`<option selected>${t.tarjeta}</option>`:""}
+              ${getTarjetas().map(nm=>`<option ${t.tarjeta===nm?'selected':''}>${escapeHtml(nm)}</option>`).join("")}
+              ${t.tarjeta && !getTarjetas().includes(t.tarjeta)?`<option selected>${escapeHtml(t.tarjeta)}</option>`:""}
             </select>
             <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('edit-tc-tarj')" title="Agregar tarjeta nueva">+</button>
           </div>
         </div>
         <div class="form-group"><label class="form-label">Categoría</label>
-          <input type="text" id="edit-tc-cat" class="form-input" value="${t.cat||''}">
+          <input type="text" id="edit-tc-cat" class="form-input" value="${escapeHtml(t.cat)}">
         </div>
       </div>
       <div class="two-col">
@@ -3829,8 +3841,8 @@ function renderEditTcForm(t){
       <div class="form-group"><label class="form-label">Cuenta</label>
         <div style="display:flex;gap:8px">
           <select id="edit-tc-cuenta" class="form-select" style="flex:1">
-            ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${c}</option>`).join("")}
-            ${t.cuenta && !getCuentas().includes(t.cuenta)?`<option selected>${t.cuenta}</option>`:""}
+            ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
+            ${t.cuenta && !getCuentas().includes(t.cuenta)?`<option selected>${escapeHtml(t.cuenta)}</option>`:""}
           </select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
@@ -3876,7 +3888,7 @@ function renderEditTcForm(t){
         <button type="button" class="btn-sm" style="color:var(--danger);width:100%" onclick="darDeBajaFrec(${t.id})">Dar de baja desde el próximo mes</button>
       </div>
       <div class="form-group"><label class="form-label">Nota</label>
-        <textarea id="edit-tc-nota" class="form-textarea">${(t.nota||'').replace(/</g,'&lt;')}</textarea>
+        <textarea id="edit-tc-nota" class="form-textarea">${escapeHtml(t.nota)}</textarea>
       </div>
     `;
   }
@@ -3890,14 +3902,14 @@ function renderEditTcForm(t){
       <div class="form-group"><label class="form-label">Tarjeta</label>
         <div style="display:flex;gap:6px">
           <select id="edit-tc-tarj" class="form-select" style="flex:1">
-            ${getTarjetas().map(nm=>`<option ${t.tarjeta===nm?'selected':''}>${nm}</option>`).join("")}
-            ${t.tarjeta && !getTarjetas().includes(t.tarjeta)?`<option selected>${t.tarjeta}</option>`:""}
+            ${getTarjetas().map(nm=>`<option ${t.tarjeta===nm?'selected':''}>${escapeHtml(nm)}</option>`).join("")}
+            ${t.tarjeta && !getTarjetas().includes(t.tarjeta)?`<option selected>${escapeHtml(t.tarjeta)}</option>`:""}
           </select>
           <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('edit-tc-tarj')" title="Agregar tarjeta nueva">+</button>
         </div>
       </div>
       <div class="form-group"><label class="form-label">Categoría</label>
-        <input type="text" id="edit-tc-cat" class="form-input" value="${t.cat||''}">
+        <input type="text" id="edit-tc-cat" class="form-input" value="${escapeHtml(t.cat)}">
       </div>
     </div>
     <div class="form-group"><label class="form-label">Moneda</label>
@@ -3922,8 +3934,8 @@ function renderEditTcForm(t){
     <div class="form-group"><label class="form-label">Cuenta</label>
       <div style="display:flex;gap:8px">
         <select id="edit-tc-cuenta" class="form-select" style="flex:1">
-          ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${c}</option>`).join("")}
-          ${t.cuenta && !getCuentas().includes(t.cuenta)?`<option selected>${t.cuenta}</option>`:""}
+          ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
+          ${t.cuenta && !getCuentas().includes(t.cuenta)?`<option selected>${escapeHtml(t.cuenta)}</option>`:""}
         </select>
         <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
       </div>
@@ -4229,7 +4241,7 @@ function renderDashYear(){
           comp=`<span style="font-size:10px;color:var(--muted);margin-left:6px">nuevo</span>`;
         }
         return `<div class="bar-row" style="cursor:pointer" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}')">
-          <div class="bar-label">${getIcon(cat,"")} ${cat}${comp}</div>
+          <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxVal*100)}%;background:#a32d2d"></div></div>
           <div class="bar-val">${fmtAbbr(val)}</div>
         </div>`;
@@ -4255,7 +4267,7 @@ function renderDashYear(){
           comp=`<span style="font-size:10px;color:var(--muted);margin-left:6px">nuevo</span>`;
         }
         return `<div class="bar-row" style="cursor:pointer" onclick="showCatDetail('${cat.replace(/'/g,"\\'")}','Ingreso')">
-          <div class="bar-label">${getIcon(cat,"")} ${cat}${comp}</div>
+          <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxValIng*100)}%;background:#2d7a3a"></div></div>
           <div class="bar-val">${fmtAbbr(val)}</div>
         </div>`;
@@ -4321,7 +4333,7 @@ function renderDashCuentas(){
     const cuentaEsc=c.cuenta.replace(/'/g,"\\'");
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showCuentaDetail('${cuentaEsc}')">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div style="font-size:13px;font-weight:600">💳 ${c.cuenta}</div>
+        <div style="font-size:13px;font-weight:600">💳 ${escapeHtml(c.cuenta)}</div>
         <div style="font-size:13px;font-weight:600;color:${balColor}">${sign}${fmtS(c.balance)}</div>
       </div>
       <div style="font-size:11px;color:var(--muted)">
@@ -4466,7 +4478,7 @@ function showCatDetail(cat, tipo){
     const maxS=subs[0][1];
     subs.forEach(([s,v])=>{
       html+=`<div class="bar-row" style="margin-bottom:5px">
-        <div class="bar-label" style="font-size:12px">${s}</div>
+        <div class="bar-label" style="font-size:12px">${escapeHtml(s)}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/maxS*100)}%;background:var(--accent)"></div></div>
         <div class="bar-val">${fmtAbbr(v)}</div>
       </div>`;
@@ -4520,8 +4532,8 @@ function showInstrumentoDetail(ticker){
       :`<span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500">📤 GASTO</span>`;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${m.subcat||m.cat} ${badge}</div>
-        <div style="font-size:11px;color:var(--muted)">${fecha}${m.cuenta?" · "+m.cuenta:""}${m.nota?" · "+m.nota:""}</div>
+        <div style="font-size:13px;font-weight:600">${escapeHtml(m.subcat||m.cat)} ${badge}</div>
+        <div style="font-size:11px;color:var(--muted)">${fecha}${m.cuenta?" · "+escapeHtml(m.cuenta):""}${m.nota?" · "+escapeHtml(m.nota):""}</div>
       </div>
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${montoTxt}</div>
@@ -4631,8 +4643,8 @@ function showCuentaDetail(cuentaNombre){
     const subInfo=m.tipo==="Inversion"?(m.subcat||""):(m.subcat||"");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${titulo} ${badge}</div>
-        <div style="font-size:11px;color:var(--muted)">${subInfo?subInfo+" · ":""}${fecha}${m.nota?" · "+m.nota:""}</div>
+        <div style="font-size:13px;font-weight:600">${escapeHtml(titulo)} ${badge}</div>
+        <div style="font-size:11px;color:var(--muted)">${subInfo?escapeHtml(subInfo)+" · ":""}${fecha}${m.nota?" · "+escapeHtml(m.nota):""}</div>
       </div>
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${signo}${fmtS(m.importe||0)}</div>
@@ -5151,7 +5163,7 @@ function renderAhorroRanking(){
     const catEsc=it.cat.replace(/'/g,"\\'");
     return `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);cursor:pointer" onclick="showAhorroCatDetail('${catEsc}')">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <div style="font-size:13px;font-weight:600">${icon} ${it.cat}</div>
+        <div style="font-size:13px;font-weight:600">${icon} ${escapeHtml(it.cat)}</div>
         <div style="text-align:right">
           ${it.saldoArs!==0?`<div style="font-size:13px;font-weight:600;color:${c}">${fmtS(it.saldoArs)}</div>`:""}
           ${it.saldoUsd!==0?`<div style="font-size:${it.saldoArs!==0?'11px':'13px'};font-weight:600;color:${cUsd}">USD ${it.saldoUsd.toFixed(2)}</div>`:""}
@@ -5213,8 +5225,8 @@ function showAhorroCatDetail(cat){
     const fecha=(m.fecha||"").split("-").reverse().join("/");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${m.subcat||m.cat} ${badge} ${badgeMoneda}</div>
-        <div style="font-size:11px;color:var(--muted)">${fecha}${m.nota?" · "+m.nota:""}</div>
+        <div style="font-size:13px;font-weight:600">${escapeHtml(m.subcat||m.cat)} ${badge} ${badgeMoneda}</div>
+        <div style="font-size:11px;color:var(--muted)">${fecha}${m.nota?" · "+escapeHtml(m.nota):""}</div>
       </div>
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${signo}${montoTxt}</div>
@@ -5522,14 +5534,14 @@ function renderMetas(){
   const depCard=document.getElementById("depositar-card");
   if(!metas.length){el.innerHTML=`<div class="empty" style="padding:24px"><div class="empty-icon">🎯</div>Creá tu primera meta</div>`;depCard.style.display="none";return;}
   depCard.style.display="block";
-  document.getElementById("dep-meta").innerHTML=metas.map(m=>`<option value="${m.id}">${m.emoji} ${m.nombre}</option>`).join("");
+  document.getElementById("dep-meta").innerHTML=metas.map(m=>`<option value="${m.id}">${m.emoji} ${escapeHtml(m.nombre)}</option>`).join("");
   el.innerHTML=metas.map(m=>{
     const pct=Math.min(100,Math.round((m.actual/m.objetivo)*100));
     const resta=Math.max(0,m.objetivo-m.actual);
     return `<div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div style="font-size:14px;font-weight:600">${m.emoji} ${m.nombre}</div>
+          <div style="font-size:14px;font-weight:600">${m.emoji} ${escapeHtml(m.nombre)}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmt(m.actual)} de ${fmt(m.objetivo)} · ${pct}% logrado</div>
           ${resta>0?`<div style="font-size:11px;color:var(--save)">Faltan ${fmt(resta)}</div>`:`<div style="font-size:11px;color:var(--success);font-weight:600">✓ Meta alcanzada!</div>`}
         </div>
@@ -5560,7 +5572,7 @@ function renderImportHistory(){
     const vivos=h.id ? movs.filter(m=>m._importId===h.id).length : 0;
     return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${h.nombre}</div><div style="font-size:11px;color:var(--muted)">${h.fecha} · ${h.registros} registros${h.id&&vivos>0?` · ${vivos} en la app`:""}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${escapeHtml(h.nombre)}</div><div style="font-size:11px;color:var(--muted)">${h.fecha} · ${h.registros} registros${h.id&&vivos>0?` · ${vivos} en la app`:""}</div></div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span style="font-size:11px;background:var(--success-light);color:var(--success);padding:3px 9px;border-radius:12px">✓</span>
         <button class="tx-del" style="color:var(--danger);font-size:18px" onclick="eliminarImport(${idx})" title="Eliminar esta importación">×</button>
@@ -5822,8 +5834,8 @@ function renderImportPreviewList(){
     <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
         <div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;font-weight:600;color:${C[m.tipo]||"var(--muted)"}">${m.tipo}</span><span style="font-size:11px;color:var(--muted)">${m.fecha}</span></div>
-        <div style="font-size:13px;font-weight:600;margin-top:2px">${m.cat} · ${m.subcat}</div>
-        ${m.nota?`<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nota}</div>`:""}
+        <div style="font-size:13px;font-weight:600;margin-top:2px">${escapeHtml(m.cat)} · ${escapeHtml(m.subcat)}</div>
+        ${m.nota?`<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.nota)}</div>`:""}
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:13px;font-weight:600;color:${C[m.tipo]||"var(--text)"}">${fmt(m.importe)}</div>
@@ -6183,7 +6195,7 @@ function renderCuentasManager(){
   if(!el) return;
   const html=getCuentas().map(c=>{
     const esCustom=cuentasCustom.includes(c);
-    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:${esCustom?'var(--accent-light)':'var(--bg)'};color:${esCustom?'var(--accent)':'var(--muted)'};padding:4px 10px;border-radius:12px;margin:3px">💳 ${c}${esCustom?`<button onclick="borrarCuentaCustom('${c.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0;line-height:1">×</button>`:''}</span>`;
+    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:${esCustom?'var(--accent-light)':'var(--bg)'};color:${esCustom?'var(--accent)':'var(--muted)'};padding:4px 10px;border-radius:12px;margin:3px">💳 ${escapeHtml(c)}${esCustom?`<button onclick="borrarCuentaCustom('${c.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0;line-height:1">×</button>`:''}</span>`;
   }).join("");
   el.innerHTML=html+`<div style="margin-top:10px"><button class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')">+ Agregar cuenta</button></div>`;
 }
@@ -6276,7 +6288,7 @@ function renderTarjetasManager(){
     const esDefault=TARJETAS_DEFAULT.includes(t);
     const tEsc=t.replace(/'/g,"\\'");
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:13px">💳 ${t}${esDefault?"":' <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px">custom</span>'}</span>
+      <span style="font-size:13px">💳 ${escapeHtml(t)}${esDefault?"":' <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px">custom</span>'}</span>
       <div style="display:flex;gap:10px">
         <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0" onclick="renombrarTarjeta('${tEsc}')" title="Renombrar">✎</button>
         ${esCustom?`<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:0" onclick="borrarTarjetaCustom('${tEsc}')" title="Eliminar">×</button>`:""}
@@ -6326,9 +6338,9 @@ function renderCatManager(){
       const subsHtml=subs.map(s=>{
         const esSubCustom=subsCustom.includes(s)&&!subsDefault.includes(s);
         if(esSubCustom){
-          return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:10px;margin:2px">${s}<button onclick="borrarSubcat('${t}','${catEsc}','${s.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0;line-height:1">×</button></span>`;
+          return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:10px;margin:2px">${escapeHtml(s)}<button onclick="borrarSubcat('${t}','${catEsc}','${s.replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0;line-height:1">×</button></span>`;
         }
-        return `<span style="display:inline-block;font-size:11px;background:var(--bg);color:var(--muted);padding:2px 8px;border-radius:10px;margin:2px">${s}</span>`;
+        return `<span style="display:inline-block;font-size:11px;background:var(--bg);color:var(--muted);padding:2px 8px;border-radius:10px;margin:2px">${escapeHtml(s)}</span>`;
       }).join("");
       const esPrimera=idx===0, esUltima=idx===nombresOrdenados.length-1;
       html+=`<div class="cat-row" style="flex-direction:column;align-items:stretch">
@@ -6339,7 +6351,7 @@ function renderCatManager(){
               <button class="btn-sm" style="padding:1px 6px;font-size:10px;line-height:1;${esUltima?'opacity:.3;pointer-events:none':''}" onclick="moverCategoriaOrden('${t}','${catEsc}',1)" title="Bajar">▼</button>
             </div>
             <button type="button" onclick="openIconPicker({mode:'edit',cat:'${catEsc}'})" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;flex-shrink:0" title="Cambiar ícono">${getIcon(cat)}</button>
-            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cat}${esDefault?'':' <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px">custom</span>'}</div>
+            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(cat)}${esDefault?'':' <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px">custom</span>'}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="btn-sm" onclick="agregarSubcat('${t}','${catEsc}')">+ Sub</button>
@@ -6616,7 +6628,7 @@ function exportarPDF(){
   ${inv>0?`<p style="font-size:12px;color:#534ab7;margin-bottom:20px">◈ Inversiones del período: ${fmtS(inv)}</p>`:""}
   ${catSorted.length?`<h2>Gastos por categoría</h2>
   <table><thead><tr><th>Categoría</th><th class="right">Total</th><th class="right">% del total</th></tr></thead><tbody>
-    ${catSorted.map(([c,v])=>`<tr><td>${c}</td><td class="right neg">${fmtS(v)}</td><td class="right">${gas>0?Math.round(v/gas*100):0}%</td></tr>`).join("")}
+    ${catSorted.map(([c,v])=>`<tr><td>${escapeHtml(c)}</td><td class="right neg">${fmtS(v)}</td><td class="right">${gas>0?Math.round(v/gas*100):0}%</td></tr>`).join("")}
   </tbody></table>`:""}
   <h2>Detalle de movimientos (${inRange.length})</h2>
   <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Nota</th><th class="right">Importe</th></tr></thead><tbody>
@@ -6626,8 +6638,8 @@ function exportarPDF(){
       return `<tr>
         <td>${(m.fecha||"").split("-").reverse().slice(0,3).join("/")}</td>
         <td>${m.tipo}${m.esAhorro?" 🏦":""}</td>
-        <td>${m.cat||""}</td>
-        <td style="font-size:11px;color:#666">${(m.nota||"").slice(0,40)}</td>
+        <td>${escapeHtml(m.cat||"")}</td>
+        <td style="font-size:11px;color:#666">${escapeHtml((m.nota||"").slice(0,40))}</td>
         <td class="right ${cls}">${sign}${fmtS(m.importe)}</td>
       </tr>`;
     }).join("")}
@@ -6808,7 +6820,7 @@ function openPresupModal(catEdit){
   // Llenar select de categorías de Gasto
   const cats=getCats("Gasto");
   const sel=document.getElementById("presup-cat");
-  sel.innerHTML=Object.keys(cats).map(c=>`<option ${c===catEdit?"selected":""}>${c}</option>`).join("");
+  sel.innerHTML=Object.keys(cats).map(c=>`<option ${c===catEdit?"selected":""}>${escapeHtml(c)}</option>`).join("");
   if(catEdit) sel.value=catEdit;
   document.getElementById("presup-modal-title").textContent=catEdit?`Editar presupuesto: ${catEdit}`:"Nuevo presupuesto";
   document.getElementById("presup-monto").value=catEdit?(presupuestos[catEdit]||""):"";
@@ -6867,7 +6879,7 @@ function renderPresupManager(){
     else if(pct>=80) color="var(--warning)";
     return `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:600">${getIcon(cat)} ${cat}</div>
+        <div style="font-size:13px;font-weight:600">${getIcon(cat)} ${escapeHtml(cat)}</div>
         <div style="display:flex;gap:6px">
           <button class="btn-sm" onclick="openPresupModal('${cat.replace(/'/g,"\\'")}')">Editar</button>
           <button class="btn-sm" style="color:var(--danger)" onclick="borrarPresup('${cat.replace(/'/g,"\\'")}')">×</button>
@@ -6894,7 +6906,7 @@ function openRenameModal(){
   movs.forEach(m=>{if(m.cat) usadas.add(m.cat);});
   const cats=Array.from(usadas).sort();
   if(!cats.length){showToast("No hay categorías cargadas todavía");return;}
-  document.getElementById("rename-cat-from").innerHTML=cats.map(c=>`<option>${c}</option>`).join("");
+  document.getElementById("rename-cat-from").innerHTML=cats.map(c=>`<option>${escapeHtml(c)}</option>`).join("");
   document.getElementById("rename-cat-to").value="";
   updateRenameInfo();
   document.getElementById("modal-rename").classList.add("open");
