@@ -269,6 +269,65 @@ test("mostrarPrompt cancelado devuelve null, como el nativo", async ()=>{
 });
 
 // ═══════════════════════════════════════════
+// ACCESIBILIDAD
+// ═══════════════════════════════════════════
+grupo("Accesibilidad");
+
+// Se parsea el index.html real en vez de mirar el DOM de esta página: acá los elementos
+// de la app no están, solo sus funciones.
+async function indexParseado(){
+  if(!indexParseado._cache){
+    const html=await (await fetch("index.html")).text();
+    indexParseado._cache=new DOMParser().parseFromString(html,"text/html");
+  }
+  return indexParseado._cache;
+}
+
+function nombreAccesible(el){
+  if(el.getAttribute("aria-label")) return true;
+  if(el.getAttribute("aria-labelledby")) return true;
+  if(el.closest("label")) return true;                        // etiqueta envolvente
+  const id=el.getAttribute("id");
+  if(id && el.ownerDocument.querySelector(`label[for="${id}"]`)) return true;
+  return false;
+}
+
+test("todos los campos de formulario tienen etiqueta", async ()=>{
+  const doc=await indexParseado();
+  const sinEtiqueta=[...doc.querySelectorAll("input,select,textarea")]
+    .filter(el=>!nombreAccesible(el))
+    .map(el=>`${el.tagName.toLowerCase()}#${el.id||"(sin id)"}`);
+  igual(sinEtiqueta, [], "hay campos que un lector de pantalla no puede nombrar");
+});
+
+test("todos los botones tienen un nombre legible", async ()=>{
+  const doc=await indexParseado();
+  const mudos=[...doc.querySelectorAll("button")].filter(b=>{
+    if(b.getAttribute("aria-label")) return false;
+    if(b.style && b.style.visibility==="hidden") return false;   // la tecla vacía del teclado del PIN
+    // Alcanza con que tenga texto de más de un símbolo suelto
+    return (b.textContent||"").trim().replace(/[^\p{L}\p{N}]/gu,"").length===0;
+  }).map(b=>`<button>${(b.textContent||"").trim().slice(0,12)}</button>`);
+  igual(mudos, [], "hay botones que se anuncian sin nombre");
+});
+
+test("todo lo que actúa como botón se puede enfocar con teclado", async ()=>{
+  const doc=await indexParseado();
+  const sinFoco=[...doc.querySelectorAll('[role="button"]')]
+    .filter(el=>el.getAttribute("tabindex")===null)
+    .map(el=>`${el.tagName.toLowerCase()}#${el.id||el.className}`);
+  igual(sinFoco, [], 'hay elementos con role="button" que el teclado no alcanza');
+});
+
+// Este test existe porque al separar el CSS del HTML se coló la etiqueta </style> dentro
+// de styles.css. El navegador la ignora en silencio, así que el defecto pasó inadvertido.
+test("styles.css no tiene etiquetas HTML sueltas", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const sueltas=(css.match(/<\/?(style|script|html|head|body)\b[^>]*>/gi)||[]);
+  igual(sueltas, [], "quedó HTML dentro del archivo CSS");
+});
+
+// ═══════════════════════════════════════════
 // AISLAMIENTO
 // ═══════════════════════════════════════════
 grupo("Aislamiento de los tests");

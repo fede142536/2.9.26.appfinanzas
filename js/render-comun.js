@@ -101,6 +101,34 @@ function vibrar(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
 function showToast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
 
 // ═══════════════════════════════════════════
+// ACCESIBILIDAD: TECLADO
+// ═══════════════════════════════════════════
+// Varios elementos que actúan como botones son <div>/<span> con onclick (chips de filtro,
+// pestañas de año, filas de detalle). Se les puso role="button" y tabindex="0" para que
+// el navegador los anuncie y los enfoque; esto completa el trato: Enter y Espacio los
+// activan, igual que a un <button> de verdad. Un solo listener delegado cubre también los
+// que se generan dinámicamente.
+document.addEventListener("keydown", (e)=>{
+  if(e.key!=="Enter" && e.key!==" ") return;
+  const el=e.target.closest && e.target.closest('[role="button"]');
+  if(!el) return;
+  e.preventDefault();
+  el.click();
+});
+
+// Escape cierra el modal abierto más reciente. Se dispara un click sobre el propio overlay
+// en vez de sacarle la clase a mano: así corre el onclick que ya tiene cada modal (que
+// llama a SU función de cierre real, con la limpieza que corresponda).
+document.addEventListener("keydown", (e)=>{
+  if(e.key!=="Escape") return;
+  const generico=document.getElementById("modal-dialogo");
+  if(generico && generico.classList.contains("open")) return; // tiene su propio manejo
+  const abiertos=document.querySelectorAll(".modal-overlay.open");
+  if(!abiertos.length) return;
+  abiertos[abiertos.length-1].click();
+});
+
+// ═══════════════════════════════════════════
 // ERRORES VISIBLES
 // ═══════════════════════════════════════════
 // En el celular no hay consola: sin esto, un error no atrapado se traduce en "la app no
