@@ -2,14 +2,30 @@
 // Estrategia: network-first para index.html (busca actualizaciones),
 // cache-first para los demás assets (íconos, manifest).
 
-const CACHE_VERSION = "enola-v72";
+const CACHE_VERSION = "enola-v73";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./styles.css",
   "./icon-192.png",
   "./icon-512.png",
-  "./icon-maskable.png"
+  "./icon-maskable.png",
+  "./js/estado-categorias.js",
+  "./js/render-comun.js",
+  "./js/form-cargar.js",
+  "./js/movimientos.js",
+  "./js/editar-movimiento.js",
+  "./js/tarjetas-inversiones.js",
+  "./js/dashboard.js",
+  "./js/ahorros.js",
+  "./js/graficos-interactivos.js",
+  "./js/importar-exportar.js",
+  "./js/cuentas-tarjetas-categorias.js",
+  "./js/config-ui.js",
+  "./js/presupuestos.js",
+  "./js/seguridad-pin.js",
+  "./js/main.js"
 ];
 
 // Instalación: cachear todos los assets de la app, forzando bytes frescos (sin caché HTTP)

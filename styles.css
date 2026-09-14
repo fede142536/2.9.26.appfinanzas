@@ -1,0 +1,212 @@
+:root{
+  --bg:#f7f6f2;--surface:#fff;--border:#e8e5df;--text:#1a1a18;--muted:#6e6d65;
+  --accent:#1c6ca8;--accent-light:#e5f0fb;--danger:#a32d2d;--danger-light:#fcebeb;
+  --success:#2d7a3a;--success-light:#e8f5eb;--warning:#ba7517;--warning-light:#faeeda;
+  --invest:#534ab7;--invest-light:#eeedfe;--save:#1a6b6b;--save-light:#e0f5f5;
+  --radius:14px;--radius-sm:8px;--shadow:0 8px 24px rgba(0,0,0,.05);
+  --surface-glass:rgba(255,255,255,.82);
+}
+[data-theme="dark"]{
+  --bg:#000000;--surface:#1c1c1e;--border:rgba(255,255,255,.1);--text:#e8e6e0;--muted:#9a9890;
+  --accent:#4da3e8;--accent-light:#1d3045;--danger:#e57373;--danger-light:#3a2020;
+  --success:#7bbf85;--success-light:#1f3322;--warning:#e0a04a;--warning-light:#3a2c18;
+  --invest:#9489e0;--invest-light:#26223a;--save:#5cbfbf;--save-light:#1a3535;
+  --shadow:0 8px 24px rgba(0,0,0,.6);
+  --surface-glass:rgba(28,28,30,.78);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-variant-numeric:tabular-nums}
+/* NAV */
+/* Botón hamburguesa: fijo arriba a la izquierda, por encima del header en todas las pantallas */
+#hamburger-btn{position:fixed;top:10px;left:12px;z-index:60;width:38px;height:38px;border:none;border-radius:50%;background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:var(--shadow);font-size:18px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center}
+#fab-cargar{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-size:28px;border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.2s}
+#fab-cargar:active{transform:scale(.92)}
+/* Fondo oscuro detrás del menú: invisible y sin capturar toques hasta que se abre */
+#side-menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;opacity:0;pointer-events:none;transition:opacity .3s ease}
+#side-menu-overlay.open{opacity:1;pointer-events:auto}
+/* Panel lateral: arranca afuera de la pantalla (a la izquierda) y entra con transform */
+#side-menu{position:fixed;top:0;left:0;bottom:0;width:78vw;max-width:300px;background:var(--surface);z-index:200;transform:translateX(-100%);transition:transform .3s ease;box-shadow:4px 0 24px rgba(0,0,0,.15);display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);overflow-y:auto}
+#side-menu.open{transform:translateX(0)}
+.side-menu-header{display:flex;align-items:center;justify-content:space-between;padding:18px 18px 14px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.side-menu-title{font-size:16px;font-weight:700;letter-spacing:-.3px}
+.side-menu-close{background:none;border:none;font-size:22px;color:var(--muted);cursor:pointer;padding:4px 8px;line-height:1}
+/* Ítems del menú: lista vertical, ícono a la izquierda, texto grande — reemplaza el look de tab bar */
+.nav-btn{width:100%;text-align:left;padding:13px 18px;border:none;background:none;font-size:15px;font-weight:500;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:14px;transition:background-color .2s ease}
+.nav-btn:active{background:var(--bg)}
+.nav-btn.active{color:var(--accent);background:var(--accent-light);font-weight:600}
+.nav-icon{font-size:19px;line-height:1;width:26px;text-align:center;flex-shrink:0}
+.nav-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* LAYOUT */
+.page{display:none;padding:0 0 24px;min-height:100vh}
+@keyframes pageEnter{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+.page.active{display:block;animation:pageEnter .25s ease}
+.header{background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:13px 16px 13px 58px;position:sticky;top:0;z-index:50}
+.header h1{font-size:17px;font-weight:600;letter-spacing:-.4px}
+.header p{font-size:12px;color:var(--muted);margin-top:2px}
+@keyframes slideUpFade{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
+/* Destello breve en el select de cuenta cuando se autocompleta por predicción */
+@keyframes cuentaSugeridaFlash{0%{box-shadow:0 0 0 3px var(--accent-light);border-color:var(--accent)}100%{box-shadow:none;border-color:var(--border)}}
+.cuenta-sugerida-flash{animation:cuentaSugeridaFlash .7s ease}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:15px;margin:10px 16px;box-shadow:var(--shadow);animation:slideUpFade .4s ease forwards}
+.card-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+/* FORM */
+.form-group{margin-bottom:18px}
+.form-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px;display:block}
+.form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;background:transparent;color:var(--text);appearance:none;-webkit-appearance:none;outline:none;transition:border-color .15s,box-shadow .15s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);background:transparent;box-shadow:0 0 0 3px var(--accent-light)}
+.form-textarea{resize:none;height:64px}
+/* TYPE TOGGLE */
+.type-toggle{display:flex;background:var(--border);border-radius:14px;padding:4px;gap:3px;border:none}
+.type-btn{flex:1;padding:9px 2px;border:none;border-radius:10px;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;background:none;color:var(--muted);position:relative;overflow:hidden}
+.type-btn.active-gasto{background:var(--danger-light);color:var(--danger)}
+.type-btn.active-ingreso{background:var(--success-light);color:var(--success)}
+.type-btn.active-inversion{background:var(--invest-light);color:var(--invest)}
+.type-btn.active-tarjeta{background:var(--warning-light);color:var(--warning)}
+/* AMOUNT */
+
+/* BUTTONS */
+.btn-primary{width:100%;padding:13px;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;position:relative;overflow:hidden}
+/* Ripple effect: span absoluto inyectado por JS en el punto exacto del toque, que se expande
+   y desvanece. rgba negro semitransparente funciona razonablemente bien tanto sobre los
+   fondos de color de .btn-primary como sobre los claros de .pin-key/.type-btn. */
+@keyframes rippleAnim{0%{transform:scale(0);opacity:1}100%{transform:scale(1);opacity:0}}
+.ripple-effect{position:absolute;border-radius:50%;background:rgba(0,0,0,.15);animation:rippleAnim .5s ease-out;pointer-events:none}
+.btn-gasto{background:var(--danger);background:linear-gradient(135deg,var(--danger),color-mix(in srgb,var(--danger) 78%,black));color:#fff}
+.btn-ingreso{background:var(--success);background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 78%,black));color:#fff}
+.btn-inversion{background:var(--invest);background:linear-gradient(135deg,var(--invest),color-mix(in srgb,var(--invest) 78%,black));color:#fff}
+.btn-tarjeta{background:var(--warning);background:linear-gradient(135deg,var(--warning),color-mix(in srgb,var(--warning) 78%,black));color:#fff}
+.btn-primary:active{transform:scale(.97)}
+.btn-sm{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap}
+.amount-wrap{position:relative}
+.amount-prefix{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--muted)}
+.amount-input{padding-left:28px!important;font-size:22px!important;font-weight:500}
+/* MONTO PROTAGONISTA (pantalla Cargar): el mismo .amount-wrap/.amount-prefix/.amount-input de
+   siempre, con clases extra encima. El prefijo de #inp-importe tiene su propio id
+   (inp-importe-prefix) para que toggleUSD()/resetForm() lo actualicen sin ambigüedad. */
+.amount-hero{display:flex;align-items:baseline;justify-content:center;gap:3px;padding:22px 0 6px;position:static}
+.amount-hero .amount-prefix{position:static;font-size:22px;font-weight:600;color:var(--muted)}
+.amount-hero .amount-input{padding-left:0!important;font-size:44px!important;font-weight:700!important;background:transparent;border:none;outline:none;box-shadow:none;text-align:left;width:auto;max-width:230px;color:var(--text)}
+.amount-hero .amount-input::placeholder{color:var(--border)}
+.amount-hero-sm{gap:2px;padding:16px 0 4px}
+.amount-hero-sm .amount-prefix{font-size:14px}
+.amount-hero-sm .amount-input{font-size:26px!important;max-width:130px}
+.amount-hero-label{text-align:center;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:0}
+/* ═══ TEMATIZACIÓN DINÁMICA (pantalla Cargar): --tema-color/--tema-light cambian según el
+   tipo de movimiento elegido (ver setTipo() en JS), y las reglas de abajo los usan en cascada
+   — así no hace falta repetir cada regla 4 veces, una por tipo. ═══ */
+#page-cargar.theme-gasto{--tema-color:var(--danger);--tema-light:var(--danger-light)}
+#page-cargar.theme-ingreso{--tema-color:var(--success);--tema-light:var(--success-light)}
+#page-cargar.theme-inversion{--tema-color:var(--invest);--tema-light:var(--invest-light)}
+#page-cargar.theme-tarjeta{--tema-color:var(--warning);--tema-light:var(--warning-light)}
+#page-cargar .form-input:focus,#page-cargar .form-select:focus,#page-cargar .form-textarea:focus{border-color:var(--tema-color);box-shadow:0 0 0 3px var(--tema-light)}
+#page-cargar .amount-prefix{color:var(--tema-color);transition:color .25s ease}
+#page-cargar .amount-hero .amount-input{caret-color:var(--tema-color)}
+#page-cargar .card{transition:background .3s ease;background:linear-gradient(180deg,var(--tema-light) 0%,var(--surface) 160px)}
+#page-cargar .type-toggle{transition:background-color .3s ease}
+/* Chips de fecha rápida (Hoy/Ayer/-2d/-7d): misma base .btn-sm, solo más redondeados */
+.date-quick-chip{border-radius:999px!important}
+/* Botón Guardar flotante: sticky por ID (la clase la pisa setTipo() en cada cambio de tipo,
+   pero el id="btn-guardar" nunca cambia, así que estilarlo por ID es lo que sobrevive) */
+#btn-guardar{position:sticky;bottom:16px;z-index:10;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+/* CHIPS */
+/* Grid en vez de fila que scrollea: los chips se acomodan solos según el ancho disponible.
+   Si entran 3 en una fila, ocupan todo el ancho parejo; si hay más (4, 5, 6...), arma
+   automáticamente una segunda fila — sin necesidad de arrastrar para ver el resto. */
+.summary-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;padding:10px 16px 0}
+.chip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 7px;text-align:center}
+.chip-label{font-size:9.5px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.chip-val{font-size:14px;font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.3px}
+.chip-val.positive{color:var(--success)}.chip-val.negative{color:var(--danger)}.chip-val.warn{color:var(--warning)}.chip-val.invest{color:var(--invest)}.chip-val.save{color:var(--save)}
+/* TX LIST */
+.tx-list{padding:0 16px}
+/* Separador de fecha: pegado justo debajo del header (sticky) mientras se scrollea la lista.
+   Márgen negativo para que se extienda de punta a punta, contrarrestando el padding de .tx-list */
+.tx-date-sep{position:sticky;top:60px;z-index:5;margin:0 -16px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--muted);background:var(--surface-glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.tx-item{background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border);padding:11px 13px;display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+/* <tx-item> (el Web Component, tag sin punto) envuelve a .tx-item (la fila visual, clase con punto):
+   el wrapper recorta y da el margen entre filas; la fila interna es la que desliza adentro. */
+tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radius-sm);margin-bottom:7px;animation:slideUpFade .4s ease forwards}
+.tx-swipe-bg{position:absolute;top:0;bottom:0;width:78px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;text-align:center;padding:0 4px;cursor:pointer}
+.tx-swipe-bg-left{left:0;background:var(--accent)}
+.tx-swipe-bg-right{right:0;background:var(--danger)}
+.tx-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.tx-icon.gasto{background:var(--danger-light)}.tx-icon.ingreso{background:var(--success-light)}.tx-icon.inversion{background:var(--invest-light)}.tx-icon.tarjeta{background:var(--warning-light)}.tx-icon.save{background:var(--save-light)}
+.tx-info{flex:1;min-width:0}
+.tx-cat{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-sub{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Etiquetas (#hashtags) detectadas en la nota: fila aparte, no se mete en el truncado de tx-sub */
+.tx-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tag-chip{font-size:10px;font-weight:500;color:var(--accent);background:var(--accent-light);padding:2px 8px;border-radius:8px;white-space:nowrap}
+.tx-amount{font-size:13px;font-weight:600;flex-shrink:0;max-width:38%;text-align:right;overflow-wrap:anywhere;word-break:normal}
+.tx-amount.gasto{color:var(--danger)}.tx-amount.ingreso{color:var(--success)}.tx-amount.inversion{color:var(--invest)}.tx-amount.save{color:var(--save)}
+.tx-actions{display:flex;flex-direction:column;gap:1px;flex-shrink:0}
+.tx-del,.tx-edit{background:none;border:none;font-size:15px;cursor:pointer;padding:7px 9px;line-height:1}
+.tx-del{color:#ccc}
+.tx-edit{color:var(--muted)}
+/* NAV MONTH */
+.month-nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0}
+.month-nav button{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 13px;font-size:14px;cursor:pointer;color:var(--text)}
+.month-nav span{font-size:15px;font-weight:600}
+/* BARS */
+.bar-wrap{display:flex;flex-direction:column;gap:8px}
+.bar-row{display:flex;align-items:center;gap:8px}
+.bar-label{font-size:11px;width:108px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;height:7px;background:var(--bg);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .4s}
+.bar-val{font-size:11px;color:var(--muted);width:74px;text-align:right;flex-shrink:0}
+/* FILTER */
+.filter-row{display:flex;gap:7px;padding:10px 16px 0;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x mandatory;scroll-padding-left:16px}
+.filter-row::-webkit-scrollbar{display:none}
+.filter-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface);font-size:12px;cursor:pointer;white-space:nowrap;color:var(--muted);scroll-snap-align:start}
+.filter-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.ahorro-view-btn.active{background:var(--save);color:#fff;border-color:var(--save)}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);background:transparent;transition:all .15s}
+.ob-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .2s}
+.ob-dot.active{background:var(--accent);width:22px;border-radius:4px}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent)}
+.pin-key{font-size:22px;padding:18px 0;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;cursor:pointer;font-weight:500;position:relative;overflow:hidden}
+.pin-key:active{background:var(--accent);color:#fff;transform:scale(.96)}
+/* MODAL */
+/* display:flex siempre (no "none"), oculto vía opacity+visibility para poder animar la transición.
+   pointer-events:none cuando está cerrado evita que capture toques mientras es invisible. */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-end;
+  opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease}
+.modal-overlay.open{opacity:1;visibility:visible;pointer-events:auto}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;padding:18px 16px 32px;width:100%;max-height:90vh;overflow-y:auto;
+  transform:translateY(28px);transition:transform .24s cubic-bezier(.22,.9,.35,1)}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:14px}
+/* TARJETA CARDS */
+.tc-card{background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border);padding:13px;margin-bottom:8px}
+.tc-progress{height:4px;background:var(--bg);border-radius:2px;margin-top:9px;overflow:hidden}
+.tc-progress-fill{height:100%;border-radius:2px;background:var(--warning)}
+.tc-badge{font-size:11px;font-weight:500;padding:3px 9px;border-radius:12px;background:var(--warning-light);color:var(--warning);flex-shrink:0;margin-left:8px}
+/* MISC */
+.inv-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--invest-light);color:var(--invest);display:inline-block;margin-left:4px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.empty{text-align:center;padding:40px 24px;color:var(--muted);font-size:14px;background:var(--surface);border:2px dashed var(--border);border-radius:16px}
+.empty-icon{font-size:44px;margin-bottom:12px;opacity:.5}
+/* Toast: entra con rebote (cubic-bezier con overshoot), sale suave. La curva de salida vive
+   en .toast (aplica cuando se saca .show); la de entrada, más específica, en .toast.show
+   (aplica cuando se agrega) — truco estándar de CSS para animar distinto ida y vuelta. */
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-120px);background:rgba(20,20,24,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#fff;padding:12px 22px;border-radius:999px;font-size:13px;font-weight:500;z-index:999;white-space:nowrap;box-shadow:0 14px 34px rgba(0,0,0,.32),0 2px 10px rgba(0,0,0,.22);transition:transform .35s cubic-bezier(.4,0,.2,1)}
+.toast.show{transform:translateX(-50%) translateY(0);transition:transform .55s cubic-bezier(.34,1.56,.64,1)}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cat-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)}
+.cat-row:last-child{border-bottom:none}
+/* CANVAS CHARTS */
+canvas{width:100%!important;max-width:100%}
+/* YEAR SELECTOR */
+.year-tabs{display:flex;gap:6px;padding:10px 16px 0;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x mandatory;scroll-padding-left:16px}
+.year-tabs::-webkit-scrollbar{display:none}
+.year-tab{flex-shrink:0;padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface);font-size:12px;cursor:pointer;color:var(--muted);scroll-snap-align:start}
+/* Utilidad genérica para cualquier otro carrusel horizontal (ej: "Próximas cuotas" en Tarjetas) */
+.hscroll{scroll-snap-type:x mandatory}
+.hscroll-item{scroll-snap-align:start}
+.year-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+/* SAVINGS GOAL */
+.goal-bar-wrap{background:var(--bg);border-radius:8px;height:12px;overflow:hidden;margin:8px 0}
+.goal-bar-fill{height:100%;border-radius:8px;background:var(--save);transition:width .5s}
+</style>
