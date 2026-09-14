@@ -158,6 +158,7 @@ async function checkPin(){
   const pinIngresado=pinBuffer;
   const hash=await hashPin(pinIngresado);
   const stored=localStorage.getItem("fpinhash");
+  let migracionRecien=false; // true solo si ESTA llamada acaba de migrar un PIN legado a cifrado
   if(hash===stored){
     if(isEncActive()){
       // Cifrado ya activo: derivar la clave con el PIN recién validado y descifrar el blob.
@@ -178,26 +179,40 @@ async function checkPin(){
     } else {
       // PIN configurado desde una versión anterior a esta funcionalidad: todavía sin cifrar.
       // Migramos ahora mismo, usando el PIN recién validado.
-      const salt=randomSaltB64();
-      encKey=await deriveKey(pinIngresado, salt);
-      encCache={};
-      ENC_KEYS.forEach(k=>{
-        const v=localStorage.getItem(k);
-        if(v!==null) encCache[k]=v;
-      });
-      const blob=await encryptBlob(encKey, encCache);
-      localStorage.setItem("fencsalt", salt);
-      localStorage.setItem("fencblob", JSON.stringify(blob));
-      ENC_KEYS.forEach(k=>localStorage.removeItem(k));
-      if(!localStorage.getItem("fencmigrado")){
-        localStorage.setItem("fencmigrado","1");
-        alert("Tus datos ahora están cifrados y ligados a tu PIN. Te recomendamos descargar un backup desde Configuración por si alguna vez olvidás el PIN.");
+      try{
+        const salt=randomSaltB64();
+        encKey=await deriveKey(pinIngresado, salt);
+        encCache={};
+        ENC_KEYS.forEach(k=>{
+          const v=localStorage.getItem(k);
+          if(v!==null) encCache[k]=v;
+        });
+        const blob=await encryptBlob(encKey, encCache);
+        localStorage.setItem("fencsalt", salt);
+        localStorage.setItem("fencblob", JSON.stringify(blob));
+        ENC_KEYS.forEach(k=>localStorage.removeItem(k));
+        migracionRecien=true;
+      }catch(err){
+        console.error("Error al migrar a cifrado:", err);
+        encKey=null; encCache=null;
+        document.getElementById("pin-error").textContent="Error al activar el cifrado. Probá de nuevo.";
+        pinBuffer="";
+        setTimeout(updatePinDisplay, 300);
+        return; // NO resolvemos: la pantalla de bloqueo sigue esperando
       }
     }
     document.getElementById("lock-screen").style.display="none";
     pinBuffer="";
     updatePinDisplay();
     if(_unlockResolve){ const r=_unlockResolve; _unlockResolve=null; r(); }
+    // El aviso se muestra DESPUÉS de desbloquear, y con showToast (no alert()): alert()/
+    // confirm()/prompt() son diálogos nativos del navegador que en una PWA instalada (modo
+    // standalone, sin barra de navegador) pueden no tener dónde renderizarse y quedan colgados
+    // esperando una interacción que nunca llega — eso dejaba al usuario trabado para siempre
+    // en la pantalla de PIN la primera vez que se migraba un PIN viejo a cifrado.
+    if(migracionRecien){
+      showToast("🔒 Tus datos ahora están cifrados y ligados a tu PIN. Te recomendamos descargar un backup desde Configuración por si alguna vez lo olvidás.");
+    }
   } else {
     document.getElementById("pin-error").textContent="PIN incorrecto";
     pinBuffer="";
