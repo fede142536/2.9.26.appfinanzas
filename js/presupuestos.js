@@ -75,8 +75,8 @@ function renderPresupManager(){
     else if(pct>=80) color="var(--warning)";
     return `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:600">${getIcon(cat)} ${escapeHtml(cat)}</div>
-        <div style="display:flex;gap:6px">
+        <div class="txt-md txt-strong">${getIcon(cat)} ${escapeHtml(cat)}</div>
+        <div class="u-row-6">
           <button class="btn-sm" onclick="openPresupModal(${attrJS(cat)})">Editar</button>
           <button class="btn-sm" style="color:var(--danger)" onclick="borrarPresup(${attrJS(cat)})">×</button>
         </div>

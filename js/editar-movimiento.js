@@ -30,8 +30,8 @@ function renderEditForm(m){
     return `
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:${m.tipo==="Gasto"?"var(--danger-light)":"var(--success-light)"};color:${m.tipo==="Gasto"?"var(--danger)":"var(--success)"};margin-bottom:10px">${esFrec?"🔁 GASTO FRECUENTE":m.tipo.toUpperCase()}</div>
       ${esFrec?`
-        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Monto vigente este mes</div>
+        <div class="inset">
+          <div class="seccion-label seccion-label-sep">Monto vigente este mes</div>
           <div style="font-size:18px;font-weight:600;color:var(--danger)">${fmtMoneda(montoVigente, m.moneda)}</div>
         </div>
       `:""}
@@ -56,8 +56,8 @@ function renderEditForm(m){
         <select id="edit-subcat" class="form-select"></select>
       </div>
       <div class="form-group"><label class="form-label">Cuenta</label>
-        <div style="display:flex;gap:8px">
-          <select id="edit-cuenta" class="form-select" style="flex:1">
+        <div class="u-row">
+          <select id="edit-cuenta" class="form-select u-flex1">
             ${getCuentas().map(c=>`<option ${m.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
             ${m.cuenta && !getCuentas().includes(m.cuenta)?`<option selected>${escapeHtml(m.cuenta)}</option>`:""}
           </select>
@@ -88,7 +88,7 @@ function renderEditForm(m){
           </div>
         </div>
         ${cambios.length?`
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Historial de aumentos</div>
+          <div class="seccion-label seccion-label-sep">Historial de aumentos</div>
           <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px">
             ${cambios.sort((a,b)=>a.desde.localeCompare(b.desde)).map((c,i)=>`
               <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0;${i<cambios.length-1?'border-bottom:1px solid var(--border)':''}">
@@ -150,8 +150,8 @@ function renderEditForm(m){
         <input type="date" id="edit-fecha" class="form-input" value="${(m.fecha||'').slice(0,10)}">
       </div>
       <div class="form-group"><label class="form-label">Cuenta</label>
-        <div style="display:flex;gap:8px">
-          <select id="edit-cuenta" class="form-select" style="flex:1">
+        <div class="u-row">
+          <select id="edit-cuenta" class="form-select u-flex1">
             ${getCuentas().map(c=>`<option ${m.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
             ${m.cuenta && !getCuentas().includes(m.cuenta)?`<option selected>${escapeHtml(m.cuenta)}</option>`:""}
           </select>

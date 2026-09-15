@@ -144,7 +144,7 @@ function renderTarjetas(){
   const balanceEl=document.getElementById("tc-balance");
   if(balanceEl){
     const esMesActual = ymSel===hoyYM;
-    let html=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${esMesActual?"A pagar este mes":"Total "+mesLbl(ymSel)}</div>
+    let html=`<div class="seccion-label seccion-label-sep">${esMesActual?"A pagar este mes":"Total "+mesLbl(ymSel)}</div>
       <div style="display:flex;gap:14px;align-items:baseline;margin-bottom:6px;flex-wrap:wrap">
         <div style="font-size:24px;font-weight:600;color:var(--warning)">${fmtS(totalMesARS)}</div>
         ${totalMesUSD>0?`<div style="font-size:18px;font-weight:600;color:var(--warning)">+ USD ${totalMesUSD.toFixed(2)}</div>`:""}
@@ -152,12 +152,12 @@ function renderTarjetas(){
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${cantidadMes} ${cantidadMes===1?"gasto":"gastos"} en este mes</div>`;
     const tarjEntries=Object.entries(porTarjeta).sort((a,b)=>b[1]-a[1]);
     if(tarjEntries.length){
-      html+=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Por tarjeta</div>`;
+      html+=`<div class="seccion-label seccion-label-sep">Por tarjeta</div>`;
       const maxV=tarjEntries[0][1];
       html+=tarjEntries.map(([key,val])=>{
         const [tarj, moneda]=key.split("|");
         const fmt=moneda==="USD"?`USD ${val.toFixed(2)}`:fmtS(val);
-        const monedaBadge=moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:6px">USD</span>`:"";
+        const monedaBadge=moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
         return `<div class="bar-row" style="margin-bottom:6px">
           <div class="bar-label">💳 ${escapeHtml(tarj)}${monedaBadge}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxV*100)}%;background:var(--warning)"></div></div>
@@ -169,7 +169,7 @@ function renderTarjetas(){
     }
     // Lista detallada de gastos del mes
     if(movsMes.length){
-      html+=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Detalle</div>
+      html+=`<div class="seccion-label mt-14 mb-6">Detalle</div>
         <div style="font-size:12px">`;
       movsMes.sort((a,b)=>b.importe-a.importe).forEach(m=>{
         const tag=m.frecuente?"🔁":`${m.nCuota}/${m.cuotasTotal}`;
@@ -190,11 +190,11 @@ function renderTarjetas(){
       return {ym, totalARS, totalUSD};
     });
     if(proyMeses.some(p=>p.totalARS>0||p.totalUSD>0)){
-      html+=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Próximos meses</div>
-        <div style="display:flex;gap:8px">
+      html+=`<div class="seccion-label mt-14 mb-6">Próximos meses</div>
+        <div class="u-row">
           ${proyMeses.map(p=>`
             <div style="flex:1;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px">
-              <div style="font-size:10px;color:var(--muted)">${mesLbl(p.ym).slice(0,3)}</div>
+              <div class="txt-micro txt-muted">${mesLbl(p.ym).slice(0,3)}</div>
               <div style="font-size:13px;font-weight:600;color:var(--warning);margin-top:2px">${fmtAbbr(p.totalARS)}</div>
               ${p.totalUSD>0?`<div style="font-size:10px;color:var(--accent);margin-top:2px">USD ${p.totalUSD.toFixed(0)}</div>`:""}
             </div>`).join("")}
@@ -223,9 +223,9 @@ function renderTarjetas(){
       }
       return `<div class="tc-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)} <span style="font-size:11px">🔁</span>${t.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:6px">USD</span>`:""}</div>
-            <div style="font-size:11px;color:var(--muted)">${escapeHtml(t.tarjeta)} · ${escapeHtml(t.cat)} · Desde ${mesLbl(t.mesInicio)}</div>
+          <div class="u-flex1 u-min0">
+            <div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)} <span style="font-size:11px">🔁</span>${t.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:""}</div>
+            <div class="txt-xs txt-muted">${escapeHtml(t.tarjeta)} · ${escapeHtml(t.cat)} · Desde ${mesLbl(t.mesInicio)}</div>
           </div>
           <span class="tc-badge" style="background:var(--warning-light);color:var(--warning)">FRECUENTE</span>
         </div>
@@ -235,24 +235,24 @@ function renderTarjetas(){
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Vigencia</span><strong>${finTxt}</strong></div>
         ${Array.isArray(t.cambios)&&t.cambios.length?`
           <div style="margin-top:10px;font-size:11px;color:var(--muted)">
-            <strong style="text-transform:uppercase;letter-spacing:.5px">Aumentos</strong>
+            <strong class="u-upper">Aumentos</strong>
             ${t.cambios.sort((a,b)=>a.desde.localeCompare(b.desde)).map(c=>`
               <div style="margin-top:3px">${mesLbl(c.desde)}: ${fmtMoneda(c.monto,t.moneda)}</div>
             `).join("")}
           </div>`:""}
         ${proyeccion.length>1?`
         <div style="margin-top:12px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Próximos meses</div>
+          <div class="seccion-label mb-6">Próximos meses</div>
           <div class="hscroll" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none">
             ${proyeccion.map(p=>`
               <div class="hscroll-item" style="flex-shrink:0;text-align:center;background:${p.esActual?"var(--warning-light)":"var(--bg)"};border:1px solid ${p.esActual?"var(--warning)":"var(--border)"};border-radius:8px;padding:6px 10px">
-                <div style="font-size:10px;color:var(--muted)">${mesLbl(p.ym).slice(0,3)}</div>
+                <div class="txt-micro txt-muted">${mesLbl(p.ym).slice(0,3)}</div>
                 <div style="font-size:11px;font-weight:600;color:${p.esActual?"var(--warning)":"var(--text)"};margin-top:2px">${t.moneda==="USD"?"USD "+p.monto.toFixed(2):fmtS(p.monto)}</div>
               </div>`).join("")}
           </div>
         </div>`:""}
         <div style="display:flex;gap:6px;margin-top:10px">
-          <button class="btn-sm" style="flex:1" onclick="openEditTcModal(${t.id})">✎ Editar / Aumento</button>
+          <button class="btn-sm u-flex1" onclick="openEditTcModal(${t.id})">✎ Editar / Aumento</button>
           <button class="btn-sm" style="color:var(--danger);flex:1" onclick="borrarTc(${t.id})">Eliminar</button>
         </div>
       </div>`;
@@ -271,9 +271,9 @@ function renderTarjetas(){
     }
     return `<div class="tc-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)}${t.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:6px">USD</span>`:""}</div>
-          <div style="font-size:11px;color:var(--muted)">${escapeHtml(t.tarjeta)} · ${escapeHtml(t.cat)}${t.fecha?" · "+t.fecha.split("-").reverse().join("/"):""}</div>
+        <div class="u-flex1 u-min0">
+          <div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)}${t.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:""}</div>
+          <div class="txt-xs txt-muted">${escapeHtml(t.tarjeta)} · ${escapeHtml(t.cat)}${t.fecha?" · "+t.fecha.split("-").reverse().join("/"):""}</div>
         </div>
         <span class="tc-badge">Cuota ${nActual}/${t.cuotasTotal}</span>
       </div>
@@ -285,18 +285,18 @@ function renderTarjetas(){
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px"><span>${nActual-1} pagadas</span><span>${restantes} restantes</span></div>
       ${proyeccion.length>1?`
       <div style="margin-top:12px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Próximas cuotas</div>
+        <div class="seccion-label mb-6">Próximas cuotas</div>
         <div class="hscroll" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none">
           ${proyeccion.map(p=>`
             <div class="hscroll-item" style="flex-shrink:0;text-align:center;background:${p.nc===nActual?"var(--warning-light)":"var(--bg)"};border:1px solid ${p.nc===nActual?"var(--warning)":"var(--border)"};border-radius:8px;padding:6px 10px">
-              <div style="font-size:10px;color:var(--muted)">${mesLbl(p.ym).slice(0,3)}</div>
+              <div class="txt-micro txt-muted">${mesLbl(p.ym).slice(0,3)}</div>
               <div style="font-size:12px;font-weight:600;color:${p.nc===nActual?"var(--warning)":"var(--text)"}">${p.nc}</div>
-              <div style="font-size:10px;color:var(--muted)">${t.moneda==="USD"?"USD "+vc.toFixed(2):fmtS(vc)}</div>
+              <div class="txt-micro txt-muted">${t.moneda==="USD"?"USD "+vc.toFixed(2):fmtS(vc)}</div>
             </div>`).join("")}
         </div>
       </div>`:""}
       <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn-sm" style="flex:1" onclick="openEditTcModal(${t.id})">✎ Editar</button>
+        <button class="btn-sm u-flex1" onclick="openEditTcModal(${t.id})">✎ Editar</button>
         <button class="btn-sm" style="color:var(--danger);flex:1" onclick="borrarTc(${t.id})">Eliminar</button>
       </div>
     </div>`;
@@ -304,7 +304,7 @@ function renderTarjetas(){
 
   // ── COMPLETAS (con botón editar) ──
   const doneEl=document.getElementById("tc-completas");
-  if(!completas.length){doneEl.innerHTML=`<p style="font-size:13px;color:var(--muted)">Sin historial aún</p>`;return;}
+  if(!completas.length){doneEl.innerHTML=`<p class="txt-md txt-muted">Sin historial aún</p>`;return;}
   doneEl.innerHTML=completas.map(t=>{
     const subInfo=t.frecuente
       ? `${escapeHtml(t.tarjeta)} · 🔁 Mensual · ${mesLbl(t.mesInicio)}–${t.mesFin?mesLbl(t.mesFin):""}`
@@ -312,12 +312,12 @@ function renderTarjetas(){
     return `<div class="tc-card" style="opacity:.75">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div><div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)}</div>
-          <div style="font-size:11px;color:var(--muted)">${subInfo}</div>
+          <div class="txt-xs txt-muted">${subInfo}</div>
         </div>
         <span class="tc-badge" style="background:var(--success-light);color:var(--success)">✓</span>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
-        <button class="btn-sm" style="flex:1" onclick="openEditTcModal(${t.id})">✎ Editar</button>
+        <button class="btn-sm u-flex1" onclick="openEditTcModal(${t.id})">✎ Editar</button>
         <button class="btn-sm" style="color:var(--danger);flex:1" onclick="borrarTc(${t.id})">Eliminar</button>
       </div>
     </div>`;
@@ -421,7 +421,7 @@ function renderInv(){
     balanceEl.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:14px 0">Sin movimientos en ${mesLbl(ymSel)}</p>`;
   } else {
     const lblNeto=totalARS>=0?"Ingreso neto":"Gasto neto";
-    let html=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${lblNeto} en ${mesLbl(ymSel)}</div>
+    let html=`<div class="seccion-label seccion-label-sep">${lblNeto} en ${mesLbl(ymSel)}</div>
       <div style="font-size:24px;font-weight:600;color:var(--${totalARS>=0?'success':'danger'});margin-bottom:6px">${fmtS(totalARS)}</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
         ${cantMes} ${cantMes===1?"movimiento":"movimientos"} · ${tiposMes.size} ${tiposMes.size===1?"tipo":"tipos"}
@@ -436,7 +436,7 @@ function renderInv(){
     });
     const catEntries=Object.entries(porCat).filter(([_,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
     if(catEntries.length){
-      html+=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Por categoría (balance)</div>`;
+      html+=`<div class="seccion-label seccion-label-sep">Por categoría (balance)</div>`;
       const maxV=Math.max(...catEntries.map(([_,v])=>Math.abs(v)));
       html+=catEntries.map(([cat,val])=>{
         const c=val>=0?"var(--success)":"var(--danger)";
@@ -456,7 +456,7 @@ function renderInv(){
     });
     const tickerEntries=Object.entries(porTicker).filter(([_,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
     if(tickerEntries.length>1){
-      html+=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Por ticker (balance)</div>`;
+      html+=`<div class="seccion-label mt-14 mb-6">Por ticker (balance)</div>`;
       const maxV=Math.max(...tickerEntries.map(([_,v])=>Math.abs(v)));
       html+=tickerEntries.map(([ticker,val])=>{
         const c=val>=0?"var(--success)":"var(--danger)";
@@ -484,8 +484,8 @@ function renderInv(){
       else amt=`${sign}${fmtS(m.importe||0)}`;
       const sub=`${escapeHtml(m.subcat||m.cat)} · ${(m.fecha||"").split("-").reverse().join("/")}`;
       const badge=esIngreso
-        ?`<span style="font-size:9px;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:8px;font-weight:500;margin-left:4px">📥 INGRESO</span>`
-        :`<span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500;margin-left:4px">📤 GASTO</span>`;
+        ?`<span class="badge badge-success">📥 INGRESO</span>`
+        :`<span class="badge badge-danger">📤 GASTO</span>`;
       const amtColor=esIngreso?"var(--success)":"var(--danger)";
       return `<div class="tx-item">
         <div class="tx-icon ${esIngreso?'ingreso':'gasto'}">${esIngreso?"📥":"📤"}</div>
@@ -519,14 +519,14 @@ function renderInv(){
       cartera[t].count++;
     });
     const items=Object.values(cartera).sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars));
-    let html=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${items.length} ${items.length===1?"posición":"posiciones"} · balance acumulado</div>`;
+    let html=`<div class="seccion-label mb-8">${items.length} ${items.length===1?"posición":"posiciones"} · balance acumulado</div>`;
     html+=items.map(p=>{
       const arsColor=p.ars>=0?"var(--success)":"var(--danger)";
       const tickerEsc=attrJS(p.ticker);
       return `<div role="button" tabindex="0" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showInstrumentoDetail(${tickerEsc})">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${escapeHtml(p.ticker)}</div>
-          <div style="font-size:11px;color:var(--muted)">${escapeHtml(p.cat)} · ${p.count} ${p.count===1?"mov":"movs"}</div>
+        <div class="u-flex1 u-min0">
+          <div class="txt-md txt-strong">${escapeHtml(p.ticker)}</div>
+          <div class="txt-xs txt-muted">${escapeHtml(p.cat)} · ${p.count} ${p.count===1?"mov":"movs"}</div>
         </div>
         <div style="text-align:right">
           ${p.ars!==0?`<div style="font-size:13px;font-weight:600;color:${arsColor}">${fmtS(p.ars)}</div>`:""}
@@ -549,7 +549,7 @@ function renderInvHistorico(){
   const topEl=document.getElementById("inv-top-tickers");
 
   if(!allInv.length){
-    kpisEl.innerHTML=`<div class="chip" style="flex:1"><div class="chip-label" style="text-align:center">Sin inversiones cargadas</div></div>`;
+    kpisEl.innerHTML=`<div class="chip u-flex1"><div class="chip-label" style="text-align:center">Sin inversiones cargadas</div></div>`;
     if(chartInvHistoricoInstance){ chartInvHistoricoInstance.destroy(); chartInvHistoricoInstance=null; }
     topEl.innerHTML="";
     return;
@@ -605,7 +605,7 @@ function renderInvHistorico(){
     .slice(0,5);
   if(topItems.length){
     const maxV=Math.max(...topItems.map(t=>Math.abs(t.ars)));
-    let html=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Top tickers (balance)</div>`;
+    let html=`<div class="seccion-label seccion-label-sep">Top tickers (balance)</div>`;
     html+=topItems.map(p=>{
       const c=p.ars>=0?"var(--success)":"var(--danger)";
       return `<div class="bar-row" style="margin-bottom:6px">
@@ -664,8 +664,8 @@ function renderEditTcForm(t){
       </div>
       <div class="two-col">
         <div class="form-group"><label class="form-label">Tarjeta</label>
-          <div style="display:flex;gap:6px">
-            <select id="edit-tc-tarj" class="form-select" style="flex:1">
+          <div class="u-row-6">
+            <select id="edit-tc-tarj" class="form-select u-flex1">
               ${getTarjetas().map(nm=>`<option ${t.tarjeta===nm?'selected':''}>${escapeHtml(nm)}</option>`).join("")}
               ${t.tarjeta && !getTarjetas().includes(t.tarjeta)?`<option selected>${escapeHtml(t.tarjeta)}</option>`:""}
             </select>
@@ -685,8 +685,8 @@ function renderEditTcForm(t){
         </div>
       </div>
       <div class="form-group"><label class="form-label">Cuenta</label>
-        <div style="display:flex;gap:8px">
-          <select id="edit-tc-cuenta" class="form-select" style="flex:1">
+        <div class="u-row">
+          <select id="edit-tc-cuenta" class="form-select u-flex1">
             ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
             ${t.cuenta && !getCuentas().includes(t.cuenta)?`<option selected>${escapeHtml(t.cuenta)}</option>`:""}
           </select>
@@ -700,8 +700,8 @@ function renderEditTcForm(t){
         </select>
         <p style="font-size:10px;color:var(--muted);margin-top:4px">Cambiar la moneda afecta el monto vigente y todos los aumentos del historial.</p>
       </div>
-      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Monto vigente este mes</div>
+      <div class="inset">
+        <div class="seccion-label seccion-label-sep">Monto vigente este mes</div>
         <div style="font-size:18px;font-weight:600;color:var(--warning)">${fmtMoneda(montoActual,t.moneda)}</div>
       </div>
       <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
@@ -719,7 +719,7 @@ function renderEditTcForm(t){
         </div>
       </div>
       ${cambios.length?`
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Historial de aumentos</div>
+        <div class="seccion-label seccion-label-sep">Historial de aumentos</div>
         <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px">
           ${cambios.map((c,i)=>`
             <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0;${i<cambios.length-1?'border-bottom:1px solid var(--border)':''}">
@@ -746,8 +746,8 @@ function renderEditTcForm(t){
     </div>
     <div class="two-col">
       <div class="form-group"><label class="form-label">Tarjeta</label>
-        <div style="display:flex;gap:6px">
-          <select id="edit-tc-tarj" class="form-select" style="flex:1">
+        <div class="u-row-6">
+          <select id="edit-tc-tarj" class="form-select u-flex1">
             ${getTarjetas().map(nm=>`<option ${t.tarjeta===nm?'selected':''}>${escapeHtml(nm)}</option>`).join("")}
             ${t.tarjeta && !getTarjetas().includes(t.tarjeta)?`<option selected>${escapeHtml(t.tarjeta)}</option>`:""}
           </select>
@@ -778,8 +778,8 @@ function renderEditTcForm(t){
       </div>
     </div>
     <div class="form-group"><label class="form-label">Cuenta</label>
-      <div style="display:flex;gap:8px">
-        <select id="edit-tc-cuenta" class="form-select" style="flex:1">
+      <div class="u-row">
+        <select id="edit-tc-cuenta" class="form-select u-flex1">
           ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
           ${t.cuenta && !getCuentas().includes(t.cuenta)?`<option selected>${escapeHtml(t.cuenta)}</option>`:""}
         </select>

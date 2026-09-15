@@ -37,7 +37,7 @@
 <div id="error-banner" role="alert" aria-live="assertive" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:10003;background:var(--danger-light);border-top:2px solid var(--danger);padding:12px 14px;max-height:55vh;overflow-y:auto">
   <div style="display:flex;align-items:flex-start;gap:10px">
     <span style="font-size:16px;line-height:1.3">⚠️</span>
-    <div style="flex:1;min-width:0">
+    <div class="u-flex1 u-min0">
       <div style="font-size:12px;font-weight:600;color:var(--danger)">Ocurrió un error</div>
       <div id="error-banner-msg" style="font-size:12px;color:var(--text);word-break:break-word;margin-top:2px"></div>
       <pre id="error-banner-detalle" style="display:none;font-size:10px;color:var(--muted);white-space:pre-wrap;word-break:break-word;margin-top:8px"></pre>
@@ -64,8 +64,8 @@
     <div class="form-group" id="dialogo-input-group" style="display:none">
       <input type="text" id="dialogo-input" class="form-input" autocomplete="off" aria-labelledby="dialogo-mensaje">
     </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn-sm" style="flex:1" id="dialogo-btn-cancelar" onclick="_dialogoCancelar()">Cancelar</button>
+    <div class="u-row">
+      <button class="btn-sm u-flex1" id="dialogo-btn-cancelar" onclick="_dialogoCancelar()">Cancelar</button>
       <button class="btn-primary" style="flex:2;padding:11px" id="dialogo-btn-ok" onclick="_dialogoAceptar()">Aceptar</button>
     </div>
   </div>
@@ -184,7 +184,7 @@
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-sm" style="flex:1" onclick="closePresupModal()">Cancelar</button>
+      <button class="btn-sm u-flex1" onclick="closePresupModal()">Cancelar</button>
       <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:11px" onclick="guardarPresup()">Guardar</button>
     </div>
   </div>
@@ -195,16 +195,16 @@
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title">Renombrar categoría</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Esto reemplaza el nombre en TODOS los movimientos existentes.</p>
+    <p class="txt-sm txt-muted mb-10">Esto reemplaza el nombre en TODOS los movimientos existentes.</p>
     <div class="form-group"><label class="form-label" for="rename-cat-from">Categoría actual</label>
       <select id="rename-cat-from" class="form-select" onchange="updateRenameInfo()"></select>
     </div>
-    <div id="rename-info" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+    <div id="rename-info" class="txt-sm txt-muted mb-10"></div>
     <div class="form-group"><label class="form-label" for="rename-cat-to">Nuevo nombre</label>
       <input type="text" id="rename-cat-to" class="form-input" placeholder="Nuevo nombre">
     </div>
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-sm" style="flex:1" onclick="closeRenameModal()">Cancelar</button>
+      <button class="btn-sm u-flex1" onclick="closeRenameModal()">Cancelar</button>
       <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:11px" onclick="aplicarRename()">Renombrar</button>
     </div>
   </div>
@@ -298,7 +298,7 @@
     <div class="modal-title">Editar movimiento</div>
     <div id="edit-form-content"></div>
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-sm" style="flex:1" onclick="closeEditModal()">Cancelar</button>
+      <button class="btn-sm u-flex1" onclick="closeEditModal()">Cancelar</button>
       <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:11px" onclick="guardarEdit()">Guardar cambios</button>
     </div>
   </div>
@@ -314,8 +314,8 @@
     </div>
     <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Revisá y eliminá lo que no corresponda antes de importar.</p>
     <div id="import-preview-list" style="max-height:52vh;overflow-y:auto;margin-bottom:14px"></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn-sm" style="flex:1" onclick="closeImportModal()">Cancelar</button>
+    <div class="u-row">
+      <button class="btn-sm u-flex1" onclick="closeImportModal()">Cancelar</button>
       <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:12px" onclick="confirmarImport()">Importar</button>
     </div>
   </div>
@@ -353,14 +353,14 @@
       </div>
       <div class="form-group"><label class="form-label" for="inp-cat">Categoría</label>
         <div id="sugerencia-cat" role="button" tabindex="0" style="display:none;font-size:12px;background:var(--accent-light);color:var(--accent);padding:7px 10px;border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="aplicarSugerenciaCat()"></div>
-        <div style="display:flex;gap:8px"><select id="inp-cat" class="form-select" style="flex:1" onchange="updateSubcats()"></select>
+        <div class="u-row"><select id="inp-cat" class="form-select u-flex1" onchange="updateSubcats()"></select>
           <button class="btn-sm" onclick="openCatModal()">+ Cat.</button>
         </div>
       </div>
       <div class="form-group"><label class="form-label" for="inp-subcat">Subcategoría</label><select id="inp-subcat" class="form-select" onchange="autoSeleccionarCuenta()"></select></div>
       <div class="form-group"><label class="form-label" for="inp-cuenta">Cuenta</label>
-        <div style="display:flex;gap:8px">
-          <select id="inp-cuenta" class="form-select" style="flex:1"></select>
+        <div class="u-row">
+          <select id="inp-cuenta" class="form-select u-flex1"></select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
@@ -423,8 +423,8 @@
       <div class="form-group"><label class="form-label" for="inv-ticker">Ticker / Fondo</label><input type="text" id="inv-ticker" class="form-input" placeholder="BCMMA, AL30, SPY, IRCFO…"></div>
       <div class="form-group"><label class="form-label" for="inv-fecha">Fecha</label><input type="date" id="inv-fecha" class="form-input"></div>
       <div class="form-group"><label class="form-label" for="inv-cuenta">Cuenta</label>
-        <div style="display:flex;gap:8px">
-          <select id="inv-cuenta" class="form-select" style="flex:1"></select>
+        <div class="u-row">
+          <select id="inv-cuenta" class="form-select u-flex1"></select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('inv-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
@@ -441,8 +441,8 @@
       <div class="form-group"><label class="form-label" for="tc-desc">Descripción del gasto</label><input type="text" id="tc-desc" class="form-input" placeholder="Ej: Cuotas celular, Netflix"></div>
       <div class="two-col">
         <div class="form-group"><label class="form-label" for="tc-tarjeta">Tarjeta</label>
-          <div style="display:flex;gap:6px">
-            <select id="tc-tarjeta" class="form-select" style="flex:1"></select>
+          <div class="u-row-6">
+            <select id="tc-tarjeta" class="form-select u-flex1"></select>
             <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')" title="Agregar tarjeta nueva" aria-label="Agregar tarjeta nueva">+</button>
           </div>
         </div>
@@ -451,8 +451,8 @@
         </div>
       </div>
       <div class="form-group"><label class="form-label" for="tc-cuenta">Cuenta</label>
-        <div style="display:flex;gap:8px">
-          <select id="tc-cuenta" class="form-select" style="flex:1"></select>
+        <div class="u-row">
+          <select id="tc-cuenta" class="form-select u-flex1"></select>
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
@@ -621,7 +621,7 @@
   <!-- Mis dólares -->
   <div class="card" id="usd-card" style="display:none">
     <div class="card-title">💵 Mis dólares</div>
-    <div id="usd-msg" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+    <div id="usd-msg" class="txt-sm txt-muted mb-10"></div>
     <div class="summary-row" style="padding:0 0 12px" id="usd-kpis"></div>
     <div id="usd-detail"></div>
   </div>
@@ -686,7 +686,7 @@
   </div>
   <div class="card">
     <div class="card-title">📥 Restaurar backup JSON</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Cargá un backup descargado desde Config. Reemplaza TODOS los datos actuales por los del backup.</p>
+    <p class="txt-sm txt-muted mb-10">Cargá un backup descargado desde Config. Reemplaza TODOS los datos actuales por los del backup.</p>
     <label style="display:block;border:2px dashed var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;cursor:pointer">
       <input type="file" id="json-restore-file" accept=".json" style="display:none" onchange="restaurarBackup(this)">
       <div style="font-size:22px">📄</div>
@@ -711,10 +711,10 @@
   <div class="header"><h1>Configuración</h1></div>
   <div class="card">
     <div class="card-title">🎨 Apariencia</div>
-    <div style="display:flex;gap:8px">
-      <button class="btn-sm theme-btn" data-theme="auto" onclick="setTheme('auto')" style="flex:1">Auto</button>
-      <button class="btn-sm theme-btn" data-theme="light" onclick="setTheme('light')" style="flex:1">☀ Claro</button>
-      <button class="btn-sm theme-btn" data-theme="dark" onclick="setTheme('dark')" style="flex:1">🌙 Oscuro</button>
+    <div class="u-row">
+      <button class="btn-sm theme-btn u-flex1" data-theme="auto" onclick="setTheme('auto')" >Auto</button>
+      <button class="btn-sm theme-btn u-flex1" data-theme="light" onclick="setTheme('light')" >☀ Claro</button>
+      <button class="btn-sm theme-btn u-flex1" data-theme="dark" onclick="setTheme('dark')" >🌙 Oscuro</button>
     </div>
   </div>
   <div class="card">
@@ -729,12 +729,12 @@
   </div>
   <div class="card">
     <div class="card-title">💳 Cuentas</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Las cuentas que usás al cargar movimientos. Las marcadas en azul son las que agregaste vos.</p>
+    <p class="txt-sm txt-muted mb-10">Las cuentas que usás al cargar movimientos. Las marcadas en azul son las que agregaste vos.</p>
     <div id="cuentas-manager"></div>
   </div>
   <div class="card">
     <div class="card-title">💳 Nombres de tarjetas</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Renombralas para identificar cada plástico (ej: "Visa Santander"). Si renombrás una que ya tiene gastos cargados, se actualizan todos.</p>
+    <p class="txt-sm txt-muted mb-10">Renombralas para identificar cada plástico (ej: "Visa Santander"). Si renombrás una que ya tiene gastos cargados, se actualizan todos.</p>
     <div id="tarjetas-manager"></div>
   </div>
   <div class="card">
@@ -751,7 +751,7 @@
   </div>
   <div class="card">
     <div class="card-title">📊 Exportar para BI</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">CSV desnormalizado con todo tu historial (una fila por movimiento y por cada cuota/mes de gasto frecuente), listo para abrir en Power BI, Looker Studio o pandas/Python.</p>
+    <p class="txt-sm txt-muted mb-10">CSV desnormalizado con todo tu historial (una fila por movimiento y por cada cuota/mes de gasto frecuente), listo para abrir en Power BI, Looker Studio o pandas/Python.</p>
     <button class="btn-sm" style="width:100%" onclick="exportarDatosBI()">⬇ Exportar CSV para BI</button>
   </div>
   <div class="card">
@@ -784,7 +784,7 @@
   <div class="card">
     <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
       <span>Categorías personalizadas</span>
-      <div style="display:flex;gap:6px">
+      <div class="u-row-6">
         <button class="btn-sm" onclick="openRenameModal()">✎ Renombrar</button>
         <button class="btn-sm" onclick="openCatModal()">+ Nueva</button>
       </div>

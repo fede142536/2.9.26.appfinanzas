@@ -308,7 +308,7 @@ function construirCuerpoTxItem(m){
     if(isTc){
       cat=escapeHtml(m.desc);
       const monedaPref=m.moneda==="USD"?"USD ":"";
-      const monedaBadge=m.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">USD</span>`:"";
+      const monedaBadge=m.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
       cat+=monedaBadge;
       if(m.frecuente){
         sub=subtituloFila([subcatVisible(m.subcat), "🔁 Mensual fijo"]);
@@ -319,17 +319,17 @@ function construirCuerpoTxItem(m){
     } else if(isInv){
       // Badge de cash flow para diferenciar rescate vs suscripción
       const invBadge=invEsIngreso
-        ?` <span style="font-size:9px;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:8px;font-weight:500">📥 INGRESO</span>`
-        :` <span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500">📤 GASTO</span>`;
+        ?` <span class="badge badge-success">📥 INGRESO</span>`
+        :` <span class="badge badge-danger">📤 GASTO</span>`;
       cat=`${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${invBadge}`;
       sub=subtituloFila([subcatVisible(m.subcat)]);
     } else {
       let badge="";
-      if(isAhorro) badge=` <span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">AHORRO</span>`;
-      else if(isRetiro) badge=` <span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">DE AHORROS</span>`;
-      else if(m.frecuente) badge=` <span style="font-size:9px;background:var(--warning-light);color:var(--warning);padding:1px 6px;border-radius:8px;font-weight:500">🔁 FRECUENTE</span>`;
+      if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
+      else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
+      else if(m.frecuente) badge=` <span class="badge badge-warning">🔁 FRECUENTE</span>`;
       cat=`${escapeHtml(m.cat)}${badge}`;
-      if(m.recuperable>0) cat+=` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">🔁 ${fmtAbbr(m.recuperable)}</span>`;
+      if(m.recuperable>0) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
       sub=subtituloFila([subcatVisible(m.subcat)]);
     }
     // Ícono e iconClass siguen la misma lógica de color
@@ -798,7 +798,7 @@ function renderMovs(){
       gastoCat[m.cat]=(gastoCat[m.cat]||0)+m.importe;
     });
     let html=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📊 Presupuestos del mes</div>`;
+      <div class="seccion-label mb-8">📊 Presupuestos del mes</div>`;
     presupCats.sort().forEach(cat=>{
       const tope=presupuestos[cat];
       const gastado=gastoCat[cat]||0;

@@ -156,7 +156,7 @@ function renderUSD(){
     <div class="chip"><div class="chip-label">Total</div><div class="chip-val save">USD ${(cashUSD+fondoUSD).toFixed(2)}</div></div>`;
 
   // Detalle desglosado
-  let html=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Detalle</div>`;
+  let html=`<div class="seccion-label mb-8">Detalle</div>`;
   const items=[
     {label:"📥 Ingresos USD", val:ingresosUSD, signo:1},
     {label:"📤 Gastos USD (incluye lo guardado)", val:gastosUSD, signo:-1},
@@ -300,7 +300,7 @@ function renderAhorroRanking(){
   const totalAbs=items.reduce((s,it)=>s+Math.abs(it.saldoArs),0)||1;
   const maxV=Math.max(...items.map(it=>Math.abs(it.saldoArs)),1);
 
-  let html=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏆 Ranking por categoría</div>`;
+  let html=`<div class="seccion-label mb-8">🏆 Ranking por categoría</div>`;
   html+=items.map(it=>{
     const pct=totalAbs>0?Math.round(Math.abs(it.saldoArs)/totalAbs*100):0;
     const c=it.saldoArs>=0?"var(--save)":"var(--danger)";
@@ -309,7 +309,7 @@ function renderAhorroRanking(){
     const catEsc=attrJS(it.cat);
     return `<div role="button" tabindex="0" style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);cursor:pointer" onclick="showAhorroCatDetail(${catEsc})">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <div style="font-size:13px;font-weight:600">${icon} ${escapeHtml(it.cat)}</div>
+        <div class="txt-md txt-strong">${icon} ${escapeHtml(it.cat)}</div>
         <div style="text-align:right">
           ${it.saldoArs!==0?`<div style="font-size:13px;font-weight:600;color:${c}">${fmtS(it.saldoArs)}</div>`:""}
           ${it.saldoUsd!==0?`<div style="font-size:${it.saldoArs!==0?'11px':'13px'};font-weight:600;color:${cUsd}">USD ${it.saldoUsd.toFixed(2)}</div>`:""}
@@ -336,7 +336,7 @@ function showAhorroCatDetail(cat){
   const icon=getIcon(cat,"🏦");
   document.getElementById("ahorrocat-detail-title").textContent=`${icon} ${cat}`;
   if(!movsCat.length){
-    document.getElementById("ahorrocat-detail-content").innerHTML=`<p style="font-size:13px;color:var(--muted)">Sin movimientos.</p>`;
+    document.getElementById("ahorrocat-detail-content").innerHTML=`<p class="txt-md txt-muted">Sin movimientos.</p>`;
     document.getElementById("modal-ahorrocat-detail").classList.add("open");
     return;
   }
@@ -350,8 +350,8 @@ function showAhorroCatDetail(cat){
   const saldoUsd=depositadoUsd-retiradoUsd;
   const colorSaldo=saldoArs>=0?"var(--save)":"var(--danger)";
   const colorSaldoUsd=saldoUsd>=0?"var(--save)":"var(--danger)";
-  let html=`<div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Saldo neto</div>
+  let html=`<div class="inset">
+    <div class="seccion-label">Saldo neto</div>
     ${saldoArs!==0||depositadoArs>0||retiradoArs>0?`<div style="font-size:20px;font-weight:600;color:${colorSaldo};margin-top:3px">${fmtSignoGrande(saldoArs)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">Depositado: <span style="color:var(--save)">${fmtS(depositadoArs)}</span> · Retirado: <span style="color:var(--danger)">${fmtS(retiradoArs)}</span></div>`:""}
     ${saldoUsd!==0||depositadoUsd>0||retiradoUsd>0?`<div style="font-size:${saldoArs!==0?'15px':'20px'};font-weight:600;color:${colorSaldoUsd};margin-top:8px">USD ${saldoUsd>=0?'+':''}${saldoUsd.toFixed(2)}</div>
@@ -365,14 +365,14 @@ function showAhorroCatDetail(cat){
     const color=esRetiro?"var(--danger)":"var(--save)";
     const montoTxt=esUSD?`USD ${(m.importeOrig||0).toFixed(2)}`:fmtS(m.importe||0);
     const badge=esRetiro
-      ?`<span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500">RETIRO</span>`
-      :`<span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">DEPÓSITO</span>`;
-    const badgeMoneda=esUSD?`<span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">USD</span>`:"";
+      ?`<span class="badge badge-danger">RETIRO</span>`
+      :`<span class="badge badge-save">DEPÓSITO</span>`;
+    const badgeMoneda=esUSD?`<span class="badge badge-accent">USD</span>`:"";
     const fecha=(m.fecha||"").split("-").reverse().join("/");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${escapeHtml(m.subcat||m.cat)} ${badge} ${badgeMoneda}</div>
-        <div style="font-size:11px;color:var(--muted)">${fecha}${m.nota?" · "+escapeHtml(m.nota):""}</div>
+      <div class="u-flex1 u-min0">
+        <div class="txt-md txt-strong">${escapeHtml(m.subcat||m.cat)} ${badge} ${badgeMoneda}</div>
+        <div class="txt-xs txt-muted">${fecha}${m.nota?" · "+escapeHtml(m.nota):""}</div>
       </div>
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${signo}${montoTxt}</div>

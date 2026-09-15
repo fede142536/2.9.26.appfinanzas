@@ -292,6 +292,48 @@ test("totalesDePlata tolera una lista vacía", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// ESTILOS
+// ═══════════════════════════════════════════
+grupo("Estilos");
+
+// El mismo badge estaba escrito inline 21 veces con 9 ortografías distintas (padding 1px 5px
+// vs 1px 6px, radio 6px vs 8px, con y sin font-weight), así que se veía apenas distinto en
+// cada pantalla. Ahora hay una sola clase; este test evita que vuelvan a multiplicarse.
+test("las clases de componente existen en styles.css", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const faltan=["badge","badge-save","badge-danger","badge-success","badge-accent","badge-warning",
+                "seccion-label","u-upper","inset","txt-micro","txt-xs","txt-sm","txt-md","txt-muted",
+                "txt-strong","txt-medium","u-flex1","u-row","u-row-6","mb-6","mb-8","mb-10","mt-14"]
+                .filter(c=>!css.includes("."+c+"{") && !css.includes("."+c+","));
+  igual(faltan, [], "desaparecieron clases que el JS y el HTML están usando");
+});
+
+test("no volvieron los badges escritos a mano", async ()=>{
+  const archivos=["movimientos","dashboard","tarjetas-inversiones","ahorros","importar-exportar",
+                  "cuentas-tarjetas-categorias","editar-movimiento","presupuestos"];
+  const malos=[];
+  for(const a of archivos){
+    const txt=await (await fetch(`js/${a}.js`)).text();
+    txt.split("\n").forEach((l,i)=>{
+      if(/style="font-size:9px;background:var\(--/.test(l)) malos.push(`js/${a}.js:${i+1}`);
+    });
+  }
+  igual(malos, [], 'se volvió a escribir un badge inline: usá class="badge badge-..."');
+});
+
+test("el rótulo de sección no se volvió a escribir inline", async ()=>{
+  const malos=[];
+  for(const a of ["dashboard","ahorros","tarjetas-inversiones","importar-exportar","movimientos",
+                  "cuentas-tarjetas-categorias","seguridad-pin","config-ui","presupuestos"]){
+    const txt=await (await fetch(`js/${a}.js`)).text();
+    txt.split("\n").forEach((l,i)=>{
+      if(/text-transform:uppercase;letter-spacing:\.5px/.test(l)) malos.push(`js/${a}.js:${i+1}`);
+    });
+  }
+  igual(malos, [], 'usá class="seccion-label" en vez de repetir el estilo');
+});
+
+// ═══════════════════════════════════════════
 // LISTA DE MOVIMIENTOS
 // ═══════════════════════════════════════════
 grupo("Lista de movimientos");

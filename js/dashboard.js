@@ -190,7 +190,7 @@ function renderDashYear(){
           <div class="bar-val">${fmtAbbr(val)}</div>
         </div>`;
       }).join("")
-    : `<p style="font-size:13px;color:var(--muted)">Sin datos para ${dashYear}</p>`;
+    : `<p class="txt-md txt-muted">Sin datos para ${dashYear}</p>`;
   // ── INGRESOS POR CATEGORÍA (mismo estilo que gastos) ──
   const sortedIng=Object.entries(catData2.catsIngreso||{}).sort((a,b)=>b[1]-a[1]);
   const maxValIng=sortedIng[0]?sortedIng[0][1]:1;
@@ -216,7 +216,7 @@ function renderDashYear(){
           <div class="bar-val">${fmtAbbr(val)}</div>
         </div>`;
       }).join("")
-    : `<p style="font-size:13px;color:var(--muted)">Sin ingresos para ${dashYear}</p>`;
+    : `<p class="txt-md txt-muted">Sin ingresos para ${dashYear}</p>`;
   renderDashCuentas();
 }
 
@@ -233,7 +233,7 @@ function renderDashCuentas(){
     movsAnio.push(...getMesMov(ym));
   });
   if(!movsAnio.length){
-    el.innerHTML=`<p style="font-size:13px;color:var(--muted)">Sin datos para ${dashYear}.</p>`;
+    el.innerHTML=`<p class="txt-md txt-muted">Sin datos para ${dashYear}.</p>`;
     return;
   }
   // Agrupar por cuenta (excluir USD del cálculo ARS para no mezclar monedas)
@@ -262,7 +262,7 @@ function renderDashCuentas(){
     .filter(c=>c.count>0)
     .sort((a,b)=>Math.abs(b.balance)-Math.abs(a.balance));
   if(!cuentas.length){
-    el.innerHTML=`<p style="font-size:13px;color:var(--muted)">Sin movimientos con cuenta asignada.</p>`;
+    el.innerHTML=`<p class="txt-md txt-muted">Sin movimientos con cuenta asignada.</p>`;
     return;
   }
   el.innerHTML=cuentas.map(c=>{
@@ -271,10 +271,10 @@ function renderDashCuentas(){
     const cuentaEsc=attrJS(c.cuenta);
     return `<div role="button" tabindex="0" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showCuentaDetail(${cuentaEsc})">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div style="font-size:13px;font-weight:600">💳 ${escapeHtml(c.cuenta)}</div>
+        <div class="txt-md txt-strong">💳 ${escapeHtml(c.cuenta)}</div>
         <div style="font-size:13px;font-weight:600;color:${balColor}">${sign}${fmtS(c.balance)}</div>
       </div>
-      <div style="font-size:11px;color:var(--muted)">
+      <div class="txt-xs txt-muted">
         Ingresos: <span style="color:var(--success)">${fmtAbbr(c.ing)}</span>
         · Gastos: <span style="color:var(--danger)">${fmtAbbr(c.gas)}</span>
         · ${c.count} movs
@@ -323,8 +323,8 @@ function renderDashUSD(){
   const netoYear = ing - gas + aho - ret + invEntrada - invSalida - tcUSD;
   const netoColor=netoYear>=0?"var(--success)":"var(--danger)";
 
-  let html=`<div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Saldo neto USD ${yrStr}</div>
+  let html=`<div class="inset">
+    <div class="seccion-label">Saldo neto USD ${yrStr}</div>
     <div style="font-size:22px;font-weight:600;color:${netoColor};margin-top:3px">${netoYear>=0?"+":""}USD ${netoYear.toFixed(2)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">${totalMovimientos} ${totalMovimientos===1?"movimiento":"movimientos"} en USD</div>
   </div>`;
@@ -380,8 +380,8 @@ function showCatDetail(cat, tipo){
   const total=movsCat.reduce((s,m)=>s+(m.importe||0),0);
   const iconCat=cat==="Inversiones (rescates)"||cat==="Inversiones (compras)"?"◈":(cat==="De ahorros"?"🏦":(getIcon(cat)));
   document.getElementById("cat-detail-title").textContent=`${iconCat} ${cat} · ${dashYear}`;
-  let html=`<div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total ${dashYear} · ${esIngreso?"Ingresos":"Gastos"}</div>
+  let html=`<div class="inset">
+    <div class="seccion-label">Total ${dashYear} · ${esIngreso?"Ingresos":"Gastos"}</div>
     <div style="font-size:22px;font-weight:600;color:${color};margin-top:3px">${fmtS(total||(esIngreso?0:(HIST_CAT_YEAR[String(dashYear)]||{})[cat]||0))}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">${movsCat.length} ${movsCat.length===1?"movimiento":"movimientos"}${total===0&&!esIngreso?" (datos del histórico)":""}</div>
   </div>`;
@@ -394,7 +394,7 @@ function showCatDetail(cat, tipo){
   const meses=Object.keys(porMes).sort();
   if(meses.length){
     const maxM=Math.max(...Object.values(porMes));
-    html+=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Por mes</div>`;
+    html+=`<div class="seccion-label seccion-label-sep">Por mes</div>`;
     meses.forEach(ym=>{
       const v=porMes[ym];
       html+=`<div class="bar-row" style="margin-bottom:5px">
@@ -412,7 +412,7 @@ function showCatDetail(cat, tipo){
   });
   const subs=Object.entries(porSub).sort((a,b)=>b[1]-a[1]);
   if(subs.length){
-    html+=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Subcategorías</div>`;
+    html+=`<div class="seccion-label mt-14 mb-6">Subcategorías</div>`;
     const maxS=subs[0][1];
     subs.forEach(([s,v])=>{
       html+=`<div class="bar-row" style="margin-bottom:5px">
@@ -439,7 +439,7 @@ function showInstrumentoDetail(ticker){
     .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   document.getElementById("instrumento-detail-title").textContent=`📊 ${ticker}`;
   if(!movsTicker.length){
-    document.getElementById("instrumento-detail-content").innerHTML=`<p style="font-size:13px;color:var(--muted)">Sin movimientos para este instrumento.</p>`;
+    document.getElementById("instrumento-detail-content").innerHTML=`<p class="txt-md txt-muted">Sin movimientos para este instrumento.</p>`;
     document.getElementById("modal-instrumento-detail").classList.add("open");
     return;
   }
@@ -451,10 +451,10 @@ function showInstrumentoDetail(ticker){
     totalUsd+=(m.importeUSD||0)*sg;
   });
   const colorTotal=totalArs>=0?"var(--success)":"var(--danger)";
-  let html=`<div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Balance acumulado</div>
+  let html=`<div class="inset">
+    <div class="seccion-label">Balance acumulado</div>
     <div style="font-size:20px;font-weight:600;color:${colorTotal};margin-top:3px">${fmtSignoGrande(totalArs)}</div>
-    ${totalUsd!==0?`<div style="font-size:13px;color:var(--muted)">USD ${totalUsd.toFixed(2)}</div>`:""}
+    ${totalUsd!==0?`<div class="txt-md txt-muted">USD ${totalUsd.toFixed(2)}</div>`:""}
     <div style="font-size:12px;color:var(--muted);margin-top:3px">${movsTicker.length} ${movsTicker.length===1?"movimiento":"movimientos"}</div>
   </div>`;
   html+=movsTicker.map(m=>{
@@ -466,12 +466,12 @@ function showInstrumentoDetail(ticker){
       ? `${sign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`
       : `${sign}${fmtS(m.importe||0)}`;
     const badge=esIngreso
-      ?`<span style="font-size:9px;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:8px;font-weight:500">📥 INGRESO</span>`
-      :`<span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500">📤 GASTO</span>`;
+      ?`<span class="badge badge-success">📥 INGRESO</span>`
+      :`<span class="badge badge-danger">📤 GASTO</span>`;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${escapeHtml(m.subcat||m.cat)} ${badge}</div>
-        <div style="font-size:11px;color:var(--muted)">${fecha}${m.cuenta?" · "+escapeHtml(m.cuenta):""}${m.nota?" · "+escapeHtml(m.nota):""}</div>
+      <div class="u-flex1 u-min0">
+        <div class="txt-md txt-strong">${escapeHtml(m.subcat||m.cat)} ${badge}</div>
+        <div class="txt-xs txt-muted">${fecha}${m.cuenta?" · "+escapeHtml(m.cuenta):""}${m.nota?" · "+escapeHtml(m.nota):""}</div>
       </div>
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${montoTxt}</div>
@@ -531,7 +531,7 @@ function showCuentaDetail(cuentaNombre){
     .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   document.getElementById("cuenta-detail-title").textContent=`💳 ${cuentaNombre} · ${dashYear}`;
   if(!movsCuenta.length){
-    document.getElementById("cuenta-detail-content").innerHTML=`<p style="font-size:13px;color:var(--muted)">Sin movimientos para esta cuenta en ${dashYear}.</p>`;
+    document.getElementById("cuenta-detail-content").innerHTML=`<p class="txt-md txt-muted">Sin movimientos para esta cuenta en ${dashYear}.</p>`;
     document.getElementById("modal-cuenta-detail").classList.add("open");
     return;
   }
@@ -548,8 +548,8 @@ function showCuentaDetail(cuentaNombre){
   });
   const balance=ing-gas;
   const balColor=balance>=0?"var(--success)":"var(--danger)";
-  let html=`<div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Balance ${dashYear}</div>
+  let html=`<div class="inset">
+    <div class="seccion-label">Balance ${dashYear}</div>
     <div style="font-size:20px;font-weight:600;color:${balColor};margin-top:3px">${fmtSignoGrande(balance)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">Ingresos: <span style="color:var(--success)">${fmtS(ing)}</span> · Gastos: <span style="color:var(--danger)">${fmtS(gas)}</span> · ${movsCuenta.length} ${movsCuenta.length===1?"movimiento":"movimientos"}</div>
   </div>`;
@@ -562,29 +562,29 @@ function showCuentaDetail(cuentaNombre){
         // Es una compra: se muestra con "-", igual que en la lista de Movimientos. El badge
         // aclara de dónde salió la plata. Antes decía "+" y contradecía a la otra pantalla.
         signo="-"; color="var(--save)";
-        badge=`<span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">DE AHORROS</span>`;
+        badge=`<span class="badge badge-save">DE AHORROS</span>`;
       } else if(m.esAhorro){
         signo="-"; color="var(--save)";
-        badge=`<span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">AHORRO</span>`;
+        badge=`<span class="badge badge-save">AHORRO</span>`;
       } else {
         signo="-"; color="var(--danger)";
-        if(m.frecuente) badge=`<span style="font-size:9px;background:var(--warning-light);color:var(--warning);padding:1px 6px;border-radius:8px;font-weight:500">🔁 FRECUENTE</span>`;
+        if(m.frecuente) badge=`<span class="badge badge-warning">🔁 FRECUENTE</span>`;
       }
     } else if(m.tipo==="Inversion"){
       const esIngreso=isInvSalida(m);
       signo=esIngreso?"+":"-";
       color=esIngreso?"var(--success)":"var(--danger)";
       badge=esIngreso
-        ?`<span style="font-size:9px;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:8px;font-weight:500">📥 INGRESO</span>`
-        :`<span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500">📤 GASTO</span>`;
+        ?`<span class="badge badge-success">📥 INGRESO</span>`
+        :`<span class="badge badge-danger">📤 GASTO</span>`;
     }
     const fecha=(m.fecha||"").split("-").reverse().join("/");
     const titulo=m.tipo==="Inversion"?(m.ticker||m.cat):m.cat;
     const subInfo=m.tipo==="Inversion"?(m.subcat||""):(m.subcat||"");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${escapeHtml(titulo)} ${badge}</div>
-        <div style="font-size:11px;color:var(--muted)">${subInfo?escapeHtml(subInfo)+" · ":""}${fecha}${m.nota?" · "+escapeHtml(m.nota):""}</div>
+      <div class="u-flex1 u-min0">
+        <div class="txt-md txt-strong">${escapeHtml(titulo)} ${badge}</div>
+        <div class="txt-xs txt-muted">${subInfo?escapeHtml(subInfo)+" · ":""}${fecha}${m.nota?" · "+escapeHtml(m.nota):""}</div>
       </div>
       <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
         <div style="font-size:14px;font-weight:600;color:${color}">${signo}${fmtS(m.importe||0)}</div>
@@ -746,10 +746,10 @@ function renderChartMensualBI(yearData){
         const balColor=d.balance>=0?"var(--success)":"var(--danger)";
         document.getElementById("dash-detail").innerHTML=`
           <div style="display:flex;justify-content:space-around;align-items:center;text-align:center;flex-wrap:wrap;gap:6px">
-            <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${mesLbl(d.mes)}</div></div>
-            <div><div style="font-size:10px;color:var(--muted)">Ingresos</div><div style="font-size:13px;font-weight:600;color:var(--success)">${fmtS(d.ingreso)}</div></div>
-            <div><div style="font-size:10px;color:var(--muted)">Gastos</div><div style="font-size:13px;font-weight:600;color:var(--danger)">${fmtS(d.gasto)}</div></div>
-            <div><div style="font-size:10px;color:var(--muted)">Balance</div><div style="font-size:13px;font-weight:600;color:${balColor}">${fmtS(d.balance)}</div></div>
+            <div><div class="seccion-label txt-micro">${mesLbl(d.mes)}</div></div>
+            <div><div class="txt-micro txt-muted">Ingresos</div><div style="font-size:13px;font-weight:600;color:var(--success)">${fmtS(d.ingreso)}</div></div>
+            <div><div class="txt-micro txt-muted">Gastos</div><div style="font-size:13px;font-weight:600;color:var(--danger)">${fmtS(d.gasto)}</div></div>
+            <div><div class="txt-micro txt-muted">Balance</div><div style="font-size:13px;font-weight:600;color:${balColor}">${fmtS(d.balance)}</div></div>
           </div>`;
       }
     }
@@ -797,8 +797,8 @@ function renderChartBalanceBI(yearData){
         const color=d.balance>=0?"var(--success)":"var(--danger)";
         document.getElementById("dash-balance-detail").innerHTML=`
           <div style="display:flex;justify-content:space-around;align-items:center;text-align:center;flex-wrap:wrap;gap:6px">
-            <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">${mesLbl(d.mes)}</div></div>
-            <div><div style="font-size:10px;color:var(--muted)">Balance</div><div style="font-size:14px;font-weight:600;color:${color}">${fmtS(d.balance)}</div></div>
+            <div><div class="seccion-label txt-micro">${mesLbl(d.mes)}</div></div>
+            <div><div class="txt-micro txt-muted">Balance</div><div style="font-size:14px;font-weight:600;color:${color}">${fmtS(d.balance)}</div></div>
           </div>`;
       }
     }
