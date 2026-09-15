@@ -558,6 +558,18 @@ async function guardar(){
   resetForm(tipo);
 }
 
+// Tras guardar, el formulario se resetea pero la página sigue scrolleada abajo, donde está el
+// botón "Guardar". Dar foco al campo no alcanza para traerlo a la vista: en el celular se abre
+// el teclado sobre un campo que quedó arriba del borde de la pantalla y escribís a ciegas.
+// Por eso se sube explícitamente al principio del formulario DESPUÉS de enfocar (focus() puede
+// mover el scroll por su cuenta, así que el scrollTo tiene que ir último para ganar).
+function enfocarCampoDeArriba(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.focus();
+  window.scrollTo(0,0);
+}
+
 // Resetea el formulario al estado inicial para cargar otro movimiento
 function resetForm(t){
   const iso=currentYMD();
@@ -580,11 +592,11 @@ function resetForm(t){
     if(catSel.options.length) catSel.selectedIndex=0;
     updateSubcats();
     // Foco en el importe para cargar el siguiente
-    document.getElementById("inp-importe").focus();
+    enfocarCampoDeArriba("inp-importe");
   } else if(t==="Inversion"){
     ["inv-ars","inv-usd","inv-ticker","inv-nota"].forEach(id=>document.getElementById(id).value="");
     document.getElementById("inv-fecha").value=iso;
-    document.getElementById("inv-ticker").focus();
+    enfocarCampoDeArriba("inv-ticker");
   } else if(t==="Tarjeta"){
     ["tc-desc","tc-total","tc-cuotas","tc-nota","tc-mes-fin"].forEach(id=>document.getElementById(id).value="");
     document.getElementById("tc-frecuente").checked=false;
@@ -598,7 +610,7 @@ function resetForm(t){
     document.getElementById("tc-cuotas-row").style.display="grid";
     document.getElementById("tc-frec-row").style.display="none";
     document.getElementById("tc-total-label").textContent="Monto total ($)";
-    document.getElementById("tc-desc").focus();
+    enfocarCampoDeArriba("tc-desc");
   }
 }
 
