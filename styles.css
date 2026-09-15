@@ -121,15 +121,15 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .tx-list{padding:0 16px}
 /* Separador de fecha: pegado justo debajo del header (sticky) mientras se scrollea la lista.
    Márgen negativo para que se extienda de punta a punta, contrarrestando el padding de .tx-list */
-.tx-date-sep{position:sticky;top:60px;z-index:5;margin:0 -16px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--muted);background:var(--surface-glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.tx-item{background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border);padding:11px 13px;display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+.tx-date-sep{position:sticky;top:60px;z-index:5;margin:0 -16px;padding:4px 16px;font-size:11px;font-weight:600;color:var(--muted);background:var(--surface-glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.tx-item{background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border);padding:8px 12px;display:flex;align-items:center;gap:10px;position:relative;z-index:1}
 /* <tx-item> (el Web Component, tag sin punto) envuelve a .tx-item (la fila visual, clase con punto):
    el wrapper recorta y da el margen entre filas; la fila interna es la que desliza adentro. */
-tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radius-sm);margin-bottom:7px;animation:slideUpFade .4s ease forwards}
+tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radius-sm);margin-bottom:4px;animation:slideUpFade .4s ease forwards}
 .tx-swipe-bg{position:absolute;top:0;bottom:0;width:78px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;text-align:center;padding:0 4px;cursor:pointer}
 .tx-swipe-bg-left{left:0;background:var(--accent)}
 .tx-swipe-bg-right{right:0;background:var(--danger)}
-.tx-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.tx-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .tx-icon.gasto{background:var(--danger-light)}.tx-icon.ingreso{background:var(--success-light)}.tx-icon.inversion{background:var(--invest-light)}.tx-icon.tarjeta{background:var(--warning-light)}.tx-icon.save{background:var(--save-light)}
 .tx-info{flex:1;min-width:0}
 .tx-cat{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

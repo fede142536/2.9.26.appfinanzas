@@ -292,6 +292,40 @@ test("totalesDePlata tolera una lista vacía", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// LISTA DE MOVIMIENTOS
+// ═══════════════════════════════════════════
+grupo("Lista de movimientos");
+
+// Cada fila repetía la fecha que ya estaba en el encabezado del grupo ("24 de septiembre")
+// y arrancaba con "Otros", la subcategoría por defecto, idéntica en casi todos los renglones.
+test("el subtítulo no repite la subcategoría por defecto", ()=>{
+  igual(subcatVisible("Otros"), "", '"Otros" no aporta nada: es el valor por defecto');
+  igual(subcatVisible(""), "", "una subcategoría vacía no debería ocupar lugar");
+  igual(subcatVisible("   "), "", "solo espacios tampoco");
+  igual(subcatVisible("Delivery"), "Delivery", "una subcategoría de verdad tiene que quedar");
+});
+
+test("el subtítulo no deja separadores colgando", ()=>{
+  igual(subtituloFila(["Delivery", "Coto"]), "Delivery · Coto");
+  igual(subtituloFila(["", "Coto"]), "Coto", 'quedó un " · " al principio');
+  igual(subtituloFila(["Delivery", ""]), "Delivery", 'quedó un " · " al final');
+  igual(subtituloFila(["", "", ""]), "", "todo vacío debería dar vacío, no separadores sueltos");
+  igual(subtituloFila([null, undefined, "Coto"]), "Coto", "null y undefined tienen que ignorarse");
+});
+
+test("subcatVisible escapa lo que escribe el usuario", ()=>{
+  const r=subcatVisible('<img src=x onerror=alert(1)>');
+  cierto(!r.includes("<"), "se coló HTML sin escapar en el subtítulo: "+r);
+});
+
+test("una compra pagada con ahorros se muestra como gasto", async ()=>{
+  const txt=await (await fetch("js/movimientos.js")).text();
+  const cuerpo=txt.slice(txt.indexOf("function construirCuerpoTxItem"));
+  cierto(/else if\(isRetiro\) amt=`-\$\{fmtS/.test(cuerpo),
+    'el retiro volvió a mostrarse con "+": es una compra, y los totales la cuentan como gasto');
+});
+
+// ═══════════════════════════════════════════
 // GRÁFICOS
 // ═══════════════════════════════════════════
 grupo("Gráficos");

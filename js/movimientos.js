@@ -257,6 +257,19 @@ function getMesMov(ym){
 // Arma el HTML de UN item de la lista de movimientos. Extraída como función aparte (en vez de
 // vivir inline dentro de un .map()) para poder reusarla tanto en el primer lote como en los
 // lotes que se van agregando con el scroll (ver iniciarLazyLoadMovs).
+// Arma el subtítulo de una fila juntando solo lo que APORTA algo.
+// La fecha NO va: la fila ya vive debajo de un encabezado de fecha ("24 de septiembre"), así
+// que repetirla adentro gastaba ancho sin decir nada nuevo. La subcategoría tampoco va cuando
+// es "Otros" (el valor por defecto), porque salía idéntica en casi todos los renglones.
+const SUBCAT_SIN_VALOR=["Otros","Otro","Sin subcategoría",""];
+function subtituloFila(partes){
+  return partes.filter(x=>x!==null && x!==undefined && String(x).trim()!=="").join(" · ");
+}
+function subcatVisible(subcat){
+  const s=String(subcat||"").trim();
+  return SUBCAT_SIN_VALOR.includes(s) ? "" : escapeHtml(s);
+}
+
 // Arma el HTML INTERNO de una fila (ícono, categoría, monto, botones) — la usa tanto el
 // componente <tx-item> como, si hiciera falta, cualquier otro lugar que necesite el mismo look.
 // Es EXACTAMENTE la misma lógica que antes vivía inline dentro de renderTxItemHTML.
@@ -287,7 +300,9 @@ function construirCuerpoTxItem(m){
       const sign=m.tipo==="Gasto"?"-":"+";
       amt=`${sign}USD ${(Math.round(m.importeOrig*100)/100).toFixed(2)}`;
     }
-    else if(isRetiro) amt=`+${fmtS(m.importe)}`; // retiro del ahorro: entra plata, signo +
+    // Un retiro es una COMPRA pagada con plata del fondo: se muestra con "-", igual que
+    // cualquier gasto y que en los totales. El badge "DE AHORROS" aclara de dónde salió.
+    else if(isRetiro) amt=`-${fmtS(m.importe)}`;
     else amt=`${isTc||m.tipo==="Gasto"?"-":"+"}${fmtS(m.importe)}`;
     let cat,sub;
     if(isTc){
@@ -296,10 +311,10 @@ function construirCuerpoTxItem(m){
       const monedaBadge=m.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">USD</span>`:"";
       cat+=monedaBadge;
       if(m.frecuente){
-        sub=`${escapeHtml(m.subcat)} · 🔁 Mensual fijo · ${(m.fecha||"").split("-").reverse().join("/")}`;
+        sub=subtituloFila([subcatVisible(m.subcat), "🔁 Mensual fijo"]);
       } else {
         const tot=m.moneda==="USD"?`USD ${m.importeTotal.toFixed(2)}`:fmtS(m.importeTotal);
-        sub=`${escapeHtml(m.subcat)} · Cuota ${m.nCuota}/${m.cuotasTotal} · ${tot} total`;
+        sub=subtituloFila([subcatVisible(m.subcat), `Cuota ${m.nCuota}/${m.cuotasTotal}`, `${tot} total`]);
       }
     } else if(isInv){
       // Badge de cash flow para diferenciar rescate vs suscripción
@@ -307,7 +322,7 @@ function construirCuerpoTxItem(m){
         ?` <span style="font-size:9px;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:8px;font-weight:500">📥 INGRESO</span>`
         :` <span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500">📤 GASTO</span>`;
       cat=`${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${invBadge}`;
-      sub=`${escapeHtml(m.subcat)} · ${(m.fecha||"").split("-").reverse().join("/")}`;
+      sub=subtituloFila([subcatVisible(m.subcat)]);
     } else {
       let badge="";
       if(isAhorro) badge=` <span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">AHORRO</span>`;
@@ -315,7 +330,7 @@ function construirCuerpoTxItem(m){
       else if(m.frecuente) badge=` <span style="font-size:9px;background:var(--warning-light);color:var(--warning);padding:1px 6px;border-radius:8px;font-weight:500">🔁 FRECUENTE</span>`;
       cat=`${escapeHtml(m.cat)}${badge}`;
       if(m.recuperable>0) cat+=` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">🔁 ${fmtAbbr(m.recuperable)}</span>`;
-      sub=`${escapeHtml(m.subcat||"")} · ${(m.fecha||"").split("-").reverse().join("/")}`;
+      sub=subtituloFila([subcatVisible(m.subcat)]);
     }
     // Ícono e iconClass siguen la misma lógica de color
     let icon, iconClass;
@@ -328,7 +343,7 @@ function construirCuerpoTxItem(m){
     return `<div class="tx-icon ${iconClass}">${icon}</div>
       <div class="tx-info">
         <div class="tx-cat">${cat}</div>
-        <div class="tx-sub">${sub}${!isTc&&m.nota?" · "+escapeHtml(m.nota.slice(0,18)):""}</div>
+        <div class="tx-sub">${subtituloFila([sub, !isTc&&m.nota?escapeHtml(m.nota.slice(0,24)):""])}</div>
         ${!isTc?renderTagsChips(m):""}
       </div>
       <div class="tx-amount ${amtClass}">${amt}</div>`;
