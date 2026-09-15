@@ -19,7 +19,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 /* NAV */
 /* Botón hamburguesa: fijo arriba a la izquierda, por encima del header en todas las pantallas */
 #hamburger-btn{position:fixed;top:10px;left:12px;z-index:60;width:38px;height:38px;border:none;border-radius:50%;background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:var(--shadow);font-size:18px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center}
-#fab-cargar{position:fixed;bottom:24px;right:24px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-size:28px;border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.2s}
+#fab-cargar{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom, 0px));right:24px;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-size:28px;border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.2s}
 #fab-cargar:active{transform:scale(.92)}
 /* Fondo oscuro detrás del menú: invisible y sin capturar toques hasta que se abre */
 #side-menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;opacity:0;pointer-events:none;transition:opacity .3s ease}
@@ -37,7 +37,10 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .nav-icon{font-size:19px;line-height:1;width:26px;text-align:center;flex-shrink:0}
 .nav-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* LAYOUT */
-.page{display:none;padding:0 0 24px;min-height:100vh}
+/* El padding de abajo despeja el botón + (56px de alto, a 24px del borde), que es fixed y
+   queda encima de lo último de la lista. Antes al llegar al final del scroll el importe de la
+   última fila quedaba tapado y no había forma de correrlo: sobraban 0px. */
+.page{display:none;padding:0 0 calc(96px + env(safe-area-inset-bottom, 0px));min-height:100vh}
 @keyframes pageEnter{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
 .page.active{display:block;animation:pageEnter .25s ease}
 .header{background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:13px 16px 13px 58px;position:sticky;top:0;z-index:50}
@@ -270,3 +273,6 @@ canvas{width:100%!important;max-width:100%}
 .mb-8{margin-bottom:8px}
 .mb-10{margin-bottom:10px}
 .mt-14{margin-top:14px}
+
+/* Comparativa contra el año anterior, al lado del nombre de la categoría (▲ 12%, nuevo). */
+.comp-anio{font-size:10px;margin-left:6px}

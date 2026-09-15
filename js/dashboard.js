@@ -149,12 +149,12 @@ function renderDashYear(){
   const bal=totalIng-totalGas;
 
   document.getElementById("dash-kpis").innerHTML=`
-    <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-dash-ing">${fmtS(0)}</div></div>
-    <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-dash-gas">${fmtS(0)}</div></div>
-    <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${bal>=0?"positive":"negative"}" id="chip-dash-bal">${fmtS(0)}</div></div>`;
-  animarNumero(document.getElementById("chip-dash-ing"), totalIng, 700, fmtS);
-  animarNumero(document.getElementById("chip-dash-gas"), totalGas, 700, fmtS);
-  animarNumero(document.getElementById("chip-dash-bal"), bal, 700, fmtS);
+    <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-dash-ing">${fmtTotal(0)}</div></div>
+    <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-dash-gas">${fmtTotal(0)}</div></div>
+    <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${bal>=0?"positive":"negative"}" id="chip-dash-bal">${fmtTotal(0)}</div></div>`;
+  animarNumero(document.getElementById("chip-dash-ing"), totalIng, 700, fmtTotal);
+  animarNumero(document.getElementById("chip-dash-gas"), totalGas, 700, fmtTotal);
+  animarNumero(document.getElementById("chip-dash-bal"), bal, 700, fmtTotal);
 
   // Reset detalles al cambiar de año
   document.getElementById("dash-detail").innerHTML="Tocá una columna para ver el detalle";
@@ -168,22 +168,13 @@ function renderDashYear(){
   // Datos del año anterior para comparativa
   const yearPrev=String(parseInt(dashYear)-1);
   const {cats: catDataPrev}=getDashData(yearPrev);
+  const hayGastosAnioAnterior=Object.keys(catDataPrev).length>0;
   document.getElementById("dash-bars-gasto").innerHTML=sorted.length
     ? sorted.slice(0,10).map(([cat,val])=>{
         // Deflactamos el año anterior a valor presente (ancla: mitad de cada año) antes de
         // comparar, así el % no confunde inflación con gasto real — ver INFLACION_MENSUAL_ARS.
         const valPrev=deflactarARS(catDataPrev[cat]||0, yearPrev+"-07", dashYear+"-07");
-        let comp="";
-        if(valPrev>0){
-          const pct=Math.round((val-valPrev)/valPrev*100);
-          if(Math.abs(pct)>=5){
-            const color=pct>0?"var(--danger)":"var(--success)";
-            const arrow=pct>0?"▲":"▼";
-            comp=`<span style="font-size:10px;color:${color};margin-left:6px">${arrow} ${Math.abs(pct)}%</span>`;
-          }
-        } else if(val>0){
-          comp=`<span style="font-size:10px;color:var(--muted);margin-left:6px">nuevo</span>`;
-        }
+        const comp=compAnioAnterior(val, valPrev, hayGastosAnioAnterior, false);
         return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail(${attrJS(cat)})">
           <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxVal*100)}%;background:#a32d2d"></div></div>
@@ -195,21 +186,12 @@ function renderDashYear(){
   const sortedIng=Object.entries(catData2.catsIngreso||{}).sort((a,b)=>b[1]-a[1]);
   const maxValIng=sortedIng[0]?sortedIng[0][1]:1;
   const catIngresoPrev=getDashData(yearPrev).catsIngreso||{};
+  const hayIngresosAnioAnterior=Object.keys(catIngresoPrev).length>0;
   document.getElementById("dash-bars-ingreso").innerHTML=sortedIng.length
     ? sortedIng.slice(0,10).map(([cat,val])=>{
         const valPrev=deflactarARS(catIngresoPrev[cat]||0, yearPrev+"-07", dashYear+"-07");
-        let comp="";
-        if(valPrev>0){
-          const pct=Math.round((val-valPrev)/valPrev*100);
-          if(Math.abs(pct)>=5){
-            // Para ingresos: subir es bueno (verde), bajar es malo (rojo)
-            const color=pct>0?"var(--success)":"var(--danger)";
-            const arrow=pct>0?"▲":"▼";
-            comp=`<span style="font-size:10px;color:${color};margin-left:6px">${arrow} ${Math.abs(pct)}%</span>`;
-          }
-        } else if(val>0){
-          comp=`<span style="font-size:10px;color:var(--muted);margin-left:6px">nuevo</span>`;
-        }
+        // En ingresos subir es bueno, al revés que en gastos.
+        const comp=compAnioAnterior(val, valPrev, hayIngresosAnioAnterior, true);
         return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail(${attrJS(cat)},'Ingreso')">
           <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxValIng*100)}%;background:#2d7a3a"></div></div>
@@ -218,6 +200,22 @@ function renderDashYear(){
       }).join("")
     : `<p class="txt-md txt-muted">Sin ingresos para ${dashYear}</p>`;
   renderDashCuentas();
+}
+
+// Arma la comparativa contra el año anterior que va al lado de la categoría.
+// "nuevo" solo tiene sentido si HAY un año anterior con datos: durante el primer año de uso
+// salía en todas las categorías a la vez, así que no informaba nada — solo hacía ruido.
+// `bueno` dice de qué color pintar una suba: en gastos subir es malo, en ingresos es bueno.
+function compAnioAnterior(val, valPrev, hayAnioAnterior, subirEsBueno){
+  if(valPrev>0){
+    const pct=Math.round((val-valPrev)/valPrev*100);
+    if(Math.abs(pct)<5) return "";   // ruido: no vale la pena mostrarlo
+    const sube=pct>0;
+    const color=(sube===!!subirEsBueno)?"var(--success)":"var(--danger)";
+    return `<span class="comp-anio" style="color:${color}">${sube?"▲":"▼"} ${Math.abs(pct)}%</span>`;
+  }
+  if(val>0 && hayAnioAnterior) return `<span class="comp-anio txt-muted">nuevo</span>`;
+  return "";
 }
 
 // Renderiza el flujo por cuenta del año actual del dashboard

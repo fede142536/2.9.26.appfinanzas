@@ -69,9 +69,70 @@ let iconsCustom = {};
 function saveIconsCustom(){ setSensitiveRaw("ficons", JSON.stringify(iconsCustom)); marcarDatosSucios(); }
 // Devuelve el ícono efectivo de una categoría: el elegido por el usuario si existe,
 // si no el de fábrica, si no un fallback (por defecto "•").
+// El mapa ICONS de arriba son las categorías con las que arrancó la app. Cualquier categoría
+// que crees después no figura ahí y quedaba con un puntito gris, igual que todas las otras
+// categorías nuevas: en una lista no se distinguían entre sí.
+// Estas reglas adivinan un ícono por el nombre, para no tener que elegirlo a mano cada vez.
+// El orden importa: gana la primera que coincide, así que lo específico va antes que lo general
+// ("farmacia" antes que "salud" no hace falta porque son íconos distintos, pero "nafta" sí
+// tiene que ir antes que cualquier regla amplia de auto).
+const ICONOS_POR_PALABRA=[
+  [/supermercad|^super|almacen|verduler|carnicer|fiambrer|panader|kiosco|chino|coto|dia\b|jumbo|carrefour/, "🛒"],
+  [/restaurant|resto|comida|delivery|pedido|rappi|cena|almuerzo|parrilla|pizzer|sushi/, "🍽️"],
+  [/cafe|cafeter|starbuck|desayuno/, "☕"],
+  [/cerveza|bar\b|boliche|trago|vino|birra/, "🍺"],
+  [/nafta|combustible|ypf|shell|axion|peaje|estacionamient|cochera/, "⛽"],
+  [/auto|mecanic|neumatic|cubierta|patente|vtv|seguro.*auto/, "🚗"],
+  [/transport|colectivo|sube|subte|tren|micro|bondi/, "🚌"],
+  [/taxi|uber|cabify|didi|remis/, "🚕"],
+  [/farmac|remedio|medicament/, "💊"],
+  [/salud|medic|obra social|prepaga|osde|swiss|galeno|dentist|odontolog|psicolog|terapia/, "❤️"],
+  [/gimnasio|gym|entrenamient|crossfit|pilates|yoga/, "🏋️"],
+  [/luz|edesur|edenor|electricidad|servicio/, "💡"],
+  [/gas\b|metrogas|camuzzi/, "🔥"],
+  [/agua|aysa|absa/, "💧"],
+  [/internet|wifi|fibertel|telecentro|movistar|claro|personal|celular|telefon/, "📶"],
+  [/netflix|spotify|disney|hbo|prime|streaming|suscripcion/, "🎬"],
+  [/cine|teatro|recital|concierto|entrada|show/, "🎫"],
+  [/ocio|salida|juego|videojuego|steam|playstation|xbox/, "🎮"],
+  [/alquiler|renta|inquilin/, "🏢"],
+  [/expensa|abl|impuest|afip|arba|monotributo|rentas/, "🧾"],
+  [/casa|hogar|ferreter|mueble|deco|sodimac|easy/, "🏠"],
+  [/ropa|indument|zapatill|calzado|zara|vestiment/, "👗"],
+  [/educac|curso|facultad|universidad|colegio|cuota.*escolar|libro|apunte/, "🎓"],
+  [/mascota|veterinar|perro|gato|petshop|alimento.*balanceado/, "🐾"],
+  [/regalo|cumple|navidad|aguinaldo.*regalo/, "🎁"],
+  [/viaje|vacacion|pasaje|avion|vuelo|hotel|airbnb/, "✈️"],
+  [/peluquer|barber|belleza|cosmetic|perfum|uñas/, "✂️"],
+  [/bebe|pañal|infantil|jugueter/, "👶"],
+  [/ahorro|fondo|reserva/, "🏦"],
+  [/inversion|bono|accion|cedear|plazo fijo|fci|caucion|dolar/, "📈"],
+  [/sueldo|salario|honorario|freelance|trabajo|cobro/, "💼"],
+  [/tarjeta|credito|visa|mastercard|amex/, "💳"]
+];
+
+// Saca tildes y pasa a minúsculas para que "Educación" y "educacion" matcheen igual.
+function normalizarTexto(txt){
+  return String(txt||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+
+function iconoPorPalabra(cat){
+  const t=normalizarTexto(cat);
+  if(!t) return "";
+  for(const [patron, icono] of ICONOS_POR_PALABRA){
+    if(patron.test(t)) return icono;
+  }
+  return "";
+}
+
 function getIcon(cat, fallback){
-  if(fallback===undefined) fallback="•";
-  return iconsCustom[cat] || ICONS[cat] || fallback;
+  // Sin fallback explícito se usa la inicial en vez de un punto: dos categorías distintas
+  // se veían exactamente igual, y la letra al menos las diferencia de un vistazo.
+  if(fallback===undefined){
+    const t=String(cat||"").trim();
+    fallback = t ? t[0].toUpperCase() : "•";
+  }
+  return iconsCustom[cat] || ICONS[cat] || iconoPorPalabra(cat) || fallback;
 }
 
 // Set curado de emojis para elegir, agrupados por tema (se muestran todos juntos en una grilla)
@@ -353,6 +414,17 @@ function fmt(n){
   // Siempre 2 decimales, separador de miles punto, decimal coma (es-AR)
   return sign+"$"+rounded.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
 }
+// fmtTotal = para TOTALES y balances (chips de resumen, balance del año, saldo de una cuenta).
+// Sin centavos: en una cifra de siete u ocho dígitos los centavos son dos dígitos que nadie va
+// a usar y que hacen más lento leer el número. En la app convivían "$14.236.967,97" arriba y
+// "$2.1M" abajo, o sea tres precisiones distintas en la misma pantalla.
+// Los centavos siguen estando donde SÍ importan: en el importe de un movimiento (fmtS).
+function fmtTotal(n){
+  if(n===undefined||n===null||isNaN(n))return "$0";
+  const abs=Math.abs(n);
+  const sign=n<0?"-":"";
+  return sign+"$"+Math.round(abs).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:0});
+}
 // fmtS = mismo formato completo para chips y listas (no abreviar K/M)
 // Extrae hashtags (#palabra) del texto de una nota. Devuelve array de tags en minúsculas,
 // sin el "#" y sin duplicados. Acepta letras (con tildes/ñ), números y guión bajo.
@@ -376,7 +448,7 @@ function fmtSignoGrande(valor){
   const neg=valor<0;
   const signo=neg?"-":"+";
   const abs=Math.abs(valor);
-  return `<span style="font-size:.6em;font-weight:500;vertical-align:2px">${signo}</span>${fmtS(abs)}`;
+  return `<span style="font-size:.6em;font-weight:500;vertical-align:2px">${signo}</span>${fmtTotal(abs)}`;
 }
 // fmtAbbr = versión abreviada solo para ejes de gráficos donde no hay espacio
 function fmtAbbr(n){

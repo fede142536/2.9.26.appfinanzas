@@ -70,9 +70,9 @@ function renderAhorro(){
   const totalRetirado=retiros.reduce((s,m)=>s+m.importe,0);
   const cantMovs=depositos.length+retiros.length;
   document.getElementById("fondo-kpis").innerHTML=`
-    <div class="chip"><div class="chip-label">Disponible</div><div class="chip-val ${fondoAcum>=0?"save":"negative"}">${fmtS(fondoAcum)}</div></div>
-    <div class="chip"><div class="chip-label">Depositado</div><div class="chip-val positive">${fmtS(totalDepositado)}</div></div>
-    <div class="chip"><div class="chip-label">Retirado</div><div class="chip-val negative">${fmtS(totalRetirado)}</div></div>`;
+    <div class="chip"><div class="chip-label">Disponible</div><div class="chip-val ${fondoAcum>=0?"save":"negative"}">${fmtTotal(fondoAcum)}</div></div>
+    <div class="chip"><div class="chip-label">Depositado</div><div class="chip-val positive">${fmtTotal(totalDepositado)}</div></div>
+    <div class="chip"><div class="chip-label">Retirado</div><div class="chip-val negative">${fmtTotal(totalRetirado)}</div></div>`;
 
   // Mensaje informativo
   const fondoMsg=document.getElementById("fondo-msg");
