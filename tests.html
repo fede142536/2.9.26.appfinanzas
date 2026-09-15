@@ -950,6 +950,123 @@ test("styles.css no tiene etiquetas HTML sueltas", async ()=>{
 // ═══════════════════════════════════════════
 // ROBUSTEZ DE DATOS GUARDADOS
 // ═══════════════════════════════════════════
+grupo("Recordatorio de backup");
+
+// Guarda y restaura las claves de backup en localStorage y el array movs, para no afectar
+// otros tests ni dejar un aviso "pendiente" que dispare en medio de otra prueba.
+async function conEstadoDeBackup(seed, fn){
+  const claves=["fultimobackup","fultimoavisobackup"];
+  const antes=Object.fromEntries(claves.map(k=>[k, localStorage.getItem(k)]));
+  const movsAntes=movs;
+  claves.forEach(k=>localStorage.removeItem(k));
+  Object.entries(seed||{}).forEach(([k,v])=>localStorage.setItem(k,v));
+  if("movs" in (seed||{})) movs=seed.movs;
+  // await, no un simple "return fn()": si fn() es async, un try/finally sin awaitear
+  // restaura el estado apenas fn() ARRANCA (en su primer await), no cuando termina.
+  try { return await fn(); }
+  finally {
+    claves.forEach(k=>{ const v=antes[k]; if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v); });
+    movs=movsAntes;
+  }
+}
+const haceDias=n=>new Date(Date.now()-n*86400000).toISOString();
+
+test("diasDesde: nunca, futuro y basura caen todos en Infinity", ()=>{
+  igual(diasDesde(null), Infinity, "sin fecha tiene que ser Infinity, no 0");
+  igual(diasDesde(""), Infinity);
+  igual(diasDesde("esto no es una fecha"), Infinity, "una fecha que no parsea no puede dar un número");
+  igual(diasDesde(haceDias(-5)), Infinity, "una fecha en el futuro (reloj mal puesto) no puede contar como backup reciente");
+});
+
+test("diasDesde cuenta días completos", ()=>{
+  igual(diasDesde(haceDias(0)), 0);
+  igual(diasDesde(haceDias(1)), 1);
+  igual(diasDesde(haceDias(45)), 45);
+});
+
+test("textoUltimoBackup usa \"hoy\"/\"ayer\" en vez de \"hace 0/1 días\"", ()=>conEstadoDeBackup({}, ()=>{
+  localStorage.setItem("fultimobackup", haceDias(0));
+  igual(textoUltimoBackup(), "Último backup: hoy.");
+  localStorage.setItem("fultimobackup", haceDias(1));
+  igual(textoUltimoBackup(), "Último backup: ayer.");
+  localStorage.setItem("fultimobackup", haceDias(10));
+  igual(textoUltimoBackup(), "Último backup: hace 10 días.");
+}));
+
+test("sin backup nunca hecho, el texto lo dice explícitamente", ()=>conEstadoDeBackup({}, ()=>{
+  igual(textoUltimoBackup(), "Todavía no hiciste ningún backup.");
+}));
+
+// La regla completa: sin datos no hay nada que perder; con datos, recién a partir de
+// DIAS_PARA_AVISAR sin backup Y con al menos DIAS_ENTRE_AVISOS desde el último aviso.
+test("tocaAvisarBackup no insiste con una app vacía", ()=>conEstadoDeBackup({movs:[]}, ()=>{
+  cierto(!tocaAvisarBackup(), "sin movimientos cargados no hay nada que valga la pena respaldar todavía");
+}));
+
+test("tocaAvisarBackup no insiste con un backup reciente", ()=>conEstadoDeBackup(
+  {movs:[{id:1}], fultimobackup:haceDias(5)}, ()=>{
+    cierto(!tocaAvisarBackup(), "5 días es reciente: no debería ofrecerse a cada rato");
+  }));
+
+test("tocaAvisarBackup SÍ avisa con datos y un backup viejo (o inexistente)", ()=>{
+  conEstadoDeBackup({movs:[{id:1}], fultimobackup:haceDias(45)}, ()=>{
+    cierto(tocaAvisarBackup(), "45 días sin backup, con datos cargados: tiene que avisar");
+  });
+  conEstadoDeBackup({movs:[{id:1}]}, ()=>{
+    cierto(tocaAvisarBackup(), "nunca haber hecho un backup, con datos cargados, también tiene que avisar");
+  });
+});
+
+// Esto es lo que evita la app pesada: si ya se avisó hace poco, no insistir de nuevo cada
+// vez que se abre la app, aunque el backup en sí siga siendo viejo.
+test("tocaAvisarBackup no insiste si ya avisó hace poco", ()=>conEstadoDeBackup(
+  {movs:[{id:1}], fultimobackup:haceDias(45), fultimoavisobackup:haceDias(2)}, ()=>{
+    cierto(!tocaAvisarBackup(), "avisó hace 2 días: insistir de nuevo tan pronto sería molesto");
+  }));
+
+test("tocaAvisarBackup vuelve a avisar pasado el tiempo entre avisos", ()=>conEstadoDeBackup(
+  {movs:[{id:1}], fultimobackup:haceDias(45), fultimoavisobackup:haceDias(10)}, ()=>{
+    cierto(tocaAvisarBackup(), "pasaron más de 7 días desde el último aviso: corresponde volver a ofrecerlo");
+  }));
+
+test("avisarSiFaltaBackup no hace nada si tocaAvisarBackup() dice que no", async ()=>{
+  await conEstadoDeBackup({movs:[{id:1}], fultimobackup:haceDias(5)}, async ()=>{
+    const avisoAntes=localStorage.getItem("fultimoavisobackup");
+    let sePreguntoAlUsuario=false;
+    const original=window.mostrarConfirm;
+    window.mostrarConfirm=()=>{ sePreguntoAlUsuario=true; return Promise.resolve(false); };
+    try{ await avisarSiFaltaBackup(); } finally { window.mostrarConfirm=original; }
+    cierto(!sePreguntoAlUsuario, "con un backup reciente no debería ni preguntar");
+    igual(localStorage.getItem("fultimoavisobackup"), avisoAntes, "tampoco debería tocar la fecha del último aviso");
+  });
+});
+
+// Simula la respuesta del diálogo en vez de abrirlo de verdad, para poder probar las dos
+// ramas (aceptar / posponer) sin depender de un click real.
+async function simularRespuestaAviso(seed, respuesta){
+  return conEstadoDeBackup(seed, async ()=>{
+    let sePidioBackup=false;
+    const originalConfirm=window.mostrarConfirm, originalExportar=window.exportarBackup;
+    window.mostrarConfirm=()=>Promise.resolve(respuesta);
+    window.exportarBackup=()=>{ sePidioBackup=true; };
+    try{ await avisarSiFaltaBackup(); }
+    finally{ window.mostrarConfirm=originalConfirm; window.exportarBackup=originalExportar; }
+    return {sePidioBackup, quedoRegistradoElAviso: diasDesde(localStorage.getItem("fultimoavisobackup"))===0};
+  });
+}
+
+test('aceptar el recordatorio dispara el backup', async ()=>{
+  const r=await simularRespuestaAviso({movs:[{id:1}], fultimobackup:haceDias(45)}, true);
+  cierto(r.sePidioBackup, "aceptar \"Hacer backup ahora\" tiene que llamar a exportarBackup()");
+  cierto(r.quedoRegistradoElAviso, "se mostró el aviso: tiene que quedar registrado aunque el usuario acepte");
+});
+
+test('posponer el recordatorio NO dispara el backup, pero sí registra que se avisó', async ()=>{
+  const r=await simularRespuestaAviso({movs:[{id:1}], fultimobackup:haceDias(45)}, false);
+  cierto(!r.sePidioBackup, '"Más tarde" no puede disparar una descarga');
+  cierto(r.quedoRegistradoElAviso, "aunque posponga, no hay que volver a preguntar hasta que pase el cooldown");
+});
+
 grupo("Robustez de datos guardados");
 
 // Guarda y restaura las variables globales de datos, para no ensuciar el resto de los tests

@@ -107,6 +107,9 @@ async function bootApp(){
   showPage('mov', document.querySelector('.nav-btn[onclick*="\'mov\'"]'));
   renderMovs();
   checkOnboarding();
+  // Con delay: que el usuario vea primero sus datos, no un diálogo tapando la pantalla
+  // apenas abre la app. avisarSiFaltaBackup() decide adentro si corresponde mostrar algo.
+  setTimeout(avisarSiFaltaBackup, 1300);
 }
 bootApp();
 
