@@ -1,6 +1,36 @@
 // ═══════════════════════════════════════════
 // GRÁFICOS INTERACTIVOS
 // ═══════════════════════════════════════════
+// Dibuja una etiqueta del eje X centrada en x, pero sin dejar que se salga del canvas:
+// la última queda sobre el borde derecho y se cortaba a la mitad ("02/2" en vez de "02/26").
+function dibujarEtiquetaX(ctx, texto, x, y, W){
+  const mitad=ctx.measureText(texto).width/2 + 2;
+  ctx.fillText(texto, Math.min(Math.max(x, mitad), W-mitad), y);
+}
+
+// "2026-07" → "07/26". El eje mostraba solo el mes (label.slice(5)), así que en un histórico
+// de varios años aparecían dos "01" y dos "02" sin forma de saber cuál era cuál.
+function etiquetaMes(ym){
+  const s=String(ym||"");
+  return s.length>=7 ? `${s.slice(5,7)}/${s.slice(2,4)}` : s;
+}
+
+// Elige qué etiquetas del eje X dibujar: una cada N, más la última siempre.
+// Si la última quedaría pegada a la anterior, se saca la anterior en vez de superponerlas
+// (las etiquetas con año son casi el doble de anchas que las viejas, así que se tocan fácil).
+function indicesDeEtiquetas(puntos, anchoMinimo){
+  if(!puntos.length) return [];
+  const step=Math.max(1, Math.ceil(puntos.length/6));
+  const idxs=[];
+  puntos.forEach((_,i)=>{ if(i%step===0) idxs.push(i); });
+  const ultimo=puntos.length-1;
+  if(idxs[idxs.length-1]!==ultimo){
+    if(puntos[ultimo].x - puntos[idxs[idxs.length-1]].x < anchoMinimo) idxs.pop();
+    idxs.push(ultimo);
+  }
+  return idxs;
+}
+
 // Índice del punto que el usuario tocó en el gráfico de línea. Vive ACÁ, fuera de la función
 // que dibuja, porque cada tap la vuelve a llamar desde cero para redibujar con el marcador:
 // una variable local se perdería en cada redibujo.
@@ -67,14 +97,11 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
   pts.forEach((p,i)=>{i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);});
   ctx.stroke();
 
-  // Labels X (cada cierto step)
+  // Labels X (cada cierto step, con el año incluido)
   ctx.fillStyle=textColor;
   ctx.textAlign="center";
-  const step=Math.max(1,Math.ceil(labels.length/6));
-  pts.forEach((p,i)=>{
-    if(i%step===0||i===pts.length-1){
-      ctx.fillText(p.label.slice(5), p.x, H-6);
-    }
+  indicesDeEtiquetas(pts, 34).forEach(i=>{
+    dibujarEtiquetaX(ctx, etiquetaMes(pts[i].label), pts[i].x, H-6, W);
   });
 
   // ── Marcador del punto tocado ──
@@ -167,14 +194,12 @@ function drawInteractiveBars(canvas, labels, values, tipEl, fmtFn){
   ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(padL,zeroY);ctx.lineTo(W-padR,zeroY);ctx.stroke();
 
-  // Labels X
+  // Labels X (con el año incluido)
   ctx.fillStyle=textColor;
   ctx.textAlign="center";
-  const step=Math.max(1,Math.ceil(labels.length/6));
-  bars.forEach((b,i)=>{
-    if(i%step===0||i===bars.length-1){
-      ctx.fillText(b.label.slice(5), b.x+barW/2, H-6);
-    }
+  const centros=bars.map(b=>({x:b.x+barW/2, label:b.label}));
+  indicesDeEtiquetas(centros, 34).forEach(i=>{
+    dibujarEtiquetaX(ctx, etiquetaMes(centros[i].label), centros[i].x, H-6, W);
   });
 
   canvas.onclick=(e)=>{

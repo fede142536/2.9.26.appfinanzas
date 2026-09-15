@@ -267,6 +267,60 @@ function taparEnLaCurva(dprForzado){
   }
 }
 
+// El eje X solo dibujaba los meses CON movimiento, repartidos parejo: diez meses sin ahorrar
+// ocupaban lo mismo que uno y la curva parecía crecimiento sostenido donde había una meseta.
+test("el acumulado completa los meses en los que no ahorraste", ()=>{
+  const conHuecos=[
+    {mes:"2025-01", monto:100000},
+    {mes:"2025-02", monto:100000},
+    {mes:"2025-12", monto:100000},   // diez meses sin nada en el medio
+    {mes:"2026-01", monto:300000},
+    {mes:"2026-02", monto:-50000}
+  ];
+  const lleno=rellenarMesesSinMovimiento(conHuecos);
+  igual(lleno.length, 14, "deberían quedar los 14 meses de calendario entre enero 2025 y febrero 2026");
+  igual(lleno.map(d=>d.mes)[6], "2025-07", "el séptimo punto debería ser julio 2025");
+  igual(lleno[6].monto, 0, "un mes sin movimiento tiene que valer 0, no arrastrar el monto del anterior");
+  // El saldo final no puede cambiar: es el mismo que muestra el chip "Disponible".
+  let acum=0; lleno.forEach(d=>{acum+=d.monto;});
+  igual(acum, 550000, "el rellenado alteró el saldo final");
+  igual(lleno[lleno.length-1].mes, "2026-02", "se corrió el último mes");
+});
+
+test("rellenar tolera datos raros sin colgarse", ()=>{
+  igual(rellenarMesesSinMovimiento([]).length, 0, "una lista vacía debería volver vacía");
+  igual(rellenarMesesSinMovimiento([{mes:"2026-01",monto:5}]).length, 1, "con un solo mes no hay nada que rellenar");
+  // Una fecha disparatada cargada por error generaría miles de puntos: se deja como estaba.
+  const absurdo=[{mes:"1970-01",monto:1},{mes:"2026-01",monto:1}];
+  igual(rellenarMesesSinMovimiento(absurdo).length, 2, "un rango absurdo debería quedar intacto, no expandirse");
+});
+
+// El eje cortaba la fecha con slice(5) y mostraba solo el mes: en un histórico de dos años
+// aparecían dos "01" y dos "02" sin forma de distinguirlos.
+test("las etiquetas del eje X llevan el año", ()=>{
+  igual(etiquetaMes("2026-07"), "07/26");
+  igual(etiquetaMes("2025-01"), "01/25");
+  cierto(etiquetaMes("2025-01")!==etiquetaMes("2026-01"), "enero de dos años distintos no puede verse igual");
+});
+
+test("las etiquetas del eje X no se salen del canvas", ()=>{
+  const c=document.createElement("canvas");
+  c.width=300;c.height=100;
+  const ctx=c.getContext("2d");
+  ctx.font="10px system-ui";ctx.textAlign="center";
+  const dibujadas=[];
+  const original=ctx.fillText.bind(ctx);
+  ctx.fillText=(t,x,y)=>{dibujadas.push({t,x});original(t,x,y);};
+  dibujarEtiquetaX(ctx,"02/26",298,90,300);   // la última, pegada al borde derecho
+  dibujarEtiquetaX(ctx,"01/25",1,90,300);     // y una pegada al izquierdo
+  igual(dibujadas.length, 2, "no se dibujaron las dos etiquetas");
+  dibujadas.forEach(d=>{
+    const mitad=ctx.measureText(d.t).width/2;
+    cierto(d.x-mitad>=0,   `"${d.t}" se corta por la izquierda`);
+    cierto(d.x+mitad<=300, `"${d.t}" se corta por la derecha`);
+  });
+});
+
 // El handler escribía el detalle y acto seguido llamaba a renderAhorroChart(), que lo primero
 // que hace es limpiar ese mismo texto. En la vista por defecto, tocar el gráfico no hacía nada.
 test("tocar la curva de ahorros deja el detalle a la vista", ()=>{
