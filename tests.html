@@ -347,34 +347,35 @@ test('"nuevo" no depende de si hay datos de inflación', ()=>{
 });
 
 // ═══════════════════════════════════════════
-// TARJETAS: CARD "ACTIVAS" SOLO DE LECTURA
+// TARJETAS: LA SECCIÓN "ACTIVAS" YA NO EXISTE
 // ═══════════════════════════════════════════
-grupo("Tarjetas: activas de solo lectura");
+grupo("Tarjetas: sin sección Activas");
 
-// La sección "Activas" de Tarjetas se achicó a solo balances y progreso, a pedido: se sacaron
-// "Próximas cuotas"/"Próximos meses" (duplicaban la card de Cuotas pendientes), "Aumentos" y
-// los botones Editar/Eliminar. Se prueba mirando el CÓDIGO FUENTE (no el DOM: en tests.html
+// La solapa Tarjetas quedó con Balance del mes + Cuotas pendientes + Completados. La sección
+// "Activas" (una card por compra cargada) se sacó a pedido por ser un desglose redundante.
+// Se prueba mirando el CÓDIGO FUENTE y el HTML, no el DOM: en tests.html
 // document.getElementById() devuelve un <div> descartable nuevo en cada llamada, así que leer
-// de vuelta lo que renderTarjetas() escribió no es confiable) — pero acotado al tramo que arma
-// esas cards puntuales, para no confundirlo con "Completados", que sigue teniendo sus botones.
-test('la card "Activas" no tiene Editar/Eliminar ni "Próximas cuotas"', async ()=>{
-  const txt=await (await fetch("js/tarjetas-inversiones.js")).text();
-  const inicio=txt.indexOf('const actEl=document.getElementById("tc-activas")');
-  const fin=txt.indexOf('// ── COMPLETAS');
-  cierto(inicio>=0 && fin>inicio, "no se encontró el tramo que arma las cards de Activas");
-  const tramo=txt.slice(inicio,fin);
-  cierto(!tramo.includes("openEditTcModal("), 'volvió el botón "Editar" a una card activa');
-  cierto(!tramo.includes("borrarTc("), 'volvió el botón "Eliminar" a una card activa');
-  cierto(!tramo.includes("Próximas cuotas"), 'volvió el bloque de próximas cuotas (duplica la card de Cuotas pendientes)');
-  cierto(!tramo.includes("Próximos meses"), 'volvió el bloque de próximos meses del gasto frecuente');
-  cierto(!tramo.includes("Aumentos"), 'volvió el historial de aumentos a la card de gasto frecuente');
-  // Lo que SÍ tiene que seguir: los balances y "N pagadas / M restantes".
-  cierto(tramo.includes("Saldo pendiente"), "se perdió el balance de saldo pendiente");
-  cierto(tramo.includes("restantes"), 'se perdió el contador de cuotas restantes ("N pagadas / M restantes")');
+// de vuelta lo que renderTarjetas() escribió no es confiable.
+test('no quedó ni el contenedor ni el render de "Activas"', async ()=>{
+  const js=await (await fetch("js/tarjetas-inversiones.js")).text();
+  const html=await (await fetch("index.html")).text();
+  cierto(!html.includes('id="tc-activas"'), 'volvió el contenedor #tc-activas al HTML');
+  cierto(!js.includes("tc-activas"), 'volvió el render de la sección Activas');
+  cierto(!js.includes("calcTotalFrecuente"), 'quedó código muerto: calcTotalFrecuente solo lo usaba la card de Activas');
 });
 
-// borrarTc/openEditTcModal siguen existiendo — "Completados" los sigue usando — así que no
-// alcanza con que hayan desaparecido del archivo entero.
+// Sacar Activas no puede llevarse puestos los chips "Pendiente ARS"/"Pendiente USD" del
+// resumen, que salen de la MISMA lista `activas` (cuotas todavía no terminadas).
+test('el saldo pendiente del resumen sigue saliendo de las cuotas activas', async ()=>{
+  const js=await (await fetch("js/tarjetas-inversiones.js")).text();
+  cierto(js.includes("const activas = tcs.filter"), 'se borró el cálculo de `activas`');
+  cierto(js.includes("saldoPendienteARS"), 'se perdió el saldo pendiente en ARS');
+  cierto(js.includes("saldoPendienteUSD"), 'se perdió el saldo pendiente en USD');
+  cierto(js.includes("Pendiente ARS"), 'se perdió el chip "Pendiente ARS" del resumen');
+});
+
+// borrarTc/openEditTcModal siguen existiendo — "Completados" es el único lugar que los usa
+// ahora — así que no alcanza con que aparezcan en el archivo entero.
 test('"Completados" conserva Editar/Eliminar (no se tocó esa sección)', async ()=>{
   const txt=await (await fetch("js/tarjetas-inversiones.js")).text();
   const inicio=txt.indexOf('// ── COMPLETAS');
