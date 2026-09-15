@@ -292,6 +292,59 @@ test("totalesDePlata tolera una lista vacía", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// FORMATO DE NÚMEROS E ÍCONOS
+// ═══════════════════════════════════════════
+grupo("Números e íconos");
+
+// En la misma pantalla convivían "$14.236.967,97" (un total anual con centavos) y "$2.1M".
+// Los centavos quedan donde sirven —el importe de un movimiento— y salen de los totales.
+test("los totales van sin centavos y los movimientos con", ()=>{
+  igual(fmtTotal(14236967.97), "$14.236.968", "un total no debería arrastrar centavos");
+  igual(fmtS(1234.56), "$1.234,56", "el importe de un movimiento sí los necesita");
+  igual(fmtTotal(-5000.4), "-$5.000", "se perdió el signo o el redondeo");
+  igual(fmtTotal(0), "$0");
+});
+
+test("fmtTotal tolera basura sin romper la pantalla", ()=>{
+  igual(fmtTotal(null), "$0");
+  igual(fmtTotal(undefined), "$0");
+  igual(fmtTotal(NaN), "$0");
+});
+
+test("ningún chip de resumen quedó con centavos", async ()=>{
+  const archivos=["movimientos","dashboard","tarjetas-inversiones","ahorros"];
+  const malos=[];
+  for(const a of archivos){
+    const txt=await (await fetch(`js/${a}.js`)).text();
+    txt.split("\n").forEach((l,i)=>{
+      if(/class="chip-val[^"]*"[^>]*>\$\{fmtS\(/.test(l)) malos.push(`js/${a}.js:${i+1}`);
+    });
+  }
+  igual(malos, [], "un chip de resumen volvió a fmtS(): los totales van con fmtTotal()");
+});
+
+// El mapa ICONS son las categorías con las que arrancó la app; cualquiera que crees después
+// quedaba con un puntito gris, indistinguible de todas las otras categorías nuevas.
+test("las categorías nuevas reciben un ícono por su nombre", ()=>{
+  igual(getIcon("Restaurantes"), "🍽️");
+  igual(getIcon("Gimnasio"), "🏋️");
+  igual(getIcon("Nafta"), "⛽");
+  igual(getIcon("Internet"), "📶");
+  igual(getIcon("Veterinaria"), "🐾");
+});
+
+test("el ícono ignora tildes y mayúsculas", ()=>{
+  igual(getIcon("Educación"), getIcon("educacion"), "la tilde no puede cambiar el ícono");
+  igual(getIcon("PELUQUERÍA"), "✂️");
+});
+
+test("una categoría sin regla cae en su inicial, no en un punto", ()=>{
+  igual(getIcon("Cosas raras"), "C", "dos categorías sin ícono se veían idénticas");
+  igual(getIcon(""), "•", "sin nombre no hay inicial posible");
+  igual(getIcon("Cosas raras", ""), "", "un fallback explícito tiene que respetarse");
+});
+
+// ═══════════════════════════════════════════
 // ESTILOS
 // ═══════════════════════════════════════════
 grupo("Estilos");

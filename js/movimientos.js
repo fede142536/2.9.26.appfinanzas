@@ -593,7 +593,7 @@ function renderMovs(){
     const totalTcUSD=mesTcsUSD.reduce((s,m)=>s+m.importe,0);
     const cantTc=mesTcsFiltrados.length;
 
-    let chipsHtml=`<div class="chip"><div class="chip-label">Total ARS</div><div class="chip-val warn">${fmtS(totalTcARS)}</div></div>`;
+    let chipsHtml=`<div class="chip"><div class="chip-label">Total ARS</div><div class="chip-val warn">${fmtTotal(totalTcARS)}</div></div>`;
     if(totalTcUSD>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Total USD</div><div class="chip-val warn">USD ${totalTcUSD.toFixed(2)}</div></div>`;
     }
@@ -649,7 +649,7 @@ function renderMovs(){
     const gastosTotalUSD=gastosPurosUSD+suscripcionesUSD;
 
     let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Gastos ARS";
-    let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val negative">${fmtS(gastosTotalARS)}</div></div>`;
+    let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val negative">${fmtTotal(gastosTotalARS)}</div></div>`;
     if(gastosTotalUSD>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">${filtroCategoria?escapeHtml(filtroCategoria)+" USD":"Gastos USD"}</div><div class="chip-val negative">USD ${gastosTotalUSD.toFixed(2)}</div></div>`;
     }
@@ -657,10 +657,10 @@ function renderMovs(){
     // Chips informativos cuando no hay sub-filtro de categoría (desglose de qué compone el total)
     if(!filtroCategoria){
       if(ahorradoARS>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Ahorrado</div><div class="chip-val" style="color:var(--save)">${fmtS(ahorradoARS)}</div></div>`;
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Ahorrado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(ahorradoARS)}</div></div>`;
       }
       if(suscripcionesARS>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--danger)">◈ Suscripciones</div><div class="chip-val" style="color:var(--danger)">${fmtS(suscripcionesARS)}</div></div>`;
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--danger)">◈ Suscripciones</div><div class="chip-val" style="color:var(--danger)">${fmtTotal(suscripcionesARS)}</div></div>`;
       }
       if(suscripcionesUSD>0){
         chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--danger)">◈ Suscripciones USD</div><div class="chip-val" style="color:var(--danger)">USD ${suscripcionesUSD.toFixed(2)}</div></div>`;
@@ -705,7 +705,7 @@ function renderMovs(){
       return s;
     }, 0);
     let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Ingresos ARS";
-    let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val positive">${fmtS(ingTotalARS)}</div></div>`;
+    let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val positive">${fmtTotal(ingTotalARS)}</div></div>`;
     if(ingTotalUSD>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">${filtroCategoria?escapeHtml(filtroCategoria)+" USD":"Ingresos USD"}</div><div class="chip-val positive">USD ${ingTotalUSD.toFixed(2)}</div></div>`;
     }
@@ -719,7 +719,7 @@ function renderMovs(){
         const resultadoInv=rescatesMes-suscripcionesMes;
         const colorRes=resultadoInv>=0?"var(--success)":"var(--danger)";
         const signRes=resultadoInv>=0?"+":"";
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorRes}">📊 Resultado inv.</div><div class="chip-val" style="color:${colorRes}">${signRes}${fmtS(resultadoInv)}</div></div>`;
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorRes}">📊 Resultado inv.</div><div class="chip-val" style="color:${colorRes}">${signRes}${fmtTotal(resultadoInv)}</div></div>`;
       }
     }
     document.getElementById("mov-summary").innerHTML=chipsHtml;
@@ -745,9 +745,9 @@ function renderMovs(){
     const ingresosUSDTotal=ingresosUSDTodos+invRescatesUSD+retirosUSD;
 
     let chipsHtml=`
-      <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtS(0)}</div></div>
-      <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtS(0)}</div></div>
-      <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balMes>=0?"positive":"negative"}" id="chip-mov-bal">${fmtS(0)}</div></div>`;
+      <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtTotal(0)}</div></div>
+      <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>
+      <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balMes>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
     if(ingresosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Ingresos USD</div><div class="chip-val positive">USD ${ingresosUSDTotal.toFixed(2)}</div></div>`;
     }
@@ -755,9 +755,9 @@ function renderMovs(){
       chipsHtml+=`<div class="chip"><div class="chip-label">Gastos USD</div><div class="chip-val negative">USD ${gastosUSDTotal.toFixed(2)}</div></div>`;
     }
     document.getElementById("mov-summary").innerHTML=chipsHtml;
-    animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtS);
-    animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtS);
-    animarNumero(document.getElementById("chip-mov-bal"), balMes, 700, fmtS);
+    animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtTotal);
+    animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
+    animarNumero(document.getElementById("chip-mov-bal"), balMes, 700, fmtTotal);
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
     // Línea informativa: extras del mes (sin arrastre)

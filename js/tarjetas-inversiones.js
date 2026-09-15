@@ -129,12 +129,12 @@ function renderTarjetas(){
     return acc + (tc.total/tc.cuotasTotal)*Math.max(0,restantes);
   },0);
 
-  let chipsHTML=`<div class="chip"><div class="chip-label">Total ARS</div><div class="chip-val negative">${fmtS(totalMesARS)}</div></div>`;
+  let chipsHTML=`<div class="chip"><div class="chip-label">Total ARS</div><div class="chip-val negative">${fmtTotal(totalMesARS)}</div></div>`;
   if(totalMesUSD>0){
     chipsHTML+=`<div class="chip"><div class="chip-label">Total USD</div><div class="chip-val negative">USD ${totalMesUSD.toFixed(2)}</div></div>`;
   }
   chipsHTML+=`<div class="chip"><div class="chip-label">Gastos</div><div class="chip-val warn">${cantidadMes}</div></div>`;
-  chipsHTML+=`<div class="chip"><div class="chip-label">Pendiente ARS</div><div class="chip-val negative">${fmtS(saldoPendienteARS)}</div></div>`;
+  chipsHTML+=`<div class="chip"><div class="chip-label">Pendiente ARS</div><div class="chip-val negative">${fmtTotal(saldoPendienteARS)}</div></div>`;
   if(saldoPendienteUSD>0){
     chipsHTML+=`<div class="chip"><div class="chip-label">Pendiente USD</div><div class="chip-val negative">USD ${saldoPendienteUSD.toFixed(2)}</div></div>`;
   }
@@ -411,7 +411,7 @@ function renderInv(){
   // ── CHIPS ──
   const colorNeto=totalARS>=0?"positive":"negative";
   document.getElementById("inv-summary").innerHTML=`
-    <div class="chip"><div class="chip-label">Balance ARS</div><div class="chip-val ${colorNeto}">${fmtS(totalARS)}</div></div>
+    <div class="chip"><div class="chip-label">Balance ARS</div><div class="chip-val ${colorNeto}">${fmtTotal(totalARS)}</div></div>
     <div class="chip"><div class="chip-label">Balance USD</div><div class="chip-val ${colorNeto}">${totalUSD!==0?"USD "+totalUSD.toFixed(2):"—"}</div></div>
     <div class="chip"><div class="chip-label">Movimientos</div><div class="chip-val">${cantMes}</div></div>`;
 
@@ -562,9 +562,9 @@ function renderInvHistorico(){
   const totalGastosARS=allInv.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
   const colorNeto=totalARS>=0?"positive":"negative";
   kpisEl.innerHTML=`
-    <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${colorNeto}">${fmtS(totalARS)}</div></div>
-    <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive">${fmtS(totalIngresosARS)}</div></div>
-    <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative">${fmtS(totalGastosARS)}</div></div>`;
+    <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${colorNeto}">${fmtTotal(totalARS)}</div></div>
+    <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive">${fmtTotal(totalIngresosARS)}</div></div>
+    <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative">${fmtTotal(totalGastosARS)}</div></div>`;
 
   // Agrupado por mes (curva acumulada en perspectiva cash)
   const porMes={};
