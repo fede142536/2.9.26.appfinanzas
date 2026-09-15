@@ -31,7 +31,7 @@ function renderEditForm(m){
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:${m.tipo==="Gasto"?"var(--danger-light)":"var(--success-light)"};color:${m.tipo==="Gasto"?"var(--danger)":"var(--success)"};margin-bottom:10px">${esFrec?"🔁 GASTO FRECUENTE":m.tipo.toUpperCase()}</div>
       ${esFrec?`
         <div class="inset">
-          <div class="seccion-label seccion-label-sep">Monto vigente este mes</div>
+          <div class="seccion-label mb-6">Monto vigente este mes</div>
           <div style="font-size:18px;font-weight:600;color:var(--danger)">${fmtMoneda(montoVigente, m.moneda)}</div>
         </div>
       `:""}
@@ -88,7 +88,7 @@ function renderEditForm(m){
           </div>
         </div>
         ${cambios.length?`
-          <div class="seccion-label seccion-label-sep">Historial de aumentos</div>
+          <div class="seccion-label mb-6">Historial de aumentos</div>
           <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px">
             ${cambios.sort((a,b)=>a.desde.localeCompare(b.desde)).map((c,i)=>`
               <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0;${i<cambios.length-1?'border-bottom:1px solid var(--border)':''}">

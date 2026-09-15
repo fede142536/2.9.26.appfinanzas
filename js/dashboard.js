@@ -392,7 +392,7 @@ function showCatDetail(cat, tipo){
   const meses=Object.keys(porMes).sort();
   if(meses.length){
     const maxM=Math.max(...Object.values(porMes));
-    html+=`<div class="seccion-label seccion-label-sep">Por mes</div>`;
+    html+=`<div class="seccion-label mb-6">Por mes</div>`;
     meses.forEach(ym=>{
       const v=porMes[ym];
       html+=`<div class="bar-row" style="margin-bottom:5px">

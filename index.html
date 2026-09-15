@@ -110,21 +110,21 @@
 
 
   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
-    <div id="ob-slide-0" class="ob-slide">
+    <div id="ob-slide-0">
       <div style="font-size:64px;margin-bottom:18px">🐷</div>
       <h2 style="margin:0 0 10px;font-size:24px">Bienvenido a Enola</h2>
       <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
         Controlá tus gastos, ingresos, tarjetas, ahorros e inversiones desde un solo lugar. Simple, rápido y pensado para el día a día.
       </p>
     </div>
-    <div id="ob-slide-1" class="ob-slide" style="display:none">
+    <div id="ob-slide-1" style="display:none">
       <div style="font-size:64px;margin-bottom:18px">🔒</div>
       <h2 style="margin:0 0 10px;font-size:24px">Tus datos son privados</h2>
       <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
         Todo lo que cargues queda guardado únicamente en tu celular. No hay servidores ni cuentas: nadie más puede ver tu información financiera.
       </p>
     </div>
-    <div id="ob-slide-2" class="ob-slide" style="display:none">
+    <div id="ob-slide-2" style="display:none">
       <div style="font-size:64px;margin-bottom:18px">💾</div>
       <h2 style="margin:0 0 10px;font-size:24px">Hacé backup seguido</h2>
       <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
@@ -241,12 +241,12 @@
       <button type="button" class="type-btn" id="ff-tab-mes" onclick="setFiltroFechaTab('mes')">Mes</button>
       <button type="button" class="type-btn" id="ff-tab-anio" onclick="setFiltroFechaTab('anio')">Año</button>
     </div>
-    <div id="ff-panel-dia" class="ff-panel">
+    <div id="ff-panel-dia">
       <div class="form-group"><label class="form-label" for="ff-dia">Fecha exacta</label>
         <input type="date" id="ff-dia" class="form-input">
       </div>
     </div>
-    <div id="ff-panel-rango" class="ff-panel" style="display:none">
+    <div id="ff-panel-rango" style="display:none">
       <div class="two-col">
         <div class="form-group"><label class="form-label" for="ff-rango-desde">Desde</label>
           <input type="date" id="ff-rango-desde" class="form-input">
@@ -256,12 +256,12 @@
         </div>
       </div>
     </div>
-    <div id="ff-panel-mes" class="ff-panel" style="display:none">
+    <div id="ff-panel-mes" style="display:none">
       <div class="form-group"><label class="form-label" for="ff-mes">Mes</label>
         <input type="month" id="ff-mes" class="form-input">
       </div>
     </div>
-    <div id="ff-panel-anio" class="ff-panel" style="display:none">
+    <div id="ff-panel-anio" style="display:none">
       <div class="form-group"><label class="form-label" for="ff-anio">Año</label>
         <select id="ff-anio" class="form-select"></select>
       </div>
@@ -804,6 +804,9 @@
     <button class="side-menu-close" onclick="closeSideMenu()" aria-label="Cerrar menú">×</button>
   </div>
   <button class="nav-btn" onclick="showPage('mov',this);closeSideMenu()"><span class="nav-icon">≡</span><span class="nav-label">Movimientos</span></button>
+  <!-- La pantalla de Tarjetas (page-tc, renderTarjetas()) estaba construida y showPage() la
+       contemplaba, pero NINGÚN botón navegaba a ella: quedó huérfana y era inalcanzable. -->
+  <button class="nav-btn" onclick="showPage('tc',this);closeSideMenu()"><span class="nav-icon">▣</span><span class="nav-label">Tarjetas</span></button>
   <button class="nav-btn" onclick="showPage('inv',this);closeSideMenu()"><span class="nav-icon">◈</span><span class="nav-label">Inversiones</span></button>
   <button class="nav-btn" onclick="showPage('dash',this);closeSideMenu()"><span class="nav-icon">◎</span><span class="nav-label">Dashboard</span></button>
   <button class="nav-btn" onclick="showPage('ahorro',this);closeSideMenu()"><span class="nav-icon">🏦</span><span class="nav-label">Ahorros</span></button>

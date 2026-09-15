@@ -144,15 +144,15 @@ function renderTarjetas(){
   const balanceEl=document.getElementById("tc-balance");
   if(balanceEl){
     const esMesActual = ymSel===hoyYM;
-    let html=`<div class="seccion-label seccion-label-sep">${esMesActual?"A pagar este mes":"Total "+mesLbl(ymSel)}</div>
+    let html=`<div class="seccion-label mb-6">${esMesActual?"A pagar este mes":"Total "+mesLbl(ymSel)}</div>
       <div style="display:flex;gap:14px;align-items:baseline;margin-bottom:6px;flex-wrap:wrap">
-        <div style="font-size:24px;font-weight:600;color:var(--warning)">${fmtS(totalMesARS)}</div>
+        <div style="font-size:24px;font-weight:600;color:var(--warning)">${fmtTotal(totalMesARS)}</div>
         ${totalMesUSD>0?`<div style="font-size:18px;font-weight:600;color:var(--warning)">+ USD ${totalMesUSD.toFixed(2)}</div>`:""}
       </div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${cantidadMes} ${cantidadMes===1?"gasto":"gastos"} en este mes</div>`;
     const tarjEntries=Object.entries(porTarjeta).sort((a,b)=>b[1]-a[1]);
     if(tarjEntries.length){
-      html+=`<div class="seccion-label seccion-label-sep">Por tarjeta</div>`;
+      html+=`<div class="seccion-label mb-6">Por tarjeta</div>`;
       const maxV=tarjEntries[0][1];
       html+=tarjEntries.map(([key,val])=>{
         const [tarj, moneda]=key.split("|");
@@ -421,8 +421,8 @@ function renderInv(){
     balanceEl.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:14px 0">Sin movimientos en ${mesLbl(ymSel)}</p>`;
   } else {
     const lblNeto=totalARS>=0?"Ingreso neto":"Gasto neto";
-    let html=`<div class="seccion-label seccion-label-sep">${lblNeto} en ${mesLbl(ymSel)}</div>
-      <div style="font-size:24px;font-weight:600;color:var(--${totalARS>=0?'success':'danger'});margin-bottom:6px">${fmtS(totalARS)}</div>
+    let html=`<div class="seccion-label mb-6">${lblNeto} en ${mesLbl(ymSel)}</div>
+      <div style="font-size:24px;font-weight:600;color:var(--${totalARS>=0?'success':'danger'});margin-bottom:6px">${fmtTotal(totalARS)}</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
         ${cantMes} ${cantMes===1?"movimiento":"movimientos"} · ${tiposMes.size} ${tiposMes.size===1?"tipo":"tipos"}
         ${totalIngresos>0?` · 📥 Ingresos: <strong style="color:var(--success)">${fmtS(totalIngresos)}</strong>`:""}
@@ -436,7 +436,7 @@ function renderInv(){
     });
     const catEntries=Object.entries(porCat).filter(([_,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
     if(catEntries.length){
-      html+=`<div class="seccion-label seccion-label-sep">Por categoría (balance)</div>`;
+      html+=`<div class="seccion-label mb-6">Por categoría (balance)</div>`;
       const maxV=Math.max(...catEntries.map(([_,v])=>Math.abs(v)));
       html+=catEntries.map(([cat,val])=>{
         const c=val>=0?"var(--success)":"var(--danger)";
@@ -605,7 +605,7 @@ function renderInvHistorico(){
     .slice(0,5);
   if(topItems.length){
     const maxV=Math.max(...topItems.map(t=>Math.abs(t.ars)));
-    let html=`<div class="seccion-label seccion-label-sep">Top tickers (balance)</div>`;
+    let html=`<div class="seccion-label mb-6">Top tickers (balance)</div>`;
     html+=topItems.map(p=>{
       const c=p.ars>=0?"var(--success)":"var(--danger)";
       return `<div class="bar-row" style="margin-bottom:6px">
@@ -701,7 +701,7 @@ function renderEditTcForm(t){
         <p style="font-size:10px;color:var(--muted);margin-top:4px">Cambiar la moneda afecta el monto vigente y todos los aumentos del historial.</p>
       </div>
       <div class="inset">
-        <div class="seccion-label seccion-label-sep">Monto vigente este mes</div>
+        <div class="seccion-label mb-6">Monto vigente este mes</div>
         <div style="font-size:18px;font-weight:600;color:var(--warning)">${fmtMoneda(montoActual,t.moneda)}</div>
       </div>
       <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
@@ -719,7 +719,7 @@ function renderEditTcForm(t){
         </div>
       </div>
       ${cambios.length?`
-        <div class="seccion-label seccion-label-sep">Historial de aumentos</div>
+        <div class="seccion-label mb-6">Historial de aumentos</div>
         <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px">
           ${cambios.map((c,i)=>`
             <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0;${i<cambios.length-1?'border-bottom:1px solid var(--border)':''}">
