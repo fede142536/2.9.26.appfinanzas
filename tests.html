@@ -352,13 +352,55 @@ grupo("Estilos");
 // El mismo badge estaba escrito inline 21 veces con 9 ortografías distintas (padding 1px 5px
 // vs 1px 6px, radio 6px vs 8px, con y sin font-weight), así que se veía apenas distinto en
 // cada pantalla. Ahora hay una sola clase; este test evita que vuelvan a multiplicarse.
-test("las clases de componente existen en styles.css", async ()=>{
+// Este test antes comparaba contra una lista escrita a mano y por eso no detectó que
+// .seccion-label-sep había desaparecido del CSS mientras 10 elementos la seguían usando:
+// esos rótulos perdieron su margen sin que nada avisara. Ahora la lista se DERIVA del código,
+// así que cubre cualquier clase, incluidas las que se agreguen después.
+//
+// Una clase se da por buena si pasa alguna de estas tres:
+//   1. está en styles.css;
+//   2. está en un <style> dentro del mismo archivo (el informe HTML que exporta la app lleva
+//      su propia hoja de estilos y no usa la de la app);
+//   3. el JS la usa como gancho (querySelector, classList, closest…), o sea que existe para
+//      encontrar el elemento, no para pintarlo.
+test("toda clase usada en el código existe en styles.css", async ()=>{
+  const ESTADO=["active","open","show","hidden","selected","dragover"];
+  const archivos=["index.html"].concat(
+    ["estado-categorias","render-comun","form-cargar","movimientos","editar-movimiento",
+     "tarjetas-inversiones","dashboard","ahorros","graficos-interactivos","importar-exportar",
+     "cuentas-tarjetas-categorias","config-ui","presupuestos","seguridad-pin","main"]
+    .map(a=>`js/${a}.js`));
+
+  const textos={};
+  for(const ruta of archivos) textos[ruta]=await (await fetch(ruta)).text();
   const css=await (await fetch("styles.css")).text();
-  const faltan=["badge","badge-save","badge-danger","badge-success","badge-accent","badge-warning",
-                "seccion-label","u-upper","inset","txt-micro","txt-xs","txt-sm","txt-md","txt-muted",
-                "txt-strong","txt-medium","u-flex1","u-row","u-row-6","mb-6","mb-8","mb-10","mt-14"]
-                .filter(c=>!css.includes("."+c+"{") && !css.includes("."+c+","));
-  igual(faltan, [], "desaparecieron clases que el JS y el HTML están usando");
+  const enCss=new Set((css.match(/\.[A-Za-z][\w-]*/g)||[]).map(c=>c.slice(1)));
+
+  // Ganchos: cualquier clase que el JS busque o toque por nombre.
+  const ganchos=new Set();
+  const todo=Object.values(textos).join("\n");
+  for(const m of todo.matchAll(/(?:querySelector|querySelectorAll|closest|matches)\(\s*["'`]([^"'`]+)["'`]/g)){
+    for(const c of (m[1].match(/\.[A-Za-z][\w-]*/g)||[])) ganchos.add(c.slice(1));
+  }
+  for(const m of todo.matchAll(/classList\.(?:add|remove|toggle|contains)\(\s*["'`]([\w-]+)["'`]/g)) ganchos.add(m[1]);
+
+  const huerfanas=new Map();
+  for(const ruta of archivos){
+    const txt=textos[ruta];
+    // Clases definidas en un <style> del propio archivo (el informe exportado)
+    const locales=new Set();
+    for(const bloque of txt.match(/<style>[\s\S]*?<\/style>/g)||[]){
+      for(const c of bloque.match(/\.[A-Za-z][\w-]*/g)||[]) locales.add(c.slice(1));
+    }
+    for(const m of txt.matchAll(/class="([^"${}]*)"/g)){
+      for(const c of m[1].split(/\s+/)){
+        if(!c || ESTADO.includes(c) || enCss.has(c) || locales.has(c) || ganchos.has(c)) continue;
+        if(!huerfanas.has(c)) huerfanas.set(c, ruta);
+      }
+    }
+  }
+  igual([...huerfanas].map(([c,r])=>`${c} (${r})`), [],
+    "hay clases usadas que no están definidas en ningún lado: el estilo se pierde sin aviso");
 });
 
 test("no volvieron los badges escritos a mano", async ()=>{
