@@ -61,7 +61,7 @@ function renderPresupManager(){
   const ymHoy=currentYM();
   const gastoMes={};
   movs.forEach(m=>{
-    if(m.tipo!=="Gasto"||m.esAhorro) return;
+    if(!esGasto(m)) return;
     const ym=String(m.fecha||"").slice(0,7);
     if(ym===ymHoy) gastoMes[m.cat]=(gastoMes[m.cat]||0)+m.importe;
   });

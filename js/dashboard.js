@@ -72,15 +72,12 @@ function getDashData(year){
       if(m.moneda==="USD") return; // No mezclar USD con totales ARS
       if(m.tipo==="Ingreso"){
         liveByMes[ym].ingreso += (m.importe||0);
-      } else if(m.tipo==="Gasto"){
-        if(m.usaAhorro){
-          // Retiro del ahorro → suma como ingreso (la plata vuelve a la mano)
-          liveByMes[ym].ingreso += (m.importe||0);
-        } else if(!m.esAhorro){
-          // Gasto puro (no es depósito a ahorro) → suma como gasto
-          liveByMes[ym].gasto += (m.importe||0);
-        }
-        // m.esAhorro=true → neutral (no cuenta como gasto ni como ingreso)
+      } else if(esGasto(m)){
+        // Todo gasto resta (consumo, depósito al fondo y compra pagada con ahorros).
+        liveByMes[ym].gasto += (m.importe||0);
+        // Y si fue pagado con ahorros, el retiro además devuelve esa plata a la mano:
+        // las dos puntas se cancelan y el fondo baja. Antes solo se contaba la entrada.
+        if(esRetiroAhorro(m)) liveByMes[ym].ingreso += (m.importe||0);
       } else if(m.tipo==="Inversion"){
         if(isInvSalida(m)){
           // Rescate/venta → suma como ingreso (entra cash)
@@ -117,13 +114,11 @@ function getDashData(year){
       const ym = yrStr+"-"+mm;
       getMesMov(ym).forEach(m=>{
         if(m.moneda==="USD") return;
-        if(m.tipo==="Gasto"){
-          if(m.usaAhorro){
-            // Retiro → ingreso, categoría agrupada
-            catIngreso["De ahorros"] = (catIngreso["De ahorros"]||0) + (m.importe||0);
-          } else if(!m.esAhorro){
-            catData[m.cat] = (catData[m.cat]||0) + (m.importe||0);
-          }
+        if(esGasto(m)){
+          // Todo gasto entra en su categoría, incluidos los pagados con ahorros.
+          catData[m.cat] = (catData[m.cat]||0) + (m.importe||0);
+          // El retiro además aparece como ingreso, agrupado bajo "De ahorros".
+          if(esRetiroAhorro(m)) catIngreso["De ahorros"] = (catIngreso["De ahorros"]||0) + (m.importe||0);
         } else if(m.tipo==="Ingreso"){
           catIngreso[m.cat] = (catIngreso[m.cat]||0) + (m.importe||0);
         } else if(m.tipo==="Inversion"){
@@ -248,15 +243,9 @@ function renderDashCuentas(){
     const c=m.cuenta||"Sin cuenta";
     if(!porCuenta[c]) porCuenta[c]={ing:0,gas:0,count:0};
     if(m.tipo==="Ingreso") porCuenta[c].ing+=(m.importe||0);
-    else if(m.tipo==="Gasto"){
-      if(m.usaAhorro){
-        // Retiro del ahorro → ingreso para la cuenta
-        porCuenta[c].ing+=(m.importe||0);
-      } else if(!m.esAhorro){
-        // Gasto puro
-        porCuenta[c].gas+=(m.importe||0);
-      }
-      // esAhorro: neutral
+    else if(esGasto(m)){
+      porCuenta[c].gas+=(m.importe||0);                      // todo gasto resta
+      if(esRetiroAhorro(m)) porCuenta[c].ing+=(m.importe||0); // y el retiro además entra
     } else if(m.tipo==="Inversion"){
       if(isInvSalida(m)){
         // Rescate/venta → ingreso (entra cash)
@@ -326,9 +315,9 @@ function renderDashUSD(){
 
   // Acumular flujos del año
   const ing=movsUSD.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+m.importeOrig,0);
-  const gas=movsUSD.filter(m=>m.tipo==="Gasto"&&!m.esAhorro&&!m.usaAhorro).reduce((s,m)=>s+m.importeOrig,0);
-  const aho=movsUSD.filter(m=>m.tipo==="Gasto"&&m.esAhorro).reduce((s,m)=>s+m.importeOrig,0);
-  const ret=movsUSD.filter(m=>m.tipo==="Gasto"&&m.usaAhorro).reduce((s,m)=>s+m.importeOrig,0);
+  const gas=movsUSD.filter(esGasto).reduce((s,m)=>s+m.importeOrig,0);
+  const aho=movsUSD.filter(esDepositoAhorro).reduce((s,m)=>s+m.importeOrig,0);
+  const ret=movsUSD.filter(esRetiroAhorro).reduce((s,m)=>s+m.importeOrig,0);
 
   // Saldo neto del año en USD: billete + inversiones + tarjeta (antes solo contaba lo primero)
   const netoYear = ing - gas + aho - ret + invEntrada - invSalida - tcUSD;
@@ -371,7 +360,7 @@ function showCatDetail(cat, tipo){
   // creadas por el Dashboard (no son m.cat reales), así que se filtran distinto.
   let movsCat;
   if(cat==="De ahorros"){
-    movsCat=movs.filter(m=>m.tipo==="Gasto" && m.usaAhorro && String(m.fecha||"").slice(0,4)===String(dashYear));
+    movsCat=movs.filter(m=>esRetiroAhorro(m) && String(m.fecha||"").slice(0,4)===String(dashYear));
   } else if(cat==="Inversiones (rescates)"){
     movsCat=movs.filter(m=>m.tipo==="Inversion" && isInvSalida(m) && String(m.fecha||"").slice(0,4)===String(dashYear));
   } else if(cat==="Inversiones (compras)"){
@@ -381,7 +370,7 @@ function showCatDetail(cat, tipo){
       if(esIngreso){
         if(m.tipo!=="Ingreso") return false;
       } else {
-        if(m.tipo!=="Gasto"||m.esAhorro) return false;
+        if(!esGasto(m)) return false;
       }
       if(m.cat!==cat) return false;
       return String(m.fecha||"").slice(0,4)===String(dashYear);
@@ -551,8 +540,8 @@ function showCuentaDetail(cuentaNombre){
   movsCuenta.forEach(m=>{
     if(m.tipo==="Ingreso") ing+=(m.importe||0);
     else if(m.tipo==="Gasto"){
-      if(m.usaAhorro) ing+=(m.importe||0);
-      else if(!m.esAhorro) gas+=(m.importe||0);
+      gas+=(m.importe||0);                                  // todo gasto resta
+      if(esRetiroAhorro(m)) ing+=(m.importe||0);            // y el retiro además entra
     } else if(m.tipo==="Inversion"){
       if(isInvSalida(m)) ing+=(m.importe||0); else gas+=(m.importe||0);
     }
@@ -569,8 +558,10 @@ function showCuentaDetail(cuentaNombre){
     if(m.tipo==="Ingreso"){
       signo="+"; color="var(--success)";
     } else if(m.tipo==="Gasto"){
-      if(m.usaAhorro){
-        signo="+"; color="var(--save)";
+      if(esRetiroAhorro(m)){
+        // Es una compra: se muestra con "-", igual que en la lista de Movimientos. El badge
+        // aclara de dónde salió la plata. Antes decía "+" y contradecía a la otra pantalla.
+        signo="-"; color="var(--save)";
         badge=`<span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">DE AHORROS</span>`;
       } else if(m.esAhorro){
         signo="-"; color="var(--save)";

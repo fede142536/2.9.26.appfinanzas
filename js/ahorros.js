@@ -27,8 +27,8 @@ function rellenarMesesSinMovimiento(arr){
 function renderAhorro(){
   // ── 1. MIS AHORROS ──
   // Sumamos depósitos (esAhorro) y restamos retiros (usaAhorro), agrupados por mes
-  const depositos=movs.filter(m=>m.tipo==="Gasto"&&m.esAhorro);
-  const retiros=movs.filter(m=>m.tipo==="Gasto"&&m.usaAhorro);
+  const depositos=movs.filter(esDepositoAhorro);
+  const retiros=movs.filter(esRetiroAhorro);
   const tieneDatosUsuario=depositos.length>0 || retiros.length>0;
   let ahorrosArr;
   let usingUserData=false;
@@ -120,17 +120,17 @@ function renderUSD(){
   const ingresosUSD=movs
     .filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig)
     .reduce((s,m)=>s+m.importeOrig,0);
-  // Gastos USD normales (no ahorros ni retiros)
+  // TODOS los gastos USD: consumo, depósitos al fondo y compras pagadas con el fondo.
   const gastosUSD=movs
-    .filter(m=>m.tipo==="Gasto"&&m.moneda==="USD"&&m.importeOrig&&!m.esAhorro&&!m.usaAhorro)
+    .filter(m=>esGasto(m)&&m.moneda==="USD"&&m.importeOrig)
     .reduce((s,m)=>s+m.importeOrig,0);
   // Ahorros USD: depósitos al fondo USD
   const ahorrosUSD=movs
-    .filter(m=>m.tipo==="Gasto"&&m.moneda==="USD"&&m.importeOrig&&m.esAhorro)
+    .filter(m=>esDepositoAhorro(m)&&m.moneda==="USD"&&m.importeOrig)
     .reduce((s,m)=>s+m.importeOrig,0);
   // Retiros del fondo USD
   const retirosUSD=movs
-    .filter(m=>m.tipo==="Gasto"&&m.moneda==="USD"&&m.importeOrig&&m.usaAhorro)
+    .filter(m=>esRetiroAhorro(m)&&m.moneda==="USD"&&m.importeOrig)
     .reduce((s,m)=>s+m.importeOrig,0);
 
   // Si no hay ningún movimiento USD, no mostramos la card
@@ -140,8 +140,11 @@ function renderUSD(){
   }
   card.style.display="block";
 
-  // Cash disponible: ingresos - gastos
-  const cashUSD = ingresosUSD - gastosUSD;
+  // Cash disponible = lo que entró menos lo que salió. El depósito al fondo SALE del cash
+  // (por eso gastosUSD ahora lo incluye) y el retiro VUELVE al cash, así que se suma.
+  // Antes el depósito no restaba de ningún lado pero sí sumaba al fondo, así que el "Total"
+  // de abajo (cash + fondo) contaba esa plata dos veces: guardabas USD 100 y el total subía.
+  const cashUSD = ingresosUSD - gastosUSD + retirosUSD;
   // Fondo USD: ahorros - retiros
   const fondoUSD = ahorrosUSD - retirosUSD;
 
@@ -156,7 +159,7 @@ function renderUSD(){
   let html=`<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Detalle</div>`;
   const items=[
     {label:"📥 Ingresos USD", val:ingresosUSD, signo:1},
-    {label:"📤 Gastos USD", val:gastosUSD, signo:-1},
+    {label:"📤 Gastos USD (incluye lo guardado)", val:gastosUSD, signo:-1},
     {label:"🏦 Ahorrado al fondo USD", val:ahorrosUSD, signo:1},
     {label:"💸 Retirado del fondo USD", val:retirosUSD, signo:-1}
   ].filter(x=>x.val>0);

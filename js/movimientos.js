@@ -517,25 +517,33 @@ function renderMovs(){
   // Las tarjetas NO afectan el saldo: solo se muestran como informativas
   // Ingresos del mes
   const ing=mesMovs.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+m.importe,0);
-  // Separar gastos: normales, ahorros (depósitos al fondo), retiros del fondo
-  const gastosArr=mesMovs.filter(m=>m.tipo==="Gasto" && !m.esAhorro && !m.usaAhorro);
-  const ahorrosArr=mesMovs.filter(m=>m.tipo==="Gasto" && m.esAhorro);
-  const retirosArr=mesMovs.filter(m=>m.tipo==="Gasto" && m.usaAhorro);
-  const gas=gastosArr.reduce((s,m)=>s+m.importe,0);
-  const aho=ahorrosArr.reduce((s,m)=>s+m.importe,0);
-  const retirado=retirosArr.reduce((s,m)=>s+m.importe,0);
+  // TODO gasto cuenta como gasto (ver el modelo en estado-categorias.js): el consumo normal,
+  // los depósitos al fondo y las compras pagadas con ahorros. Los otros dos arrays son
+  // subconjuntos, solo para los chips informativos y para sumar el retiro como ingreso.
+  const gastosArr=mesMovs.filter(esGasto);
+  const ahorrosArr=mesMovs.filter(esDepositoAhorro);
+  const retirosArr=mesMovs.filter(esRetiroAhorro);
+  // Las sumas y el balance salen de totalesDePlata() (estado-categorias.js), que es la única
+  // que sabe la regla y la única que se puede probar sin levantar la pantalla entera.
+  const totales=totalesDePlata(mesMovs);
+  const gas=totales.gastos;
+  const aho=totales.depositos;
+  const retirado=totales.retiros;
   // Inversiones del mes: impactan el balance desde la perspectiva de cash flow
   // - Suscripción/Compra → sale cash (resta del balance, igual que un gasto)
   // - Rescate/Venta → entra cash (suma al balance, igual que un ingreso)
   const invsMes=mesMovs.filter(m=>m.tipo==="Inversion");
-  const invIngresos=invsMes.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
-  const invGastos=invsMes.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
-  // Balance del mes:
-  // INGRESOS REALES: ingresos puros + retiros del ahorro (vuelve a la mano) + rescates de inversión (entra cash)
-  // GASTOS REALES: gastos puros + compras/suscripciones de inversión (sale cash, queda expuesto a riesgo de mercado)
-  // El ahorro (depósito) sigue siendo neutral: es la misma plata líquida, solo cambia de "cajón".
+  const invIngresos=totales.invEntra;
+  const invGastos=totales.invSale;
+  // Balance del mes = cuánto cambió la plata que tenés a mano.
+  // ENTRA: ingresos + retiros del fondo + rescates de inversión.
+  // SALE : todos los gastos (incluidos los depósitos al fondo y las compras con ahorros)
+  //        + compras/suscripciones de inversión.
+  // El retiro entra y su compra sale, así que se cancelan y el fondo baja: eso es lo que pasó.
+  // Antes el retiro sumaba como ingreso y la compra no restaba nunca, así que el balance
+  // quedaba inflado en exactamente la plata que sacabas del fondo.
   // Las tarjetas no afectan el balance.
-  const balMes=Math.round((ing+retirado+invIngresos-gas-invGastos)*100)/100;
+  const balMes=totales.balance;
 
   // ── CHIPS ADAPTADOS AL FILTRO ──
   const arrastreEl=document.getElementById("mov-arrastre");
@@ -617,10 +625,10 @@ function renderMovs(){
     // Sumas para mostrar chips claros:
     // - "Gastos" = gastos puros + compras/suscripciones de inversión (consumo real + plata que salió al mercado)
     // - "Ahorrado" = depósitos al fondo (informativo, sigue siendo neutral)
-    const gastosPurosARS=todoGastos.filter(m=>m.tipo==="Gasto"&&!m.esAhorro&&!m.usaAhorro&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
-    const ahorradoARS=todoGastos.filter(m=>m.tipo==="Gasto"&&m.esAhorro&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+    const gastosPurosARS=todoGastos.filter(m=>esGasto(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+    const ahorradoARS=todoGastos.filter(m=>esDepositoAhorro(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
     const suscripcionesARS=todoGastos.filter(m=>m.tipo==="Inversion"&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
-    const gastosPurosUSD=todoGastos.filter(m=>m.tipo==="Gasto"&&!m.esAhorro&&!m.usaAhorro&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+    const gastosPurosUSD=todoGastos.filter(m=>esGasto(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
     const suscripcionesUSD=todoGastos.filter(m=>m.tipo==="Inversion"&&(m.importeUSD||0)>0).reduce((s,m)=>s+m.importeUSD,0);
     const gastosTotalARS=gastosPurosARS+suscripcionesARS;
     const gastosTotalUSD=gastosPurosUSD+suscripcionesUSD;
@@ -654,7 +662,7 @@ function renderMovs(){
     //   así que para que el total coincida con el chip de la vista Todos, también se incluyen acá.
     const ingresosArr=mesMovs.filter(m=>m.tipo==="Ingreso");
     const invRescates=mesMovs.filter(m=>m.tipo==="Inversion"&&isInvSalida(m));
-    const retirosAhorro=mesMovs.filter(m=>m.tipo==="Gasto"&&m.usaAhorro);
+    const retirosAhorro=mesMovs.filter(esRetiroAhorro);
     const todoIngresosOriginal=[...ingresosArr, ...invRescates, ...retirosAhorro];
 
     // Sub-filtro por categoría
@@ -711,11 +719,11 @@ function renderMovs(){
 
     // Totales USD del mes (gastos e ingresos en moneda extranjera)
     // Gastos USD: gastos puros + compras de inversión en USD (sin ahorros)
-    const gastosUSDTodos=mesMovs.filter(m=>m.tipo==="Gasto"&&m.moneda==="USD"&&!m.esAhorro&&!m.usaAhorro&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+    const gastosUSDTodos=mesMovs.filter(m=>esGasto(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
     const invComprasUSD=mesMovs.filter(m=>m.tipo==="Inversion"&&!isInvSalida(m)&&(m.importeUSD||0)>0).reduce((s,m)=>s+m.importeUSD,0);
     const gastosUSDTotal=gastosUSDTodos+invComprasUSD;
     // Retiros USD del ahorro (vuelven a la mano = ingreso)
-    const retirosUSD=mesMovs.filter(m=>m.tipo==="Gasto"&&m.moneda==="USD"&&m.usaAhorro&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+    const retirosUSD=mesMovs.filter(m=>esRetiroAhorro(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
 
     const ingresosUSDTodos=mesMovs.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
     const invRescatesUSD=mesMovs.filter(m=>m.tipo==="Inversion"&&isInvSalida(m)&&(m.importeUSD||0)>0).reduce((s,m)=>s+m.importeUSD,0);
@@ -752,7 +760,7 @@ function renderMovs(){
       partes.push(`💸 De ahorros: <strong style="color:var(--save)">${fmtS(retirado)}</strong>`);
     }
     // Total a recuperar (gastos compartidos)
-    const recup=mesMovs.filter(m=>m.tipo==="Gasto"&&!m.esAhorro&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
+    const recup=mesMovs.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
     if(recup>0){
       partes.push(`🔁 A recuperar: <strong style="color:var(--accent)">${fmtS(recup)}</strong>`);
     }
@@ -771,7 +779,7 @@ function renderMovs(){
     // Calcular gasto del mes seleccionado por categoría con presupuesto
     const gastoCat={};
     mesMovs.forEach(m=>{
-      if(m.tipo!=="Gasto"||m.esAhorro) return;
+      if(!esGasto(m)) return;
       gastoCat[m.cat]=(gastoCat[m.cat]||0)+m.importe;
     });
     let html=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px">
@@ -897,11 +905,11 @@ function getArrastre(ymActual){
     if(!ym||ym>=ymActual) return;
     // Solo movimientos del mismo año
     if(ym.slice(0,4)!==yrActual) return;
-    if(m.tipo==="Ingreso") acum+=m.importe;
-    else if(m.tipo==="Gasto" && !m.usaAhorro) acum-=m.importe;
-    // Inversiones también afectan el arrastre desde perspectiva cash flow
+    // Un retiro cae en las DOS líneas (entra por el retiro, sale por la compra) y se cancela,
+    // igual que en el balance del mes. Un Ingreso solo en la primera.
+    if(esIngreso(m)) acum+=m.importe;
+    if(esGasto(m)) acum-=m.importe;
     else if(m.tipo==="Inversion") acum+=(m.importe||0)*invSignoCash(m);
-    // Los retiros de ahorros no afectan el arrastre (la plata ya salió cuando se ahorró)
   });
   return Math.round(acum*100)/100;
 }

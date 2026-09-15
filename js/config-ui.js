@@ -178,14 +178,14 @@ function exportarPDF(){
   if(!inRange.length){showToast("Sin movimientos en ese rango");return;}
 
   const ing=inRange.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+m.importe,0);
-  const gas=inRange.filter(m=>m.tipo==="Gasto"&&!m.esAhorro).reduce((s,m)=>s+m.importe,0);
-  const aho=inRange.filter(m=>m.tipo==="Gasto"&&m.esAhorro).reduce((s,m)=>s+m.importe,0);
+  const gas=inRange.filter(esGasto).reduce((s,m)=>s+m.importe,0);
+  const aho=inRange.filter(esDepositoAhorro).reduce((s,m)=>s+m.importe,0);
   const inv=inRange.filter(m=>m.tipo==="Inversion").reduce((s,m)=>s+m.importe,0);
   const balance=ing-gas-aho;
 
   // Por categoría (gastos)
   const porCat={};
-  inRange.filter(m=>m.tipo==="Gasto"&&!m.esAhorro).forEach(m=>{
+  inRange.filter(esGasto).forEach(m=>{
     porCat[m.cat]=(porCat[m.cat]||0)+m.importe;
   });
   const catSorted=Object.entries(porCat).sort((a,b)=>b[1]-a[1]);
