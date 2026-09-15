@@ -229,6 +229,67 @@ test("no queda el escape viejo de comillas en ningún onclick", async ()=>{
   igual(malos, [], "volvió el patrón que dejaba pasar comillas dobles; usá attrJS()");
 });
 
+// ═══════════════════════════════════════════
+// GRÁFICOS
+// ═══════════════════════════════════════════
+grupo("Gráficos");
+
+// Arma un canvas de verdad, dibuja la curva de ahorros y devuelve lo que cambió al tocarla.
+// dprForzado sirve para reproducir el celular: el bug del marcador solo aparecía con dpr > 1.
+function taparEnLaCurva(dprForzado){
+  const dprOriginal=Object.getOwnPropertyDescriptor(window,"devicePixelRatio");
+  Object.defineProperty(window,"devicePixelRatio",{value:dprForzado,configurable:true});
+  const canvas=document.createElement("canvas");
+  canvas.style.width="320px";
+  const tip=document.createElement("div");
+  document.body.appendChild(canvas); document.body.appendChild(tip);
+  try{
+    limpiarSeleccionLinea();
+    const meses=["2026-01","2026-02","2026-03","2026-04","2026-05","2026-06"];
+    const valores=[100,250,220,400,380,520];
+    const dibujar=()=>drawInteractiveLine(canvas,meses,valores,"#2d7a3a",tip,(ym,v)=>ym+": "+v);
+    dibujar();
+    const ctx=canvas.getContext("2d");
+    const antes=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    const caja=canvas.getBoundingClientRect();
+    canvas.onclick({clientX:caja.left+caja.width*0.7, clientY:caja.top+caja.height/2});
+    const despues=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    const cambiados=[];
+    for(let i=0;i<antes.length;i+=4){
+      if(antes[i]!==despues[i]||antes[i+1]!==despues[i+1]||antes[i+2]!==despues[i+2]||antes[i+3]!==despues[i+3]){
+        cambiados.push({x:(i/4)%canvas.width, y:Math.floor((i/4)/canvas.width)});
+      }
+    }
+    return {cambiados, detalle:tip.textContent.trim(), ancho:canvas.width, dpr:dprForzado};
+  } finally {
+    canvas.remove(); tip.remove();
+    if(dprOriginal) Object.defineProperty(window,"devicePixelRatio",dprOriginal);
+  }
+}
+
+// El handler escribía el detalle y acto seguido llamaba a renderAhorroChart(), que lo primero
+// que hace es limpiar ese mismo texto. En la vista por defecto, tocar el gráfico no hacía nada.
+test("tocar la curva de ahorros deja el detalle a la vista", ()=>{
+  const r=taparEnLaCurva(1);
+  cierto(r.detalle!=="", "el tap dejó el detalle vacío: algo lo limpia después de escribirlo");
+});
+
+// El punto se dibujaba en pts.x * dpr sobre un contexto que YA tenía scale(dpr,dpr): quedaba
+// a dpr² veces la posición correcta, o sea fuera del canvas en cualquier celular.
+test("el marcador del tap cae dentro del canvas con dpr de celular", ()=>{
+  const r=taparEnLaCurva(3);
+  cierto(r.cambiados.length>0, "no se dibujó nada al tocar");
+  // La columna con más píxeles cambiados es la línea guía vertical.
+  const porColumna={};
+  r.cambiados.forEach(c=>{porColumna[c.x]=(porColumna[c.x]||0)+1;});
+  const guiaX=+Object.keys(porColumna).reduce((a,b)=>porColumna[a]>=porColumna[b]?a:b);
+  // El punto es lo único que se ensancha a los costados de esa guía.
+  const delPunto=r.cambiados.filter(c=>Math.abs(c.x-guiaX)>4);
+  cierto(delPunto.length>50, "solo se dibujó la línea guía: el punto se fue del canvas (¿volvió el *dpr?)");
+  const ancho=(Math.max(...delPunto.map(c=>c.x))-Math.min(...delPunto.map(c=>c.x)))/r.dpr;
+  cierto(ancho>6 && ancho<20, "el punto quedó de "+Math.round(ancho)+"px CSS; se esperaba ~10px (escala mal aplicada)");
+});
+
 test("un PIN incorrecto no puede descifrar", async ()=>{
   const salt=randomSaltB64();
   const blob=await encryptBlob(await deriveKey("1234", salt), {fmovs3:'[{"id":"secreto"}]'});

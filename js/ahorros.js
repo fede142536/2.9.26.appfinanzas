@@ -178,7 +178,11 @@ function renderAhorroChart(){
   const canvas=document.getElementById("chart-fondo");
   if(!canvas) return;
   const tipEl=document.getElementById("ahorro-tooltip");
+  // Se limpia el detalle y la selección porque acá se llega al cambiar de vista o cuando
+  // cambiaron los datos: el punto que habías tocado ya no significa lo mismo en el gráfico
+  // nuevo. El redibujo por un tap NO pasa por acá justamente para no borrar lo recién escrito.
   if(tipEl) tipEl.textContent="";
+  limpiarSeleccionLinea();
 
   const {ahorrosArr, depositos, retiros}=ahorroState;
   if(!ahorrosArr.length){
