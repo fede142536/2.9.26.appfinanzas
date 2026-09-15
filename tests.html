@@ -292,6 +292,82 @@ test("totalesDePlata tolera una lista vacía", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// CUOTAS PENDIENTES (TARJETAS)
+// ═══════════════════════════════════════════
+grupo("Cuotas pendientes");
+
+// Corre fn con estas compras en cuotas cargadas, y después deja tcs como estaba.
+function conTarjetas(lista, fn){
+  const antes=tcs;
+  tcs=lista;
+  try { return fn(); } finally { tcs=antes; }
+}
+const NOTEBOOK   = {id:1, desc:"Notebook",   total:1200000, cuotasTotal:12, mesInicio:"2026-05", tarjeta:"Visa",       moneda:"ARS"};
+const HELADERA   = {id:2, desc:"Heladera",   total:840000,  cuotasTotal:6,  mesInicio:"2026-07", tarjeta:"Mastercard", moneda:"ARS"};
+const ZAPATILLAS = {id:3, desc:"Zapatillas", total:180000,  cuotasTotal:3,  mesInicio:"2026-08", tarjeta:"Visa",       moneda:"ARS"};
+// cuotasTotal de un gasto frecuente no significa nada (no tiene cuotas): se le pone un número
+// grande a propósito, para que el test falle si alguien lo usa para calcular el horizonte.
+const NETFLIX    = {id:4, desc:"Netflix",    total:9000,    cuotasTotal:999, mesInicio:"2026-01", tarjeta:"Visa",       moneda:"ARS", frecuente:true};
+
+test("la proyección llega hasta la última cuota y no más", ()=>{
+  const meses=conTarjetas([NOTEBOOK, HELADERA, ZAPATILLAS], ()=>mesesConCuotasPendientes("2026-09"));
+  igual(meses[0].ym, "2026-09", "tiene que arrancar en el mes que estás mirando");
+  igual(meses[meses.length-1].ym, "2027-04", "la última cuota de la Notebook cae en abril 2027");
+  igual(meses.length, 8);
+});
+
+test("cada mes suma solo las cuotas que le tocan", ()=>{
+  const meses=conTarjetas([NOTEBOOK, HELADERA, ZAPATILLAS], ()=>mesesConCuotasPendientes("2026-09"));
+  const porYm=Object.fromEntries(meses.map(m=>[m.ym, Math.round(m.totalARS)]));
+  igual(porYm["2026-09"], 300000, "septiembre: Notebook 100k + Heladera 140k + Zapatillas 60k");
+  igual(porYm["2026-11"], 240000, "en noviembre las Zapatillas ya terminaron");
+  igual(porYm["2027-01"], 100000, "en enero solo queda la Notebook");
+});
+
+test("el total proyectado es lo que realmente falta pagar", ()=>{
+  const meses=conTarjetas([NOTEBOOK, HELADERA, ZAPATILLAS], ()=>mesesConCuotasPendientes("2026-09"));
+  const suma=meses.reduce((s,m)=>s+m.totalARS,0);
+  // Notebook: cuotas 5..12 = 8x100k · Heladera: 3..6 = 4x140k · Zapatillas: 2..3 = 2x60k
+  igual(Math.round(suma), 800000+560000+120000, "la suma de los meses no coincide con las cuotas que quedan");
+});
+
+// Un gasto frecuente sin fecha de fin sigue para siempre: si definiera el horizonte, la
+// proyección no terminaría nunca. Aparece dentro de los meses, pero no los extiende.
+test("un gasto mensual fijo no estira la proyección al infinito", ()=>{
+  const soloFrec=conTarjetas([NETFLIX], ()=>mesesConCuotasPendientes("2026-09"));
+  cierto(soloFrec.length<=1, "sin cuotas de verdad, un gasto fijo no puede generar meses y meses: "+soloFrec.length);
+  const conCuotas=conTarjetas([ZAPATILLAS, NETFLIX], ()=>mesesConCuotasPendientes("2026-09"));
+  igual(conCuotas[conCuotas.length-1].ym, "2026-10", "el horizonte lo marcan las cuotas, no el gasto fijo");
+  cierto(conCuotas[0].movs.some(m=>m.frecuente), "pero el gasto fijo sí tiene que aparecer en el desglose del mes");
+});
+
+test("el desglose de un mes trae las compras que lo componen", ()=>{
+  const meses=conTarjetas([NOTEBOOK, HELADERA, ZAPATILLAS], ()=>mesesConCuotasPendientes("2026-09"));
+  const sep=meses[0];
+  igual(sep.movs.length, 3);
+  igual(sep.movs.map(m=>m.desc).sort(), ["Heladera","Notebook","Zapatillas"]);
+  const nb=sep.movs.find(m=>m.desc==="Notebook");
+  igual(nb.nCuota, 5, "en septiembre la Notebook va por la cuota 5");
+  igual(nb.cuotasTotal, 12);
+  igual(Math.round(sep.movs.reduce((s,m)=>s+m.importe,0)), Math.round(sep.totalARS),
+    "el total del mes tiene que ser la suma de su propio desglose");
+});
+
+test("tocar un mes lo abre y tocarlo de nuevo lo cierra", ()=>{
+  const antes=tcMesAbierto;
+  try{
+    tcMesAbierto=null;
+    toggleTcMes("2026-10"); igual(tcMesAbierto, "2026-10", "no se abrió");
+    toggleTcMes("2026-11"); igual(tcMesAbierto, "2026-11", "no se cambió al mes tocado");
+    toggleTcMes("2026-11"); igual(tcMesAbierto, null, "tocar el mismo mes tiene que cerrarlo");
+  } finally { tcMesAbierto=antes; }
+});
+
+test("sin compras en cuotas no hay meses que proyectar", ()=>{
+  igual(conTarjetas([], ()=>mesesConCuotasPendientes("2026-09")), []);
+});
+
+// ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
 grupo("Números e íconos");
