@@ -1,6 +1,17 @@
 // ═══════════════════════════════════════════
 // GRÁFICOS INTERACTIVOS
 // ═══════════════════════════════════════════
+// Índice del punto que el usuario tocó en el gráfico de línea. Vive ACÁ, fuera de la función
+// que dibuja, porque cada tap la vuelve a llamar desde cero para redibujar con el marcador:
+// una variable local se perdería en cada redibujo.
+let seleccionLinea=null;
+
+// La llama renderAhorroChart() al cambiar de vista o cuando cambian los datos: el punto que
+// habías tocado ya no significa lo mismo (o directamente no existe) en el gráfico nuevo.
+function limpiarSeleccionLinea(){
+  seleccionLinea=null;
+}
+
 // Línea con tap: dibuja curva acumulada y permite tocar para ver el valor de cada punto.
 function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
   if(!canvas||!values.length) return;
@@ -66,12 +77,23 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
     }
   });
 
-  // Punto seleccionado (interactivo)
-  let selectedIdx=null;
-  function redrawSelection(){
-    // Re-dibujar todo desde cero requiere mucho. Mejor: solo dibujar el dot y línea vertical.
-    // Repintamos primero
-    drawInteractiveLine.lastSelected=selectedIdx;
+  // ── Marcador del punto tocado ──
+  // Se dibuja como parte del render normal, no parcheado encima después con un setTimeout.
+  if(seleccionLinea!==null && pts[seleccionLinea]){
+    const sel=pts[seleccionLinea];
+    // Línea guía vertical, discreta: ancla el punto al eje X sin competir con la curva.
+    ctx.strokeStyle=gridColor;
+    ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(sel.x,padT);ctx.lineTo(sel.x,padT+ch);ctx.stroke();
+    // OJO: las coordenadas van en píxeles CSS, SIN multiplicar por dpr. El contexto ya viene
+    // escalado con ctx.scale(dpr,dpr) más arriba; volver a multiplicar mandaba el punto a dpr²
+    // veces la posición correcta (9× en un celular con dpr 3), o sea afuera del canvas.
+    ctx.fillStyle=color;
+    // El aro va del color de la superficie, no "#fff" fijo: en tema oscuro un aro blanco canta.
+    ctx.strokeStyle=themeColor('--surface');
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(sel.x,sel.y,5,0,Math.PI*2);
+    ctx.fill();ctx.stroke();
   }
 
   canvas.onclick=(e)=>{
@@ -83,26 +105,11 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
       const d=Math.abs(p.x-x);
       if(d<minDist){minDist=d;idx=i;}
     });
-    selectedIdx=idx;
+    seleccionLinea=idx;
+    // Se vuelve a llamar a ESTA función, no a renderAhorroChart(): esa limpia el tooltip como
+    // primer paso, así que borraba el detalle recién escrito y el tap parecía no hacer nada.
+    drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn);
     if(tipEl) tipEl.textContent=fmtFn(pts[idx].label, pts[idx].val);
-    // Re-dibujar marcador
-    renderAhorroChart();
-    // Después de re-renderizar, dibujar el dot encima
-    setTimeout(()=>{
-      const c2=document.getElementById("chart-fondo");
-      if(!c2) return;
-      const ctx2=c2.getContext("2d");
-      const dpr2=window.devicePixelRatio||1;
-      ctx2.save();
-      ctx2.scale(1,1);
-      ctx2.fillStyle=color;
-      ctx2.strokeStyle="#fff";
-      ctx2.lineWidth=2;
-      ctx2.beginPath();
-      ctx2.arc(pts[idx].x*dpr2, pts[idx].y*dpr2, 6, 0, Math.PI*2);
-      ctx2.fill();ctx2.stroke();
-      ctx2.restore();
-    },10);
   };
 }
 
