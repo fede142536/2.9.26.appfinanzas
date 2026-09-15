@@ -187,6 +187,24 @@ test("un nombre hostil no agrega atributos al elemento", ()=>{
   igual(JSON.parse(literal), hostil, "el nombre no llegó intacto al handler");
 });
 
+// Las pestañas comparten un solo scroll (son divs que se muestran/ocultan en el mismo
+// documento), así que entrar a "Cargar" arrastraba el scroll de la lista de movimientos y el
+// campo Importe quedaba arriba del borde de la pantalla.
+test("cambiar de pestaña vuelve el scroll arriba", async ()=>{
+  const txt=await (await fetch("js/movimientos.js")).text();
+  const cuerpo=txt.slice(txt.indexOf("function showPage("));
+  cierto(/window\.scrollTo\(0\s*,\s*0\)/.test(cuerpo.slice(0,700)),
+    "showPage() dejó de resetear el scroll: vas a entrar a Cargar con el scroll de la pantalla anterior");
+});
+
+test("tras guardar, el formulario vuelve arriba y no solo enfoca", async ()=>{
+  const txt=await (await fetch("js/form-cargar.js")).text();
+  const cuerpo=txt.slice(txt.indexOf("function resetForm("));
+  const sueltos=cuerpo.split("\n").filter(l=>/getElementById\([^)]+\)\.focus\(\)/.test(l));
+  igual(sueltos, [], "focus() solo no arrastra el scroll en el celular; usá enfocarCampoDeArriba()");
+  cierto(cuerpo.includes("enfocarCampoDeArriba("), "resetForm() ya no enfoca ningún campo");
+});
+
 test("no queda el escape viejo de comillas en ningún onclick", async ()=>{
   const archivos=["ahorros","cuentas-tarjetas-categorias","dashboard","movimientos","presupuestos","tarjetas-inversiones"];
   const malos=[];

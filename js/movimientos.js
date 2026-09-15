@@ -18,6 +18,11 @@ function toggleSideMenu(){
 }
 
 function showPage(id,btn){
+  // Todas las pestañas viven en el mismo documento (se muestran/ocultan con .active), así que
+  // comparten UN solo scroll. Sin esto, entrabas a "Cargar" con el scroll que traías de la
+  // lista de movimientos y el campo Importe quedaba arriba del borde de la pantalla: había que
+  // scrollear para arriba para escribir el monto. Cambiar de pestaña arranca siempre de cero.
+  window.scrollTo(0,0);
   document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
   document.getElementById("page-"+id).classList.add("active");
