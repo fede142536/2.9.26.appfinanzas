@@ -191,15 +191,6 @@ function renderTarjetas(){
   const hoyYM = currentYM();
   document.getElementById("tc-mes-label").textContent=mesLbl(ymSel);
 
-  // Activas/Completadas se calculan respecto a HOY (no al mes seleccionado)
-  // porque indican el estado real de la tarjeta, no si tenía actividad ese mes.
-  const activas = tcs.filter(t=>{
-    if(t.frecuente){
-      return !t.mesFin || t.mesFin>=hoyYM;
-    }
-    return t.mesInicio && addMonths(t.mesInicio, t.cuotasTotal-1) >= hoyYM;
-  });
-
   // ── BALANCE DEL MES SELECCIONADO ──
   const movsMes = getTcMovsEnMes(ymSel);
   const movsMesARS = movsMes.filter(m=>m.moneda!=="USD");
@@ -213,28 +204,9 @@ function renderTarjetas(){
     const key=`${m.tarjeta}|${m.moneda||"ARS"}`;
     porTarjeta[key] = (porTarjeta[key]||0) + m.importe;
   });
-  // Saldo pendiente (cuotas no terminadas, calculado al día de hoy) — separado por moneda
-  const saldoPendienteARS = activas.filter(t=>!t.frecuente && t.moneda!=="USD").reduce((acc,tc)=>{
-    const nActual = getCuotaEnMes(tc, hoyYM)||1;
-    const restantes = tc.cuotasTotal - nActual + 1;
-    return acc + (tc.total/tc.cuotasTotal)*Math.max(0,restantes);
-  },0);
-  const saldoPendienteUSD = activas.filter(t=>!t.frecuente && t.moneda==="USD").reduce((acc,tc)=>{
-    const nActual = getCuotaEnMes(tc, hoyYM)||1;
-    const restantes = tc.cuotasTotal - nActual + 1;
-    return acc + (tc.total/tc.cuotasTotal)*Math.max(0,restantes);
-  },0);
-
-  let chipsHTML=`<div class="chip"><div class="chip-label">Total ARS</div><div class="chip-val negative">${fmtTotal(totalMesARS)}</div></div>`;
-  if(totalMesUSD>0){
-    chipsHTML+=`<div class="chip"><div class="chip-label">Total USD</div><div class="chip-val negative">USD ${totalMesUSD.toFixed(2)}</div></div>`;
-  }
-  chipsHTML+=`<div class="chip"><div class="chip-label">Gastos</div><div class="chip-val warn">${cantidadMes}</div></div>`;
-  chipsHTML+=`<div class="chip"><div class="chip-label">Pendiente ARS</div><div class="chip-val negative">${fmtTotal(saldoPendienteARS)}</div></div>`;
-  if(saldoPendienteUSD>0){
-    chipsHTML+=`<div class="chip"><div class="chip-label">Pendiente USD</div><div class="chip-val negative">USD ${saldoPendienteUSD.toFixed(2)}</div></div>`;
-  }
-  document.getElementById("tc-summary").innerHTML=chipsHTML;
+  // La fila de chips de arriba (Total ARS/USD, Gastos, Pendiente ARS/USD) se sacó a pedido:
+  // repetía números que ya están en las dos cards. El total del mes y la cantidad de gastos
+  // los muestra "Balance del mes"; el total de lo que falta pagar, "Cuotas pendientes".
 
   // Card Balance del mes con desglose por tarjeta
   const balanceEl=document.getElementById("tc-balance");
