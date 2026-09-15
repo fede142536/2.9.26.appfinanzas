@@ -17,12 +17,20 @@ function toggleSideMenu(){
   if(abierto) closeSideMenu(); else openSideMenu();
 }
 
+// Todas las pestañas viven en el MISMO documento (son divs que se muestran y ocultan con la
+// clase .active), así que comparten UN solo scroll. Si no se toca, al cambiar de pestaña te
+// quedás con el scroll de la anterior: entrabas a "Cargar" a mitad del formulario y el campo
+// Importe quedaba arriba del borde de la pantalla.
+// Acá se guarda a mano dónde dejaste cada pestaña para reponerlo al volver.
+const scrollPorPagina={};
+// "cargar" es un formulario, no una lista: siempre se abre arriba de todo, con el Importe a
+// la vista. No tiene sentido devolverte al medio del formulario que ya guardaste.
+const PAGINAS_SIEMPRE_ARRIBA=["cargar"];
+
 function showPage(id,btn){
-  // Todas las pestañas viven en el mismo documento (se muestran/ocultan con .active), así que
-  // comparten UN solo scroll. Sin esto, entrabas a "Cargar" con el scroll que traías de la
-  // lista de movimientos y el campo Importe quedaba arriba del borde de la pantalla: había que
-  // scrollear para arriba para escribir el monto. Cambiar de pestaña arranca siempre de cero.
-  window.scrollTo(0,0);
+  // Anotar dónde queda la pestaña que estás dejando, antes de ocultarla.
+  const saliendo=document.querySelector(".page.active");
+  if(saliendo) scrollPorPagina[saliendo.id.replace(/^page-/,"")]=window.scrollY;
   document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
   document.getElementById("page-"+id).classList.add("active");
@@ -47,6 +55,10 @@ function showPage(id,btn){
   if(id==="import") renderImportHistory(); // liviano, y depende de importHistory (no cubierto por datosVersion)
   if(id==="config"){renderExportStats();renderCatManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderTarjetasManager();} // liviano
   if(["mov","dash","tc","inv","ahorro"].includes(id)) paginaVersionRenderizada[id]=datosVersion;
+  // Reponer el scroll AL FINAL, no antes: los render de arriba cambian el alto de la página y
+  // si se hace primero el navegador recorta la posición al alto viejo (más corto) y quedás
+  // más arriba de donde estabas.
+  window.scrollTo(0, PAGINAS_SIEMPRE_ARRIBA.includes(id) ? 0 : (scrollPorPagina[id]||0));
 }
 // El menú lateral ya no tiene botón para "Cargar" (ver punto 1) — showPage() ahora
 // acepta btn=null (ver el chequeo agregado ahí) para este caso.

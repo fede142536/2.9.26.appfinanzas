@@ -188,13 +188,27 @@ test("un nombre hostil no agrega atributos al elemento", ()=>{
 });
 
 // Las pestañas comparten un solo scroll (son divs que se muestran/ocultan en el mismo
-// documento), así que entrar a "Cargar" arrastraba el scroll de la lista de movimientos y el
-// campo Importe quedaba arriba del borde de la pantalla.
-test("cambiar de pestaña vuelve el scroll arriba", async ()=>{
+// documento). Cada una guarda el suyo para reponerlo al volver, menos "Cargar", que es un
+// formulario y siempre tiene que abrirse arriba, con el Importe a la vista.
+test("cada pestaña guarda y repone su propio scroll", async ()=>{
   const txt=await (await fetch("js/movimientos.js")).text();
   const cuerpo=txt.slice(txt.indexOf("function showPage("));
-  cierto(/window\.scrollTo\(0\s*,\s*0\)/.test(cuerpo.slice(0,700)),
-    "showPage() dejó de resetear el scroll: vas a entrar a Cargar con el scroll de la pantalla anterior");
+  cierto(/scrollPorPagina\[[^\]]+\]\s*=\s*window\.scrollY/.test(cuerpo),
+    "showPage() ya no anota dónde dejaste la pestaña que estás saliendo");
+  const reponer=cuerpo.split("\n").filter(l=>l.includes("window.scrollTo("));
+  cierto(reponer.some(l=>l.includes("scrollPorPagina[id]")),
+    "showPage() ya no repone el scroll guardado de la pestaña a la que entrás");
+});
+
+test('"Cargar" se abre siempre arriba, no donde lo dejaste', async ()=>{
+  const txt=await (await fetch("js/movimientos.js")).text();
+  const lista=txt.match(/PAGINAS_SIEMPRE_ARRIBA\s*=\s*\[([^\]]*)\]/);
+  cierto(lista, "desapareció PAGINAS_SIEMPRE_ARRIBA");
+  cierto(lista[1].includes('"cargar"'),
+    'el formulario de carga volvió a recordar su scroll: vas a entrar a mitad de camino');
+  const cuerpo=txt.slice(txt.indexOf("function showPage("));
+  cierto(cuerpo.includes("PAGINAS_SIEMPRE_ARRIBA.includes(id)"),
+    "showPage() ya no consulta la lista de pestañas que arrancan arriba");
 });
 
 test("tras guardar, el formulario vuelve arriba y no solo enfoca", async ()=>{
