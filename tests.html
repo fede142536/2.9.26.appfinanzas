@@ -380,14 +380,25 @@ test('no quedó ni el contenedor ni el render de "Activas"/"Completados"', async
   cierto(!/\bborrarTc\b/.test(js), 'quedó código muerto: borrarTc solo lo usaba Completados (Movimientos usa confirmarBorrarTc)');
 });
 
-// Sacar Activas no puede llevarse puestos los chips "Pendiente ARS"/"Pendiente USD" del
-// resumen, que salen de la MISMA lista `activas` (cuotas todavía no terminadas).
-test("el saldo pendiente del resumen sigue saliendo de las cuotas activas", async ()=>{
+// La fila de chips de arriba (Total ARS/USD, Gastos, Pendiente ARS/USD) también se sacó: cada
+// número que mostraba ya vive en una de las dos cards. Con ella se fueron `activas` y el
+// cálculo de saldo pendiente, que no alimentaban nada más.
+test("no quedó la fila de chips del resumen ni su cálculo", async ()=>{
   const js=await (await fetch("js/tarjetas-inversiones.js")).text();
-  cierto(js.includes("const activas = tcs.filter"), "se borró el cálculo de `activas`");
-  cierto(js.includes("saldoPendienteARS"), "se perdió el saldo pendiente en ARS");
-  cierto(js.includes("saldoPendienteUSD"), "se perdió el saldo pendiente en USD");
-  cierto(js.includes("Pendiente ARS"), 'se perdió el chip "Pendiente ARS" del resumen');
+  const html=await (await fetch("index.html")).text();
+  cierto(!html.includes('id="tc-summary"'), "volvió la fila de chips al HTML");
+  cierto(!js.includes("tc-summary"), "volvió el armado de los chips del resumen");
+  cierto(!js.includes("saldoPendiente"), "quedó código muerto: el saldo pendiente solo alimentaba los chips");
+  cierto(!/\bconst activas\b/.test(js), "quedó código muerto: `activas` solo alimentaba el saldo pendiente");
+});
+
+// Lo que los chips decían tiene que seguir estando, pero dentro de las cards: el total del mes
+// y la cantidad de gastos en "Balance del mes", el total de lo que falta en "Cuotas pendientes".
+test("los números que mostraban los chips siguen dentro de las cards", async ()=>{
+  const js=await (await fetch("js/tarjetas-inversiones.js")).text();
+  cierto(js.includes("A pagar este mes"), 'se perdió el total del mes en "Balance del mes"');
+  cierto(js.includes('cantidadMes===1?"gasto":"gastos"'), 'se perdió la cantidad de gastos en "Balance del mes"');
+  cierto(js.includes("en total"), 'se perdió el total pendiente en "Cuotas pendientes"');
 });
 
 // Sin "Completados", Movimientos es el ÚNICO lugar desde donde se puede editar o borrar una
