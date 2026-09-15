@@ -201,10 +201,17 @@ function _dialogoValorCancelado(){
   return undefined;
 }
 
+let _dialogoFocusTimer=null;
+
 function _dialogoCerrar(valor){
   const ov=document.getElementById("modal-dialogo");
   if(ov) ov.classList.remove("open");
   document.removeEventListener("keydown", _dialogoTecla);
+  // Si el diálogo se cierra antes de que pasen los 250ms de abajo, ese timer todavía no
+  // disparó. Sin cancelarlo, el input del diálogo YA CERRADO recibía foco y selección solo
+  // medio segundo después: en el celular eso podía levantar el teclado de nuevo justo
+  // después de que el usuario había cancelado.
+  if(_dialogoFocusTimer){ clearTimeout(_dialogoFocusTimer); _dialogoFocusTimer=null; }
   const r=_dialogo.resolver;
   _dialogo.resolver=null;
   if(r) r(valor);
@@ -268,7 +275,8 @@ function _dialogoAbrir(opts){
   document.addEventListener("keydown", _dialogoTecla);
   // El foco va después de la animación de entrada del modal (250ms): en el celular es lo
   // que levanta el teclado sin que el modal "salte" mientras se está moviendo.
-  if(opts.tipo==="prompt") setTimeout(()=>{ input.focus(); input.select(); }, 250);
+  if(_dialogoFocusTimer) clearTimeout(_dialogoFocusTimer);
+  if(opts.tipo==="prompt") _dialogoFocusTimer=setTimeout(()=>{ input.focus(); input.select(); }, 250);
 
   return new Promise(resolve=>{ _dialogo.resolver=resolve; });
 }

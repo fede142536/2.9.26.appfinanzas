@@ -140,22 +140,75 @@ document.addEventListener("visibilitychange", ()=>{
   if(document.visibilityState==="hidden") flushGuardadoPendiente();
 });
 
+// Nombres legibles para el aviso al usuario si una clave sale corrupta. En español, porque
+// es lo único de esto que el usuario llega a ver.
+const NOMBRE_CLAVE_DATOS={
+  fmovs3:"tus movimientos", ftcs3:"tus tarjetas", fcustom3:"tus categorías personalizadas",
+  fmetas:"tus metas de ahorro", fimphist3:"tu historial de importaciones",
+  fcatorder:"el orden de tus categorías", fpresup:"tus presupuestos",
+  fcuentas:"tus cuentas", ftarjetas:"tus tarjetas guardadas", ficons:"tus íconos personalizados"
+};
+
+// Parsea un valor guardado por la propia app sin dejar que uno corrupto tire abajo el resto
+// del arranque. Antes, un JSON.parse roto en loadSensitiveIntoMemory() —JSON inválido, o un
+// tipo que cambió de forma, por ejemplo "fmovs3" con un objeto en vez de una lista— cortaba
+// la función a la mitad: todo lo que venía DESPUÉS se quedaba sin cargar (tcs, presupuestos,
+// cuentas...) y la app se veía completamente vacía, sin ningún aviso de qué pasó.
+//   - `tipo` es "array" u "object": si el JSON parsea pero no tiene esa forma, también se
+//     trata como corrupto (fmovs3 pisado con "{}" rompía renderMovs() con un TypeError,
+//     "movs.forEach is not a function").
+//   - Nunca tira: si algo falla, lo anota en datosCorruptosAlArrancar y devuelve el valor
+//     por defecto, para que la clave siguiente se siga cargando bien.
+//   - A propósito NO reescribe la clave en localStorage ni en el sobre cifrado: si el dato
+//     original todavía está ahí (aunque roto), sigue disponible para recuperarlo a mano en
+//     vez de perderse apenas arranca la app. Recién se pisa si el usuario sigue usando la
+//     app y algo la guarda de nuevo — igual que pasaría con cualquier dato nuevo.
+let datosCorruptosAlArrancar=[];
+function leerJSONSeguro(clave, defaultJSON, tipo){
+  const crudo=getSensitiveRaw(clave, defaultJSON);
+  let valor;
+  try{ valor=JSON.parse(crudo); }catch(e){ valor=undefined; }
+  const formaOk = tipo==="array" ? Array.isArray(valor)
+    : (valor!==null && typeof valor==="object" && !Array.isArray(valor));
+  if(formaOk) return valor;
+  datosCorruptosAlArrancar.push(clave);
+  return JSON.parse(defaultJSON);
+}
+
 // Puebla las variables globales en memoria (movs, tcs, custom, etc.) con los datos reales:
 // en claro si el cifrado no está activo, o desde encCache (ya descifrado por checkPin) si
 // lo está. Se llama desde bootApp() DESPUÉS de que checkLock() resuelve — es decir, después
 // de que no hace falta PIN, o de que el PIN correcto ya fue ingresado y descifrado.
 function loadSensitiveIntoMemory(){
-  movs = JSON.parse(getSensitiveRaw("fmovs3","[]"));
-  tcs = JSON.parse(getSensitiveRaw("ftcs3","[]"));
-  custom = JSON.parse(getSensitiveRaw("fcustom3",'{"Gasto":{},"Ingreso":{},"Inversion":{},"Tarjeta":{}}'));
+  datosCorruptosAlArrancar=[];
+  movs = leerJSONSeguro("fmovs3","[]","array");
+  tcs = leerJSONSeguro("ftcs3","[]","array");
+  custom = leerJSONSeguro("fcustom3",'{"Gasto":{},"Ingreso":{},"Inversion":{},"Tarjeta":{}}',"object");
   if(!custom.Tarjeta) custom.Tarjeta={};
-  metas = JSON.parse(getSensitiveRaw("fmetas","[]"));
-  importHistory = JSON.parse(getSensitiveRaw("fimphist3","[]"));
-  catOrder = JSON.parse(getSensitiveRaw("fcatorder","{}"));
-  presupuestos = JSON.parse(getSensitiveRaw("fpresup","{}"));
-  cuentasCustom = JSON.parse(getSensitiveRaw("fcuentas","[]"));
-  tarjetasCustom = JSON.parse(getSensitiveRaw("ftarjetas","[]"));
-  iconsCustom = JSON.parse(getSensitiveRaw("ficons","{}"));
+  metas = leerJSONSeguro("fmetas","[]","array");
+  importHistory = leerJSONSeguro("fimphist3","[]","array");
+  catOrder = leerJSONSeguro("fcatorder","{}","object");
+  presupuestos = leerJSONSeguro("fpresup","{}","object");
+  cuentasCustom = leerJSONSeguro("fcuentas","[]","array");
+  tarjetasCustom = leerJSONSeguro("ftarjetas","[]","array");
+  iconsCustom = leerJSONSeguro("ficons","{}","object");
+  if(datosCorruptosAlArrancar.length) avisarDatosCorruptos(datosCorruptosAlArrancar);
+}
+
+// Aviso post-arranque: reusa el banner de error global (el mismo que atrapa cualquier
+// excepción no manejada) en vez de inventar otra UI. Se llama con un delay corto para no
+// competir con el primer render de la pantalla.
+function avisarDatosCorruptos(claves){
+  const nombres=claves.map(k=>NOMBRE_CLAVE_DATOS[k]||k).join(", ");
+  setTimeout(()=>{
+    mostrarErrorGlobal(
+      `No se pudieron leer ${nombres}. Se muestran vacíos por ahora.`,
+      `Claves afectadas: ${claves.join(", ")}\n\n` +
+      `Los datos guardados no se borraron: siguen en el dispositivo tal cual estaban. ` +
+      `Si tenés un backup exportado, podés restaurarlo desde Configuración. ` +
+      `Si el problema persiste, copiá este detalle y compartilo para poder ayudarte.`
+    );
+  }, 400);
 }
 
 // ═══════════════════════════════════════════

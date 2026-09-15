@@ -172,13 +172,19 @@ function migrateStorage(){
   // (Se usa localStorage.getItem directo en vez de isEncActive() porque esta función
   // corre antes de que se cargue el módulo de cifrado — ver js/seguridad-pin.js.)
   if(localStorage.getItem("fencblob") || localStorage.getItem("fencsalt")) return;
-  const oldKeys = ["fmovs2","fmovs","ftcs2","ftcs"];
   const oldMovs = localStorage.getItem("fmovs2")||localStorage.getItem("fmovs")||"[]";
-  const oldTcs  = localStorage.getItem("ftcs2") ||localStorage.getItem("ftcs") ||"[]";
-  const existing = JSON.parse(localStorage.getItem("fmovs3")||"[]");
+  // Esta función es la PRIMERA línea que corre en el PRIMER script que carga la app (ver el
+  // migrateStorage() suelto, dos líneas más abajo). Un throw acá corta la ejecución de este
+  // archivo a la mitad: todo lo que viene después —cientos de funciones y variables, incluida
+  // "let movs"— queda sin declarar. Reproducido con una clave vieja ("fmovs") corrupta de una
+  // versión anterior: la app quedaba en blanco, sin pantalla de PIN ni nada, con
+  // "Cannot access 'movs' before initialization" en la consola.
+  let existing, migrated;
+  try{ existing = JSON.parse(localStorage.getItem("fmovs3")||"[]"); }catch(e){ existing=[]; }
+  if(!Array.isArray(existing)) existing=[];
   if(!existing.length){
-    const migrated = JSON.parse(oldMovs);
-    if(migrated.length){
+    try{ migrated = JSON.parse(oldMovs); }catch(e){ migrated=[]; }
+    if(Array.isArray(migrated) && migrated.length){
       localStorage.setItem("fmovs3", oldMovs);
       console.log("Migrated", migrated.length, "movs from old key");
     }

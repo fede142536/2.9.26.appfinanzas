@@ -53,6 +53,24 @@ function deflactarARS(monto, ymOrigen, ymDestino){
   return Math.round(monto*factor*100)/100;
 }
 
+// deflactarARS() trata cada mes SIN dato como 0% de inflación, así que con la tabla
+// incompleta (hoy solo hay 4 meses cargados) el resultado no subestima un poco: se queda
+// muy corto. Ejemplo real, un año con inflación real del 100%: la app mostraba "▲ 84%" para
+// un gasto que en términos reales fue IDÉNTICO al del año pasado.
+// Esta función dice si el tramo ymOrigen→ymDestino tiene TODOS los meses cargados. Se usa
+// para no mostrar ningún porcentaje cuando el ajuste no es confiable — es mejor no decir
+// nada que mostrar un número que parece preciso y no lo es.
+function inflacionCompleta(ymOrigen, ymDestino){
+  if(!ymOrigen || !ymDestino || ymOrigen>=ymDestino) return true;
+  let ym=ymOrigen, guard=0;
+  while(ym<ymDestino && guard<600){
+    guard++;
+    ym=addMonths(ym,1);
+    if(INFLACION_MENSUAL_ARS[ym]===undefined) return false;
+  }
+  return true;
+}
+
 function getDashData(year){
   // Merge: historical hardcoded data + live imported movs
   const yrStr = String(year);
@@ -169,12 +187,15 @@ function renderDashYear(){
   const yearPrev=String(parseInt(dashYear)-1);
   const {cats: catDataPrev}=getDashData(yearPrev);
   const hayGastosAnioAnterior=Object.keys(catDataPrev).length>0;
+  // Un solo cálculo para las 10 categorías: el tramo a deflactar es siempre el mismo
+  // (mitad de un año a mitad del otro), así que alcanza o falta dato para todas por igual.
+  const inflacionOk=inflacionCompleta(yearPrev+"-07", dashYear+"-07");
   document.getElementById("dash-bars-gasto").innerHTML=sorted.length
     ? sorted.slice(0,10).map(([cat,val])=>{
         // Deflactamos el año anterior a valor presente (ancla: mitad de cada año) antes de
         // comparar, así el % no confunde inflación con gasto real — ver INFLACION_MENSUAL_ARS.
         const valPrev=deflactarARS(catDataPrev[cat]||0, yearPrev+"-07", dashYear+"-07");
-        const comp=compAnioAnterior(val, valPrev, hayGastosAnioAnterior, false);
+        const comp=compAnioAnterior(val, valPrev, hayGastosAnioAnterior, false, inflacionOk);
         return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail(${attrJS(cat)})">
           <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxVal*100)}%;background:#a32d2d"></div></div>
@@ -187,11 +208,14 @@ function renderDashYear(){
   const maxValIng=sortedIng[0]?sortedIng[0][1]:1;
   const catIngresoPrev=getDashData(yearPrev).catsIngreso||{};
   const hayIngresosAnioAnterior=Object.keys(catIngresoPrev).length>0;
+  // Mismo tramo que arriba: mismo resultado. Se recalcula (es barato) para no acoplar
+  // esta sección a una variable de la de gastos.
+  const inflacionOkIng=inflacionCompleta(yearPrev+"-07", dashYear+"-07");
   document.getElementById("dash-bars-ingreso").innerHTML=sortedIng.length
     ? sortedIng.slice(0,10).map(([cat,val])=>{
         const valPrev=deflactarARS(catIngresoPrev[cat]||0, yearPrev+"-07", dashYear+"-07");
         // En ingresos subir es bueno, al revés que en gastos.
-        const comp=compAnioAnterior(val, valPrev, hayIngresosAnioAnterior, true);
+        const comp=compAnioAnterior(val, valPrev, hayIngresosAnioAnterior, true, inflacionOkIng);
         return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail(${attrJS(cat)},'Ingreso')">
           <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
           <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxValIng*100)}%;background:#2d7a3a"></div></div>
@@ -206,8 +230,14 @@ function renderDashYear(){
 // "nuevo" solo tiene sentido si HAY un año anterior con datos: durante el primer año de uso
 // salía en todas las categorías a la vez, así que no informaba nada — solo hacía ruido.
 // `bueno` dice de qué color pintar una suba: en gastos subir es malo, en ingresos es bueno.
-function compAnioAnterior(val, valPrev, hayAnioAnterior, subirEsBueno){
+// `datosInflacionCompletos` viene de inflacionCompleta(): si falta algún mes en la tabla de
+// INFLACION_MENSUAL_ARS, el valor deflactado subestima la inflación real y el % que saldría
+// de compararlo puede estar muy lejos de la realidad (visto: "▲ 84%" para un gasto que en
+// términos reales fue igual al del año pasado). Mejor no mostrar nada que mostrar un número
+// que parece preciso y no lo es.
+function compAnioAnterior(val, valPrev, hayAnioAnterior, subirEsBueno, datosInflacionCompletos){
   if(valPrev>0){
+    if(!datosInflacionCompletos) return "";
     const pct=Math.round((val-valPrev)/valPrev*100);
     if(Math.abs(pct)<5) return "";   // ruido: no vale la pena mostrarlo
     const sube=pct>0;

@@ -292,6 +292,61 @@ test("totalesDePlata tolera una lista vacía", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// INFLACIÓN (comparativa año a año del Dashboard)
+// ═══════════════════════════════════════════
+grupo("Inflación");
+
+// INFLACION_MENSUAL_ARS hoy solo tiene 4 meses cargados a propósito (ver el comentario en
+// dashboard.js): son los únicos verificados. Este test no depende de CUÁLES meses estén,
+// solo de que la tabla siga incompleta — si algún día se completa del todo, hay que revisar
+// este test junto con el resto de la lógica de "no mostrar el %".
+test("la tabla de inflación sigue incompleta (documenta el estado real)", ()=>{
+  cierto(Object.keys(INFLACION_MENSUAL_ARS).length < 24,
+    "si ya se cargaron 24+ meses seguidos, revisar si sigue haciendo falta ocultar el %");
+});
+
+test("inflacionCompleta detecta un tramo con meses sin cargar", ()=>{
+  // 2025-07 → 2026-07: con la tabla actual, quedan meses sin dato en el medio.
+  cierto(!inflacionCompleta("2025-07","2026-07"), "el tramo real (con huecos) debería dar incompleto");
+});
+
+test("inflacionCompleta no rechaza un tramo cuyo único mes SÍ está cargado", ()=>{
+  cierto(inflacionCompleta("2026-06","2026-07"), "2026-07 está en la tabla: el tramo tiene que darse por completo");
+});
+
+test("inflacionCompleta no explota con un rango vacío o invertido", ()=>{
+  igual(inflacionCompleta("2026-07","2026-07"), true);
+  igual(inflacionCompleta("2026-07","2026-01"), true, "origen>=destino no tiene meses que chequear");
+  igual(inflacionCompleta("","2026-07"), true);
+});
+
+// Este es EL bug: con la tabla incompleta, deflactarARS() trata cada mes sin dato como 0% y
+// el resultado subestima mucho la inflación real. Comparado con un gasto que en TÉRMINOS
+// REALES fue idéntico, la app mostraba "▲ 84%" en vez de no mostrar nada.
+test("sin datos de inflación completos, no se muestra ningún porcentaje", ()=>{
+  // 50% de diferencia nominal: sin el guard esto SÍ generaría un badge (el umbral de ruido
+  // es 5%), así que si el guard desaparece este test lo detecta.
+  const r=compAnioAnterior(1500000, 1000000, true, false, /*datosInflacionCompletos*/ false);
+  igual(r, "", "con datos incompletos no hay que mostrar ningún % (podría estar muy lejos de la realidad)");
+});
+
+test("con datos de inflación completos, el porcentaje SÍ se muestra", ()=>{
+  const r=compAnioAnterior(1500000, 1000000, true, false, true);
+  cierto(r.includes("50%"), "con datos completos y una diferencia real, el % tiene que aparecer: "+r);
+});
+
+test("el umbral de ruido (<5%) sigue aplicando con datos completos", ()=>{
+  const r=compAnioAnterior(1020000, 1000000, true, false, true);
+  igual(r, "", "una diferencia de 2% es ruido, no debería mostrarse aunque los datos estén completos");
+});
+
+test('"nuevo" no depende de si hay datos de inflación', ()=>{
+  // val>0, valPrev=0 (no existía el año pasado): tiene que decir "nuevo" haya o no datos.
+  const r=compAnioAnterior(500000, 0, true, false, false);
+  cierto(r.includes("nuevo"), '"nuevo" no puede depender de la tabla de inflación');
+});
+
+// ═══════════════════════════════════════════
 // CUOTAS PENDIENTES (TARJETAS)
 // ═══════════════════════════════════════════
 grupo("Cuotas pendientes");
@@ -823,6 +878,16 @@ test("mostrarPrompt cancelado devuelve null, como el nativo", async ()=>{
   igual(await p, null);
 });
 
+// El foco del prompt se da después de 250ms (para no pelear con la animación de entrada).
+// Si el diálogo se cancela ANTES de eso, ese timer seguía vivo y tocaba el input del diálogo
+// ya cerrado medio segundo más tarde: foco y selección "solos" sin que nadie los pidiera.
+test("cancelar un prompt YA cancela el foco tardío pendiente", async ()=>{
+  const p=mostrarPrompt("¿test?");
+  _dialogoCancelar();
+  await p;
+  cierto(_dialogoFocusTimer===null, "quedó un timer de foco vivo después de cerrar el diálogo");
+});
+
 // ═══════════════════════════════════════════
 // ACCESIBILIDAD
 // ═══════════════════════════════════════════
@@ -880,6 +945,106 @@ test("styles.css no tiene etiquetas HTML sueltas", async ()=>{
   const css=await (await fetch("styles.css")).text();
   const sueltas=(css.match(/<\/?(style|script|html|head|body)\b[^>]*>/gi)||[]);
   igual(sueltas, [], "quedó HTML dentro del archivo CSS");
+});
+
+// ═══════════════════════════════════════════
+// ROBUSTEZ DE DATOS GUARDADOS
+// ═══════════════════════════════════════════
+grupo("Robustez de datos guardados");
+
+// Guarda y restaura las variables globales de datos, para no ensuciar el resto de los tests
+// que corren después de este grupo (muchos asumen que movs/tcs/etc siguen como al principio).
+// Async y con await adentro: si no se espera a que fn() termine, la restauración corre
+// apenas empieza un test asíncrono (en su primer await) y no al final, dejando el estado
+// real a mitad de camino mientras el test todavía sigue corriendo.
+async function conDatosGuardados(fn){
+  const antes={movs, tcs, custom, metas, importHistory, catOrder, presupuestos,
+    cuentasCustom, tarjetasCustom, iconsCustom, datosCorruptosAlArrancar};
+  try { return await fn(); }
+  finally {
+    movs=antes.movs; tcs=antes.tcs; custom=antes.custom; metas=antes.metas;
+    importHistory=antes.importHistory; catOrder=antes.catOrder; presupuestos=antes.presupuestos;
+    cuentasCustom=antes.cuentasCustom; tarjetasCustom=antes.tarjetasCustom;
+    iconsCustom=antes.iconsCustom; datosCorruptosAlArrancar=antes.datosCorruptosAlArrancar;
+  }
+}
+
+test("leerJSONSeguro devuelve el valor cuando el JSON es válido y tiene la forma esperada", ()=>{
+  localStorage.setItem("__test_ok", JSON.stringify([1,2,3]));
+  igual(leerJSONSeguro("__test_ok","[]","array"), [1,2,3]);
+  localStorage.removeItem("__test_ok");
+});
+
+test("leerJSONSeguro cae al default con JSON inválido, sin tirar", ()=>{
+  localStorage.setItem("__test_roto", "{esto no es json");
+  datosCorruptosAlArrancar=[];
+  igual(leerJSONSeguro("__test_roto","[]","array"), []);
+  igual(datosCorruptosAlArrancar, ["__test_roto"], "tiene que quedar registrado que esta clave falló");
+  localStorage.removeItem("__test_roto");
+});
+
+// fmovs3 pisado con un objeto en vez de una lista rompía renderMovs() más adelante con
+// "movs.forEach is not a function": el JSON.parse no fallaba, pero la FORMA sí estaba mal.
+test("leerJSONSeguro cae al default cuando el JSON no tiene la forma esperada", ()=>{
+  localStorage.setItem("__test_forma", JSON.stringify({a:1}));
+  datosCorruptosAlArrancar=[];
+  igual(leerJSONSeguro("__test_forma","[]","array"), [], "un objeto donde se esperaba una lista tiene que caer al default");
+  igual(datosCorruptosAlArrancar, ["__test_forma"]);
+  localStorage.removeItem("__test_forma");
+});
+
+test("leerJSONSeguro no reescribe la clave original al fallar", ()=>{
+  localStorage.setItem("__test_intacto", "esto sigue roto");
+  leerJSONSeguro("__test_intacto","[]","array");
+  igual(localStorage.getItem("__test_intacto"), "esto sigue roto",
+    "el dato original no debería tocarse: podría ser recuperable a mano más adelante");
+  localStorage.removeItem("__test_intacto");
+});
+
+// Antes, un solo JSON.parse roto cortaba loadSensitiveIntoMemory() a la mitad: todo lo que
+// venía DESPUÉS en la función (tcs, presupuestos, cuentas...) se quedaba sin cargar y la app
+// se veía completamente vacía.
+test("un movimiento corrupto no vacía toda la app: el resto de las claves carga bien", ()=>conDatosGuardados(()=>{
+  limpiarEstadoCifrado();
+  localStorage.setItem("fmovs3", "{esto no es json valido");
+  localStorage.setItem("fpresup", JSON.stringify({Comida:100}));
+  loadSensitiveIntoMemory();
+  igual(movs, [], "fmovs3 corrupto debería caer a una lista vacía, no tirar");
+  igual(presupuestos, {Comida:100}, "una clave sana no tendría que verse afectada por otra corrupta");
+  cierto(datosCorruptosAlArrancar.includes("fmovs3"), "tiene que quedar registrado qué clave falló");
+  localStorage.removeItem("fmovs3"); localStorage.removeItem("fpresup");
+}));
+
+test("fmovs3 con la forma equivocada (objeto en vez de lista) no rompe el resto", ()=>conDatosGuardados(()=>{
+  limpiarEstadoCifrado();
+  localStorage.setItem("fmovs3", JSON.stringify({a:1}));
+  loadSensitiveIntoMemory();
+  igual(movs, [], "un objeto donde se esperaba una lista tiene que caer al default, no tirar 'forEach is not a function'");
+  localStorage.removeItem("fmovs3");
+}));
+
+test("una clave corrupta avisa al usuario con el banner de error", ()=>conDatosGuardados(async ()=>{
+  limpiarEstadoCifrado();
+  localStorage.setItem("fmovs3", "{esto no es json valido");
+  loadSensitiveIntoMemory();
+  await new Promise(r=>setTimeout(r, 550));
+  cierto(_ultimoError.includes("tus movimientos"),
+    "el aviso debería usar el nombre legible de la clave, no la clave interna (\"fmovs3\")");
+  localStorage.removeItem("fmovs3");
+}));
+
+// migrateStorage() corre en la primera línea del primer script que carga la app. Un throw ahí
+// corta la ejecución de TODO el resto del archivo: cientos de funciones y variables —incluida
+// "let movs"— quedan sin declarar, y la app queda en blanco sin llegar ni a la pantalla del PIN.
+test("migrateStorage no tira con una clave legacy corrupta", ()=>{
+  const fmovs3Previo=localStorage.getItem("fmovs3");
+  localStorage.removeItem("fmovs3");
+  localStorage.setItem("fmovs", "{esto tampoco es json");
+  let fallo=false;
+  try{ migrateStorage(); }catch(e){ fallo=true; }
+  cierto(!fallo, "migrateStorage() no puede tirar: rompe todo lo que se define después en el archivo");
+  localStorage.removeItem("fmovs");
+  if(fmovs3Previo!==null) localStorage.setItem("fmovs3", fmovs3Previo);
 });
 
 // ═══════════════════════════════════════════
