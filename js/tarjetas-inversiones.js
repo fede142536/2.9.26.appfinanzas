@@ -294,19 +294,16 @@ function renderTarjetas(){
   if(!activas.length){actEl.innerHTML=`<div class="empty"><div class="empty-icon">✓</div>Sin cuotas activas</div>`;}
   else actEl.innerHTML=activas.map(t=>{
     if(t.frecuente){
-      // Card para gasto frecuente
+      // Card para gasto frecuente: solo los números (monto, meses activos, total pagado,
+      // vigencia). Se sacó el historial de aumentos, la mini-proyección de meses y los
+      // botones de editar/borrar a pedido: la
+      // proyección mes a mes ya vive en su propia card (renderTcPendientes) y quedaba
+      // duplicada acá. Sin botones, esta card queda de solo lectura: editar o borrar un
+      // gasto frecuente activo no es posible desde ningún lugar de la app por ahora.
       const montoActual=getMontoEnMes(t,hoyYM);
       const mesesActivos=getCuotaEnMes(t,hoyYM)||0;
       const totalPagado=calcTotalFrecuente(t,t.mesInicio,hoyYM);
       const finTxt=t.mesFin?`Hasta ${mesLbl(t.mesFin)}`:"Sin fecha de fin";
-      // Próximos 6 meses
-      const proyeccion=[];
-      for(let i=0;i<6;i++){
-        const ym=addMonths(hoyYM,i);
-        if(getCuotaEnMes(t,ym)>0){
-          proyeccion.push({ym, monto: getMontoEnMes(t,ym), esActual: i===0});
-        }
-      }
       return `<div class="tc-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
           <div class="u-flex1 u-min0">
@@ -319,42 +316,17 @@ function renderTarjetas(){
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Meses activos</span><strong>${mesesActivos}</strong></div>
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Total pagado</span><strong>${fmtMoneda(totalPagado,t.moneda)}</strong></div>
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Vigencia</span><strong>${finTxt}</strong></div>
-        ${Array.isArray(t.cambios)&&t.cambios.length?`
-          <div style="margin-top:10px;font-size:11px;color:var(--muted)">
-            <strong class="u-upper">Aumentos</strong>
-            ${t.cambios.sort((a,b)=>a.desde.localeCompare(b.desde)).map(c=>`
-              <div style="margin-top:3px">${mesLbl(c.desde)}: ${fmtMoneda(c.monto,t.moneda)}</div>
-            `).join("")}
-          </div>`:""}
-        ${proyeccion.length>1?`
-        <div style="margin-top:12px">
-          <div class="seccion-label mb-6">Próximos meses</div>
-          <div class="hscroll" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none">
-            ${proyeccion.map(p=>`
-              <div class="hscroll-item" style="flex-shrink:0;text-align:center;background:${p.esActual?"var(--warning-light)":"var(--bg)"};border:1px solid ${p.esActual?"var(--warning)":"var(--border)"};border-radius:8px;padding:6px 10px">
-                <div class="txt-micro txt-muted">${mesLbl(p.ym).slice(0,3)}</div>
-                <div style="font-size:11px;font-weight:600;color:${p.esActual?"var(--warning)":"var(--text)"};margin-top:2px">${t.moneda==="USD"?"USD "+p.monto.toFixed(2):fmtS(p.monto)}</div>
-              </div>`).join("")}
-          </div>
-        </div>`:""}
-        <div style="display:flex;gap:6px;margin-top:10px">
-          <button class="btn-sm u-flex1" onclick="openEditTcModal(${t.id})">✎ Editar / Aumento</button>
-          <button class="btn-sm" style="color:var(--danger);flex:1" onclick="borrarTc(${t.id})">Eliminar</button>
-        </div>
       </div>`;
     }
-    // Card para cuotas
+    // Card para cuotas: los balances (por cuota, total, pendiente, última cuota) más la
+    // barra de progreso y "N pagadas / M restantes". Se sacó la mini-proyección de cuotas (duplicaba
+    // la card de Cuotas pendientes) y Editar/Eliminar a pedido — mismo trade-off que arriba:
+    // una compra en cuotas activa no se puede editar ni borrar desde ningún otro lugar.
     const vc=Math.round(t.total/t.cuotasTotal*100)/100;
     const nActual=getCuotaEnMes(t,hoyYM)||1;
     const restantes=t.cuotasTotal-nActual+1;
     const pct=Math.round((nActual-1)/t.cuotasTotal*100);
     const mesUltima=addMonths(t.mesInicio,t.cuotasTotal-1);
-    const proyeccion=[];
-    for(let i=0;i<6;i++){
-      const ym=addMonths(hoyYM,i);
-      const nc=getCuotaEnMes(t,ym);
-      if(nc>0) proyeccion.push({ym,nc});
-    }
     return `<div class="tc-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div class="u-flex1 u-min0">
@@ -369,22 +341,6 @@ function renderTarjetas(){
       <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Última cuota</span><strong>${mesLbl(mesUltima)}</strong></div>
       <div class="tc-progress" style="margin-top:10px"><div class="tc-progress-fill" style="width:${pct}%"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px"><span>${nActual-1} pagadas</span><span>${restantes} restantes</span></div>
-      ${proyeccion.length>1?`
-      <div style="margin-top:12px">
-        <div class="seccion-label mb-6">Próximas cuotas</div>
-        <div class="hscroll" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none">
-          ${proyeccion.map(p=>`
-            <div class="hscroll-item" style="flex-shrink:0;text-align:center;background:${p.nc===nActual?"var(--warning-light)":"var(--bg)"};border:1px solid ${p.nc===nActual?"var(--warning)":"var(--border)"};border-radius:8px;padding:6px 10px">
-              <div class="txt-micro txt-muted">${mesLbl(p.ym).slice(0,3)}</div>
-              <div style="font-size:12px;font-weight:600;color:${p.nc===nActual?"var(--warning)":"var(--text)"}">${p.nc}</div>
-              <div class="txt-micro txt-muted">${t.moneda==="USD"?"USD "+vc.toFixed(2):fmtS(vc)}</div>
-            </div>`).join("")}
-        </div>
-      </div>`:""}
-      <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn-sm u-flex1" onclick="openEditTcModal(${t.id})">✎ Editar</button>
-        <button class="btn-sm" style="color:var(--danger);flex:1" onclick="borrarTc(${t.id})">Eliminar</button>
-      </div>
     </div>`;
   }).join("");
 

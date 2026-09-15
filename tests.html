@@ -347,6 +347,44 @@ test('"nuevo" no depende de si hay datos de inflación', ()=>{
 });
 
 // ═══════════════════════════════════════════
+// TARJETAS: CARD "ACTIVAS" SOLO DE LECTURA
+// ═══════════════════════════════════════════
+grupo("Tarjetas: activas de solo lectura");
+
+// La sección "Activas" de Tarjetas se achicó a solo balances y progreso, a pedido: se sacaron
+// "Próximas cuotas"/"Próximos meses" (duplicaban la card de Cuotas pendientes), "Aumentos" y
+// los botones Editar/Eliminar. Se prueba mirando el CÓDIGO FUENTE (no el DOM: en tests.html
+// document.getElementById() devuelve un <div> descartable nuevo en cada llamada, así que leer
+// de vuelta lo que renderTarjetas() escribió no es confiable) — pero acotado al tramo que arma
+// esas cards puntuales, para no confundirlo con "Completados", que sigue teniendo sus botones.
+test('la card "Activas" no tiene Editar/Eliminar ni "Próximas cuotas"', async ()=>{
+  const txt=await (await fetch("js/tarjetas-inversiones.js")).text();
+  const inicio=txt.indexOf('const actEl=document.getElementById("tc-activas")');
+  const fin=txt.indexOf('// ── COMPLETAS');
+  cierto(inicio>=0 && fin>inicio, "no se encontró el tramo que arma las cards de Activas");
+  const tramo=txt.slice(inicio,fin);
+  cierto(!tramo.includes("openEditTcModal("), 'volvió el botón "Editar" a una card activa');
+  cierto(!tramo.includes("borrarTc("), 'volvió el botón "Eliminar" a una card activa');
+  cierto(!tramo.includes("Próximas cuotas"), 'volvió el bloque de próximas cuotas (duplica la card de Cuotas pendientes)');
+  cierto(!tramo.includes("Próximos meses"), 'volvió el bloque de próximos meses del gasto frecuente');
+  cierto(!tramo.includes("Aumentos"), 'volvió el historial de aumentos a la card de gasto frecuente');
+  // Lo que SÍ tiene que seguir: los balances y "N pagadas / M restantes".
+  cierto(tramo.includes("Saldo pendiente"), "se perdió el balance de saldo pendiente");
+  cierto(tramo.includes("restantes"), 'se perdió el contador de cuotas restantes ("N pagadas / M restantes")');
+});
+
+// borrarTc/openEditTcModal siguen existiendo — "Completados" los sigue usando — así que no
+// alcanza con que hayan desaparecido del archivo entero.
+test('"Completados" conserva Editar/Eliminar (no se tocó esa sección)', async ()=>{
+  const txt=await (await fetch("js/tarjetas-inversiones.js")).text();
+  const inicio=txt.indexOf('// ── COMPLETAS');
+  cierto(inicio>=0, "no se encontró la sección de Completados");
+  const tramo=txt.slice(inicio, inicio+1500);
+  cierto(tramo.includes("openEditTcModal("), '"Completados" perdió el botón Editar');
+  cierto(tramo.includes("borrarTc("), '"Completados" perdió el botón Eliminar');
+});
+
+// ═══════════════════════════════════════════
 // CUOTAS PENDIENTES (TARJETAS)
 // ═══════════════════════════════════════════
 grupo("Cuotas pendientes");
