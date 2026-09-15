@@ -319,6 +319,75 @@ function exportarDatosBI(){
   showToast(`✓ CSV para BI exportado · ${filas.length} filas`);
 }
 
+// ═══════════════════════════════════════════
+// RECORDATORIO DE BACKUP
+// ═══════════════════════════════════════════
+// La fecha del último backup no es un dato sensible en sí (es una fecha, no plata): se
+// guarda en localStorage llano, igual que el tema visual — no hace falta el PIN para verla,
+// y no tiene sentido que desaparezca si la app está bloqueada.
+const DIAS_PARA_AVISAR=30;   // a partir de cuánto sin backup se considera "viejo"
+const DIAS_ENTRE_AVISOS=7;   // no insistir más seguido que esto, aunque abras la app todos los días
+
+function marcarBackupHecho(){
+  localStorage.setItem("fultimobackup", new Date().toISOString());
+}
+
+// Días completos desde una fecha ISO guardada. Infinity para "nunca" (null) y para
+// cualquier basura que no parsee como fecha — así "nunca hiciste backup" y "hace 30 años que
+// no hacés uno" caen del mismo lado de cualquier comparación con un umbral, sin casos aparte.
+// Una fecha en el FUTURO (reloj del dispositivo mal puesto) también cuenta como Infinity: no
+// tiene sentido creer un backup que "todavía no pasó".
+function diasDesde(isoFecha){
+  if(!isoFecha) return Infinity;
+  const ms=Date.now()-new Date(isoFecha).getTime();
+  if(!isFinite(ms) || ms<0) return Infinity;
+  return Math.floor(ms/86400000);
+}
+
+function textoUltimoBackup(){
+  const d=diasDesde(localStorage.getItem("fultimobackup"));
+  if(d===Infinity) return "Todavía no hiciste ningún backup.";
+  if(d===0) return "Último backup: hoy.";
+  if(d===1) return "Último backup: ayer.";
+  return `Último backup: hace ${d} días.`;
+}
+
+// Línea de estado en Configuración: siempre visible, sin condiciones ni cooldown (a
+// diferencia del aviso emergente de abajo, que sí se hace notar solo de vez en cuando).
+function renderEstadoBackup(){
+  const el=document.getElementById("backup-estado");
+  if(!el) return;
+  const d=diasDesde(localStorage.getItem("fultimobackup"));
+  el.style.color = d===Infinity ? "var(--danger)" : d>=DIAS_PARA_AVISAR ? "var(--warning)" : "var(--muted)";
+  el.textContent=textoUltimoBackup();
+}
+
+// Decide si CORRESPONDE avisar ahora, sin tocar la UI: separado de avisarSiFaltaBackup()
+// para poder probar la regla (30 días sin backup, 7 entre avisos, solo si hay algo cargado)
+// sin depender del sistema de diálogos.
+function tocaAvisarBackup(){
+  if(!movs.length) return false;                                    // nada que perder todavía
+  if(diasDesde(localStorage.getItem("fultimobackup"))<DIAS_PARA_AVISAR) return false;
+  if(diasDesde(localStorage.getItem("fultimoavisobackup"))<DIAS_ENTRE_AVISOS) return false;
+  return true;
+}
+
+// Se llama una vez al arrancar la app (bootApp, con un pequeño delay para no competir con el
+// primer render). Si corresponde, ofrece hacer el backup ahí mismo en vez de solo avisar.
+async function avisarSiFaltaBackup(){
+  if(!tocaAvisarBackup()) return;
+  localStorage.setItem("fultimoavisobackup", new Date().toISOString());
+  const dias=diasDesde(localStorage.getItem("fultimobackup"));
+  const cuando = dias===Infinity
+    ? "Todavía no hiciste ningún backup de tus datos."
+    : `Hace ${dias} días que no hacés un backup.`;
+  const hacerlo=await mostrarConfirm(
+    `${cuando} Es un archivo chico (suele pesar menos de 1 MB) que podés guardar donde quieras.`,
+    {titulo:"💾 Recordatorio de backup", textoOk:"Hacer backup ahora", textoCancelar:"Más tarde"}
+  );
+  if(hacerlo) exportarBackup();
+}
+
 function exportarBackup(){
   const backup={
     version:1,
@@ -347,6 +416,8 @@ function exportarBackup(){
   a.click();
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),1000);
+  marcarBackupHecho();
+  renderEstadoBackup();
   showToast("✓ Backup descargado");
 }
 
@@ -403,6 +474,10 @@ function restaurarBackup(input){
       }
       save();
       setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
+      // Restaurar deja los datos actuales idénticos a un archivo que YA existe afuera:
+      // para el propósito del recordatorio, es lo mismo que acabar de hacer un backup.
+      marcarBackupHecho();
+      renderEstadoBackup();
       showToast(`✓ Restaurados ${cant} movimientos`);
       // Refrescar vistas
       renderExportStats();
