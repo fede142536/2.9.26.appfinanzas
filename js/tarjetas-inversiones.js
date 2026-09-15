@@ -199,12 +199,6 @@ function renderTarjetas(){
     }
     return t.mesInicio && addMonths(t.mesInicio, t.cuotasTotal-1) >= hoyYM;
   });
-  const completas = tcs.filter(t=>{
-    if(t.frecuente){
-      return t.mesFin && t.mesFin<hoyYM;
-    }
-    return !t.mesInicio || addMonths(t.mesInicio, t.cuotasTotal-1) < hoyYM;
-  });
 
   // ── BALANCE DEL MES SELECCIONADO ──
   const movsMes = getTcMovsEnMes(ymSel);
@@ -294,36 +288,9 @@ function renderTarjetas(){
   // Cuotas pendientes (proyección mes a mes, con desglose al tocar) más el Balance del mes.
   // `activas` sigue calculándose porque de ahí salen los chips "Pendiente ARS"/"Pendiente USD".
 
-  // ── COMPLETAS (con botón editar) ──
-  const doneEl=document.getElementById("tc-completas");
-  if(!completas.length){doneEl.innerHTML=`<p class="txt-md txt-muted">Sin historial aún</p>`;return;}
-  doneEl.innerHTML=completas.map(t=>{
-    const subInfo=t.frecuente
-      ? `${escapeHtml(t.tarjeta)} · 🔁 Mensual · ${mesLbl(t.mesInicio)}–${t.mesFin?mesLbl(t.mesFin):""}`
-      : `${escapeHtml(t.tarjeta)} · ${t.cuotasTotal} cuotas · ${fmtMoneda(t.total,t.moneda)}`;
-    return `<div class="tc-card" style="opacity:.75">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)}</div>
-          <div class="txt-xs txt-muted">${subInfo}</div>
-        </div>
-        <span class="tc-badge" style="background:var(--success-light);color:var(--success)">✓</span>
-      </div>
-      <div style="display:flex;gap:6px;margin-top:8px">
-        <button class="btn-sm u-flex1" onclick="openEditTcModal(${t.id})">✎ Editar</button>
-        <button class="btn-sm" style="color:var(--danger);flex:1" onclick="borrarTc(${t.id})">Eliminar</button>
-      </div>
-    </div>`;
-  }).join("");
-}
-
-async function borrarTc(id){
-  const t=tcs.find(x=>x.id===id);
-  if(!t) return;
-  if(await mostrarConfirm(`¿Eliminar "${t.desc}"?`, {textoOk:"Eliminar", peligroso:true})){
-    tcs=tcs.filter(x=>x.id!==id);
-    save();
-    renderTarjetas();
-  }
+  // "Completados" también se sacó a pedido: después de Cuotas pendientes no va nada más.
+  // El historial de compras terminadas y sus acciones (editar/eliminar) viven en la solapa
+  // Movimientos, donde cada cuota aparece como un movimiento con swipe para editar o borrar.
 }
 
 // ═══════════════════════════════════════════
