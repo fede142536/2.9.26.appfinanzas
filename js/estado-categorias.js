@@ -262,6 +262,61 @@ function getCats(t){
   return merged;
 }
 
+// ═══════════════════════════════════════════
+// QUÉ CUENTA COMO GASTO Y COMO INGRESO
+// ═══════════════════════════════════════════
+// El modelo, en una frase: CADA PESO SE CUENTA UNA VEZ, CUANDO SE MUEVE.
+//
+//   Depositás en el fondo   → es un gasto (la plata se va de la mano)
+//   Sacás del fondo         → es un ingreso (la plata vuelve a la mano)
+//   Pagás algo con esa plata→ es un gasto (se va de nuevo)
+//
+// Un retiro es el único movimiento que cuenta DOS veces y en sentidos opuestos: la app lo
+// guarda como un solo registro (un Gasto con usaAhorro) que representa la compra pagada con
+// ahorros, así que suma como ingreso (el retiro) Y resta como gasto (la compra). Se cancelan
+// en el balance y el fondo baja, que es exactamente lo que pasó.
+//
+// Esta regla estaba escrita a mano en 55 lugares del código y no todos decían lo mismo:
+// el gráfico por categoría y los presupuestos contaban la compra, pero los totales del mes
+// y del dashboard la sumaban como ingreso y NUNCA la restaban como gasto. El balance quedaba
+// inflado en exactamente la plata que sacabas del fondo.
+//
+// Si alguna vez querés cambiar el criterio, se cambia ACÁ y vale para toda la app.
+
+function esGasto(m){
+  return !!m && m.tipo==="Gasto";
+}
+// Depósito al fondo de ahorro.
+function esDepositoAhorro(m){
+  return esGasto(m) && !!m.esAhorro;
+}
+// Compra pagada con plata del fondo. Es un gasto Y devuelve plata a la mano.
+function esRetiroAhorro(m){
+  return esGasto(m) && !!m.usaAhorro;
+}
+// Plata que ENTRA a la mano en el mes: los ingresos propiamente dichos y los retiros del fondo.
+// (Los rescates de inversión se suman aparte, donde corresponde.)
+function esIngreso(m){
+  return !!m && (m.tipo==="Ingreso" || esRetiroAhorro(m));
+}
+
+// Totales de plata de un conjunto de movimientos, en un solo lugar y sin tocar el DOM,
+// para que la regla de arriba se pueda probar de verdad y no haya dos versiones dando vueltas.
+// `balance` es cuánto cambió la plata que tenés a mano en ese período.
+function totalesDePlata(lista){
+  const ingresos = lista.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+(m.importe||0),0);
+  const gastos   = lista.filter(esGasto).reduce((s,m)=>s+(m.importe||0),0);
+  const depositos= lista.filter(esDepositoAhorro).reduce((s,m)=>s+(m.importe||0),0);
+  const retiros  = lista.filter(esRetiroAhorro).reduce((s,m)=>s+(m.importe||0),0);
+  const inversiones = lista.filter(m=>m.tipo==="Inversion");
+  const invEntra = inversiones.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  const invSale  = inversiones.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  return {
+    ingresos, gastos, depositos, retiros, invEntra, invSale,
+    balance: Math.round((ingresos + retiros + invEntra - gastos - invSale)*100)/100
+  };
+}
+
 // ── SEGURIDAD ──
 // Devuelve un valor listo para usar como ARGUMENTO dentro de un onclick="...".
 // Hay DOS contextos anidados y hay que respetar los dos: el atributo HTML (delimitado por

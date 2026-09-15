@@ -230,6 +230,144 @@ test("no queda el escape viejo de comillas en ningún onclick", async ()=>{
 });
 
 // ═══════════════════════════════════════════
+// PLATA: QUÉ CUENTA COMO GASTO
+// ═══════════════════════════════════════════
+grupo("Plata: gastos y ahorros");
+
+const GASTO_NORMAL   = {tipo:"Gasto",    cat:"Comida", importe:200000};
+const DEPOSITO       = {tipo:"Gasto",    cat:"Ahorro", importe:180000, esAhorro:true};
+const COMPRA_CON_AHO = {tipo:"Gasto",    cat:"Comida", importe:300000, usaAhorro:true};
+const SUELDO         = {tipo:"Ingreso",  cat:"Sueldo", importe:1000000};
+
+test("cada movimiento se clasifica una sola vez", ()=>{
+  cierto(esGasto(GASTO_NORMAL) && !esDepositoAhorro(GASTO_NORMAL) && !esRetiroAhorro(GASTO_NORMAL), "el gasto normal se clasificó mal");
+  cierto(esGasto(DEPOSITO) && esDepositoAhorro(DEPOSITO), "un depósito al fondo también es un gasto");
+  cierto(esGasto(COMPRA_CON_AHO) && esRetiroAhorro(COMPRA_CON_AHO), "una compra pagada con ahorros sigue siendo un gasto");
+  cierto(!esGasto(SUELDO), "un ingreso no es un gasto");
+  cierto(esIngreso(SUELDO) && esIngreso(COMPRA_CON_AHO), "el retiro devuelve plata a la mano: cuenta como ingreso");
+  cierto(!esIngreso(DEPOSITO) && !esIngreso(GASTO_NORMAL), "un gasto común no puede contar como ingreso");
+});
+
+// El bug: el retiro sumaba como ingreso y la compra no restaba NUNCA, así que el balance
+// quedaba inflado en exactamente la plata que sacabas del fondo.
+test("pagar con ahorros no infla el balance", ()=>{
+  const t=totalesDePlata([SUELDO, GASTO_NORMAL, COMPRA_CON_AHO]);
+  igual(t.gastos, 500000, "la compra pagada con ahorros tiene que estar en los gastos");
+  igual(t.retiros, 300000, "el retiro tiene que reconocerse");
+  // Cobraste 1.000.000, gastaste 500.000, sacaste 300.000 del fondo → te quedan 800.000.
+  igual(t.balance, 800000, "el balance se infló con la plata sacada del fondo");
+});
+
+test("un retiro no cambia el balance por sí solo", ()=>{
+  const sinRetiro=totalesDePlata([SUELDO, GASTO_NORMAL]);
+  const conRetiro=totalesDePlata([SUELDO, GASTO_NORMAL, COMPRA_CON_AHO]);
+  // El retiro entra y su compra sale: se cancelan. Lo que baja es el fondo, no el balance:
+  // esa plata ya se había descontado de la mano cuando la guardaste.
+  igual(conRetiro.balance, sinRetiro.balance,
+    "gastar plata del fondo no puede mover el balance del mes: entra por el retiro y sale por la compra");
+  igual(conRetiro.gastos, sinRetiro.gastos + 300000,
+    "pero sí tiene que aparecer en los gastos: la plata se gastó");
+});
+
+test("cada peso se cuenta una sola vez en la cadena completa", ()=>{
+  // Guardás 180.000, después sacás 180.000 y los gastás: consumiste 180.000, no 0 ni 360.000.
+  const guardar=totalesDePlata([DEPOSITO]);
+  const gastarDelFondo=totalesDePlata([{tipo:"Gasto", cat:"Comida", importe:180000, usaAhorro:true}]);
+  igual(guardar.balance, -180000, "guardar en el fondo saca esa plata de la mano");
+  igual(gastarDelFondo.balance, 0, "sacar del fondo y gastarlo en el acto no cambia la plata a mano");
+  igual(guardar.balance + gastarDelFondo.balance, -180000, "la cadena entera tiene que costar 180.000, una sola vez");
+});
+
+test("los depósitos y retiros siguen siendo distinguibles", ()=>{
+  const t=totalesDePlata([SUELDO, GASTO_NORMAL, DEPOSITO, COMPRA_CON_AHO]);
+  igual(t.depositos, 180000, "se perdió el desglose de lo ahorrado");
+  igual(t.retiros, 300000, "se perdió el desglose de lo retirado");
+  igual(t.gastos, 680000, "los gastos son el consumo + el depósito + la compra con ahorros");
+  igual(t.balance, 1000000 + 300000 - 680000, "el balance no cierra con sus propias partes");
+});
+
+test("totalesDePlata tolera una lista vacía", ()=>{
+  const t=totalesDePlata([]);
+  igual([t.ingresos, t.gastos, t.balance], [0,0,0]);
+});
+
+// ═══════════════════════════════════════════
+// ESTILOS
+// ═══════════════════════════════════════════
+grupo("Estilos");
+
+// El mismo badge estaba escrito inline 21 veces con 9 ortografías distintas (padding 1px 5px
+// vs 1px 6px, radio 6px vs 8px, con y sin font-weight), así que se veía apenas distinto en
+// cada pantalla. Ahora hay una sola clase; este test evita que vuelvan a multiplicarse.
+test("las clases de componente existen en styles.css", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const faltan=["badge","badge-save","badge-danger","badge-success","badge-accent","badge-warning",
+                "seccion-label","u-upper","inset","txt-micro","txt-xs","txt-sm","txt-md","txt-muted",
+                "txt-strong","txt-medium","u-flex1","u-row","u-row-6","mb-6","mb-8","mb-10","mt-14"]
+                .filter(c=>!css.includes("."+c+"{") && !css.includes("."+c+","));
+  igual(faltan, [], "desaparecieron clases que el JS y el HTML están usando");
+});
+
+test("no volvieron los badges escritos a mano", async ()=>{
+  const archivos=["movimientos","dashboard","tarjetas-inversiones","ahorros","importar-exportar",
+                  "cuentas-tarjetas-categorias","editar-movimiento","presupuestos"];
+  const malos=[];
+  for(const a of archivos){
+    const txt=await (await fetch(`js/${a}.js`)).text();
+    txt.split("\n").forEach((l,i)=>{
+      if(/style="font-size:9px;background:var\(--/.test(l)) malos.push(`js/${a}.js:${i+1}`);
+    });
+  }
+  igual(malos, [], 'se volvió a escribir un badge inline: usá class="badge badge-..."');
+});
+
+test("el rótulo de sección no se volvió a escribir inline", async ()=>{
+  const malos=[];
+  for(const a of ["dashboard","ahorros","tarjetas-inversiones","importar-exportar","movimientos",
+                  "cuentas-tarjetas-categorias","seguridad-pin","config-ui","presupuestos"]){
+    const txt=await (await fetch(`js/${a}.js`)).text();
+    txt.split("\n").forEach((l,i)=>{
+      if(/text-transform:uppercase;letter-spacing:\.5px/.test(l)) malos.push(`js/${a}.js:${i+1}`);
+    });
+  }
+  igual(malos, [], 'usá class="seccion-label" en vez de repetir el estilo');
+});
+
+// ═══════════════════════════════════════════
+// LISTA DE MOVIMIENTOS
+// ═══════════════════════════════════════════
+grupo("Lista de movimientos");
+
+// Cada fila repetía la fecha que ya estaba en el encabezado del grupo ("24 de septiembre")
+// y arrancaba con "Otros", la subcategoría por defecto, idéntica en casi todos los renglones.
+test("el subtítulo no repite la subcategoría por defecto", ()=>{
+  igual(subcatVisible("Otros"), "", '"Otros" no aporta nada: es el valor por defecto');
+  igual(subcatVisible(""), "", "una subcategoría vacía no debería ocupar lugar");
+  igual(subcatVisible("   "), "", "solo espacios tampoco");
+  igual(subcatVisible("Delivery"), "Delivery", "una subcategoría de verdad tiene que quedar");
+});
+
+test("el subtítulo no deja separadores colgando", ()=>{
+  igual(subtituloFila(["Delivery", "Coto"]), "Delivery · Coto");
+  igual(subtituloFila(["", "Coto"]), "Coto", 'quedó un " · " al principio');
+  igual(subtituloFila(["Delivery", ""]), "Delivery", 'quedó un " · " al final');
+  igual(subtituloFila(["", "", ""]), "", "todo vacío debería dar vacío, no separadores sueltos");
+  igual(subtituloFila([null, undefined, "Coto"]), "Coto", "null y undefined tienen que ignorarse");
+});
+
+test("subcatVisible escapa lo que escribe el usuario", ()=>{
+  const r=subcatVisible('<img src=x onerror=alert(1)>');
+  cierto(!r.includes("<"), "se coló HTML sin escapar en el subtítulo: "+r);
+});
+
+test("una compra pagada con ahorros se muestra como gasto", async ()=>{
+  const txt=await (await fetch("js/movimientos.js")).text();
+  const cuerpo=txt.slice(txt.indexOf("function construirCuerpoTxItem"));
+  cierto(/else if\(isRetiro\) amt=`-\$\{fmtS/.test(cuerpo),
+    'el retiro volvió a mostrarse con "+": es una compra, y los totales la cuentan como gasto');
+});
+
+// ═══════════════════════════════════════════
 // GRÁFICOS
 // ═══════════════════════════════════════════
 grupo("Gráficos");

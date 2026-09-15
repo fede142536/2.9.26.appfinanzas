@@ -150,7 +150,7 @@ function renderTarjetasManager(){
     const esDefault=TARJETAS_DEFAULT.includes(t);
     const tEsc=attrJS(t);
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:13px">💳 ${escapeHtml(t)}${esDefault?"":' <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px">custom</span>'}</span>
+      <span style="font-size:13px">💳 ${escapeHtml(t)}${esDefault?"":' <span class="badge badge-accent">custom</span>'}</span>
       <div style="display:flex;gap:10px">
         <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0" onclick="renombrarTarjeta(${tEsc})" title="Renombrar">✎</button>
         ${esCustom?`<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:0" onclick="borrarTarjetaCustom(${tEsc})" title="Eliminar">×</button>`:""}
@@ -188,7 +188,7 @@ function renderCatManager(){
   ["Gasto","Ingreso","Inversion","Tarjeta"].forEach(t=>{
     const cats=getCats(t);
     if(!Object.keys(cats).length) return;
-    html+=`<p style="font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">${t}</p>`;
+    html+=`<p class="seccion-label txt-medium mt-14 mb-6">${t}</p>`;
     const nombresOrdenados=ordenarCats(t, cats);
     nombresOrdenados.forEach((cat,idx)=>{
       const subs=cats[cat];
@@ -213,14 +213,14 @@ function renderCatManager(){
               <button class="btn-sm" style="padding:1px 6px;font-size:10px;line-height:1;${esUltima?'opacity:.3;pointer-events:none':''}" onclick="moverCategoriaOrden('${t}',${catEsc},1)" title="Bajar">▼</button>
             </div>
             <button type="button" onclick="openIconPicker({mode:'edit',cat:${catEsc}})" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;flex-shrink:0" title="Cambiar ícono">${getIcon(cat)}</button>
-            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(cat)}${esDefault?'':' <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px">custom</span>'}</div>
+            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(cat)}${esDefault?'':' <span class="badge badge-accent">custom</span>'}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button class="btn-sm" onclick="agregarSubcat('${t}',${catEsc})">+ Sub</button>
             ${esDefault?'':`<button class="btn-sm" style="color:var(--danger)" onclick="borrarCat('${t}',${catEsc})">×</button>`}
           </div>
         </div>
-        <div style="margin-top:6px">${subsHtml||'<span style="font-size:11px;color:var(--muted)">Sin subcategorías</span>'}</div>
+        <div style="margin-top:6px">${subsHtml||'<span class="txt-xs txt-muted">Sin subcategorías</span>'}</div>
       </div>`;
     });
   });

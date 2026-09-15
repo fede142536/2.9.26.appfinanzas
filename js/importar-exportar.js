@@ -10,7 +10,7 @@ function renderImportHistory(){
     const vivos=h.id ? movs.filter(m=>m._importId===h.id).length : 0;
     return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${escapeHtml(h.nombre)}</div><div style="font-size:11px;color:var(--muted)">${h.fecha} · ${h.registros} registros${h.id&&vivos>0?` · ${vivos} en la app`:""}</div></div>
+      <div class="u-flex1 u-min0"><div class="txt-md txt-strong">${escapeHtml(h.nombre)}</div><div class="txt-xs txt-muted">${h.fecha} · ${h.registros} registros${h.id&&vivos>0?` · ${vivos} en la app`:""}</div></div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span style="font-size:11px;background:var(--success-light);color:var(--success);padding:3px 9px;border-radius:12px">✓</span>
         <button class="tx-del" style="color:var(--danger);font-size:18px" onclick="eliminarImport(${idx})" title="Eliminar esta importación">×</button>
@@ -283,8 +283,8 @@ function renderImportPreviewList(){
   const C={Gasto:"var(--danger)",Ingreso:"var(--success)",Inversion:"var(--invest)"};
   el.innerHTML=importPreview.map((m,i)=>`
     <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;font-weight:600;color:${C[m.tipo]||"var(--muted)"}">${m.tipo}</span><span style="font-size:11px;color:var(--muted)">${m.fecha}</span></div>
+      <div class="u-flex1 u-min0">
+        <div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;font-weight:600;color:${C[m.tipo]||"var(--muted)"}">${m.tipo}</span><span class="txt-xs txt-muted">${m.fecha}</span></div>
         <div style="font-size:13px;font-weight:600;margin-top:2px">${escapeHtml(m.cat)} · ${escapeHtml(m.subcat)}</div>
         ${m.nota?`<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.nota)}</div>`:""}
       </div>

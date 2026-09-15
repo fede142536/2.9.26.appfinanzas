@@ -418,13 +418,13 @@ function renderPinStatus(){
   if(activo){
     el.innerHTML=`
       <p style="font-size:12px;color:var(--success);margin-bottom:10px">✓ PIN activo. Se va a pedir cada vez que abras la app.</p>
-      <div style="display:flex;gap:8px">
-        <button class="btn-sm" style="flex:1" onclick="changePin()">Cambiar PIN</button>
+      <div class="u-row">
+        <button class="btn-sm u-flex1" onclick="changePin()">Cambiar PIN</button>
         <button class="btn-sm" style="flex:1;color:var(--danger)" onclick="removePin()">Desactivar</button>
       </div>`;
   } else {
     el.innerHTML=`
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">El PIN te protege si alguien toma tu celular. Es opcional.</p>
+      <p class="txt-sm txt-muted mb-10">El PIN te protege si alguien toma tu celular. Es opcional.</p>
       <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%" onclick="setupPin()">🔐 Activar PIN</button>`;
   }
 }

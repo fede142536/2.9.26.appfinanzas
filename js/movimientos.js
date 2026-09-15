@@ -257,6 +257,19 @@ function getMesMov(ym){
 // Arma el HTML de UN item de la lista de movimientos. Extraída como función aparte (en vez de
 // vivir inline dentro de un .map()) para poder reusarla tanto en el primer lote como en los
 // lotes que se van agregando con el scroll (ver iniciarLazyLoadMovs).
+// Arma el subtítulo de una fila juntando solo lo que APORTA algo.
+// La fecha NO va: la fila ya vive debajo de un encabezado de fecha ("24 de septiembre"), así
+// que repetirla adentro gastaba ancho sin decir nada nuevo. La subcategoría tampoco va cuando
+// es "Otros" (el valor por defecto), porque salía idéntica en casi todos los renglones.
+const SUBCAT_SIN_VALOR=["Otros","Otro","Sin subcategoría",""];
+function subtituloFila(partes){
+  return partes.filter(x=>x!==null && x!==undefined && String(x).trim()!=="").join(" · ");
+}
+function subcatVisible(subcat){
+  const s=String(subcat||"").trim();
+  return SUBCAT_SIN_VALOR.includes(s) ? "" : escapeHtml(s);
+}
+
 // Arma el HTML INTERNO de una fila (ícono, categoría, monto, botones) — la usa tanto el
 // componente <tx-item> como, si hiciera falta, cualquier otro lugar que necesite el mismo look.
 // Es EXACTAMENTE la misma lógica que antes vivía inline dentro de renderTxItemHTML.
@@ -287,35 +300,37 @@ function construirCuerpoTxItem(m){
       const sign=m.tipo==="Gasto"?"-":"+";
       amt=`${sign}USD ${(Math.round(m.importeOrig*100)/100).toFixed(2)}`;
     }
-    else if(isRetiro) amt=`+${fmtS(m.importe)}`; // retiro del ahorro: entra plata, signo +
+    // Un retiro es una COMPRA pagada con plata del fondo: se muestra con "-", igual que
+    // cualquier gasto y que en los totales. El badge "DE AHORROS" aclara de dónde salió.
+    else if(isRetiro) amt=`-${fmtS(m.importe)}`;
     else amt=`${isTc||m.tipo==="Gasto"?"-":"+"}${fmtS(m.importe)}`;
     let cat,sub;
     if(isTc){
       cat=escapeHtml(m.desc);
       const monedaPref=m.moneda==="USD"?"USD ":"";
-      const monedaBadge=m.moneda==="USD"?` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">USD</span>`:"";
+      const monedaBadge=m.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
       cat+=monedaBadge;
       if(m.frecuente){
-        sub=`${escapeHtml(m.subcat)} · 🔁 Mensual fijo · ${(m.fecha||"").split("-").reverse().join("/")}`;
+        sub=subtituloFila([subcatVisible(m.subcat), "🔁 Mensual fijo"]);
       } else {
         const tot=m.moneda==="USD"?`USD ${m.importeTotal.toFixed(2)}`:fmtS(m.importeTotal);
-        sub=`${escapeHtml(m.subcat)} · Cuota ${m.nCuota}/${m.cuotasTotal} · ${tot} total`;
+        sub=subtituloFila([subcatVisible(m.subcat), `Cuota ${m.nCuota}/${m.cuotasTotal}`, `${tot} total`]);
       }
     } else if(isInv){
       // Badge de cash flow para diferenciar rescate vs suscripción
       const invBadge=invEsIngreso
-        ?` <span style="font-size:9px;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:8px;font-weight:500">📥 INGRESO</span>`
-        :` <span style="font-size:9px;background:var(--danger-light);color:var(--danger);padding:1px 6px;border-radius:8px;font-weight:500">📤 GASTO</span>`;
+        ?` <span class="badge badge-success">📥 INGRESO</span>`
+        :` <span class="badge badge-danger">📤 GASTO</span>`;
       cat=`${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${invBadge}`;
-      sub=`${escapeHtml(m.subcat)} · ${(m.fecha||"").split("-").reverse().join("/")}`;
+      sub=subtituloFila([subcatVisible(m.subcat)]);
     } else {
       let badge="";
-      if(isAhorro) badge=` <span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">AHORRO</span>`;
-      else if(isRetiro) badge=` <span style="font-size:9px;background:var(--save-light);color:var(--save);padding:1px 6px;border-radius:8px;font-weight:500">DE AHORROS</span>`;
-      else if(m.frecuente) badge=` <span style="font-size:9px;background:var(--warning-light);color:var(--warning);padding:1px 6px;border-radius:8px;font-weight:500">🔁 FRECUENTE</span>`;
+      if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
+      else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
+      else if(m.frecuente) badge=` <span class="badge badge-warning">🔁 FRECUENTE</span>`;
       cat=`${escapeHtml(m.cat)}${badge}`;
-      if(m.recuperable>0) cat+=` <span style="font-size:9px;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:500">🔁 ${fmtAbbr(m.recuperable)}</span>`;
-      sub=`${escapeHtml(m.subcat||"")} · ${(m.fecha||"").split("-").reverse().join("/")}`;
+      if(m.recuperable>0) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
+      sub=subtituloFila([subcatVisible(m.subcat)]);
     }
     // Ícono e iconClass siguen la misma lógica de color
     let icon, iconClass;
@@ -328,7 +343,7 @@ function construirCuerpoTxItem(m){
     return `<div class="tx-icon ${iconClass}">${icon}</div>
       <div class="tx-info">
         <div class="tx-cat">${cat}</div>
-        <div class="tx-sub">${sub}${!isTc&&m.nota?" · "+escapeHtml(m.nota.slice(0,18)):""}</div>
+        <div class="tx-sub">${subtituloFila([sub, !isTc&&m.nota?escapeHtml(m.nota.slice(0,24)):""])}</div>
         ${!isTc?renderTagsChips(m):""}
       </div>
       <div class="tx-amount ${amtClass}">${amt}</div>`;
@@ -517,25 +532,33 @@ function renderMovs(){
   // Las tarjetas NO afectan el saldo: solo se muestran como informativas
   // Ingresos del mes
   const ing=mesMovs.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+m.importe,0);
-  // Separar gastos: normales, ahorros (depósitos al fondo), retiros del fondo
-  const gastosArr=mesMovs.filter(m=>m.tipo==="Gasto" && !m.esAhorro && !m.usaAhorro);
-  const ahorrosArr=mesMovs.filter(m=>m.tipo==="Gasto" && m.esAhorro);
-  const retirosArr=mesMovs.filter(m=>m.tipo==="Gasto" && m.usaAhorro);
-  const gas=gastosArr.reduce((s,m)=>s+m.importe,0);
-  const aho=ahorrosArr.reduce((s,m)=>s+m.importe,0);
-  const retirado=retirosArr.reduce((s,m)=>s+m.importe,0);
+  // TODO gasto cuenta como gasto (ver el modelo en estado-categorias.js): el consumo normal,
+  // los depósitos al fondo y las compras pagadas con ahorros. Los otros dos arrays son
+  // subconjuntos, solo para los chips informativos y para sumar el retiro como ingreso.
+  const gastosArr=mesMovs.filter(esGasto);
+  const ahorrosArr=mesMovs.filter(esDepositoAhorro);
+  const retirosArr=mesMovs.filter(esRetiroAhorro);
+  // Las sumas y el balance salen de totalesDePlata() (estado-categorias.js), que es la única
+  // que sabe la regla y la única que se puede probar sin levantar la pantalla entera.
+  const totales=totalesDePlata(mesMovs);
+  const gas=totales.gastos;
+  const aho=totales.depositos;
+  const retirado=totales.retiros;
   // Inversiones del mes: impactan el balance desde la perspectiva de cash flow
   // - Suscripción/Compra → sale cash (resta del balance, igual que un gasto)
   // - Rescate/Venta → entra cash (suma al balance, igual que un ingreso)
   const invsMes=mesMovs.filter(m=>m.tipo==="Inversion");
-  const invIngresos=invsMes.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
-  const invGastos=invsMes.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
-  // Balance del mes:
-  // INGRESOS REALES: ingresos puros + retiros del ahorro (vuelve a la mano) + rescates de inversión (entra cash)
-  // GASTOS REALES: gastos puros + compras/suscripciones de inversión (sale cash, queda expuesto a riesgo de mercado)
-  // El ahorro (depósito) sigue siendo neutral: es la misma plata líquida, solo cambia de "cajón".
+  const invIngresos=totales.invEntra;
+  const invGastos=totales.invSale;
+  // Balance del mes = cuánto cambió la plata que tenés a mano.
+  // ENTRA: ingresos + retiros del fondo + rescates de inversión.
+  // SALE : todos los gastos (incluidos los depósitos al fondo y las compras con ahorros)
+  //        + compras/suscripciones de inversión.
+  // El retiro entra y su compra sale, así que se cancelan y el fondo baja: eso es lo que pasó.
+  // Antes el retiro sumaba como ingreso y la compra no restaba nunca, así que el balance
+  // quedaba inflado en exactamente la plata que sacabas del fondo.
   // Las tarjetas no afectan el balance.
-  const balMes=Math.round((ing+retirado+invIngresos-gas-invGastos)*100)/100;
+  const balMes=totales.balance;
 
   // ── CHIPS ADAPTADOS AL FILTRO ──
   const arrastreEl=document.getElementById("mov-arrastre");
@@ -617,10 +640,10 @@ function renderMovs(){
     // Sumas para mostrar chips claros:
     // - "Gastos" = gastos puros + compras/suscripciones de inversión (consumo real + plata que salió al mercado)
     // - "Ahorrado" = depósitos al fondo (informativo, sigue siendo neutral)
-    const gastosPurosARS=todoGastos.filter(m=>m.tipo==="Gasto"&&!m.esAhorro&&!m.usaAhorro&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
-    const ahorradoARS=todoGastos.filter(m=>m.tipo==="Gasto"&&m.esAhorro&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+    const gastosPurosARS=todoGastos.filter(m=>esGasto(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+    const ahorradoARS=todoGastos.filter(m=>esDepositoAhorro(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
     const suscripcionesARS=todoGastos.filter(m=>m.tipo==="Inversion"&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
-    const gastosPurosUSD=todoGastos.filter(m=>m.tipo==="Gasto"&&!m.esAhorro&&!m.usaAhorro&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+    const gastosPurosUSD=todoGastos.filter(m=>esGasto(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
     const suscripcionesUSD=todoGastos.filter(m=>m.tipo==="Inversion"&&(m.importeUSD||0)>0).reduce((s,m)=>s+m.importeUSD,0);
     const gastosTotalARS=gastosPurosARS+suscripcionesARS;
     const gastosTotalUSD=gastosPurosUSD+suscripcionesUSD;
@@ -654,7 +677,7 @@ function renderMovs(){
     //   así que para que el total coincida con el chip de la vista Todos, también se incluyen acá.
     const ingresosArr=mesMovs.filter(m=>m.tipo==="Ingreso");
     const invRescates=mesMovs.filter(m=>m.tipo==="Inversion"&&isInvSalida(m));
-    const retirosAhorro=mesMovs.filter(m=>m.tipo==="Gasto"&&m.usaAhorro);
+    const retirosAhorro=mesMovs.filter(esRetiroAhorro);
     const todoIngresosOriginal=[...ingresosArr, ...invRescates, ...retirosAhorro];
 
     // Sub-filtro por categoría
@@ -711,11 +734,11 @@ function renderMovs(){
 
     // Totales USD del mes (gastos e ingresos en moneda extranjera)
     // Gastos USD: gastos puros + compras de inversión en USD (sin ahorros)
-    const gastosUSDTodos=mesMovs.filter(m=>m.tipo==="Gasto"&&m.moneda==="USD"&&!m.esAhorro&&!m.usaAhorro&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+    const gastosUSDTodos=mesMovs.filter(m=>esGasto(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
     const invComprasUSD=mesMovs.filter(m=>m.tipo==="Inversion"&&!isInvSalida(m)&&(m.importeUSD||0)>0).reduce((s,m)=>s+m.importeUSD,0);
     const gastosUSDTotal=gastosUSDTodos+invComprasUSD;
     // Retiros USD del ahorro (vuelven a la mano = ingreso)
-    const retirosUSD=mesMovs.filter(m=>m.tipo==="Gasto"&&m.moneda==="USD"&&m.usaAhorro&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+    const retirosUSD=mesMovs.filter(m=>esRetiroAhorro(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
 
     const ingresosUSDTodos=mesMovs.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
     const invRescatesUSD=mesMovs.filter(m=>m.tipo==="Inversion"&&isInvSalida(m)&&(m.importeUSD||0)>0).reduce((s,m)=>s+m.importeUSD,0);
@@ -752,7 +775,7 @@ function renderMovs(){
       partes.push(`💸 De ahorros: <strong style="color:var(--save)">${fmtS(retirado)}</strong>`);
     }
     // Total a recuperar (gastos compartidos)
-    const recup=mesMovs.filter(m=>m.tipo==="Gasto"&&!m.esAhorro&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
+    const recup=mesMovs.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
     if(recup>0){
       partes.push(`🔁 A recuperar: <strong style="color:var(--accent)">${fmtS(recup)}</strong>`);
     }
@@ -771,11 +794,11 @@ function renderMovs(){
     // Calcular gasto del mes seleccionado por categoría con presupuesto
     const gastoCat={};
     mesMovs.forEach(m=>{
-      if(m.tipo!=="Gasto"||m.esAhorro) return;
+      if(!esGasto(m)) return;
       gastoCat[m.cat]=(gastoCat[m.cat]||0)+m.importe;
     });
     let html=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📊 Presupuestos del mes</div>`;
+      <div class="seccion-label mb-8">📊 Presupuestos del mes</div>`;
     presupCats.sort().forEach(cat=>{
       const tope=presupuestos[cat];
       const gastado=gastoCat[cat]||0;
@@ -897,11 +920,11 @@ function getArrastre(ymActual){
     if(!ym||ym>=ymActual) return;
     // Solo movimientos del mismo año
     if(ym.slice(0,4)!==yrActual) return;
-    if(m.tipo==="Ingreso") acum+=m.importe;
-    else if(m.tipo==="Gasto" && !m.usaAhorro) acum-=m.importe;
-    // Inversiones también afectan el arrastre desde perspectiva cash flow
+    // Un retiro cae en las DOS líneas (entra por el retiro, sale por la compra) y se cancela,
+    // igual que en el balance del mes. Un Ingreso solo en la primera.
+    if(esIngreso(m)) acum+=m.importe;
+    if(esGasto(m)) acum-=m.importe;
     else if(m.tipo==="Inversion") acum+=(m.importe||0)*invSignoCash(m);
-    // Los retiros de ahorros no afectan el arrastre (la plata ya salió cuando se ahorró)
   });
   return Math.round(acum*100)/100;
 }
