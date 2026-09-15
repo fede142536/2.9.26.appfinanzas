@@ -1,6 +1,29 @@
 // ═══════════════════════════════════════════
 // AHORROS
 // ═══════════════════════════════════════════
+// Completa los meses en los que no hubo ningún movimiento, entre el primero y el último,
+// con monto 0 para que el acumulado los arrastre plano.
+// Sin esto el eje X mentía sobre el tiempo: solo se dibujaban los meses CON movimiento,
+// repartidos parejo, así que diez meses sin ahorrar ocupaban el mismo ancho que uno y la
+// curva parecía un crecimiento sostenido cuando en realidad había una meseta.
+function rellenarMesesSinMovimiento(arr){
+  if(arr.length<2) return arr;
+  const [primerA, primerM]=arr[0].mes.split("-").map(Number);
+  const [ultimoA, ultimoM]=arr[arr.length-1].mes.split("-").map(Number);
+  const total=(ultimoA-primerA)*12+(ultimoM-primerM);
+  // Red de seguridad: con una fecha disparatada cargada por error (un 1970, por ejemplo)
+  // esto generaría miles de puntos y colgaría el dibujo. Ante eso, se deja como estaba.
+  if(!isFinite(total) || total<0 || total>600) return arr;
+  const porMes=Object.fromEntries(arr.map(d=>[d.mes,d]));
+  const out=[];
+  for(let i=0;i<=total;i++){
+    const m=primerM-1+i;
+    const ym=`${primerA+Math.floor(m/12)}-${String(m%12+1).padStart(2,"0")}`;
+    out.push(porMes[ym] || {mes:ym, monto:0});
+  }
+  return out;
+}
+
 function renderAhorro(){
   // ── 1. MIS AHORROS ──
   // Sumamos depósitos (esAhorro) y restamos retiros (usaAhorro), agrupados por mes
@@ -28,6 +51,10 @@ function renderAhorro(){
   } else {
     ahorrosArr=FONDO_DATA.map(d=>({mes:d.mes,monto:d.monto}));
   }
+  // Completar los meses sin movimiento para que el eje del gráfico sea tiempo real.
+  // Va ANTES del acumulado: los meses agregados suman 0, o sea arrastran el saldo plano.
+  ahorrosArr=rellenarMesesSinMovimiento(ahorrosArr);
+
   // Calcular acumulado
   let acum=0;
   ahorrosArr.forEach(d=>{acum+=d.monto;d.acum=Math.round(acum*100)/100;});
@@ -183,6 +210,17 @@ function renderAhorroChart(){
   // nuevo. El redibujo por un tap NO pasa por acá justamente para no borrar lo recién escrito.
   if(tipEl) tipEl.textContent="";
   limpiarSeleccionLinea();
+
+  // Qué estás mirando, en una línea. Cada vista responde una pregunta distinta y sin esto
+  // hay que deducirlo del nombre del botón.
+  const descEl=document.getElementById("ahorro-view-desc");
+  if(descEl){
+    descEl.textContent={
+      acum:      "Cuánto llevás ahorrado en total, mes a mes. El último punto es lo que tenés disponible hoy.",
+      mensual:   "Cuánto pusiste o sacaste en cada mes por separado. Verde es depósito, rojo es retiro.",
+      categoria: "Cuánto tenés guardado hoy en cada tipo de ahorro."
+    }[ahorroState.view] || "";
+  }
 
   const {ahorrosArr, depositos, retiros}=ahorroState;
   if(!ahorrosArr.length){

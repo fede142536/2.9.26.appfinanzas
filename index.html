@@ -605,6 +605,10 @@
       <button class="btn-sm ahorro-view-btn" data-view="categoria" onclick="setAhorroView('categoria')">🏷 Por categoría</button>
     </div>
 
+    <!-- Dice en una línea qué se está mirando: el gráfico no tiene título propio y "Acumulado"
+         solo no alcanza para saber acumulado DE QUÉ. Lo completa renderAhorroChart(). -->
+    <div id="ahorro-view-desc" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.45"></div>
+
     <canvas id="chart-fondo" height="180"></canvas>
 
     <!-- Ranking por categoría -->
