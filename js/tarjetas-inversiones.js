@@ -77,6 +77,108 @@ function getTcMovsEnMes(ym){
 }
 
 // ═══════════════════════════════════════════
+// CUOTAS PENDIENTES POR MES
+// ═══════════════════════════════════════════
+// Una caja por mes con lo que queda por pagar, desde el mes que estás mirando hacia adelante.
+// Al tocar una caja se abre abajo el desglose de las compras que arman ese monto.
+// Antes esto era un mini-recuadro fijo de 3 meses dentro de la card de balance, sin desglose.
+
+// Mes cuyo desglose está abierto (null = ninguno). Vive acá y no dentro del render porque
+// cada toque vuelve a dibujar la card entera y una variable local se perdería.
+let tcMesAbierto=null;
+
+// Hasta dónde proyectar. El horizonte lo marca la última cuota de las compras en cuotas: un
+// gasto frecuente sin fecha de fin seguiría para siempre, así que no puede definir el límite
+// (sí aparece DENTRO de los meses proyectados, porque también lo vas a pagar).
+// El tope de 24 meses es una red por si quedara una compra con un plazo disparatado.
+function horizonteCuotas(desde){
+  let ultimo=desde;
+  tcs.forEach(t=>{
+    if(t.frecuente) return;
+    const fin=addMonths(t.mesInicio, (t.cuotasTotal||1)-1);
+    if(fin>ultimo) ultimo=fin;
+  });
+  let meses=0, ym=desde;
+  while(ym<ultimo && meses<24){ ym=addMonths(ym,1); meses++; }
+  return meses;
+}
+
+// Devuelve [{ym, movs, totalARS, totalUSD}] de los meses que tienen algo por pagar.
+function mesesConCuotasPendientes(desde){
+  const out=[];
+  const cantidad=horizonteCuotas(desde);
+  for(let i=0;i<=cantidad;i++){
+    const ym=addMonths(desde,i);
+    const movs=getTcMovsEnMes(ym);
+    if(!movs.length) continue;
+    out.push({
+      ym, movs,
+      totalARS: movs.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0),
+      totalUSD: movs.filter(m=>m.moneda==="USD").reduce((s,m)=>s+(m.importe||0),0)
+    });
+  }
+  return out;
+}
+
+function toggleTcMes(ym){
+  tcMesAbierto = (tcMesAbierto===ym) ? null : ym;
+  renderTcPendientes();
+}
+
+function renderTcPendientes(){
+  const el=document.getElementById("tc-pendientes");
+  if(!el) return;
+  const meses=mesesConCuotasPendientes(mesTc);
+  if(!meses.length){
+    el.innerHTML=`<div class="empty" style="padding:20px"><div class="empty-icon">✓</div>Sin cuotas pendientes</div>`;
+    return;
+  }
+  // Si el mes que estaba abierto ya no está en la lista (cambiaste de mes), se cierra.
+  if(tcMesAbierto && !meses.some(m=>m.ym===tcMesAbierto)) tcMesAbierto=null;
+
+  const totalARS=meses.reduce((s,m)=>s+m.totalARS,0);
+  const totalUSD=meses.reduce((s,m)=>s+m.totalUSD,0);
+
+  let html=`<div class="txt-sm txt-muted mb-10">
+    ${meses.length} ${meses.length===1?"mes":"meses"} por delante ·
+    <strong style="color:var(--warning)">${fmtTotal(totalARS)}</strong>${totalUSD>0?` + <strong style="color:var(--accent)">USD ${totalUSD.toFixed(2)}</strong>`:""} en total
+  </div>`;
+
+  html+=`<div class="mes-grid">`+meses.map(m=>`
+    <div class="mes-caja${tcMesAbierto===m.ym?" abierta":""}" role="button" tabindex="0"
+         aria-expanded="${tcMesAbierto===m.ym}" onclick="toggleTcMes(${attrJS(m.ym)})">
+      <div class="mes-caja-label">${escapeHtml(mesLbl(m.ym).replace(" "," ").slice(0,3))} ${m.ym.slice(2,4)}</div>
+      <div class="mes-caja-val">${fmtAbbr(m.totalARS)}</div>
+      ${m.totalUSD>0?`<div class="mes-caja-usd">USD ${m.totalUSD.toFixed(0)}</div>`:""}
+      <div class="mes-caja-n">${m.movs.length} ${m.movs.length===1?"cuota":"cuotas"}</div>
+    </div>`).join("")+`</div>`;
+
+  const abierto=meses.find(m=>m.ym===tcMesAbierto);
+  if(abierto){
+    html+=`<div class="mes-desglose">
+      <div class="seccion-label mb-6">${escapeHtml(mesLbl(abierto.ym))}</div>`;
+    html+=abierto.movs.slice().sort((a,b)=>b.importe-a.importe).map(m=>{
+      const tag=m.frecuente?"🔁 mensual fijo":`cuota ${m.nCuota}/${m.cuotasTotal}`;
+      const monto=m.moneda==="USD"?`USD ${(m.importe||0).toFixed(2)}`:fmtS(m.importe||0);
+      return `<div class="mes-desglose-fila">
+        <div class="u-min0">
+          <div class="txt-strong">${escapeHtml(m.desc||"")}</div>
+          <div class="txt-micro txt-muted">💳 ${escapeHtml(m.tarjeta||"Sin tarjeta")} · ${tag}</div>
+        </div>
+        <strong>${monto}</strong>
+      </div>`;
+    }).join("");
+    html+=`<div class="mes-desglose-fila" style="border-top:1px solid var(--border);border-bottom:none">
+      <span class="txt-muted">Total del mes</span>
+      <strong style="color:var(--warning)">${fmtTotal(abierto.totalARS)}${abierto.totalUSD>0?` + USD ${abierto.totalUSD.toFixed(2)}`:""}</strong>
+    </div></div>`;
+  } else {
+    html+=`<div class="txt-micro txt-muted" style="text-align:center;margin-top:10px">Tocá un mes para ver qué lo compone</div>`;
+  }
+  el.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════
 // TARJETAS
 // ═══════════════════════════════════════════
 function cambiarMesTc(delta){
@@ -181,27 +283,11 @@ function renderTarjetas(){
       });
       html+=`</div>`;
     }
-    // Proyección próximos 3 meses (siempre desde ymSel hacia adelante)
-    const proyMeses=[1,2,3].map(i=>{
-      const ym=addMonths(ymSel,i);
-      const movsP=getTcMovsEnMes(ym);
-      const totalARS=movsP.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+m.importe,0);
-      const totalUSD=movsP.filter(m=>m.moneda==="USD").reduce((s,m)=>s+m.importe,0);
-      return {ym, totalARS, totalUSD};
-    });
-    if(proyMeses.some(p=>p.totalARS>0||p.totalUSD>0)){
-      html+=`<div class="seccion-label mt-14 mb-6">Próximos meses</div>
-        <div class="u-row">
-          ${proyMeses.map(p=>`
-            <div style="flex:1;text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px">
-              <div class="txt-micro txt-muted">${mesLbl(p.ym).slice(0,3)}</div>
-              <div style="font-size:13px;font-weight:600;color:var(--warning);margin-top:2px">${fmtAbbr(p.totalARS)}</div>
-              ${p.totalUSD>0?`<div style="font-size:10px;color:var(--accent);margin-top:2px">USD ${p.totalUSD.toFixed(0)}</div>`:""}
-            </div>`).join("")}
-        </div>`;
-    }
+    // (La proyección mes a mes vive ahora en su propia card: renderTcPendientes())
     balanceEl.innerHTML=html;
   }
+
+  renderTcPendientes();
 
   // ── ACTIVAS ──
   const actEl=document.getElementById("tc-activas");

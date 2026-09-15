@@ -276,3 +276,20 @@ canvas{width:100%!important;max-width:100%}
 
 /* Comparativa contra el año anterior, al lado del nombre de la categoría (▲ 12%, nuevo). */
 .comp-anio{font-size:10px;margin-left:6px}
+
+/* ── Cuotas pendientes (pestaña Tarjetas) ──
+   Una caja por mes con lo que queda por pagar. Se toca una y se abre su desglose abajo. */
+.mes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.mes-caja{text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:10px;
+  padding:9px 6px;cursor:pointer;transition:border-color .15s,background .15s}
+.mes-caja:active{transform:scale(.97)}
+.mes-caja.abierta{border-color:var(--warning);background:var(--warning-light)}
+.mes-caja-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.mes-caja-val{font-size:14px;font-weight:600;color:var(--warning);margin-top:3px}
+.mes-caja-usd{font-size:10px;color:var(--accent);margin-top:2px}
+.mes-caja-n{font-size:10px;color:var(--muted);margin-top:2px}
+/* Desglose del mes abierto */
+.mes-desglose{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
+.mes-desglose-fila{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
+.mes-desglose-fila:last-child{border-bottom:none}
