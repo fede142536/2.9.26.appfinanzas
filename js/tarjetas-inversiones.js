@@ -128,9 +128,14 @@ function toggleTcMes(ym){
 function renderTcPendientes(){
   const el=document.getElementById("tc-pendientes");
   if(!el) return;
-  const meses=mesesConCuotasPendientes(mesTc);
+  // Arranca en el mes SIGUIENTE al que estás mirando: el mes en curso ya está detallado
+  // arriba, en "Balance del mes" (con desglose por tarjeta y los gastos de mayor a menor), y
+  // tenerlo también como primera cajita acá lo mostraba dos veces. Así cada mes aparece una
+  // sola vez y el encabezado ("N meses por delante") pasa a contar solo lo que falta.
+  const desde=addMonths(mesTc,1);
+  const meses=mesesConCuotasPendientes(desde);
   if(!meses.length){
-    el.innerHTML=`<div class="empty" style="padding:20px"><div class="empty-icon">✓</div>Sin cuotas pendientes</div>`;
+    el.innerHTML=`<div class="empty" style="padding:20px"><div class="empty-icon">✓</div>Nada pendiente después de ${escapeHtml(mesLbl(mesTc))}</div>`;
     return;
   }
   // Si el mes que estaba abierto ya no está en la lista (cambiaste de mes), se cierra.
@@ -139,8 +144,10 @@ function renderTcPendientes(){
   const totalARS=meses.reduce((s,m)=>s+m.totalARS,0);
   const totalUSD=meses.reduce((s,m)=>s+m.totalUSD,0);
 
+  // Se aclara desde cuándo cuenta el total, para que no parezca que se perdió plata al no
+  // incluir el mes en curso.
   let html=`<div class="txt-sm txt-muted mb-10">
-    ${meses.length} ${meses.length===1?"mes":"meses"} por delante ·
+    Después de ${escapeHtml(mesLbl(mesTc))} · ${meses.length} ${meses.length===1?"mes":"meses"} ·
     <strong style="color:var(--warning)">${fmtTotal(totalARS)}</strong>${totalUSD>0?` + <strong style="color:var(--accent)">USD ${totalUSD.toFixed(2)}</strong>`:""} en total
   </div>`;
 

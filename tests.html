@@ -488,6 +488,55 @@ test("sin compras en cuotas no hay meses que proyectar", ()=>{
   igual(conTarjetas([], ()=>mesesConCuotasPendientes("2026-09")), []);
 });
 
+// ── LA CARD ARRANCA EN EL MES SIGUIENTE ──
+// mesesConCuotasPendientes(desde) sigue siendo inclusiva (los tests de arriba dependen de eso);
+// lo que cambia es QUIÉN la llama: renderTcPendientes() le pasa mesTc+1, porque el mes en curso
+// ya está detallado arriba en "Balance del mes" y antes aparecía dos veces.
+
+// Corre renderTcPendientes() de verdad y devuelve el HTML que escribió. Hace falta crear el
+// contenedor real: el getElementById parcheado de esta página devuelve un <div> descartable
+// distinto en cada llamada, así que si no existe #tc-pendientes no hay forma de leer lo dibujado.
+function htmlDePendientes(lista, ym){
+  const cont=document.createElement("div");
+  cont.id="tc-pendientes";
+  cont.style.display="none";
+  document.body.appendChild(cont);
+  const antesTcs=tcs, antesMes=mesTc, antesAbierto=tcMesAbierto;
+  try{
+    tcs=lista; mesTc=ym; tcMesAbierto=null;
+    renderTcPendientes();
+    return cont.innerHTML;
+  } finally {
+    tcs=antesTcs; mesTc=antesMes; tcMesAbierto=antesAbierto;
+    cont.remove();
+  }
+}
+
+test("la grilla arranca en el mes siguiente al que estás mirando", ()=>{
+  const html=htmlDePendientes([NOTEBOOK, HELADERA, ZAPATILLAS], "2026-09");
+  cierto(!html.includes("Sep 26"), "septiembre no va: ya está detallado en la card de arriba");
+  cierto(html.includes("Oct 26"), "la primera cajita tiene que ser octubre");
+  cierto(html.includes("Abr 27"), "la última cuota de la Notebook sigue teniendo que aparecer");
+});
+
+test("el total de la card no cuenta el mes en curso", ()=>{
+  const html=htmlDePendientes([NOTEBOOK, HELADERA, ZAPATILLAS], "2026-09");
+  // Falta pagar 1.480.000 en total; septiembre son 300.000, así que después de septiembre
+  // quedan 1.180.000 repartidos en 7 meses (oct 26 … abr 27).
+  cierto(html.includes("7 meses"), "tiene que contar 7 meses, no 8: "+html.slice(0,200));
+  cierto(html.includes(fmtTotal(1180000)), "el total tiene que excluir el mes en curso");
+  cierto(html.includes("Después de Septiembre 2026"),
+    "hace falta decir desde cuándo cuenta el total, si no parece que se perdió plata");
+});
+
+test("si no queda nada después del mes en curso lo dice", ()=>{
+  // Zapatillas: 3 cuotas desde agosto 2026 → la última cae en octubre. Parado en octubre,
+  // no queda ningún mes por delante.
+  const html=htmlDePendientes([ZAPATILLAS], "2026-10");
+  cierto(html.includes("Nada pendiente después de Octubre 2026"),
+    "el vacío tiene que aclarar de qué mes en adelante no queda nada: "+html.slice(0,200));
+});
+
 // ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
