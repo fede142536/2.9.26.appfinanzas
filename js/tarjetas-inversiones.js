@@ -289,60 +289,10 @@ function renderTarjetas(){
 
   renderTcPendientes();
 
-  // ── ACTIVAS ──
-  const actEl=document.getElementById("tc-activas");
-  if(!activas.length){actEl.innerHTML=`<div class="empty"><div class="empty-icon">✓</div>Sin cuotas activas</div>`;}
-  else actEl.innerHTML=activas.map(t=>{
-    if(t.frecuente){
-      // Card para gasto frecuente: solo los números (monto, meses activos, total pagado,
-      // vigencia). Se sacó el historial de aumentos, la mini-proyección de meses y los
-      // botones de editar/borrar a pedido: la
-      // proyección mes a mes ya vive en su propia card (renderTcPendientes) y quedaba
-      // duplicada acá. Sin botones, esta card queda de solo lectura: editar o borrar un
-      // gasto frecuente activo no es posible desde ningún lugar de la app por ahora.
-      const montoActual=getMontoEnMes(t,hoyYM);
-      const mesesActivos=getCuotaEnMes(t,hoyYM)||0;
-      const totalPagado=calcTotalFrecuente(t,t.mesInicio,hoyYM);
-      const finTxt=t.mesFin?`Hasta ${mesLbl(t.mesFin)}`:"Sin fecha de fin";
-      return `<div class="tc-card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-          <div class="u-flex1 u-min0">
-            <div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)} <span style="font-size:11px">🔁</span>${t.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:""}</div>
-            <div class="txt-xs txt-muted">${escapeHtml(t.tarjeta)} · ${escapeHtml(t.cat)} · Desde ${mesLbl(t.mesInicio)}</div>
-          </div>
-          <span class="tc-badge" style="background:var(--warning-light);color:var(--warning)">FRECUENTE</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">Monto actual</span><strong>${fmtMoneda(montoActual,t.moneda)}</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Meses activos</span><strong>${mesesActivos}</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Total pagado</span><strong>${fmtMoneda(totalPagado,t.moneda)}</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Vigencia</span><strong>${finTxt}</strong></div>
-      </div>`;
-    }
-    // Card para cuotas: los balances (por cuota, total, pendiente, última cuota) más la
-    // barra de progreso y "N pagadas / M restantes". Se sacó la mini-proyección de cuotas (duplicaba
-    // la card de Cuotas pendientes) y Editar/Eliminar a pedido — mismo trade-off que arriba:
-    // una compra en cuotas activa no se puede editar ni borrar desde ningún otro lugar.
-    const vc=Math.round(t.total/t.cuotasTotal*100)/100;
-    const nActual=getCuotaEnMes(t,hoyYM)||1;
-    const restantes=t.cuotasTotal-nActual+1;
-    const pct=Math.round((nActual-1)/t.cuotasTotal*100);
-    const mesUltima=addMonths(t.mesInicio,t.cuotasTotal-1);
-    return `<div class="tc-card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div class="u-flex1 u-min0">
-          <div style="font-size:14px;font-weight:600">${escapeHtml(t.desc)}${t.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:""}</div>
-          <div class="txt-xs txt-muted">${escapeHtml(t.tarjeta)} · ${escapeHtml(t.cat)}${t.fecha?" · "+t.fecha.split("-").reverse().join("/"):""}</div>
-        </div>
-        <span class="tc-badge">Cuota ${nActual}/${t.cuotasTotal}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:var(--muted)">Por cuota</span><strong>${fmtMoneda(vc,t.moneda)}</strong></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Total gasto</span><strong>${fmtMoneda(t.total,t.moneda)}</strong></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Saldo pendiente</span><strong style="color:var(--danger)">${fmtMoneda(vc*restantes,t.moneda)}</strong></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:3px"><span style="color:var(--muted)">Última cuota</span><strong>${mesLbl(mesUltima)}</strong></div>
-      <div class="tc-progress" style="margin-top:10px"><div class="tc-progress-fill" style="width:${pct}%"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px"><span>${nActual-1} pagadas</span><span>${restantes} restantes</span></div>
-    </div>`;
-  }).join("");
+  // La sección "Activas" (una card por compra, con sus balances y barra de progreso) se sacó
+  // a pedido: era un desglose de cada movimiento cargado y ya está cubierto por la card de
+  // Cuotas pendientes (proyección mes a mes, con desglose al tocar) más el Balance del mes.
+  // `activas` sigue calculándose porque de ahí salen los chips "Pendiente ARS"/"Pendiente USD".
 
   // ── COMPLETAS (con botón editar) ──
   const doneEl=document.getElementById("tc-completas");
@@ -364,20 +314,6 @@ function renderTarjetas(){
       </div>
     </div>`;
   }).join("");
-}
-
-// Calcula el total pagado de un gasto frecuente desde mesDesde hasta mesHasta (inclusive).
-function calcTotalFrecuente(tc, mesDesde, mesHasta){
-  if(!tc.frecuente||!mesDesde||!mesHasta) return 0;
-  let total=0;
-  let cur=mesDesde;
-  let i=0;
-  while(cur<=mesHasta && i<600){
-    if(getCuotaEnMes(tc,cur)>0) total+=getMontoEnMes(tc,cur);
-    cur=addMonths(cur,1);
-    i++;
-  }
-  return Math.round(total*100)/100;
 }
 
 async function borrarTc(id){

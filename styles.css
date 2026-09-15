@@ -182,8 +182,6 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .modal-title{font-size:16px;font-weight:600;margin-bottom:14px}
 /* TARJETA CARDS */
 .tc-card{background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border);padding:13px;margin-bottom:8px}
-.tc-progress{height:4px;background:var(--bg);border-radius:2px;margin-top:9px;overflow:hidden}
-.tc-progress-fill{height:100%;border-radius:2px;background:var(--warning)}
 .tc-badge{font-size:11px;font-weight:500;padding:3px 9px;border-radius:12px;background:var(--warning-light);color:var(--warning);flex-shrink:0;margin-left:8px}
 /* MISC */
 .inv-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--invest-light);color:var(--invest);display:inline-block;margin-left:4px}
