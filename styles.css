@@ -65,6 +65,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .type-btn.active-ingreso{background:var(--success-light);color:var(--success)}
 .type-btn.active-inversion{background:var(--invest-light);color:var(--invest)}
 .type-btn.active-tarjeta{background:var(--warning-light);color:var(--warning)}
+.type-btn.active-cambio{background:var(--accent-light);color:var(--accent)}
 /* AMOUNT */
 
 /* BUTTONS */
@@ -78,11 +79,13 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .btn-ingreso{background:var(--success);background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 78%,black));color:#fff}
 .btn-inversion{background:var(--invest);background:linear-gradient(135deg,var(--invest),color-mix(in srgb,var(--invest) 78%,black));color:#fff}
 .btn-tarjeta{background:var(--warning);background:linear-gradient(135deg,var(--warning),color-mix(in srgb,var(--warning) 78%,black));color:#fff}
+.btn-cambio{background:var(--accent);background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 78%,black));color:#fff}
 .btn-primary:active{transform:scale(.97)}
 .btn-sm{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap}
 .amount-wrap{position:relative}
 .amount-prefix{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--muted)}
 .amount-input{padding-left:28px!important;font-size:22px!important;font-weight:500}
+.amount-wrap-usd .amount-input{padding-left:52px!important}
 /* MONTO PROTAGONISTA (pantalla Cargar): el mismo .amount-wrap/.amount-prefix/.amount-input de
    siempre, con clases extra encima. El prefijo de #inp-importe tiene su propio id
    (inp-importe-prefix) para que toggleUSD()/resetForm() lo actualicen sin ambigüedad. */
@@ -101,6 +104,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 #page-cargar.theme-ingreso{--tema-color:var(--success);--tema-light:var(--success-light)}
 #page-cargar.theme-inversion{--tema-color:var(--invest);--tema-light:var(--invest-light)}
 #page-cargar.theme-tarjeta{--tema-color:var(--warning);--tema-light:var(--warning-light)}
+#page-cargar.theme-cambio{--tema-color:var(--accent);--tema-light:var(--accent-light)}
 #page-cargar .form-input:focus,#page-cargar .form-select:focus,#page-cargar .form-textarea:focus{border-color:var(--tema-color);box-shadow:0 0 0 3px var(--tema-light)}
 #page-cargar .amount-prefix{color:var(--tema-color);transition:color .25s ease}
 #page-cargar .amount-hero .amount-input{caret-color:var(--tema-color)}

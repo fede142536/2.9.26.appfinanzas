@@ -9,7 +9,7 @@ function init(){
   document.getElementById("fecha-hoy").textContent=hoy.toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
   const iso=currentYMD();
   const ym=currentYM();
-  ["inp-fecha","inv-fecha","tc-fecha"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=iso;});
+  ["inp-fecha","inv-fecha","tc-fecha","cambio-fecha"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=iso;});
   const mesInicioEl=document.getElementById("tc-mes-inicio");
   if(mesInicioEl) mesInicioEl.value=ym;
   const mesInicioFrecEl=document.getElementById("tc-mes-inicio-frec");
@@ -27,6 +27,7 @@ function init(){
   buildCuentaSelect("inp-cuenta");
   buildCuentaSelect("inv-cuenta");
   buildCuentaSelect("tc-cuenta");
+  buildCuentaSelect("cambio-cuenta");
   buildTarjetaSelect("tc-tarjeta");
   document.getElementById("mes-label").textContent=mesLbl(mesActual);
   renderAlertasFrecuentes();
@@ -346,14 +347,15 @@ function setTipo(t){
   tipo=t;
   const pageCargar=document.getElementById("page-cargar");
   if(pageCargar){
-    pageCargar.classList.remove("theme-gasto","theme-ingreso","theme-inversion","theme-tarjeta");
+    pageCargar.classList.remove("theme-gasto","theme-ingreso","theme-inversion","theme-tarjeta","theme-cambio");
     pageCargar.classList.add("theme-"+t.toLowerCase());
   }
-  ["gasto","ingreso","inversion","tarjeta"].forEach(x=>document.getElementById("btn-"+x).className="type-btn");
+  ["gasto","ingreso","inversion","tarjeta","cambio"].forEach(x=>document.getElementById("btn-"+x).className="type-btn");
   document.getElementById("btn-"+t.toLowerCase()).className="type-btn active-"+t.toLowerCase();
   document.getElementById("campos-gi").style.display=(t==="Gasto"||t==="Ingreso")?"block":"none";
   document.getElementById("campos-inv").style.display=t==="Inversion"?"block":"none";
   document.getElementById("campos-tc").style.display=t==="Tarjeta"?"block":"none";
+  document.getElementById("campos-cambio").style.display=t==="Cambio"?"block":"none";
   // El toggle de ahorro solo aparece en Gasto
   document.getElementById("ahorro-toggle-group").style.display=(t==="Gasto")?"block":"none";
   document.getElementById("frecuente-toggle-group").style.display=(t==="Gasto")?"block":"none";
@@ -365,13 +367,67 @@ function setTipo(t){
     if(frecEl) frecEl.checked=false;
     document.getElementById("inp-recup").value="";
   }
-  const labels={Gasto:"Guardar gasto",Ingreso:"Guardar ingreso",Inversion:"Guardar inversión",Tarjeta:"Guardar tarjeta"};
-  const cls={Gasto:"btn-gasto",Ingreso:"btn-ingreso",Inversion:"btn-inversion",Tarjeta:"btn-tarjeta"};
+  const labels={Gasto:"Guardar gasto",Ingreso:"Guardar ingreso",Inversion:"Guardar inversión",Tarjeta:"Guardar tarjeta",Cambio:"Guardar cambio"};
+  const cls={Gasto:"btn-gasto",Ingreso:"btn-ingreso",Inversion:"btn-inversion",Tarjeta:"btn-tarjeta",Cambio:"btn-cambio"};
   const btn=document.getElementById("btn-guardar");
   btn.className="btn-primary "+cls[t];btn.textContent=labels[t];
   if(t==="Gasto"||t==="Ingreso")buildCats();
   if(t==="Tarjeta"){ buildTcCats(); buildTarjetaSelect("tc-tarjeta"); }
   if(t==="Inversion") buildInvCats();
+  if(t==="Cambio"){ buildCuentaSelect("cambio-cuenta"); setSentidoCambio(sentidoCambio); }
+}
+
+// ═══════════════════════════════════════════
+// CAMBIO DE MONEDA (formulario)
+// ═══════════════════════════════════════════
+// "compra" = pagás pesos y recibís dólares · "venta" = al revés.
+let sentidoCambio="compra";
+
+function setSentidoCambio(s){
+  sentidoCambio = s==="venta" ? "venta" : "compra";
+  const compra = sentidoCambio==="compra";
+  document.getElementById("btn-cambio-compra").className = "type-btn"+(compra?" active-cambio":"");
+  document.getElementById("btn-cambio-venta").className  = "type-btn"+(compra?"":" active-cambio");
+  // Las etiquetas se dan vuelta: en una compra los pesos salen y en una venta entran.
+  document.getElementById("cambio-ars-label").textContent = compra ? "Pesos que pagué" : "Pesos que recibí";
+  document.getElementById("cambio-usd-label").textContent = compra ? "Dólares que recibí" : "Dólares que entregué";
+  calcTipoCambio();
+}
+
+// Muestra a cuánto te salió el dólar, en vivo. Es el dato que después no te acordás.
+function calcTipoCambio(){
+  const el=document.getElementById("cambio-tc");
+  if(!el) return;
+  const ars=parseFloat(limpiarImporte(document.getElementById("cambio-ars").value))||0;
+  const usd=parseFloat(document.getElementById("cambio-usd").value)||0;
+  const tc=tipoDeCambio(ars,usd);
+  if(!tc){ el.style.display="none"; return; }
+  el.style.display="block";
+  el.innerHTML=`<div class="seccion-label">Tipo de cambio</div>
+    <div style="font-size:18px;font-weight:600;color:var(--accent);margin-top:2px">${fmtS(tc)} por dólar</div>`;
+}
+
+async function guardarCambio(){
+  const ars=parseFloat(limpiarImporte(document.getElementById("cambio-ars").value))||0;
+  const usd=parseFloat(document.getElementById("cambio-usd").value)||0;
+  const fecha=document.getElementById("cambio-fecha").value;
+  if(ars<=0 || usd<=0){ showToast("Completá los dos montos: pesos y dólares"); return; }
+  if(!fecha){ showToast("Poné la fecha del cambio"); return; }
+  const patas=crearCambio({
+    fecha, montoARS:ars, montoUSD:usd, sentido:sentidoCambio,
+    cuenta:document.getElementById("cambio-cuenta").value,
+    nota:document.getElementById("cambio-nota").value.trim()
+  });
+  if(!patas){ showToast("No pude armar el cambio, revisá los datos"); return; }
+  movs.push(...patas);
+  save();
+  const tc=tipoDeCambio(ars,usd);
+  showToast(`${sentidoCambio==="compra"?"Compra":"Venta"} guardada · ${fmtS(tc)} por dólar ✓`);
+  document.getElementById("cambio-ars").value="";
+  document.getElementById("cambio-usd").value="";
+  document.getElementById("cambio-nota").value="";
+  calcTipoCambio();
+  renderMovs();
 }
 function toggleFrecuente(){
   const isFrec=document.getElementById("tc-frecuente").checked;
@@ -432,6 +488,7 @@ function importeParaceAbsurdo(importe, tipoMov, moneda){
 }
 
 async function guardar(){
+  if(tipo==="Cambio"){ await guardarCambio(); return; }
   if(tipo==="Tarjeta"){
     const desc=document.getElementById("tc-desc").value.trim();
     const total=parseFloat(limpiarImporte(document.getElementById("tc-total").value))||0;

@@ -52,7 +52,7 @@ function showPage(id,btn){
   if(id==="tc" && !yaAlDia) renderTarjetas();
   if(id==="inv" && !yaAlDia) renderInv();
   if(id==="ahorro" && !yaAlDia) renderAhorro();
-  if(id==="import") renderImportHistory(); // liviano, y depende de importHistory (no cubierto por datosVersion)
+  if(id==="import"){ renderImportHistory(); renderMigrarCambios(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
   if(id==="config"){renderExportStats();renderCatManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderTarjetasManager();renderEstadoBackup();} // liviano
   if(["mov","dash","tc","inv","ahorro"].includes(id)) paginaVersionRenderizada[id]=datosVersion;
   // Reponer el scroll AL FINAL, no antes: los render de arriba cambian el alto de la página y
@@ -325,7 +325,10 @@ function construirCuerpoTxItem(m){
       sub=subtituloFila([subcatVisible(m.subcat)]);
     } else {
       let badge="";
-      if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
+      // Las dos patas de un cambio de moneda van marcadas: sin el badge, en la lista se ven
+      // como un gasto suelto y un ingreso suelto, y no se entiende que son una sola operación.
+      if(esPataDeCambio(m)) badge=` <span class="badge badge-accent">💱 ${m.cambioPata==="sale"?"CAMBIO · SALE":"CAMBIO · ENTRA"}</span>`;
+      else if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
       else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
       else if(m.frecuente) badge=` <span class="badge badge-warning">🔁 FRECUENTE</span>`;
       cat=`${escapeHtml(m.cat)}${badge}`;
@@ -861,6 +864,22 @@ function renderMovs(){
 }
 async function borrarMov(id, btn){
   const m=movs.find(x=>x.id===id);
+  // Un cambio de moneda son DOS movimientos ligados (los pesos que salen y los dólares que
+  // entran). Borrar uno solo deja la mitad huérfana y descuadra el balance para siempre, así
+  // que se borran juntos y se avisa antes.
+  if(m && esPataDeCambio(m)){
+    const info=leerCambio(patasDelCambio(m.cambioId, movs));
+    const detalle = info
+      ? `${fmtS(info.montoARS)} ↔ USD ${info.montoUSD.toFixed(2)}${info.tc?` (a ${fmtS(info.tc)} por dólar)`:""}`
+      : "las dos patas";
+    if(!await mostrarConfirm(`Este movimiento es la mitad de un cambio de moneda.\n\n${detalle}\n\nSe eliminan las dos mitades juntas: borrar una sola dejaría el balance descuadrado.`,
+      {titulo:"Eliminar el cambio", textoOk:"Eliminar las dos", peligroso:true})) return;
+    movs=movs.filter(x=>x.cambioId!==m.cambioId);
+    save();
+    showToast("Cambio de moneda eliminado");
+    renderMovs();
+    return;
+  }
   // Si es un gasto frecuente, en lugar de borrar todo el historial, ofrecemos darlo de baja
   // desde el MES QUE EL USUARIO ESTÁ VIENDO (mesActual), no el calendario real
   if(m && m.frecuente){
