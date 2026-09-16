@@ -170,8 +170,19 @@ function renderMigrarCambios(){
   const el=document.getElementById("migrar-cambios-lista");
   if(!card||!el) return;
   const cands=candidatosAMigrar(movs);
-  if(!cands.length){ card.style.display="none"; return; }
+  const descartados=idsIgnorados().length;
+  // Si no hay candidatos pero sí descartes, la card sigue a la vista con el botón de
+  // deshacer: descartar de más no puede ser una puerta de una sola dirección.
+  if(!cands.length && !descartados){ card.style.display="none"; return; }
   card.style.display="block";
+  if(!cands.length){
+    el.innerHTML=`<div class="inset">
+      <div class="txt-md">No queda ninguno sin completar.</div>
+      <div class="txt-xs txt-muted" style="margin-top:4px">Marcaste ${descartados} ${descartados===1?"movimiento":"movimientos"} como "no es un cambio".</div>
+    </div>
+    <button class="btn-sm" style="width:100%;margin-top:10px" onclick="revisarDescartados()">Volver a revisarlos</button>`;
+    return;
+  }
 
   el.innerHTML=cands.map(c=>{
     const m=c.mov;
@@ -195,6 +206,9 @@ function renderMigrarCambios(){
     </div>`;
   }).join("");
   el.innerHTML+=`<p class="txt-micro txt-muted" style="margin-top:4px">Los que marques como "no es un cambio" no vuelven a aparecer acá.</p>`;
+  if(descartados){
+    el.innerHTML+=`<button class="btn-sm" style="width:100%;margin-top:8px" onclick="revisarDescartados()">Volver a revisar los ${descartados} descartados</button>`;
+  }
 }
 
 // Le pide al usuario la mitad que falta y, si confirma, la agrega.
@@ -233,4 +247,16 @@ async function descartarCandidato(idStr){
   const id=Number(idStr);
   ignorarParaMigrar(id);
   renderMigrarCambios();
+}
+
+// Vuelve a poner en la lista los que marcaste como "no es un cambio". Sin esto, descartar
+// era irreversible y un toque de más te dejaba el movimiento mal cargado para siempre.
+async function revisarDescartados(){
+  const n=idsIgnorados().length;
+  if(!n){ showToast("No hay ninguno descartado"); return; }
+  if(!await mostrarConfirm(`Vuelven a aparecer los ${n} que marcaste como "no es un cambio".`,
+    {titulo:"Volver a revisarlos", textoOk:"Mostrarlos"})) return;
+  limpiarIgnorados();
+  renderMigrarCambios();
+  showToast(`${n} ${n===1?"movimiento vuelve":"movimientos vuelven"} a la lista`);
 }

@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>Enola</title>
+<!-- La versión que este HTML espera. index.html se pide SIEMPRE a la red (ver sw.js), así
+     que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
+     —que se sirven primero desde caché— quedaron viejos.
+     ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
+<meta name="enola-version" content="enola-v105">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -27,6 +32,15 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<!-- Aviso de versión desactualizada. Los estilos van inline a propósito: styles.css también
+     se sirve desde caché, y este cartel tiene que verse bien justamente cuando lo cacheado
+     quedó viejo. -->
+<div id="version-vieja" role="alert" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#ba7517;color:#fff;padding:10px 14px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.25)">
+  <div style="max-width:560px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between">
+    <span id="version-vieja-msg" style="flex:1;min-width:0"></span>
+    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:#fff;color:#8a5610;border:none;border-radius:8px;padding:8px 14px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
+  </div>
+</div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <!-- AVISO DE ERROR NO ATRAPADO.
@@ -911,5 +925,67 @@
 <script src="js/presupuestos.js"></script>
 <script src="js/seguridad-pin.js"></script>
 <script src="js/main.js"></script>
+
+<script>
+// ═══════════════════════════════════════════
+// AVISO DE VERSIÓN DESACTUALIZADA
+// ═══════════════════════════════════════════
+// Este bloque vive INLINE en index.html a propósito, y no en un .js: el service worker pide
+// index.html siempre a la red, pero sirve los .js primero desde caché. Si el chequeo viviera
+// en un archivo aparte, una versión vieja de ese archivo no tendría el chequeo — o sea, no
+// avisaría nada justo en el caso que tiene que detectar.
+//
+// Por la misma razón no llama a ninguna función de la app (showToast, mostrarAlerta): todas
+// viven en archivos que podrían estar viejos. Es autosuficiente a propósito.
+(function(){
+  var meta=document.querySelector('meta[name="enola-version"]');
+  var esperada=meta ? meta.getAttribute("content") : "";
+  if(!esperada || !("serviceWorker" in navigator)) return;
+
+  var cartel=document.getElementById("version-vieja");
+  var msg=document.getElementById("version-vieja-msg");
+  var btn=document.getElementById("version-vieja-btn");
+  if(!cartel || !msg || !btn) return;
+
+  btn.addEventListener("click", function(){
+    btn.disabled=true;
+    btn.textContent="Actualizando…";
+    navigator.serviceWorker.getRegistration().then(function(reg){
+      if(reg){
+        reg.update();
+        if(reg.waiting) reg.waiting.postMessage({tipo:"SKIP_WAITING"});
+      }
+      setTimeout(function(){ location.reload(); }, 800);
+    }).catch(function(){ location.reload(); });
+  });
+
+  function chequear(){
+    navigator.serviceWorker.getRegistration().then(function(reg){
+      var sw=reg && reg.active;
+      if(!sw) return;  // primera visita: no hay nada viejo todavía
+      var canal=new MessageChannel();
+      canal.port1.onmessage=function(ev){
+        var instalada=(ev.data && ev.data.version) || "";
+        if(!instalada || instalada===esperada) return;
+        msg.textContent="Tenés guardada una versión vieja ("+instalada+"). Algunas cosas pueden no andar bien hasta que actualices.";
+        cartel.style.display="block";
+        // El cartel es fixed: sin esto tapa el header de la app, y como el header es sticky
+        // con top:0, al scrollear se le volvería a meter abajo igual. Se corre todo lo demás
+        // hacia abajo la altura del cartel.
+        var alto=cartel.offsetHeight;
+        document.body.style.paddingTop=alto+"px";
+        var est=document.createElement("style");
+        est.textContent=".header{top:"+alto+"px}";
+        document.head.appendChild(est);
+      };
+      sw.postMessage({tipo:"GET_VERSION"}, [canal.port2]);
+    }).catch(function(){});
+  }
+
+  // Un segundo de gracia: si el service worker recién se está activando, preguntarle en el
+  // mismo instante de la carga puede dar la versión anterior y mostrar un cartel que sobra.
+  setTimeout(chequear, 1200);
+})();
+</script>
 </body>
 </html>

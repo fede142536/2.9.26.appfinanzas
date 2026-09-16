@@ -3,11 +3,13 @@
 // cache-first para los demás assets (íconos, manifest).
 
 // ⚠️ SUBIR ESTA VERSIÓN ANTE CUALQUIER CAMBIO en index.html, styles.css o js/*.js.
+// ⚠️ Y SUBIR TAMBIÉN <meta name="enola-version"> en index.html, que es lo que compara el
+// aviso de "tenés una versión vieja". Hay un test que verifica que las dos coincidan.
 // El navegador solo busca una versión nueva del service worker cuando el contenido de
 // ESTE archivo cambia. Si tocás un .js y no subís este número, los celulares que ya
 // tienen la app instalada siguen sirviendo para siempre la versión vieja desde su caché
 // (la estrategia para los assets es "cache-first") y tu cambio NO LLEGA NUNCA.
-const CACHE_VERSION = "enola-v104";
+const CACHE_VERSION = "enola-v105";
 const ASSETS = [
   "./",
   "./index.html",

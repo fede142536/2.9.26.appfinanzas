@@ -1533,6 +1533,80 @@ test("un error HTTP no se confunde con datos", async ()=>{
 });
 
 // ═══════════════════════════════════════════
+// AVISO DE VERSIÓN DESACTUALIZADA
+// ═══════════════════════════════════════════
+grupo("Versión: aviso de app vieja");
+
+// El service worker pide index.html SIEMPRE a la red, pero sirve los .js primero desde
+// caché. Por eso podías terminar con HTML nuevo y JavaScript viejo sin ningún indicio — y
+// eso hace parecer que otros arreglos no funcionan. El aviso compara la versión que el HTML
+// fresco dice esperar contra la que reporta el service worker instalado.
+
+test("la versión del HTML y la del service worker coinciden", async ()=>{
+  // ESTE es el test que importa: el aviso funciona comparando dos números que hay que subir
+  // juntos a mano. Si se desincronizan, el cartel aparece siempre y deja de significar nada
+  // — un aviso que salta sin motivo se ignora y es peor que no tenerlo.
+  const html=await (await fetch("index.html")).text();
+  const sw=await (await fetch("sw.js")).text();
+  const enHtml=(html.match(/<meta name="enola-version" content="([^"]+)"/)||[])[1];
+  const enSw=(sw.match(/CACHE_VERSION\s*=\s*"([^"]+)"/)||[])[1];
+  cierto(!!enHtml, "falta el <meta name=\"enola-version\"> en index.html");
+  cierto(!!enSw, "no encontré CACHE_VERSION en sw.js");
+  igual(enHtml, enSw, "subiste una y te olvidaste de la otra");
+});
+
+test("el chequeo vive inline en el HTML, no en un archivo .js", async ()=>{
+  // Si se mudara a un .js, ese archivo se serviría desde caché: una versión vieja no tendría
+  // el chequeo y no avisaría nada, que es exactamente el caso que tiene que detectar.
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('meta[name="enola-version"]'),
+    "el chequeo tiene que estar dentro de index.html");
+  for(const archivo of ["js/main.js","js/config-ui.js","js/render-comun.js"]){
+    const js=await (await fetch(archivo)).text();
+    cierto(!js.includes('meta[name="enola-version"]'),
+      `el chequeo se mudó a ${archivo}, donde la caché lo puede dejar viejo`);
+  }
+});
+
+test("el cartel trae sus propios estilos", async ()=>{
+  // styles.css también se sirve desde caché: el cartel tiene que verse bien justamente
+  // cuando lo cacheado quedó viejo, así que no puede depender de una clase de ahí.
+  const html=await (await fetch("index.html")).text();
+  const i=html.indexOf('id="version-vieja"');
+  cierto(i>=0, "no está el cartel");
+  const tramo=html.slice(i, i+400);
+  cierto(/style="[^"]*position:fixed/.test(tramo), "los estilos del cartel tienen que ir inline");
+  cierto(/z-index:\s*9{3,}/.test(tramo), "tiene que ir por encima de todo lo demás");
+});
+
+test("arranca oculto", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const i=html.indexOf('id="version-vieja"');
+  cierto(/display:none/.test(html.slice(i, i+200)),
+    "si arranca visible, lo ves en cada carga aunque esté todo al día");
+});
+
+// ═══════════════════════════════════════════
+// MIGRACIÓN: DESHACER UN DESCARTE
+// ═══════════════════════════════════════════
+grupo("Migración: volver atrás un descarte");
+
+test("descartar no es una puerta de una sola dirección", ()=>{
+  // Antes, al descartar el último candidato la card desaparecía entera y no había forma de
+  // volver atrás un toque de más: el movimiento quedaba mal cargado para siempre.
+  const mov={id:777, tipo:"Gasto", nota:"MEP Compra", cat:"MEP", subcat:"AL30",
+             fecha:"2026-09-03", moneda:"ARS", importe:39467.53, importeOrig:null};
+  conMovsLimpios([mov], ()=>{
+    igual(candidatosAMigrar([mov]).length, 1);
+    ignorarParaMigrar(mov.id);
+    igual(candidatosAMigrar([mov]).length, 0, "descartado, ya no aparece");
+    igual(idsIgnorados().length, 1, "pero queda registrado, para poder deshacerlo");
+    limpiarIgnorados();
+    igual(candidatosAMigrar([mov]).length, 1, "y al limpiarlos vuelve a la lista");
+  });
+});
+
+// ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
 grupo("Números e íconos");
