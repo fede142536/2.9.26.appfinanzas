@@ -104,7 +104,7 @@ function idsIgnorados(){
 function ignorarParaMigrar(id){
   const ids=idsIgnorados();
   if(!ids.includes(id)) ids.push(id);
-  localStorage.setItem(CAMBIO_IGNORADOS_KEY, JSON.stringify(ids));
+  guardarPreferencia(CAMBIO_IGNORADOS_KEY, JSON.stringify(ids));
 }
 function limpiarIgnorados(){
   localStorage.removeItem(CAMBIO_IGNORADOS_KEY);

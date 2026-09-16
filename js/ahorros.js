@@ -188,7 +188,7 @@ const ahorroState = {
 // Cambia la vista del gráfico de ahorros y la guarda como preferencia
 function setAhorroView(v){
   ahorroState.view=v;
-  localStorage.setItem("fahorrov",v);
+  guardarPreferencia("fahorrov",v);
   document.querySelectorAll(".ahorro-view-btn").forEach(b=>{
     b.classList.toggle("active", b.dataset.view===v);
   });

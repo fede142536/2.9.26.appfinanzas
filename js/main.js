@@ -11,7 +11,7 @@ let obStep=0;
 function checkOnboarding(){
   if(localStorage.getItem("fonboarded")) return;
   if(movs.length>0 || tcs.length>0){
-    localStorage.setItem("fonboarded","1");
+    guardarPreferencia("fonboarded","1");
     return;
   }
   obStep=0;
@@ -31,7 +31,7 @@ function onboardingSiguiente(){
   else { cerrarOnboarding(); }
 }
 function cerrarOnboarding(){
-  localStorage.setItem("fonboarded","1");
+  guardarPreferencia("fonboarded","1");
   document.getElementById("onboarding-screen").style.display="none";
 }
 
