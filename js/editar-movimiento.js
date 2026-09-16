@@ -6,6 +6,9 @@ let editingId=null;
 function openEditModal(id){
   const m=movs.find(x=>x.id===id);
   if(!m) return;
+  // Editar una sola pata de un cambio dejaría el tipo de cambio inconsistente (cambiás los
+  // pesos y los dólares quedan como estaban). Se edita la operación entera.
+  if(esPataDeCambio(m)) return openEditCambioModal(m.cambioId);
   editingId=id;
   document.getElementById("edit-form-content").innerHTML=renderEditForm(m);
   document.getElementById("modal-edit").classList.add("open");
@@ -17,9 +20,73 @@ function openEditModal(id){
     populateEditCatSelect(m.tipo,m.cat,m.subcat);
   }
 }
+// ═══════════════════════════════════════════
+// EDITAR UN CAMBIO DE MONEDA
+// ═══════════════════════════════════════════
+// Mismo patrón que openEditTcModal: se reusa el modal de edición y se le cambia el handler
+// del botón de guardar.
+let editingCambioId=null;
+
+function openEditCambioModal(cambioId){
+  const info=leerCambio(patasDelCambio(cambioId, movs));
+  if(!info){ showToast("No encontré las dos mitades de este cambio"); return; }
+  editingCambioId=cambioId;
+  const compra=info.sentido==="compra";
+  document.getElementById("edit-form-content").innerHTML=`
+    <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--accent-light);color:var(--accent);margin-bottom:10px">💱 ${compra?"COMPRA DE DÓLARES":"VENTA DE DÓLARES"}</div>
+    <p class="txt-sm txt-muted mb-10">Se guardan las dos mitades juntas, así el tipo de cambio siempre cierra.</p>
+    <div class="form-group"><label class="form-label" for="edit-cambio-ars">${compra?"Pesos que pagaste":"Pesos que recibiste"}</label>
+      <input type="number" id="edit-cambio-ars" class="form-input" value="${info.montoARS}" inputmode="decimal" step="any" oninput="previsualizarEditCambio()"></div>
+    <div class="form-group"><label class="form-label" for="edit-cambio-usd">${compra?"Dólares que recibiste":"Dólares que entregaste"}</label>
+      <input type="number" id="edit-cambio-usd" class="form-input" value="${info.montoUSD}" inputmode="decimal" step="any" oninput="previsualizarEditCambio()"></div>
+    <div id="edit-cambio-tc" class="inset mb-10"></div>
+    <div class="form-group"><label class="form-label" for="edit-cambio-fecha">Fecha</label>
+      <input type="date" id="edit-cambio-fecha" class="form-input" value="${escapeHtml(info.fecha||"")}"></div>
+    <div class="form-group"><label class="form-label" for="edit-cambio-nota">Nota</label>
+      <textarea id="edit-cambio-nota" class="form-textarea">${escapeHtml(info.nota||"")}</textarea></div>`;
+  document.getElementById("modal-edit").classList.add("open");
+  const btnGuardar=document.querySelector("#modal-edit .btn-primary");
+  if(btnGuardar) btnGuardar.setAttribute("onclick","guardarEditCambio()");
+  previsualizarEditCambio();
+}
+
+function previsualizarEditCambio(){
+  const el=document.getElementById("edit-cambio-tc");
+  if(!el) return;
+  const tc=tipoDeCambio(parseFloat(document.getElementById("edit-cambio-ars").value)||0,
+                        parseFloat(document.getElementById("edit-cambio-usd").value)||0);
+  el.innerHTML=tc
+    ? `<div class="seccion-label">Tipo de cambio</div><div style="font-size:18px;font-weight:600;color:var(--accent);margin-top:2px">${fmtS(tc)} por dólar</div>`
+    : `<div class="txt-sm txt-muted">Poné los dos montos para ver el tipo de cambio.</div>`;
+}
+
+function guardarEditCambio(){
+  const patas=patasDelCambio(editingCambioId, movs);
+  const info=leerCambio(patas);
+  if(!info){ showToast("No encontré las dos mitades de este cambio"); return; }
+  const ars=parseFloat(document.getElementById("edit-cambio-ars").value)||0;
+  const usd=parseFloat(document.getElementById("edit-cambio-usd").value)||0;
+  const fecha=document.getElementById("edit-cambio-fecha").value;
+  if(ars<=0||usd<=0){ showToast("Los dos montos tienen que ser mayores a cero"); return; }
+  if(!fecha){ showToast("Poné la fecha"); return; }
+  const nota=document.getElementById("edit-cambio-nota").value.trim();
+  const compra=info.sentido==="compra";
+  patas.forEach(m=>{
+    m.fecha=fecha; m.nota=nota;
+    const esPataARS = compra ? (m.cambioPata==="sale") : (m.cambioPata==="entra");
+    if(esPataARS){ m.importe=Math.round(ars*100)/100; m.importeOrig=null; }
+    else { m.importe=0; m.importeOrig=Math.round(usd*100)/100; }
+  });
+  save();
+  closeEditModal();
+  showToast(`Cambio actualizado · ${fmtS(tipoDeCambio(ars,usd))} por dólar ✓`);
+  renderMovs();
+}
+
 function closeEditModal(){
   document.getElementById("modal-edit").classList.remove("open");
   editingId=null;
+  editingCambioId=null;
 }
 function renderEditForm(m){
   if(m.tipo==="Gasto"||m.tipo==="Ingreso"){

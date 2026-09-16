@@ -353,7 +353,8 @@
         <button class="type-btn active-gasto" id="btn-gasto" onclick="setTipo('Gasto')">↑ Gasto</button>
         <button class="type-btn" id="btn-ingreso" onclick="setTipo('Ingreso')">↓ Ingreso</button>
         <button class="type-btn" id="btn-inversion" onclick="setTipo('Inversion')">◈ Inv.</button>
-        <button class="type-btn" id="btn-tarjeta" onclick="setTipo('Tarjeta')">▣ Tarjeta</button>
+        <button class="type-btn" id="btn-tarjeta" onclick="setTipo('Tarjeta')">▣ Tarj.</button>
+        <button class="type-btn" id="btn-cambio" onclick="setTipo('Cambio')">💱 Cambio</button>
       </div>
     </div>
     <!-- GASTO/INGRESO -->
@@ -505,6 +506,35 @@
       </div>
       <div class="form-group"><label class="form-label" for="tc-fecha">Fecha</label><input type="date" id="tc-fecha" class="form-input"></div>
       <div class="form-group"><label class="form-label" for="tc-nota">Nota (opcional)</label><textarea id="tc-nota" class="form-textarea" placeholder="Descripción adicional..."></textarea></div>
+    </div>
+
+    <!-- CAMBIO DE MONEDA -->
+    <div id="campos-cambio" style="display:none">
+      <p class="txt-sm txt-muted mb-10">Comprar o vender dólares no es un gasto: es plata que cambia de bolsillo. Se guardan las dos patas, así los pesos salen y los dólares entran.</p>
+      <div class="form-group">
+        <div class="type-toggle">
+          <button type="button" class="type-btn active-gasto" id="btn-cambio-compra" onclick="setSentidoCambio('compra')">Compro dólares</button>
+          <button type="button" class="type-btn" id="btn-cambio-venta" onclick="setSentidoCambio('venta')">Vendo dólares</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="amount-hero-label" id="cambio-ars-label">Pesos que pagué</div>
+        <div class="amount-wrap amount-hero"><span class="amount-prefix">$</span>
+          <input type="text" id="cambio-ars" class="form-input amount-input" aria-label="Monto en pesos" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcTipoCambio()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="cambio-usd" id="cambio-usd-label">Dólares que recibí</label>
+        <div class="amount-wrap amount-wrap-usd"><span class="amount-prefix">USD</span>
+          <input type="number" id="cambio-usd" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any" oninput="calcTipoCambio()">
+        </div>
+      </div>
+      <div id="cambio-tc" class="inset mb-10" style="display:none"></div>
+      <div class="two-col">
+        <div class="form-group"><label class="form-label" for="cambio-cuenta">Cuenta</label><select id="cambio-cuenta" class="form-select"></select></div>
+        <div class="form-group"><label class="form-label" for="cambio-fecha">Fecha</label><input type="date" id="cambio-fecha" class="form-input"></div>
+      </div>
+      <div class="form-group"><label class="form-label" for="cambio-nota">Nota (opcional)</label><textarea id="cambio-nota" class="form-textarea" placeholder="Ej: MEP con AL30"></textarea></div>
     </div>
     <button id="btn-guardar" class="btn-primary btn-gasto" onclick="guardar()">Guardar gasto</button>
   </div>
@@ -717,6 +747,11 @@
     </label>
   </div>
   <div class="card"><div class="card-title">Historial</div><div id="import-history"></div></div>
+  <div class="card" id="card-migrar-cambios" style="display:none">
+    <div class="card-title">💱 Compras de dólares sin completar</div>
+    <p class="txt-sm txt-muted mb-10">Estos movimientos parecen compras o ventas de dólares cargadas como un gasto suelto: les falta la otra mitad de la operación. Completala y dejan de contar doble.</p>
+    <div id="migrar-cambios-lista"></div>
+  </div>
   <div class="card">
     <div class="card-title">🧹 Limpieza de datos</div>
     <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Si querés reimportar desde cero o sacar movimientos que cargaste por error.</p>
@@ -850,6 +885,7 @@
 <script src="js/editar-movimiento.js"></script>
 <script src="js/tarjetas-inversiones.js"></script>
 <script src="js/analisis.js"></script>
+<script src="js/cambio-moneda.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/ahorros.js"></script>
 <script src="js/graficos-interactivos.js"></script>

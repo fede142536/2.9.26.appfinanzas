@@ -76,6 +76,7 @@
 <script src="js/editar-movimiento.js"></script>
 <script src="js/tarjetas-inversiones.js"></script>
 <script src="js/analisis.js"></script>
+<script src="js/cambio-moneda.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/ahorros.js"></script>
 <script src="js/graficos-interactivos.js"></script>
@@ -957,6 +958,153 @@ test("cada movimiento dice qué efecto tiene sobre tu saldo", ()=>{
   igual(porDesc["Gasto"], -1);
   igual(porDesc["Al fondo"], -1, "pasarlos al fondo los saca de tu mano");
   igual(porDesc["Con el fondo"], 0, "salen del fondo y se gastan en el mismo acto");
+});
+
+// ═══════════════════════════════════════════
+// CAMBIO DE MONEDA
+// ═══════════════════════════════════════════
+grupo("Cambio de moneda");
+
+// Comprar dólares toca DOS monedas, y un movimiento guarda una sola. Por eso un cambio son
+// dos movimientos ligados: el que sale y el que entra.
+test("una compra de dólares genera las dos patas", ()=>{
+  const [sale, entra]=crearCambio({fecha:"2026-09-03", montoARS:39467.53, montoUSD:27,
+                                   sentido:"compra", cuenta:"Banco", idBase:1000});
+  igual(sale.tipo, "Gasto");   igual(sale.moneda, "ARS");  igual(sale.importe, 39467.53);
+  igual(entra.tipo, "Ingreso"); igual(entra.moneda, "USD"); igual(entra.importeOrig, 27);
+  igual(entra.importe, 0, "en USD el monto vive en importeOrig y la columna en pesos va en 0");
+  igual(sale.cambioId, entra.cambioId, "las dos patas tienen que quedar ligadas");
+});
+
+test("una venta de dólares es la operación espejo", ()=>{
+  const [sale, entra]=crearCambio({fecha:"2026-09-03", montoARS:40000, montoUSD:27,
+                                   sentido:"venta", idBase:1000});
+  igual(sale.moneda, "USD");  igual(sale.tipo, "Gasto");   igual(sale.importeOrig, 27);
+  igual(entra.moneda, "ARS"); igual(entra.tipo, "Ingreso"); igual(entra.importe, 40000);
+});
+
+// Esto es lo que arregla el problema de fondo: los pesos salen del balance en pesos Y los
+// dólares entran al flujo USD. Antes, cargándolo de cualquiera de las dos formas, faltaba
+// una mitad y la plata terminaba contada dos veces.
+test("los pesos salen del balance y los dólares entran, en la misma operación", ()=>{
+  const patas=crearCambio({fecha:"2026-09-03", montoARS:39467.53, montoUSD:27,
+                           sentido:"compra", idBase:1000});
+  const t=totalesDePlata(patas);
+  igual(t.gastos, 39467.53, "los pesos tienen que salir de la mano");
+  igual(t.balance, -39467.53, "y el balance en pesos baja por ese monto");
+  igual(t.depositos, 0, "un cambio no es un depósito al fondo de ahorro");
+  const usd=conTarjetas([], ()=>resumenUSDdelAnio(patas, 2026));
+  igual(usd.ing, 27, "y los dólares tienen que ENTRAR — esto es lo que antes no existía");
+  igual(usd.neto, 27);
+});
+
+test("un cambio no se puede crear a medias", ()=>{
+  igual(crearCambio({fecha:"2026-09-03", montoARS:0, montoUSD:27, sentido:"compra"}), null);
+  igual(crearCambio({fecha:"2026-09-03", montoARS:100, montoUSD:0, sentido:"compra"}), null);
+  igual(crearCambio({fecha:"", montoARS:100, montoUSD:27, sentido:"compra"}), null);
+  igual(crearCambio({fecha:"2026-09-03", montoARS:100, montoUSD:27, sentido:"cualquiera"}), null);
+});
+
+test("el tipo de cambio sale de los dos montos", ()=>{
+  igual(tipoDeCambio(39467.53, 27), 1461.76);
+  igual(tipoDeCambio(1000, 0), null, "sin una de las dos patas no hay tipo de cambio");
+  igual(tipoDeCambio(0, 27), null);
+});
+
+test("leerCambio reconstruye la operación desde las dos patas", ()=>{
+  const patas=crearCambio({fecha:"2026-09-03", montoARS:39467.53, montoUSD:27,
+                           sentido:"compra", nota:"MEP con AL30", idBase:1000});
+  const info=leerCambio(patas);
+  igual(info.sentido, "compra");
+  igual(info.montoARS, 39467.53);
+  igual(info.montoUSD, 27);
+  igual(info.tc, 1461.76);
+  igual(info.nota, "MEP con AL30");
+  igual(leerCambio([patas[0]]), null, "con una sola pata no alcanza");
+});
+
+// ── MIGRACIÓN DE LO YA CARGADO ──
+
+// Corre fn con estos movimientos y sin ningún candidato descartado, y después deja todo como
+// estaba (la lista de descartados vive en localStorage).
+function conMovsLimpios(lista, fn){
+  const antes=movs;
+  const antesIgnorados=localStorage.getItem("fcambioignorados");
+  movs=lista;
+  localStorage.removeItem("fcambioignorados");
+  try { return fn(); }
+  finally {
+    movs=antes;
+    if(antesIgnorados===null) localStorage.removeItem("fcambioignorados");
+    else localStorage.setItem("fcambioignorados", antesIgnorados);
+  }
+}
+function gastoARS(nota, cat, subcat, importe){
+  return {id:Math.floor(Math.random()*1e9), tipo:"Gasto", nota, cat, subcat:subcat||"",
+          fecha:"2026-09-03", moneda:"ARS", importe, importeOrig:null, cuenta:"Banco"};
+}
+
+test("encuentra las compras de dólares cargadas como un gasto suelto", ()=>{
+  const lista=[gastoARS("MEP Compra","MEP","AL30",39467.53),
+               gastoARS("Compré dólares","Otros","",50000),
+               gastoARS("Supermercado","Supermercado","Almacen",80000)];
+  const c=conMovsLimpios(lista, ()=>candidatosAMigrar(lista));
+  igual(c.length, 2, "el supermercado no tiene nada que ver");
+  igual(c[0].faltaPata, "usd", "está en pesos, así que falta saber cuántos dólares entraron");
+});
+
+test("un movimiento que ya es parte de un cambio no vuelve a aparecer", ()=>{
+  const patas=crearCambio({fecha:"2026-09-03", montoARS:39467.53, montoUSD:27,
+                           sentido:"compra", cat:"MEP", subcat:"AL30", idBase:1000});
+  igual(conMovsLimpios(patas, ()=>candidatosAMigrar(patas)), []);
+});
+
+test("lo que marcás como \"no es un cambio\" no vuelve", ()=>{
+  const mov=gastoARS("MEP Compra","MEP","AL30",39467.53);
+  conMovsLimpios([mov], ()=>{
+    igual(candidatosAMigrar([mov]).length, 1);
+    ignorarParaMigrar(mov.id);
+    igual(candidatosAMigrar([mov]), []);
+  });
+});
+
+test("completar un gasto en pesos le agrega la pata en dólares", ()=>{
+  const mov=gastoARS("MEP Compra","MEP","AL30",39467.53);
+  const r=completarCambioDesde(mov, 27);
+  igual(r.sale.importe, 39467.53);
+  igual(r.sale.cambioPata, "sale");
+  igual(r.entra.tipo, "Ingreso");
+  igual(r.entra.moneda, "USD");
+  igual(r.entra.importeOrig, 27);
+  igual(r.sale.cambioId, r.entra.cambioId);
+  igual(r.sale.cat, "MEP", "tu categoría es tuya: no se pisa con \"Cambio de moneda\"");
+  igual(r.entra.cat, "MEP", "y la pata nueva hereda la misma");
+});
+
+test("completar un movimiento en dólares le agrega la pata en pesos", ()=>{
+  const mov={id:5, tipo:"Gasto", nota:"MEP", cat:"Inversiones", subcat:"MEP", fecha:"2026-05-20",
+             moneda:"USD", importe:0, importeOrig:54.21, cuenta:"Banco"};
+  const r=completarCambioDesde(mov, 79000);
+  igual(r.entra.moneda, "ARS");
+  igual(r.entra.importe, 79000);
+  igual(r.montoUSD, 54.21);
+  igual(r.montoARS, 79000);
+});
+
+// Un cambio marcado además como depósito al fondo contaría la misma plata por dos caminos:
+// como pata del cambio y como movimiento del fondo de ahorro.
+test("completar limpia los flags de ahorro", ()=>{
+  const mov=Object.assign(gastoARS("MEP","Inversiones","MEP",39467.53), {esAhorro:true});
+  const r=completarCambioDesde(mov, 27);
+  igual(r.sale.esAhorro, false);
+  igual(r.entra.esAhorro, false);
+});
+
+test("no se puede completar con un monto vacío o negativo", ()=>{
+  const mov=gastoARS("MEP Compra","MEP","AL30",39467.53);
+  igual(completarCambioDesde(mov, 0), null);
+  igual(completarCambioDesde(mov, -5), null);
+  igual(completarCambioDesde(null, 27), null);
 });
 
 // ═══════════════════════════════════════════
