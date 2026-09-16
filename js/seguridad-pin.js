@@ -118,10 +118,13 @@ async function persistEncBlobNow(){
   try{
     await guardarSobre(encKey, (sobre && sobre.salt) || randomSaltB64(), encCache);
   }catch(err){
-    // Sin esto el fallo quedaba como promesa rechazada sin dueño: los cambios no se
-    // guardaban y el usuario no se enteraba nunca.
+    // Con el PIN activo el guardado real es diferido (encCache + este volcado con 400ms de
+    // retraso), así que cuando se entera del fallo ya pasó tiempo y puede haber más de un
+    // cambio en el aire: revertir podría llevarse puesto algo que el usuario no espera. Por
+    // eso acá se avisa y se ofrece el backup —que se arma desde la memoria y por lo tanto
+    // incluye todo lo que no llegó al disco— pero no se toca nada.
     console.error("No se pudo guardar el sobre cifrado:", err);
-    mostrarErrorGlobal("No se pudieron guardar tus cambios", `${err.name||""}: ${err.message||err}`);
+    avisarGuardadoFallido(err, {puedeRevertir:false});
   }
 }
 

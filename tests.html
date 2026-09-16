@@ -1225,6 +1225,126 @@ test("las dos patas de un cambio quedan juntas y arriba", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// GUARDADO CON RED DE SEGURIDAD
+// ═══════════════════════════════════════════
+grupo("Guardado: disco lleno");
+
+// Cuando el almacenamiento se llena, localStorage.setItem() tira QuotaExceededError. Antes
+// eso dejaba el cambio SOLO en memoria: se veía en la lista como guardado y al recargar no
+// estaba. La plata se perdía sin que nada lo dijera.
+
+// Corre fn con el disco "lleno" y los diálogos y el backup mockeados, y después deja todo
+// como estaba. Devuelve qué se le preguntó al usuario.
+function conDiscoLleno(fn, opts){
+  const o=opts||{};
+  const setReal=localStorage.setItem.bind(localStorage);
+  const confirmReal=window.mostrarConfirm, alertaReal=window.mostrarAlerta,
+        exportReal=window.exportarBackup, ultimoReal=ultimoGuardadoOk;
+  const visto={preguntas:[], backupsBajados:0};
+  localStorage.setItem=()=>{ const e=new Error("sin espacio"); e.name="QuotaExceededError"; throw e; };
+  window.mostrarConfirm=(msg)=>{ visto.preguntas.push(msg); return Promise.resolve(!!o.bajaBackup); };
+  window.mostrarAlerta=(msg)=>{ visto.preguntas.push(msg); return Promise.resolve(); };
+  window.exportarBackup=()=>{ visto.backupsBajados++; };
+  try { fn(visto); return visto; }
+  finally {
+    localStorage.setItem=setReal;
+    window.mostrarConfirm=confirmReal; window.mostrarAlerta=alertaReal;
+    window.exportarBackup=exportReal; ultimoGuardadoOk=ultimoReal;
+  }
+}
+
+test("un guardado que anda devuelve true y deja los datos en disco", ()=>{
+  const antes=movs, antesUltimo=ultimoGuardadoOk;
+  try{
+    movs=[{id:1, tipo:"Gasto", nota:"Uno", cat:"Otros", subcat:"", fecha:"2026-09-01",
+           moneda:"ARS", importe:100, importeOrig:null}];
+    igual(save(), true);
+    igual(JSON.parse(localStorage.getItem("fmovs3")).length, 1);
+  } finally { movs=antes; ultimoGuardadoOk=antesUltimo; save(); }
+});
+
+test("si el disco está lleno, save() corta el paso en vez de mentir", ()=>{
+  // El error va marcado para que el código que viene DESPUÉS del save() —el toast de
+  // "guardado ✓", el reseteo del formulario— no llegue a ejecutarse.
+  conDiscoLleno(()=>{
+    let err=null;
+    try { save(); } catch(e){ err=e; }
+    cierto(!!err, "tiene que cortar: si devolviera normal, el toast diría 'guardado ✓'");
+    cierto(err.__guardadoManejado===true, "y va marcado, para que el banner rojo se calle");
+  });
+});
+
+test("un guardado fallido no deja el disco a medio escribir", ()=>{
+  // save() escribe 4 claves. Si revienta en la segunda, la primera ya quedó con datos nuevos
+  // que no se corresponden con el resto: un movimiento guardado con su tarjeta perdida.
+  const antesMovs=movs, antesTcs=tcs, antesUltimo=ultimoGuardadoOk;
+  try{
+    movs=[{id:1, tipo:"Gasto", nota:"Original", cat:"Otros", subcat:"", fecha:"2026-09-01",
+           moneda:"ARS", importe:100, importeOrig:null}];
+    tcs=[];
+    save();                                  // foto buena en disco
+    const enDiscoAntes=localStorage.getItem("fmovs3");
+
+    const setReal=localStorage.setItem.bind(localStorage);
+    let escrituras=0;
+    // Falla recién en la SEGUNDA clave: la primera ya se escribió.
+    localStorage.setItem=(k,v)=>{
+      escrituras++;
+      if(escrituras===2){ const e=new Error("sin espacio"); e.name="QuotaExceededError"; throw e; }
+      setReal(k,v);
+    };
+    const confirmReal=window.mostrarConfirm, alertaReal=window.mostrarAlerta;
+    window.mostrarConfirm=()=>Promise.resolve(false);
+    window.mostrarAlerta=()=>Promise.resolve();
+    try{
+      movs.push({id:2, tipo:"Gasto", nota:"Nuevo", cat:"Otros", subcat:"", fecha:"2026-09-16",
+                 moneda:"ARS", importe:200, importeOrig:null});
+      try { save(); } catch(e){}
+      igual(localStorage.getItem("fmovs3"), enDiscoAntes,
+        "la clave que sí se escribió tiene que volver a su valor anterior");
+    } finally {
+      localStorage.setItem=setReal;
+      window.mostrarConfirm=confirmReal; window.mostrarAlerta=alertaReal;
+    }
+  } finally { movs=antesMovs; tcs=antesTcs; ultimoGuardadoOk=antesUltimo; save(); }
+});
+
+test("revertir deja la memoria igual a lo último que sí se guardó", ()=>{
+  // Es lo que hace que la pantalla no siga mostrando un movimiento que en realidad no existe.
+  const antesMovs=movs, antesUltimo=ultimoGuardadoOk;
+  try{
+    movs=[{id:1, tipo:"Gasto", nota:"Guardado", cat:"Otros", subcat:"", fecha:"2026-09-01",
+           moneda:"ARS", importe:100, importeOrig:null}];
+    save();
+    movs.push({id:2, tipo:"Gasto", nota:"Sin guardar", cat:"Otros", subcat:"",
+               fecha:"2026-09-16", moneda:"ARS", importe:200, importeOrig:null});
+    igual(movs.length, 2);
+    revertirALoGuardado();
+    igual(movs.length, 1, "el que no se guardó tiene que desaparecer de la pantalla");
+    igual(movs[0].nota, "Guardado");
+  } finally { movs=antesMovs; ultimoGuardadoOk=antesUltimo; save(); }
+});
+
+test("se ofrece el backup, que es por donde el dato se salva", ()=>{
+  // El backup se arma desde la MEMORIA (ver exportarBackup), no desde el disco: por eso se
+  // puede bajar aunque no entre un byte más, y lleva adentro el cambio que no se guardó.
+  const r=conDiscoLleno(()=>{ try{ save(); }catch(e){} }, {bajaBackup:true});
+  cierto(r.preguntas.some(t=>/backup/i.test(t)), "hay que ofrecer el backup, no solo avisar del error");
+  cierto(r.preguntas.some(t=>/lleno/i.test(t)), "y decir por qué falló, en castellano");
+});
+
+test("las preferencias no pueden tirar abajo la app", ()=>{
+  // El tema, la vista elegida, la fecha del último backup: si no se guardan no duele. Justo
+  // con el disco lleno es cuando más molesta que un dato cosmético tape con un banner rojo
+  // el diálogo que te está explicando qué hacer. (Pasó de verdad: al bajar el backup, el
+  // recordatorio escribía su fecha y reventaba encima del diálogo.)
+  conDiscoLleno(()=>{
+    igual(guardarPreferencia("ftheme","oscuro"), false, "avisa que no pudo, pero sin tirar");
+  });
+  igual(guardarPreferencia("ftheme","oscuro"), true, "con disco normal, guarda");
+});
+
+// ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
 grupo("Números e íconos");

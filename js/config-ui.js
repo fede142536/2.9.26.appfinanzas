@@ -130,7 +130,7 @@ function setFechaQuick(inputId, deltaDays){
 // TEMA (claro / oscuro / auto)
 // ═══════════════════════════════════════════
 function setTheme(t){
-  localStorage.setItem("ftheme",t);
+  guardarPreferencia("ftheme",t);
   applyTheme();
   // Actualizar botones activos
   document.querySelectorAll(".theme-btn").forEach(b=>{
@@ -329,7 +329,7 @@ const DIAS_PARA_AVISAR=30;   // a partir de cuánto sin backup se considera "vie
 const DIAS_ENTRE_AVISOS=7;   // no insistir más seguido que esto, aunque abras la app todos los días
 
 function marcarBackupHecho(){
-  localStorage.setItem("fultimobackup", new Date().toISOString());
+  guardarPreferencia("fultimobackup", new Date().toISOString());
 }
 
 // Días completos desde una fecha ISO guardada. Infinity para "nunca" (null) y para
@@ -376,7 +376,7 @@ function tocaAvisarBackup(){
 // primer render). Si corresponde, ofrece hacer el backup ahí mismo en vez de solo avisar.
 async function avisarSiFaltaBackup(){
   if(!tocaAvisarBackup()) return;
-  localStorage.setItem("fultimoavisobackup", new Date().toISOString());
+  guardarPreferencia("fultimoavisobackup", new Date().toISOString());
   const dias=diasDesde(localStorage.getItem("fultimobackup"));
   const cuando = dias===Infinity
     ? "Todavía no hiciste ningún backup de tus datos."

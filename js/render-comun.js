@@ -11,12 +11,112 @@ function marcarDatosSucios(){ datosVersion++; }
 // Guarda con qué versión de datos se renderizó por última vez cada pestaña
 let paginaVersionRenderizada={};
 
+// ═══════════════════════════════════════════
+// GUARDADO CON RED DE SEGURIDAD
+// ═══════════════════════════════════════════
+// Si el almacenamiento del dispositivo se llena, localStorage.setItem() tira
+// QuotaExceededError. Antes eso salía como un banner rojo con texto técnico, el cambio se
+// quedaba SOLO en memoria (o sea: se veía en la lista como si estuviera guardado) y al
+// recargar la app no estaba. Perdías lo último que cargaste sin que nada te lo dijera.
+//
+// Cómo se resuelve sin perder nada: el backup se arma desde la MEMORIA, no desde el disco
+// (ver exportarBackup), así que se puede bajar aunque no entre un byte más. Entonces, cuando
+// un guardado falla:
+//   1. se devuelven a disco las claves que sí llegaron a escribirse, para no dejarlo a medio
+//      camino (los movimientos nuevos guardados pero las tarjetas no, por ejemplo);
+//   2. se te ofrece bajar el backup AHORA — con el cambio adentro, porque la memoria todavía
+//      lo tiene;
+//   3. recién después se revierte la memoria a la última foto que sí se guardó, así lo que
+//      ves en pantalla vuelve a ser exactamente lo que está en disco.
+
+// Guarda una PREFERENCIA (el tema, la vista elegida, si ya viste el onboarding, cuándo fue
+// el último backup...). Son cosas que si se pierden no duele, así que un fallo de escritura
+// se traga: justo cuando el disco está lleno es cuando más importa que la app siga andando y
+// que el diálogo que te explica qué hacer no quede tapado por un banner rojo de contabilidad
+// interna. Para los datos de verdad está save(), que sí avisa y revierte.
+function guardarPreferencia(clave, valor){
+  try{ localStorage.setItem(clave, valor); return true; }
+  catch(e){ console.warn(`No se pudo guardar la preferencia "${clave}":`, e); return false; }
+}
+
+// La última foto que SÍ quedó escrita. Es de dónde se saca el "volver atrás".
+let ultimoGuardadoOk = null;
+
+const CLAVES_GUARDADO = {
+  fmovs3:   {valor: ()=>JSON.stringify(movs),   defecto: "[]",  aplicar: v=>{ movs   = JSON.parse(v); }},
+  ftcs3:    {valor: ()=>JSON.stringify(tcs),    defecto: "[]",  aplicar: v=>{ tcs    = JSON.parse(v); }},
+  fcustom3: {valor: ()=>JSON.stringify(custom), defecto: '{"Gasto":{},"Ingreso":{},"Inversion":{},"Tarjeta":{}}', aplicar: v=>{ custom = JSON.parse(v); }},
+  fmetas:   {valor: ()=>JSON.stringify(metas),  defecto: "[]",  aplicar: v=>{ metas  = JSON.parse(v); }}
+};
+
+// Lo que hay escrito ahora mismo. Se usa como punto de retorno la primera vez, cuando
+// todavía no hubo ningún guardado exitoso en esta sesión.
+function fotoEnDisco(){
+  const foto={};
+  Object.entries(CLAVES_GUARDADO).forEach(([k,def])=>{ foto[k]=getSensitiveRaw(k, def.defecto); });
+  return foto;
+}
+
 function save(){
-  setSensitiveRaw("fmovs3",JSON.stringify(movs));
-  setSensitiveRaw("ftcs3",JSON.stringify(tcs));
-  setSensitiveRaw("fcustom3",JSON.stringify(custom));
-  setSensitiveRaw("fmetas",JSON.stringify(metas));
+  if(!ultimoGuardadoOk) ultimoGuardadoOk = fotoEnDisco();
+  const nuevo={};
+  Object.entries(CLAVES_GUARDADO).forEach(([k,def])=>{ nuevo[k]=def.valor(); });
+
+  const yaEscritas=[];
+  try{
+    Object.keys(CLAVES_GUARDADO).forEach(k=>{ setSensitiveRaw(k, nuevo[k]); yaEscritas.push(k); });
+  }catch(err){
+    // Paso 1: dejar el disco consistente. Volver a poner los valores viejos es escribir algo
+    // igual o más chico que lo que ya entraba, así que no debería fallar; si igual falla, no
+    // hay nada mejor que hacer y el aviso de abajo es lo que importa.
+    yaEscritas.forEach(k=>{ try{ setSensitiveRaw(k, ultimoGuardadoOk[k]); }catch(e){} });
+    // Pasos 2 y 3 (diálogo, backup y vuelta atrás de la memoria): son asíncronos.
+    avisarGuardadoFallido(err);
+    // Se corta acá para que el código que sigue al save() —el toast de "guardado ✓", el
+    // reseteo del formulario— no se ejecute: no se guardó nada.
+    const e=new Error("No se pudo guardar: "+(err&&err.message||err));
+    e.__guardadoManejado=true;  // el banner global se calla: ya hay un diálogo explicándolo
+    throw e;
+  }
+  ultimoGuardadoOk = nuevo;
   marcarDatosSucios();
+  return true;
+}
+
+// Revierte la memoria a la última foto guardada y vuelve a dibujar.
+function revertirALoGuardado(){
+  if(!ultimoGuardadoOk) return;
+  Object.entries(CLAVES_GUARDADO).forEach(([k,def])=>{
+    try{ def.aplicar(ultimoGuardadoOk[k]); }catch(e){ /* dato ilegible: se deja como está */ }
+  });
+  marcarDatosSucios();
+  if(typeof renderMovs==="function") renderMovs();
+}
+
+// `puedeRevertir` en false es el caso del cifrado con PIN: ahí el guardado real es diferido,
+// así que cuando se entera del fallo ya pasó tiempo y revertir podría llevarse puesto algo
+// más que el último cambio. En ese caso se avisa y se ofrece el backup, pero no se toca nada.
+async function avisarGuardadoFallido(err, opciones){
+  const puedeRevertir = !opciones || opciones.puedeRevertir!==false;
+  const lleno = /quota|exceeded|storage/i.test(String((err&&err.name)||"")+" "+String((err&&err.message)||""));
+  const causa = lleno
+    ? "El almacenamiento del dispositivo está lleno."
+    : `El navegador rechazó la escritura (${(err&&err.name)||"error"}).`;
+  const queSigue = puedeRevertir
+    ? "Tu último cambio NO quedó guardado. Bajate el backup ahora: se arma desde la memoria, así que incluye ese cambio aunque no haya entrado en el disco. Después de bajarlo, la pantalla vuelve a mostrar lo último que sí está guardado."
+    : "Los cambios de los últimos segundos pueden no haber quedado guardados. Bajate el backup ahora: se arma desde la memoria, así que los incluye.";
+  const bajar = await mostrarConfirm(`${causa}\n\n${queSigue}`,
+    {titulo:"No se pudieron guardar tus datos", textoOk:"Bajar backup ahora",
+     textoCancelar: puedeRevertir?"Descartar el cambio":"Ahora no", peligroso:true});
+  if(bajar && typeof exportarBackup==="function"){
+    try{ exportarBackup(); }
+    catch(e){ mostrarErrorGlobal("Tampoco se pudo generar el backup", String(e&&e.message||e)); }
+  }
+  if(puedeRevertir) revertirALoGuardado();
+  if(lleno){
+    await mostrarAlerta("Para liberar espacio: borrá movimientos viejos desde Importar → Limpieza de datos, o sacá alguna app del celular. Después volvé a cargar el movimiento.",
+      "Cómo hacer lugar");
+  }
 }
 // Vibración nativa (haptic feedback). No todos los dispositivos/navegadores lo soportan
 // (iOS Safari no lo tiene, por ejemplo) — por eso el chequeo antes de llamar.
@@ -172,10 +272,14 @@ window.addEventListener("error", (e)=>{
   // Sin `message` es un recurso que no cargó (por ejemplo un CDN caído), no un error de
   // código: eso ya se maneja aparte y no tiene sentido alarmar al usuario.
   if(!e.message) return;
+  if(e.error && e.error.__guardadoManejado) return;
   mostrarErrorGlobal(e.message, `${e.filename||"?"}:${e.lineno||"?"}:${e.colno||"?"}\n\n${(e.error&&e.error.stack)||""}`);
 });
 window.addEventListener("unhandledrejection", (e)=>{
   const r=e.reason;
+  // Un fallo de guardado ya abrió su propio diálogo explicando qué pasó y ofreciendo el
+  // backup: encima de eso, el banner rojo con el stack solo asusta.
+  if(r && r.__guardadoManejado) return;
   const titulo=(r && (r.message||typeof r==="string")) ? String(r.message||r) : "Una operación falló sin dar motivo";
   mostrarErrorGlobal(titulo, (r && r.stack) ? r.stack : "");
 });
