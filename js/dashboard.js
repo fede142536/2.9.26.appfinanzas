@@ -25,6 +25,9 @@ function setDashYear(y,el){
 // ═══════════════════════════════════════════
 
 // Índices de inflación mensual (IPC nacional, INDEC) — variación % respecto al mes anterior.
+// Esta tabla es solo el PISO: la serie de verdad se baja o se pega desde Configuración y se
+// guarda aparte (ver js/inflacion.js). tablaInflacion() pone la descargada por encima de
+// esta, así que borrar la descargada deja la app como estaba y nunca peor.
 // ⚠️ DICCIONARIO INCOMPLETO A PROPÓSITO: solo se cargaron los puntos que se pudieron verificar
 // con fuentes públicas al momento de escribir esto (sept. 2026). Para que el ajuste por
 // inflación sea preciso, hay que completar el resto mes a mes con datos oficiales del INDEC
@@ -43,12 +46,14 @@ const INFLACION_MENSUAL_ARS = {
 // encadenando —no sumando— la inflación mensual mes a mes entre ambas fechas.
 function deflactarARS(monto, ymOrigen, ymDestino){
   if(!monto || !ymOrigen || !ymDestino || ymOrigen>=ymDestino) return monto;
+  // Se resuelve UNA vez y no dentro del while: tablaInflacion() fusiona dos objetos.
+  const tabla=tablaInflacion();
   let factor=1, ym=ymOrigen;
   let guard=0;
   while(ym<ymDestino && guard<600){
     guard++;
     ym=addMonths(ym,1);
-    const infl=INFLACION_MENSUAL_ARS[ym];
+    const infl=tabla[ym];
     if(infl) factor*=(1+infl/100);
   }
   return Math.round(monto*factor*100)/100;
@@ -63,11 +68,12 @@ function deflactarARS(monto, ymOrigen, ymDestino){
 // nada que mostrar un número que parece preciso y no lo es.
 function inflacionCompleta(ymOrigen, ymDestino){
   if(!ymOrigen || !ymDestino || ymOrigen>=ymDestino) return true;
+  const tabla=tablaInflacion();
   let ym=ymOrigen, guard=0;
   while(ym<ymDestino && guard<600){
     guard++;
     ym=addMonths(ym,1);
-    if(INFLACION_MENSUAL_ARS[ym]===undefined) return false;
+    if(tabla[ym]===undefined) return false;
   }
   return true;
 }
