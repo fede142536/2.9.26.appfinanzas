@@ -178,8 +178,11 @@ function renderUSD(){
 // ═══════════════════════════════════════════
 // AHORROS — VISTAS Y RANKING POR CATEGORÍA
 // ═══════════════════════════════════════════
+// La vista "categoria" ya no existe: quien la tenía guardada como preferencia vuelve a
+// "acum" en vez de quedarse mirando un gráfico vacío.
+const VISTAS_AHORRO = ["acum","mensual"];
 const ahorroState = {
-  view: localStorage.getItem("fahorrov")||"acum",
+  view: VISTAS_AHORRO.includes(localStorage.getItem("fahorrov")) ? localStorage.getItem("fahorrov") : "acum",
   ahorrosArr: [],
   depositos: [],
   retiros: []
@@ -220,8 +223,7 @@ function renderAhorroChart(){
   if(descEl){
     descEl.textContent={
       acum:      "Cuánto llevás ahorrado en total, mes a mes. El último punto es lo que tenés disponible hoy.",
-      mensual:   "Cuánto pusiste o sacaste en cada mes por separado. Verde es depósito, rojo es retiro.",
-      categoria: "Cuánto tenés guardado hoy en cada tipo de ahorro."
+      mensual:   "Cuánto pusiste o sacaste en cada mes por separado. Verde es depósito, rojo es retiro."
     }[ahorroState.view] || "";
   }
 
@@ -256,20 +258,6 @@ function renderAhorroChart(){
         return `${mesLbl(ym)}: ${lbl} ${fmtS(Math.abs(val))}`;
       }
     );
-  } else if(view==="categoria"){
-    // Vista por categoría: barras horizontales con porcentaje
-    // Calculamos el saldo neto por categoría: depósitos - retiros
-    const porCat={};
-    depositos.forEach(m=>{
-      const c=m.cat||"Sin categoría";
-      porCat[c]=(porCat[c]||0)+m.importe;
-    });
-    retiros.forEach(m=>{
-      const c=m.cat||"Sin categoría";
-      porCat[c]=(porCat[c]||0)-m.importe;
-    });
-    const entries=Object.entries(porCat).filter(([_,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
-    drawInteractiveCatBars(canvas, entries, tipEl);
   }
 }
 

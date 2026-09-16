@@ -667,7 +667,6 @@
     <div id="ahorro-view-selector" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
       <button class="btn-sm ahorro-view-btn active" data-view="acum" onclick="setAhorroView('acum')">📈 Acumulado</button>
       <button class="btn-sm ahorro-view-btn" data-view="mensual" onclick="setAhorroView('mensual')">📊 Por mes</button>
-      <button class="btn-sm ahorro-view-btn" data-view="categoria" onclick="setAhorroView('categoria')">🏷 Por categoría</button>
     </div>
 
     <!-- Dice en una línea qué se está mirando: el gráfico no tiene título propio y "Acumulado"
@@ -676,7 +675,10 @@
 
     <canvas id="chart-fondo" height="180"></canvas>
 
-    <!-- Ranking por categoría -->
+    <!-- Ranking por categoría. Acá vivía también una vista "Por categoría" del gráfico de
+         arriba, que mostraba lo mismo que este ranking pero peor: sumaba pesos y dólares en
+         un solo número, cortaba el nombre de la categoría a 15 caracteres y había que tocar
+         el botón para verla. El ranking se ve siempre y trae más. -->
     <div id="ahorro-ranking" style="margin-top:14px"></div>
 
     <!-- Detalle del punto seleccionado -->

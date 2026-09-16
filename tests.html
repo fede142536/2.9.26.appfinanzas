@@ -1718,6 +1718,48 @@ test("el ancho fijo de la etiqueta sigue ahí (para que las barras se alineen)",
 });
 
 // ═══════════════════════════════════════════
+// VISTAS DE AHORROS
+// ═══════════════════════════════════════════
+grupo("Vistas del gráfico de Ahorros");
+
+// La vista "Por categoría" del gráfico mostraba lo mismo que el ranking que está justo
+// abajo, pero peor: sumaba pesos y dólares en un solo número (el ranking los separa),
+// cortaba el nombre a 15 caracteres y había que tocar un botón para verla.
+test("ya no queda el botón \"Por categoría\"", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(!html.includes('data-view="categoria"'), "volvió el botón de la vista por categoría");
+});
+
+test("el gráfico de ahorros ya no dibuja la vista por categoría", async ()=>{
+  const js=await (await fetch("js/ahorros.js")).text();
+  cierto(!js.includes("drawInteractiveCatBars"), "sigue el dibujo de la vista por categoría");
+});
+
+test("no quedó código muerto de esa vista", async ()=>{
+  const js=await (await fetch("js/graficos-interactivos.js")).text();
+  cierto(!js.includes("function drawInteractiveCatBars"), "la función quedó sin uso pero sigue en el bundle");
+});
+
+test("quien tenía guardada la vista por categoría vuelve a Acumulado", async ()=>{
+  // Sin esto, al abrir Ahorros se encuentra con un gráfico vacío y ningún botón marcado,
+  // porque su preferencia guardada apunta a una vista que ya no existe.
+  cierto(typeof VISTAS_AHORRO!=="undefined", "no existe la lista de vistas válidas");
+  igual(VISTAS_AHORRO, ["acum","mensual"]);
+  const js=await (await fetch("js/ahorros.js")).text();
+  const linea=js.split("\n").find(l=>l.includes('localStorage.getItem("fahorrov")'));
+  cierto(!!linea, "no se encontró la lectura de la preferencia");
+  cierto(linea.includes("VISTAS_AHORRO"), "la preferencia guardada se usa sin validarla: " + linea.trim());
+});
+
+test("el ranking por categoría sigue separando pesos de dólares", async ()=>{
+  // Es lo que hace que el ranking sea el reemplazo y no una pérdida: la vista que sacamos
+  // los mezclaba en un solo total.
+  const js=await (await fetch("js/ahorros.js")).text();
+  cierto(js.includes("saldoUsd"), "el ranking perdió el saldo en dólares");
+  cierto(js.includes("saldoArs"), "el ranking perdió el saldo en pesos");
+});
+
+// ═══════════════════════════════════════════
 // GRÁFICO DEL DASHBOARD
 // ═══════════════════════════════════════════
 grupo("Ingresos, gastos y balance en un gráfico");
