@@ -433,6 +433,84 @@ const ZAPATILLAS = {id:3, desc:"Zapatillas", total:180000,  cuotasTotal:3,  mesI
 // grande a propósito, para que el test falle si alguien lo usa para calcular el horizonte.
 const NETFLIX    = {id:4, desc:"Netflix",    total:9000,    cuotasTotal:999, mesInicio:"2026-01", tarjeta:"Visa",       moneda:"ARS", frecuente:true};
 
+// ── POR CATEGORÍA EN TARJETAS ──
+// "Por tarjeta" dice con qué plástico pagaste; no dice en qué se te fue la plata. El desglose
+// por categoría del mes vive en la card "Balance del mes", antes del Detalle — después de
+// Cuotas pendientes no va nada.
+// Hace falta DOM de verdad: el harness devuelve un <div> descartable para los ids que no
+// existen, así que leer de vuelta lo que renderTarjetas() escribió no funcionaría.
+function balanceTcDelMes(lista, ym){
+  const ids=["tc-mes-label","tc-balance","tc-pendientes"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const mesAntes=mesTc;
+  mesTc=ym;
+  try { return conTarjetas(lista, ()=>{ renderTarjetas(); return creados[1].innerHTML; }); }
+  finally { creados.forEach(e=>e.remove()); mesTc=mesAntes; }
+}
+
+const SUPER_VISA  = {id:11, desc:"Super",     total:300000, cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa",       moneda:"ARS", cat:"Supermercado"};
+const SUPER_MASTE = {id:12, desc:"Chino",     total:100000, cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Mastercard", moneda:"ARS", cat:"Supermercado"};
+const NAFTA       = {id:13, desc:"Nafta",     total:80000,  cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa",       moneda:"ARS", cat:"Transporte"};
+const SPOTIFY     = {id:14, desc:"Spotify",   total:12,     cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa",       moneda:"USD", cat:"Suscripciones"};
+
+test("el balance del mes muestra el desglose por categoría", ()=>{
+  const html=balanceTcDelMes([SUPER_VISA, SUPER_MASTE, NAFTA], "2026-09");
+  cierto(html.includes("Por categoría"), "no aparece la sección por categoría");
+  cierto(html.includes("Supermercado"), "falta la categoría Supermercado");
+  cierto(html.includes("Transporte"), "falta la categoría Transporte");
+});
+
+test("suma las tarjetas dentro de una misma categoría", ()=>{
+  // Supermercado son $300.000 de Visa + $100.000 de Mastercard: la categoría es una sola.
+  const html=balanceTcDelMes([SUPER_VISA, SUPER_MASTE, NAFTA], "2026-09");
+  const sec=html.slice(html.indexOf("Por categoría"));
+  cierto(sec.includes("$400.000"), "no sumó las dos tarjetas en Supermercado: " + sec.slice(0,400));
+});
+
+test("ordena las categorías de mayor a menor", ()=>{
+  const html=balanceTcDelMes([NAFTA, SUPER_VISA, SUPER_MASTE], "2026-09");
+  const sec=html.slice(html.indexOf("Por categoría"));
+  cierto(sec.indexOf("Supermercado") < sec.indexOf("Transporte"),
+         "Transporte ($80.000) quedó antes que Supermercado ($400.000)");
+});
+
+test("no suma pesos con dólares en una misma categoría", ()=>{
+  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09");
+  const sec=html.slice(html.indexOf("Por categoría"));
+  cierto(sec.includes("USD 12.00"), "el gasto en dólares no se muestra en su moneda: " + sec.slice(0,400));
+  cierto(sec.includes("$300.000"), "se perdió el total en pesos");
+});
+
+test("las barras se escalan dentro de cada moneda, no entre monedas", ()=>{
+  // USD 12 contra $300.000 con un solo máximo daría una barra de 0%: invisible, comparando
+  // números que no son comparables.
+  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09");
+  const sec=html.slice(html.indexOf("Por categoría"));
+  const anchos=[...sec.matchAll(/width:(\d+)%/g)].map(m=>Number(m[1]));
+  igual(anchos.length, 2, "esperaba dos barras");
+  cierto(anchos.every(w=>w===100), "cada moneda tiene una sola categoría, así que ambas van al 100%: " + anchos);
+});
+
+test("un gasto sin categoría no desaparece del desglose", ()=>{
+  const sinCat={id:15, desc:"Algo", total:50000, cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa", moneda:"ARS"};
+  const html=balanceTcDelMes([sinCat], "2026-09");
+  cierto(html.includes("Sin categoría"), "el gasto sin categoría se perdió");
+});
+
+test("el desglose por categoría va antes del Detalle", ()=>{
+  // Lo que importa del orden: primero el resumen, después la lista larga.
+  const html=balanceTcDelMes([SUPER_VISA, NAFTA], "2026-09");
+  cierto(html.indexOf("Por categoría") < html.indexOf("Detalle"), "el Detalle quedó antes del resumen por categoría");
+});
+
+test("la barra de una tarjeta en USD no queda invisible al lado de las de pesos", ()=>{
+  // Mismo bug que el de categorías, dos líneas más arriba en el mismo archivo.
+  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09");
+  const sec=html.slice(html.indexOf("Por tarjeta"), html.indexOf("Por categoría"));
+  const anchos=[...sec.matchAll(/width:(\d+)%/g)].map(m=>Number(m[1]));
+  cierto(anchos.length>=2 && anchos.every(w=>w>0), "una barra quedó en 0%: " + anchos);
+});
+
 test("la proyección llega hasta la última cuota y no más", ()=>{
   const meses=conTarjetas([NOTEBOOK, HELADERA, ZAPATILLAS], ()=>mesesConCuotasPendientes("2026-09"));
   igual(meses[0].ym, "2026-09", "tiene que arrancar en el mes que estás mirando");
@@ -1722,41 +1800,111 @@ test("el ancho fijo de la etiqueta sigue ahí (para que las barras se alineen)",
 // ═══════════════════════════════════════════
 grupo("Vistas del gráfico de Ahorros");
 
-// La vista "Por categoría" del gráfico mostraba lo mismo que el ranking que está justo
-// abajo, pero peor: sumaba pesos y dólares en un solo número (el ranking los separa),
-// cortaba el nombre a 15 caracteres y había que tocar un botón para verla.
-test("ya no queda el botón \"Por categoría\"", async ()=>{
+// Las tres vistas responden tres preguntas distintas. "Por categoría" volvió después de que
+// sacarla dejara sin respuesta la única que importa de verdad: dónde está la plata. Pero ahora
+// la dibuja el ranking, no el canvas: el canvas mezclaba pesos con dólares en un solo número
+// y cortaba el nombre de la categoría a 15 caracteres.
+test("están las tres vistas", async ()=>{
+  igual(VISTAS_AHORRO, ["acum","mensual","categoria"]);
   const html=await (await fetch("index.html")).text();
-  cierto(!html.includes('data-view="categoria"'), "volvió el botón de la vista por categoría");
+  cierto(html.includes('data-view="categoria"'), "falta el botón de la vista por categoría");
 });
 
-test("el gráfico de ahorros ya no dibuja la vista por categoría", async ()=>{
-  const js=await (await fetch("js/ahorros.js")).text();
-  cierto(!js.includes("drawInteractiveCatBars"), "sigue el dibujo de la vista por categoría");
-});
-
-test("no quedó código muerto de esa vista", async ()=>{
-  const js=await (await fetch("js/graficos-interactivos.js")).text();
-  cierto(!js.includes("function drawInteractiveCatBars"), "la función quedó sin uso pero sigue en el bundle");
-});
-
-test("quien tenía guardada la vista por categoría vuelve a Acumulado", async ()=>{
-  // Sin esto, al abrir Ahorros se encuentra con un gráfico vacío y ningún botón marcado,
-  // porque su preferencia guardada apunta a una vista que ya no existe.
-  cierto(typeof VISTAS_AHORRO!=="undefined", "no existe la lista de vistas válidas");
-  igual(VISTAS_AHORRO, ["acum","mensual"]);
+test("una preferencia guardada que ya no existe vuelve a Acumulado", async ()=>{
   const js=await (await fetch("js/ahorros.js")).text();
   const linea=js.split("\n").find(l=>l.includes('localStorage.getItem("fahorrov")'));
   cierto(!!linea, "no se encontró la lectura de la preferencia");
   cierto(linea.includes("VISTAS_AHORRO"), "la preferencia guardada se usa sin validarla: " + linea.trim());
 });
 
-test("el ranking por categoría sigue separando pesos de dólares", async ()=>{
-  // Es lo que hace que el ranking sea el reemplazo y no una pérdida: la vista que sacamos
-  // los mezclaba en un solo total.
-  const js=await (await fetch("js/ahorros.js")).text();
-  cierto(js.includes("saldoUsd"), "el ranking perdió el saldo en dólares");
-  cierto(js.includes("saldoArs"), "el ranking perdió el saldo en pesos");
+test("no volvió el dibujo en canvas de la vista por categoría", async ()=>{
+  // Era el que mezclaba monedas y truncaba los nombres.
+  const ahorros=await (await fetch("js/ahorros.js")).text();
+  const graficos=await (await fetch("js/graficos-interactivos.js")).text();
+  cierto(!ahorros.includes("drawInteractiveCatBars"), "volvió la llamada al dibujo viejo");
+  cierto(!graficos.includes("function drawInteractiveCatBars"), "volvió la función vieja");
+});
+
+// Helper: pone el DOM mínimo de la tarjeta de ahorros, corre renderAhorroChart() con una vista
+// y devuelve qué quedó visible.
+function vistaAhorro(view, datos){
+  const ids=["chart-fondo","ahorro-ranking","ahorro-tooltip","ahorro-view-desc"];
+  const creados=ids.map(id=>{
+    const el=document.createElement(id==="chart-fondo"?"canvas":"div");
+    el.id=id; document.body.appendChild(el); return el;
+  });
+  const previo={view:ahorroState.view, dep:ahorroState.depositos, ret:ahorroState.retiros, arr:ahorroState.ahorrosArr};
+  ahorroState.view=view;
+  ahorroState.depositos=datos.depositos; ahorroState.retiros=datos.retiros;
+  ahorroState.ahorrosArr=datos.ahorrosArr||[];
+  let r;
+  try{
+    renderAhorroChart();
+    r={canvas:creados[0].style.display, ranking:creados[1].style.display,
+       rankingHtml:creados[1].innerHTML, desc:creados[3].textContent};
+  } finally {
+    creados.forEach(e=>e.remove());
+    ahorroState.view=previo.view; ahorroState.depositos=previo.dep;
+    ahorroState.retiros=previo.ret; ahorroState.ahorrosArr=previo.arr;
+  }
+  return r;
+}
+
+const AHORROS_DEMO={
+  depositos:[{cat:"Fondo de retiro", importe:150000}, {cat:"Vacaciones", importe:60000},
+             {cat:"Dólares", importe:0, importeOrig:500, moneda:"USD"}],
+  retiros:[{cat:"Vacaciones", importe:20000}],
+  ahorrosArr:[{mes:"2026-01", monto:190000, acum:190000}]
+};
+
+test("en Por categoría se ve el ranking y no el gráfico", ()=>{
+  const r=vistaAhorro("categoria", AHORROS_DEMO);
+  igual(r.canvas, "none");
+  igual(r.ranking, "");
+  cierto(r.rankingHtml.includes("Fondo de retiro"), "el ranking no trajo las categorías");
+});
+
+test("en las otras vistas se ve el gráfico y no el ranking", ()=>{
+  // Si se vieran los dos a la vez estaríamos mostrando el mismo dato dos veces, que es lo que
+  // hacía que sobrara una de las dos cosas.
+  ["acum","mensual"].forEach(v=>{
+    const r=vistaAhorro(v, AHORROS_DEMO);
+    igual(r.canvas, "", "el gráfico quedó oculto en la vista " + v);
+    igual(r.ranking, "none", "el ranking quedó visible en la vista " + v);
+  });
+});
+
+test("cada vista dice qué estás mirando", ()=>{
+  const vistas=["acum","mensual","categoria"].map(v=>vistaAhorro(v, AHORROS_DEMO).desc);
+  vistas.forEach((d,i)=>cierto(d.length>10, "la vista " + VISTAS_AHORRO[i] + " se quedó sin descripción"));
+  igual(new Set(vistas).size, 3, "dos vistas comparten la misma descripción");
+});
+
+test("sin ahorros cargados la vista por categoría no queda en blanco", ()=>{
+  const r=vistaAhorro("categoria", {depositos:[], retiros:[], ahorrosArr:[]});
+  cierto(r.rankingHtml.length>0, "queda un hueco vacío y parece que se rompió");
+});
+
+test("el ranking sigue separando pesos de dólares", ()=>{
+  const r=vistaAhorro("categoria", AHORROS_DEMO);
+  cierto(r.rankingHtml.includes("USD 500.00"), "se perdió el saldo en dólares: " + r.rankingHtml.slice(0,200));
+});
+
+test("una categoría que solo tiene dólares no dice \"0%\" con la barra vacía", ()=>{
+  // El % y la barra salían siempre del saldo en pesos, que para esa categoría es 0. Decía
+  // "0% del total" con la barra vacía cuando en realidad es el 100% de tus dólares.
+  const r=vistaAhorro("categoria", AHORROS_DEMO);
+  const fila=r.rankingHtml.slice(r.rankingHtml.indexOf("Dólares"));
+  cierto(fila.includes("100% de tus dólares"), "el % sigue calculándose contra los pesos: " + fila.slice(0,400));
+  const ancho=fila.match(/width:(\d+)%/);
+  cierto(!!ancho && Number(ancho[1])>0, "la barra quedó vacía: " + (ancho?ancho[0]:"sin barra"));
+});
+
+test("las categorías en pesos se miden entre ellas, sin contar las de dólares", ()=>{
+  const r=vistaAhorro("categoria", AHORROS_DEMO);
+  // Fondo de retiro 150.000 y Vacaciones 60.000-20.000=40.000 → 150/190 = 79%.
+  const fila=r.rankingHtml.slice(r.rankingHtml.indexOf("Fondo de retiro"));
+  cierto(fila.includes("79% de tus pesos"), "cambió el reparto en pesos: " + fila.slice(0,300));
 });
 
 // ═══════════════════════════════════════════

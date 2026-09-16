@@ -178,9 +178,10 @@ function renderUSD(){
 // ═══════════════════════════════════════════
 // AHORROS — VISTAS Y RANKING POR CATEGORÍA
 // ═══════════════════════════════════════════
-// La vista "categoria" ya no existe: quien la tenía guardada como preferencia vuelve a
-// "acum" en vez de quedarse mirando un gráfico vacío.
-const VISTAS_AHORRO = ["acum","mensual"];
+// Las tres vistas responden tres preguntas distintas: cuánto llevo, cuánto puse cada mes, y
+// dónde está guardado. Una preferencia guardada que no esté en esta lista vuelve a "acum" en
+// vez de dejar la tarjeta en blanco.
+const VISTAS_AHORRO = ["acum","mensual","categoria"];
 const ahorroState = {
   view: VISTAS_AHORRO.includes(localStorage.getItem("fahorrov")) ? localStorage.getItem("fahorrov") : "acum",
   ahorrosArr: [],
@@ -211,11 +212,6 @@ function renderAhorroChart(){
   const canvas=document.getElementById("chart-fondo");
   if(!canvas) return;
   const tipEl=document.getElementById("ahorro-tooltip");
-  // Se limpia el detalle y la selección porque acá se llega al cambiar de vista o cuando
-  // cambiaron los datos: el punto que habías tocado ya no significa lo mismo en el gráfico
-  // nuevo. El redibujo por un tap NO pasa por acá justamente para no borrar lo recién escrito.
-  if(tipEl) tipEl.textContent="";
-  limpiarSeleccionLinea();
 
   // Qué estás mirando, en una línea. Cada vista responde una pregunta distinta y sin esto
   // hay que deducirlo del nombre del botón.
@@ -223,11 +219,32 @@ function renderAhorroChart(){
   if(descEl){
     descEl.textContent={
       acum:      "Cuánto llevás ahorrado en total, mes a mes. El último punto es lo que tenés disponible hoy.",
-      mensual:   "Cuánto pusiste o sacaste en cada mes por separado. Verde es depósito, rojo es retiro."
+      mensual:   "Cuánto pusiste o sacaste en cada mes por separado. Verde es depósito, rojo es retiro.",
+      categoria: "Dónde está guardado hoy. Tocá una categoría para ver los movimientos que la arman."
     }[ahorroState.view] || "";
   }
 
-  const {ahorrosArr, depositos, retiros}=ahorroState;
+  // "Por categoría" no es un gráfico en el lienzo: es el ranking, que ya sabe separar pesos de
+  // dólares y abre el detalle al tocar. Se muestra uno u otro, nunca los dos: tenerlos juntos
+  // era mostrar el mismo dato dos veces.
+  const esCategoria = ahorroState.view==="categoria";
+  const ranking=document.getElementById("ahorro-ranking");
+  if(ranking) ranking.style.display = esCategoria ? "" : "none";
+  canvas.style.display = esCategoria ? "none" : "";
+  if(tipEl) tipEl.style.display = esCategoria ? "none" : "";
+  if(esCategoria){
+    if(tipEl) tipEl.textContent="";
+    limpiarSeleccionLinea();
+    renderAhorroRanking();
+    return;
+  }
+  // Se limpia el detalle y la selección porque acá se llega al cambiar de vista o cuando
+  // cambiaron los datos: el punto que habías tocado ya no significa lo mismo en el gráfico
+  // nuevo. El redibujo por un tap NO pasa por acá justamente para no borrar lo recién escrito.
+  if(tipEl) tipEl.textContent="";
+  limpiarSeleccionLinea();
+
+  const {ahorrosArr}=ahorroState;
   if(!ahorrosArr.length){
     const ctx=canvas.getContext("2d");
     canvas.width=canvas.offsetWidth||320;canvas.height=180;
@@ -266,7 +283,13 @@ function renderAhorroRanking(){
   const el=document.getElementById("ahorro-ranking");
   if(!el) return;
   const {depositos, retiros}=ahorroState;
-  if(!depositos.length && !retiros.length){el.innerHTML="";return;}
+  // Con la vista "Por categoría" activa, el ranking es TODO lo que se ve: si se vacía sin decir
+  // nada queda un hueco en blanco y parece que se rompió.
+  const vacio=`<div class="empty" style="padding:20px"><div class="empty-icon">🏷</div>Todavía no hay ahorros para desglosar por categoría.</div>`;
+  if(!depositos.length && !retiros.length){
+    el.innerHTML = ahorroState.view==="categoria" ? vacio : "";
+    return;
+  }
 
   // Saldo neto por categoría, separado por moneda (ARS y USD nunca se mezclan en un mismo total)
   const porCat={};
@@ -283,15 +306,32 @@ function renderAhorroRanking(){
     .map(([cat,d])=>({cat, ...d, saldoArs: d.depositadoArs-d.retiradoArs, saldoUsd: d.depositadoUsd-d.retiradoUsd}))
     .filter(x=>x.saldoArs!==0||x.saldoUsd!==0)
     .sort((a,b)=>Math.abs(b.saldoArs)-Math.abs(a.saldoArs));
-  if(!items.length){el.innerHTML="";return;}
+  if(!items.length){
+    el.innerHTML = ahorroState.view==="categoria" ? vacio : "";
+    return;
+  }
 
-  const totalAbs=items.reduce((s,it)=>s+Math.abs(it.saldoArs),0)||1;
-  const maxV=Math.max(...items.map(it=>Math.abs(it.saldoArs)),1);
+  // Cada categoría se mide contra las de SU moneda. Antes el % y la barra salían siempre del
+  // saldo en pesos, así que una categoría que solo tiene dólares decía "0% del total" con la
+  // barra vacía: era el 100% de tus dólares, no el 0% de nada.
+  const soloUsd = it => it.saldoArs===0 && it.saldoUsd!==0;
+  const escala = moneda => {
+    const campo = moneda==="USD" ? "saldoUsd" : "saldoArs";
+    const delGrupo = items.filter(it => (moneda==="USD") === soloUsd(it));
+    return {
+      total: delGrupo.reduce((s,it)=>s+Math.abs(it[campo]),0)||1,
+      max:   Math.max(...delGrupo.map(it=>Math.abs(it[campo])), 1)
+    };
+  };
+  const escalaArs=escala("ARS"), escalaUsd=escala("USD");
 
   let html=`<div class="seccion-label mb-8">🏆 Ranking por categoría</div>`;
   html+=items.map(it=>{
-    const pct=totalAbs>0?Math.round(Math.abs(it.saldoArs)/totalAbs*100):0;
-    const c=it.saldoArs>=0?"var(--save)":"var(--danger)";
+    const esUsd=soloUsd(it);
+    const {total: totalAbs, max: maxV}=esUsd?escalaUsd:escalaArs;
+    const valor=Math.abs(esUsd?it.saldoUsd:it.saldoArs);
+    const pct=Math.round(valor/totalAbs*100);
+    const c=(esUsd?it.saldoUsd:it.saldoArs)>=0?"var(--save)":"var(--danger)";
     const cUsd=it.saldoUsd>=0?"var(--save)":"var(--danger)";
     const icon=getIcon(it.cat,"🏦");
     const catEsc=attrJS(it.cat);
@@ -304,10 +344,10 @@ function renderAhorroRanking(){
         </div>
       </div>
       <div style="background:var(--bg);height:6px;border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${maxV>0?Math.round(Math.abs(it.saldoArs)/maxV*100):0}%;background:${c}"></div>
+        <div style="height:100%;width:${Math.round(valor/maxV*100)}%;background:${c}"></div>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;justify-content:space-between">
-        <span>${pct}% del total · ${it.count} ${it.count===1?"movimiento":"movimientos"}</span>
+        <span>${pct}% de ${esUsd?"tus dólares":"tus pesos"} · ${it.count} ${it.count===1?"movimiento":"movimientos"}</span>
         <span>${it.depositadoArs>0?`+${fmtAbbr(it.depositadoArs)}`:""}${it.retiradoArs>0?` -${fmtAbbr(it.retiradoArs)}`:""}</span>
       </div>
     </div>`;
