@@ -75,6 +75,7 @@
 <script src="js/movimientos.js"></script>
 <script src="js/editar-movimiento.js"></script>
 <script src="js/tarjetas-inversiones.js"></script>
+<script src="js/analisis.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/ahorros.js"></script>
 <script src="js/graficos-interactivos.js"></script>
@@ -535,6 +536,329 @@ test("si no queda nada después del mes en curso lo dice", ()=>{
   const html=htmlDePendientes([ZAPATILLAS], "2026-10");
   cierto(html.includes("Nada pendiente después de Octubre 2026"),
     "el vacío tiene que aclarar de qué mes en adelante no queda nada: "+html.slice(0,200));
+});
+
+// ═══════════════════════════════════════════
+// ANÁLISIS LOCAL: TEXTO Y NÚMEROS
+// ═══════════════════════════════════════════
+grupo("Análisis: texto y números");
+
+test("normalizarTexto saca acentos, puntuación y mayúsculas", ()=>{
+  // Sin sacar acentos, "Almacén" y "almacen" son dos claves distintas y el historial no
+  // encuentra nada: en la práctica la misma nota se escribe de las dos formas.
+  igual(normalizarTexto("Almacén"), "almacen");
+  igual(normalizarTexto("  Nafta -- YPF!  "), "nafta ypf");
+  // La ñ también se colapsa a n, a propósito: quien escribe "nino" tiene que encontrar lo
+  // que cargó como "niño".
+  igual(normalizarTexto("Año Ñandú"), "ano nandu");
+  igual(normalizarTexto("niño"), normalizarTexto("nino"), "niño y nino tienen que ser la misma clave");
+  igual(normalizarTexto(null), "");
+});
+
+test("palabrasClave descarta las palabras vacías y las cortas", ()=>{
+  // "pago de la nafta" y "pago de la pizza" comparten 3 de 4 palabras. Si contaran todas,
+  // el puntaje las daría por casi idénticas y la sugerencia sería una moneda al aire.
+  igual(palabrasClave("pago de la nafta"), ["nafta"]);
+  igual(palabrasClave("Compra en el super de Av. Mitre"), ["super","mitre"]);
+  igual(palabrasClave("de la el"), []);
+});
+
+test("la mediana no se mueve por un solo gasto enorme", ()=>{
+  igual(mediana([1,2,3]), 2);
+  igual(mediana([1,2,3,4]), 2.5, "con cantidad par va el promedio de los dos del medio");
+  igual(mediana([]), 0);
+  igual(mediana([100,100,100,100,999999]), 100, "justamente por esto no se usa el promedio");
+});
+
+// ═══════════════════════════════════════════
+// ANÁLISIS: CATEGORIZACIÓN AUTOMÁTICA
+// ═══════════════════════════════════════════
+grupo("Análisis: categorización");
+
+// Movimientos de prueba. `nota` es lo que escribís en el form; de ahí sale la sugerencia.
+function g(nota, cat, subcat, fecha, importe){
+  return {id:Math.random(), tipo:"Gasto", nota, cat, subcat:subcat||"", fecha:fecha||"2026-09-05", importe:importe||1000};
+}
+
+test("una nota idéntica ya cargada le gana a una coincidencia parcial", ()=>{
+  // "Nafta" aparece 1 vez exacta en Auto, y 3 veces como parte de otras notas en Salidas.
+  // Por puntaje de palabras ganaría Salidas; la coincidencia exacta tiene que imponerse.
+  const lista=[
+    g("Nafta","Auto","Nafta"),
+    g("Nafta para el viaje","Salidas"),
+    g("Nafta ruta 2","Salidas"),
+    g("Nafta vuelta","Salidas")
+  ];
+  const r=sugerirCategoriaPara("nafta","Gasto",lista);
+  igual(r.cat, "Auto");
+  igual(r.fuente, "exacta");
+});
+
+test("la sugerencia ignora acentos y mayúsculas", ()=>{
+  const lista=[g("Almacén de la esquina","Supermercado","Almacen")];
+  const r=sugerirCategoriaPara("ALMACEN DE LA ESQUINA","Gasto",lista);
+  igual(r.cat, "Supermercado");
+  igual(r.subcat, "Almacen");
+});
+
+test("con empate no sugiere nada", ()=>{
+  // Una vez en cada categoría: no hay patrón, y sugerir cualquiera es adivinar delante tuyo.
+  const lista=[g("Kiosco","Supermercado"), g("Kiosco","Salidas")];
+  igual(sugerirCategoriaPara("kiosco","Gasto",lista), null);
+});
+
+test("sin historial cae a las reglas de comercios conocidos", ()=>{
+  const r=sugerirCategoriaPara("Cargué en la YPF de la ruta","Gasto",[]);
+  igual(r.cat, "Auto");
+  igual(r.fuente, "reglas");
+});
+
+test("no cruza Gastos con Ingresos", ()=>{
+  // Un "Sueldo" cargado como Ingreso no puede sugerir categoría para un Gasto.
+  const lista=[{id:1, tipo:"Ingreso", nota:"Sueldo", cat:"Sueldo", fecha:"2026-09-01", importe:900000}];
+  igual(sugerirCategoriaPara("sueldo","Gasto",lista), null);
+});
+
+test("un texto de menos de 3 letras no sugiere nada", ()=>{
+  igual(sugerirCategoriaPara("na","Gasto",[g("Nafta","Auto")]), null);
+});
+
+// El punto 1 pedía que "aprenda de tus correcciones". No hace falta ningún modelo: la
+// corrección se guarda como un movimiento más y es justo de ahí que sale la sugerencia.
+test("corregir una sugerencia cambia la próxima sugerencia", ()=>{
+  const lista=[g("Kiosco","Supermercado")];
+  igual(sugerirCategoriaPara("kiosco","Gasto",lista).cat, "Supermercado");
+  // Lo corregís dos veces a Salidas y guardás: ahora Salidas manda.
+  lista.push(g("Kiosco","Salidas"), g("Kiosco","Salidas"));
+  igual(sugerirCategoriaPara("kiosco","Gasto",lista).cat, "Salidas");
+});
+
+// ═══════════════════════════════════════════
+// ANÁLISIS: GASTOS RECURRENTES
+// ═══════════════════════════════════════════
+grupo("Análisis: recurrentes");
+
+test("tres meses seguidos lo marcan como recurrente", ()=>{
+  const lista=[g("Netflix","Salidas",null,"2026-07-03",8000),
+               g("Netflix","Salidas",null,"2026-08-03",8000),
+               g("Netflix","Salidas",null,"2026-09-03",9000)];
+  const r=detectarRecurrentes(lista,"2026-09");
+  igual(r.length, 1);
+  igual(r[0].n, 3);
+  igual(r[0].montoTipico, 8000, "el monto típico es la mediana, no el último");
+  igual(r[0].faltaEsteMes, false, "septiembre ya está cargado");
+});
+
+test("dos meses no alcanzan", ()=>{
+  const lista=[g("Netflix","Salidas",null,"2026-08-03",8000),
+               g("Netflix","Salidas",null,"2026-09-03",8000)];
+  igual(detectarRecurrentes(lista,"2026-09"), []);
+});
+
+test("tres meses salteados no son un patrón mensual", ()=>{
+  // Enero, febrero y octubre: 3 meses sobre un período de 10. Eso es casualidad, no un
+  // gasto fijo, y marcarlo como recurrente generaría una alerta falsa todos los meses.
+  const lista=[g("Regalo","Salidas",null,"2026-01-03",8000),
+               g("Regalo","Salidas",null,"2026-02-03",8000),
+               g("Regalo","Salidas",null,"2026-10-03",8000)];
+  igual(detectarRecurrentes(lista,"2026-10"), []);
+});
+
+test("avisa cuando un gasto de todos los meses no aparece este mes", ()=>{
+  const lista=[g("Osde","Salud",null,"2026-06-10",170000),
+               g("Osde","Salud",null,"2026-07-10",170000),
+               g("Osde","Salud",null,"2026-08-10",175000)];
+  const r=detectarRecurrentes(lista,"2026-09");
+  igual(r.length, 1);
+  igual(r[0].faltaEsteMes, true, "lo pagaste 3 meses seguidos y en septiembre no está");
+});
+
+test("lo que pasás a ahorros no cuenta como gasto recurrente", ()=>{
+  // Ahorrar todos los meses es lo contrario de un problema: no tiene que generar avisos.
+  const ahorro=(f)=>({id:Math.random(), tipo:"Gasto", esAhorro:true, nota:"Ahorro mensual",
+                      cat:"Ahorro", fecha:f, importe:100000});
+  igual(detectarRecurrentes([ahorro("2026-07-01"),ahorro("2026-08-01"),ahorro("2026-09-01")],"2026-09"), []);
+});
+
+// ═══════════════════════════════════════════
+// ANÁLISIS: GASTOS FUERA DE LO NORMAL
+// ═══════════════════════════════════════════
+grupo("Análisis: gastos fuera de lo normal");
+
+test("compara contra la mediana de SU categoría, no la global", ()=>{
+  // Salidas ronda los $5.000 y Supermercado los $80.000. Un gasto de $20.000 en Salidas
+  // está fuera de lo normal; los mismos $20.000 en Supermercado son un martes cualquiera.
+  // Con una mediana global (como usa detectarMovsAtipicos) ninguno de los dos se detecta.
+  const lista=[
+    g("Bar","Salidas",null,"2026-08-01",5000), g("Bar","Salidas",null,"2026-08-02",5000),
+    g("Bar","Salidas",null,"2026-08-03",4000), g("Bar","Salidas",null,"2026-08-04",6000),
+    g("Súper","Supermercado",null,"2026-08-01",80000), g("Súper","Supermercado",null,"2026-08-02",80000),
+    g("Súper","Supermercado",null,"2026-08-03",75000), g("Súper","Supermercado",null,"2026-08-04",85000)
+  ];
+  const salidaCara={id:99, tipo:"Gasto", nota:"Cumpleaños", cat:"Salidas", fecha:"2026-09-10", importe:20000};
+  const superNormal={id:98, tipo:"Gasto", nota:"Súper", cat:"Supermercado", fecha:"2026-09-10", importe:20000};
+  const r=gastoFueraDeLoNormal(salidaCara, lista.concat([salidaCara, superNormal]));
+  cierto(!!r, "un gasto 4x la mediana de Salidas tiene que saltar");
+  igual(r.veces, 4);
+  igual(gastoFueraDeLoNormal(superNormal, lista.concat([salidaCara, superNormal])), null,
+    "el mismo importe en una categoría cara no es una anomalía");
+});
+
+test("con pocos casos en la categoría no inventa una anomalía", ()=>{
+  // Con 2 gastos cargados, la mediana de la categoría no significa nada todavía.
+  const lista=[g("Bar","Salidas",null,"2026-08-01",5000), g("Bar","Salidas",null,"2026-08-02",5000)];
+  const caro={id:99, tipo:"Gasto", nota:"Salida", cat:"Salidas", fecha:"2026-09-10", importe:50000};
+  igual(gastoFueraDeLoNormal(caro, lista.concat([caro])), null);
+});
+
+test("un gasto no se sube su propia vara", ()=>{
+  // Si el propio gasto entrara en la mediana de su categoría, levanta la vara contra la que
+  // se lo mide y deja de detectarse a sí mismo. Se excluye por id.
+  // Base [1000,2000,8000,9000] → mediana 5.000. Metiendo el gasto de 16.000, serían
+  // [1000,2000,8000,9000,16000] → mediana 8.000, y 16.000 ya no llega a 3× nada.
+  const base=[g("Bar","Salidas",null,"2026-08-01",1000), g("Bar","Salidas",null,"2026-08-02",2000),
+              g("Bar","Salidas",null,"2026-08-03",8000), g("Bar","Salidas",null,"2026-08-04",9000)];
+  const caro={id:99, tipo:"Gasto", nota:"Fiesta", cat:"Salidas", fecha:"2026-09-10", importe:16000};
+  const r=gastoFueraDeLoNormal(caro, base.concat([caro]));
+  cierto(!!r, "incluyendo el propio gasto la mediana sube a 8.000 y el gasto se esconde solo");
+  igual(r.mediana, 5000, "la mediana no puede incluir al movimiento que se está evaluando");
+  igual(r.veces, 3.2);
+});
+
+test("inusualesDelMes solo mira el mes pedido y ordena por desvío", ()=>{
+  const base=[g("Bar","Salidas",null,"2026-08-01",5000), g("Bar","Salidas",null,"2026-08-02",5000),
+              g("Bar","Salidas",null,"2026-08-03",5000), g("Bar","Salidas",null,"2026-08-04",5000)];
+  const sep1={id:91, tipo:"Gasto", nota:"A", cat:"Salidas", fecha:"2026-09-02", importe:20000};
+  const sep2={id:92, tipo:"Gasto", nota:"B", cat:"Salidas", fecha:"2026-09-03", importe:50000};
+  const ago ={id:93, tipo:"Gasto", nota:"C", cat:"Salidas", fecha:"2026-08-20", importe:60000};
+  const r=inusualesDelMes(base.concat([sep1,sep2,ago]), "2026-09");
+  igual(r.map(x=>x.mov.id), [92,91], "solo septiembre, y del más desviado al menos");
+});
+
+// ═══════════════════════════════════════════
+// ANÁLISIS: EL MES CONTRA TU HISTORIAL
+// ═══════════════════════════════════════════
+grupo("Análisis: el mes contra tu historial");
+
+// Arma N meses con un gasto de `monto` cada uno, terminando en el mes anterior a `hastaYM`.
+function mesesDeGasto(hastaYM, cuantos, monto){
+  const out=[];
+  for(let i=1;i<=cuantos;i++) out.push(g("Varios","Supermercado",null,addMonths(hastaYM,-i)+"-10",monto));
+  return out;
+}
+
+test("con menos de 3 meses de historial no compara nada", ()=>{
+  const r=comparativaMes(mesesDeGasto("2026-09",2,100000), "2026-09", "2026-09-30");
+  igual(r.hayDatos, false, "comparar contra 2 meses es comparar contra ruido");
+});
+
+test("detecta que el mes viene por arriba de lo normal", ()=>{
+  const lista=mesesDeGasto("2026-09",4,100000).concat([g("Varios","Supermercado",null,"2026-09-10",150000)]);
+  const r=comparativaMes(lista, "2026-09", "2026-09-30");
+  igual(r.mediana, 100000);
+  igual(r.pct, 50, "gastaste 150k contra una mediana de 100k");
+  igual(r.desviado, true);
+});
+
+test("un desvío chico no dispara una alerta", ()=>{
+  const lista=mesesDeGasto("2026-09",4,100000).concat([g("Varios","Supermercado",null,"2026-09-10",105000)]);
+  const r=comparativaMes(lista, "2026-09", "2026-09-30");
+  igual(r.pct, 5);
+  igual(r.desviado, false, "5% es ruido del mes, no una noticia");
+});
+
+test("el mes en curso se proyecta a fin de mes antes de comparar", ()=>{
+  // Día 10 de 30, con 40k gastados. Sin proyectar diría "vas 60% ABAJO" el día 10 de todos
+  // los meses, que es un consuelo falso. Proyectado son 120k: vas 20% arriba.
+  const lista=mesesDeGasto("2026-09",4,100000).concat([g("Varios","Supermercado",null,"2026-09-05",40000)]);
+  const r=comparativaMes(lista, "2026-09", "2026-09-10");
+  igual(r.parcial, true);
+  igual(r.actual, 40000);
+  igual(r.proyectado, 120000, "40k en 10 de 30 días se proyecta a 120k");
+  igual(r.pct, 20);
+});
+
+test("un mes cerrado se compara tal cual, sin proyectar", ()=>{
+  const lista=mesesDeGasto("2026-09",4,100000).concat([g("Varios","Supermercado",null,"2026-08-05",120000)]);
+  const r=comparativaMes(lista, "2026-08", "2026-09-10");
+  igual(r.parcial, false);
+  igual(r.proyectado, null);
+});
+
+test("pasar plata a ahorros no cuenta como gastar más", ()=>{
+  // Sin esta regla, el mes que guardás plata dispara "te fuiste al carajo", que es
+  // exactamente al revés de lo que pasó.
+  const ahorro={id:77, tipo:"Gasto", esAhorro:true, nota:"Ahorro", cat:"Ahorro",
+                fecha:"2026-09-10", importe:500000};
+  const lista=mesesDeGasto("2026-09",4,100000)
+    .concat([g("Varios","Supermercado",null,"2026-09-10",100000), ahorro]);
+  const r=comparativaMes(lista, "2026-09", "2026-09-30");
+  igual(r.actual, 100000, "los 500k que pasaste a ahorros no son gasto del mes");
+  igual(r.desviado, false);
+});
+
+// ═══════════════════════════════════════════
+// ANÁLISIS: SIMULADOR DE CUOTAS
+// ═══════════════════════════════════════════
+grupo("Análisis: simulador de cuotas");
+
+test("parte el monto y lo suma a lo que ya debés cada mes", ()=>{
+  // NOTEBOOK: 12 cuotas de 100k desde mayo 2026 → en octubre y noviembre debe 100k.
+  const r=conTarjetas([NOTEBOOK], ()=>simularCuotas(60000, 3, "2026-10", [], "2026-09"));
+  igual(r.cuota, 20000);
+  igual(r.filas.map(f=>f.ym), ["2026-10","2026-11","2026-12"]);
+  igual(r.filas[0].yaComprometido, 100000, "la cuota de la Notebook que ya tenías");
+  igual(r.filas[0].total, 120000);
+});
+
+test("el pico es el mes más caro de todos", ()=>{
+  // ZAPATILLAS: 3 cuotas de 60k desde agosto → su última cae en octubre. Con ella, octubre
+  // es más caro que noviembre y diciembre.
+  const r=conTarjetas([ZAPATILLAS], ()=>simularCuotas(30000, 3, "2026-10", [], "2026-09"));
+  igual(r.pico.ym, "2026-10");
+  igual(r.pico.total, 70000, "60k de las Zapatillas + 10k de la cuota nueva");
+});
+
+test("dice qué porcentaje del sueldo se lleva el peor mes", ()=>{
+  const sueldo=(f)=>({id:Math.random(), tipo:"Ingreso", nota:"Sueldo", cat:"Sueldo", fecha:f, importe:1000000});
+  const ingresos=[sueldo("2026-08-01"), sueldo("2026-07-01"), sueldo("2026-06-01")];
+  const r=conTarjetas([], ()=>simularCuotas(600000, 6, "2026-10", ingresos, "2026-09"));
+  igual(r.cuota, 100000);
+  igual(r.ingresoTipico, 1000000);
+  igual(r.mesesDeIngreso, 3);
+  igual(r.pctPico, 10, "100k de cuota sobre 1M de ingreso típico");
+});
+
+test("sin ingresos cargados no inventa un porcentaje", ()=>{
+  const r=conTarjetas([], ()=>simularCuotas(60000, 3, "2026-10", [], "2026-09"));
+  igual(r.pctPico, null, "mejor no decir nada que inventar una base de comparación");
+});
+
+test("un monto o unas cuotas inválidas no devuelven una simulación", ()=>{
+  igual(conTarjetas([], ()=>simularCuotas(0, 3, "2026-10", [], "2026-09")), null);
+  igual(conTarjetas([], ()=>simularCuotas(60000, 3, "", [], "2026-09")), null);
+});
+
+// ═══════════════════════════════════════════
+// ANÁLISIS: ALERTAS
+// ═══════════════════════════════════════════
+grupo("Análisis: alertas");
+
+test("sin datos suficientes no inventa alertas", ()=>{
+  igual(conTarjetas([], ()=>alertasDelMomento([], [], "2026-09-15")), []);
+});
+
+test("avisa del desvío del mes y de las cuotas que caen", ()=>{
+  const lista=mesesDeGasto("2026-09",4,100000).concat([g("Varios","Supermercado",null,"2026-09-15",200000)]);
+  const a=conTarjetas([NOTEBOOK], ()=>alertasDelMomento(lista, [NOTEBOOK], "2026-09-30"));
+  cierto(a.some(x=>/arriba de tu mes típico/.test(x.titulo)), "falta el aviso de desvío: "+JSON.stringify(a.map(x=>x.titulo)));
+  cierto(a.some(x=>/cuota/.test(x.titulo)), "falta el aviso de cuotas del mes");
+});
+
+test("nunca muestra más de 5 alertas juntas", ()=>{
+  const lista=mesesDeGasto("2026-09",6,100000).concat([g("Varios","Supermercado",null,"2026-09-15",900000)]);
+  const a=conTarjetas([NOTEBOOK,HELADERA,ZAPATILLAS], ()=>alertasDelMomento(lista, [], "2026-09-30"));
+  cierto(a.length<=5, "con más de 5 dejás de leerlas: "+a.length);
 });
 
 // ═══════════════════════════════════════════

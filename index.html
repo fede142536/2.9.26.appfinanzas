@@ -292,6 +292,26 @@
 </div>
 
 <!-- MODAL EDITAR MOVIMIENTO -->
+<div class="modal-overlay" id="modal-simulador" onclick="if(event.target===this)cerrarSimulador()">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
+    <div class="modal-handle"></div>
+    <div class="modal-title">¿Me lo banco?</div>
+    <p class="txt-sm txt-muted mb-10">Suma esta compra a las cuotas que ya tenés y te muestra cómo queda cada mes.</p>
+    <div class="two-col">
+      <div class="form-group"><label class="form-label" for="sim-monto">Monto total ($)</label>
+        <input type="number" id="sim-monto" class="form-input" placeholder="50000" inputmode="decimal" oninput="correrSimulacion()"></div>
+      <div class="form-group"><label class="form-label" for="sim-cuotas">Cuotas</label>
+        <input type="number" id="sim-cuotas" class="form-input" value="6" min="1" inputmode="numeric" oninput="correrSimulacion()"></div>
+    </div>
+    <div class="form-group"><label class="form-label" for="sim-mes">1ª cuota en</label>
+      <input type="month" id="sim-mes" class="form-input" onchange="correrSimulacion()"></div>
+    <div id="sim-resultado"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn-sm u-flex1" onclick="cerrarSimulador()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-edit" onclick="if(event.target===this)closeEditModal()">
   <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
     <div class="modal-handle"></div>
@@ -476,6 +496,7 @@
         <div class="form-group"><label class="form-label" for="tc-mes-inicio-frec">Mes de inicio</label><input type="month" id="tc-mes-inicio-frec" class="form-input"></div>
         <div class="form-group"><label class="form-label" for="tc-mes-fin">Mes de fin (opcional)</label><input type="month" id="tc-mes-fin" class="form-input"></div>
       </div>
+      <button type="button" class="btn-sm u-flex1" style="width:100%;margin-bottom:12px" onclick="abrirSimulador()">🧮 ¿Me lo banco? Simular la cuota</button>
       <div id="tc-preview" style="display:none;margin-bottom:12px">
         <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
           <span id="tc-cuota-label" style="font-size:12px;color:var(--warning);font-weight:500">Valor por cuota</span>
@@ -554,6 +575,11 @@
   <div class="year-tabs" id="year-tabs"></div>
   <div class="summary-row" id="dash-kpis"></div>
   <div style="height:4px"></div>
+
+  <div class="card">
+    <div class="card-title">Para tener en cuenta</div>
+    <div id="dash-alertas"></div>
+  </div>
 
   <div class="card">
     <div class="card-title">Ingresos vs Gastos</div>
@@ -823,6 +849,7 @@
 <script src="js/movimientos.js"></script>
 <script src="js/editar-movimiento.js"></script>
 <script src="js/tarjetas-inversiones.js"></script>
+<script src="js/analisis.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/ahorros.js"></script>
 <script src="js/graficos-interactivos.js"></script>

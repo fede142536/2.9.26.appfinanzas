@@ -218,42 +218,12 @@ const AUTO_CAT_RULES = [
 // Busca una sugerencia para el texto. Prioriza:
 // 1. Historial del usuario (movs anteriores con la misma palabra)
 // 2. Reglas hardcoded de comercios conocidos
+// La lógica vive en js/analisis.js (sugerirCategoriaPara): normaliza el texto (saca acentos
+// y palabras vacías), prioriza una nota IDÉNTICA ya cargada sobre una coincidencia parcial,
+// se abstiene cuando hay empate, y recién al final cae a AUTO_CAT_RULES. Esta función queda
+// como el punto de entrada de siempre para no tocar a quien la llama.
 function buscarSugerencia(texto, tipoActual){
-  const limpio=String(texto||"").trim().toLowerCase();
-  if(limpio.length<3) return null;
-
-  // 1. HISTORIAL: buscar movs anteriores cuya nota tenga palabras en común con la nota actual
-  // Solo del tipo actual (Gasto sugiere de Gastos, Ingreso de Ingresos)
-  const palabras=limpio.split(/\s+/).filter(p=>p.length>=3);
-  if(palabras.length){
-    const candidatos={};
-    movs.forEach(m=>{
-      if(m.tipo!==tipoActual) return;
-      if(!m.nota) return;
-      const notaLow=String(m.nota).toLowerCase();
-      // Cuenta cuántas palabras de la nota actual aparecen en la nota del histórico
-      let matches=0;
-      palabras.forEach(p=>{ if(notaLow.includes(p)) matches++; });
-      if(matches>0){
-        const key=m.cat+"||"+(m.subcat||"");
-        candidatos[key]=(candidatos[key]||0)+matches;
-      }
-    });
-    const top=Object.entries(candidatos).sort((a,b)=>b[1]-a[1])[0];
-    if(top){
-      const [cat,subcat]=top[0].split("||");
-      return {cat, subcat: subcat||null, fuente:"historial"};
-    }
-  }
-
-  // 2. REGLAS de comercios conocidos
-  for(const rule of AUTO_CAT_RULES){
-    if(rule.tipo!==tipoActual) continue;
-    if(rule.re.test(limpio)){
-      return {cat: rule.cat, subcat: rule.subcat||null, fuente:"reglas"};
-    }
-  }
-  return null;
+  return sugerirCategoriaPara(texto, tipoActual, movs);
 }
 
 // Llamado cuando el usuario escribe en la nota
