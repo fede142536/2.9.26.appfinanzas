@@ -1694,6 +1694,30 @@ test("descartar no es una puerta de una sola dirección", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// ETIQUETAS DE LAS BARRAS (categorías, tarjetas, tickers)
+// ═══════════════════════════════════════════
+grupo("Etiquetas de las barras");
+
+// .bar-label truncaba con "…" a los 108px: una categoría como "Vacaciones Gastos" quedaba
+// "Vacaciones Gas…" y no había forma de saber cuál era sin ir a buscarla a otro lado. Ahora
+// el nombre envuelve a la línea siguiente en vez de cortarse. Se prueba sobre el CSS, no
+// renderizando: es una propiedad de layout, no de datos.
+test("el nombre de la categoría ya no se corta con puntos suspensivos", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf(".bar-label{");
+  cierto(i>=0, "no se encontró la regla .bar-label");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(!regla.includes("text-overflow"), "volvió el corte con \"…\": " + regla);
+  cierto(!regla.includes("white-space:nowrap"), "una sola línea forzada vuelve a truncar visualmente: " + regla);
+});
+
+test("el ancho fijo de la etiqueta sigue ahí (para que las barras se alineen)", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const regla=css.slice(css.indexOf(".bar-label{"), css.indexOf("}", css.indexOf(".bar-label{"))+1);
+  cierto(/width:108px/.test(regla), "sin un ancho fijo, cada fila alinearía la barra en un lugar distinto");
+});
+
+// ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
 grupo("Números e íconos");
