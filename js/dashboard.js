@@ -2,6 +2,7 @@
 // DASHBOARD CON CHARTS
 // ═══════════════════════════════════════════
 function renderDash(){
+  renderAlertas();
   // Build year list from hist + live movs
   const histYears = [...new Set(HIST_MONTHLY.map(d=>parseInt(d.mes.slice(0,4))))];
   const liveYears = [...new Set(movs.map(m=>parseInt(String(m.fecha||"").slice(0,4))).filter(y=>y>2000))];
