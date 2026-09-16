@@ -182,11 +182,9 @@ function renderDashYear(){
   animarNumero(document.getElementById("chip-dash-bal"), bal, 700, fmtTotal);
 
   // Reset detalles al cambiar de año
-  document.getElementById("dash-detail").innerHTML="Tocá una columna para ver el detalle";
-  document.getElementById("dash-balance-detail").innerHTML="Tocá un punto para ver el balance del mes";
+  document.getElementById("dash-detail").innerHTML="Tocá un mes para ver el detalle";
 
   renderChartMensualBI(yearData);
-  renderChartBalanceBI(yearData);
 
   const sorted=Object.entries(catData).sort((a,b)=>b[1]-a[1]);
   const maxVal=sorted[0]?sorted[0][1]:1;
@@ -821,35 +819,54 @@ function drawBarRoundedH(ctx, x, y, w, h, r, corners){
   ctx.fill();
 }
 // ═══════════════════════════════════════════
-// CHART.JS — Dashboard (Ingresos vs Gastos, Balance mensual)
+// CHART.JS — Dashboard (Ingresos, gastos y balance)
 // ═══════════════════════════════════════════
 // Instancias guardadas para poder destruirlas antes de re-crear (Chart.js tira error
 // "Canvas is already in use" si no se destruye la instancia anterior sobre el mismo canvas).
 let chartMensualInstance=null;
-let chartBalanceInstance=null;
 let chartInvHistoricoInstance=null;
 
-// Gráfico de barras Ingresos vs Gastos, con tooltip nativo de Chart.js y clic en una
-// columna para mostrar el detalle del mes en #dash-detail (mismo comportamiento de antes).
+// Ingresos, gastos y balance en un solo gráfico.
+//
+// Antes esto eran dos tarjetas separadas: las barras de ingresos/gastos y, abajo, una línea
+// con el balance. Como el balance es exactamente ingreso − gasto, está en la misma unidad
+// (pesos) y sobre los mismos meses, ponerlo encima de las barras deja leer de un vistazo
+// "cuánto entró, cuánto salió y qué quedó" sin saltar entre dos gráficos ni comparar dos
+// escalas distintas. Es un solo eje Y para las tres series — nunca dos escalas superpuestas,
+// porque eso inventa relaciones que los datos no tienen.
+//
+// La leyenda ahora se muestra siempre: con tres series, distinguirlas sólo por color deja
+// afuera a quien no distingue verde de rojo.
 function renderChartMensualBI(yearData){
   const canvas=document.getElementById("chart-mensual");
   if(!canvas || typeof Chart==="undefined") return;
   if(chartMensualInstance){ chartMensualInstance.destroy(); chartMensualInstance=null; }
   const labels=yearData.map(d=>d.mes.slice(5));
   const muted=themeColor('--muted'), border=themeColor('--border');
+  const accent=themeColor('--accent'), surface=themeColor('--surface');
   chartMensualInstance=new Chart(canvas.getContext("2d"), {
     type:"bar",
     data:{
       labels,
       datasets:[
-        {label:"Ingresos", data:yearData.map(d=>d.ingreso), backgroundColor:themeColor('--success'), borderRadius:4, maxBarThickness:22},
-        {label:"Gastos", data:yearData.map(d=>d.gasto), backgroundColor:themeColor('--danger'), borderRadius:4, maxBarThickness:22}
+        {label:"Ingresos", data:yearData.map(d=>d.ingreso), backgroundColor:themeColor('--success'), borderRadius:4, maxBarThickness:22, order:2},
+        {label:"Gastos", data:yearData.map(d=>d.gasto), backgroundColor:themeColor('--danger'), borderRadius:4, maxBarThickness:22, order:2},
+        // order menor = se dibuja encima de las barras.
+        {label:"Balance", data:yearData.map(d=>d.balance), type:"line", order:1,
+         borderColor:accent, backgroundColor:accent, borderWidth:2, tension:0.35,
+         pointRadius:3, pointHoverRadius:5,
+         // Anillo del color de la tarjeta para que el punto se despegue de la barra que tenga detrás.
+         pointBackgroundColor:accent, pointBorderColor:surface, pointBorderWidth:2}
       ]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
+      // Con "index" el tooltip y el clic toman el mes entero: no hay que acertarle justo a una
+      // barra de 22px en el celular, y el tooltip muestra las tres cifras juntas.
+      interaction:{mode:"index", intersect:false},
       plugins:{
-        legend:{display:false},
+        legend:{display:true, position:"bottom",
+          labels:{color:muted, boxWidth:8, boxHeight:8, usePointStyle:true, pointStyle:"circle", padding:12, font:{size:10}}},
         tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtS(ctx.parsed.y)}`}}
       },
       scales:{
@@ -867,55 +884,6 @@ function renderChartMensualBI(yearData){
             <div><div class="txt-micro txt-muted">Ingresos</div><div style="font-size:13px;font-weight:600;color:var(--success)">${fmtS(d.ingreso)}</div></div>
             <div><div class="txt-micro txt-muted">Gastos</div><div style="font-size:13px;font-weight:600;color:var(--danger)">${fmtS(d.gasto)}</div></div>
             <div><div class="txt-micro txt-muted">Balance</div><div style="font-size:13px;font-weight:600;color:${balColor}">${fmtS(d.balance)}</div></div>
-          </div>`;
-      }
-    }
-  });
-}
-
-// Gráfico de línea del balance mensual (con relleno), color del punto/línea según sea
-// positivo o negativo, y clic en un punto para ver el detalle en #dash-balance-detail.
-function renderChartBalanceBI(yearData){
-  const canvas=document.getElementById("chart-balance");
-  if(!canvas || typeof Chart==="undefined") return;
-  if(chartBalanceInstance){ chartBalanceInstance.destroy(); chartBalanceInstance=null; }
-  const labels=yearData.map(d=>d.mes.slice(5));
-  const values=yearData.map(d=>d.balance);
-  const successColor=themeColor('--success'), dangerColor=themeColor('--danger');
-  const muted=themeColor('--muted'), border=themeColor('--border');
-  const pointColors=values.map(v=>v>=0?successColor:dangerColor);
-  const lineColor=(values[values.length-1]||0)>=0?successColor:dangerColor;
-  chartBalanceInstance=new Chart(canvas.getContext("2d"), {
-    type:"line",
-    data:{
-      labels,
-      datasets:[{
-        data:values,
-        borderColor:lineColor,
-        backgroundColor:themeColorAlpha('--accent',0.08),
-        fill:true, tension:0.35, borderWidth:2.5,
-        pointBackgroundColor:pointColors, pointBorderColor:pointColors, pointRadius:3
-      }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{label:ctx=>`Balance: ${fmtS(ctx.parsed.y)}`}}
-      },
-      scales:{
-        x:{grid:{display:false}, ticks:{color:muted, font:{size:9}, maxTicksLimit:6}},
-        y:{grid:{color:border}, ticks:{color:muted, font:{size:9}, callback:v=>fmtAbbr(v)}}
-      },
-      onClick:(evt, elements)=>{
-        if(!elements.length) return;
-        const d=yearData[elements[0].index];
-        if(!d) return;
-        const color=d.balance>=0?"var(--success)":"var(--danger)";
-        document.getElementById("dash-balance-detail").innerHTML=`
-          <div style="display:flex;justify-content:space-around;align-items:center;text-align:center;flex-wrap:wrap;gap:6px">
-            <div><div class="seccion-label txt-micro">${mesLbl(d.mes)}</div></div>
-            <div><div class="txt-micro txt-muted">Balance</div><div style="font-size:14px;font-weight:600;color:${color}">${fmtS(d.balance)}</div></div>
           </div>`;
       }
     }
