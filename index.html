@@ -768,6 +768,21 @@
 <div id="page-config" class="page">
   <div class="header"><h1>Configuración</h1></div>
   <div class="card">
+    <div class="card-title">📈 Inflación</div>
+    <p class="txt-sm txt-muted mb-10">Sirve para comparar un gasto contra el mismo mes del año pasado en plata de hoy. Si falta algún mes del tramo, el porcentaje no se muestra.</p>
+    <div id="inflacion-estado"></div>
+    <button class="btn-sm" style="width:100%;margin:10px 0" id="btn-inflacion-bajar" onclick="actualizarInflacionDesdeInternet()">🌐 Actualizar desde internet</button>
+    <details>
+      <summary class="txt-sm txt-muted" style="cursor:pointer;padding:4px 0">o pegala a mano</summary>
+      <p class="txt-xs txt-muted" style="margin:8px 0">Sirve el JSON tal cual sale de la API, o una línea por mes: <code>2026-07, 2,11</code></p>
+      <textarea id="inflacion-pegar" class="form-textarea" rows="4" aria-label="Serie de inflación para pegar" placeholder='[{"fecha":"2026-07-31","valor":2.11}, ...]'></textarea>
+      <div class="u-row" style="margin-top:8px">
+        <button class="btn-sm u-flex1" onclick="guardarInflacionPegada()">Guardar</button>
+        <button class="btn-sm" style="color:var(--danger)" onclick="borrarInflacion()">Borrar la serie</button>
+      </div>
+    </details>
+  </div>
+  <div class="card">
     <div class="card-title">🎨 Apariencia</div>
     <div class="u-row">
       <button class="btn-sm theme-btn u-flex1" data-theme="auto" onclick="setTheme('auto')" >Auto</button>
@@ -887,6 +902,7 @@
 <script src="js/analisis.js"></script>
 <script src="js/cambio-moneda.js"></script>
 <script src="js/dashboard.js"></script>
+<script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>

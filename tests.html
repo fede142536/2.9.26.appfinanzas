@@ -78,6 +78,7 @@
 <script src="js/analisis.js"></script>
 <script src="js/cambio-moneda.js"></script>
 <script src="js/dashboard.js"></script>
+<script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
@@ -1342,6 +1343,193 @@ test("las preferencias no pueden tirar abajo la app", ()=>{
     igual(guardarPreferencia("ftheme","oscuro"), false, "avisa que no pudo, pero sin tirar");
   });
   igual(guardarPreferencia("ftheme","oscuro"), true, "con disco normal, guarda");
+});
+
+// ═══════════════════════════════════════════
+// SERIE DE INFLACIÓN
+// ═══════════════════════════════════════════
+grupo("Inflación: la serie");
+
+// Corre fn sin ninguna serie guardada y después deja lo que hubiera.
+function sinSerieGuardada(fn){
+  const antes=localStorage.getItem("finflacion");
+  localStorage.removeItem("finflacion");
+  try { return fn(); }
+  finally { if(antes===null) localStorage.removeItem("finflacion"); else localStorage.setItem("finflacion", antes); }
+}
+
+// Genera meses seguidos desde ym, para tener una serie que pase el mínimo de 12.
+function serieSeguida(ymDesde, cuantos, valor){
+  const out=[];
+  for(let i=0;i<cuantos;i++) out.push({fecha:addMonths(ymDesde,i)+"-28", valor:valor});
+  return out;
+}
+
+test("parsea el JSON tal cual sale de la API", ()=>{
+  // La forma real: [{fecha:"YYYY-MM-DD", valor: <% del mes>}]
+  const t=parsearSerieFechaValor([{fecha:"2026-07-31", valor:2.11},
+                                  {fecha:"2026-08-31", valor:1.9}], "fecha", "valor");
+  igual(t, {"2026-07":2.11, "2026-08":1.9}, "la clave es el mes, sin el día");
+});
+
+test("descarta los meses viejos que no se van a usar", ()=>{
+  // La API trae desde 1943. Guardar un siglo de serie es ocupar lugar al pedo: el dashboard
+  // compara a lo sumo un par de años para atrás.
+  const t=parsearSerieFechaValor([{fecha:"1943-03-31", valor:1.6},
+                                  {fecha:"2026-07-31", valor:2.11}], "fecha", "valor");
+  igual(Object.keys(t), ["2026-07"]);
+});
+
+test("descarta valores imposibles en vez de guardarlos", ()=>{
+  // Un 5000% mensual no es un mes malo, es un dato roto. Si entra, deflactar da cualquier cosa.
+  const t=parsearSerieFechaValor([{fecha:"2026-07-31", valor:2.11},
+                                  {fecha:"2026-08-31", valor:5000},
+                                  {fecha:"2026-09-30", valor:"ni idea"}], "fecha", "valor");
+  igual(t, {"2026-07":2.11});
+});
+
+test("una respuesta que no es la serie no devuelve nada", ()=>{
+  // Así una página de error, o una API que cambió de formato, no pisa la serie buena.
+  igual(parsearSerieFechaValor(null, "fecha", "valor"), null);
+  igual(parsearSerieFechaValor([], "fecha", "valor"), null);
+  igual(parsearSerieFechaValor([{error:"not found"}], "fecha", "valor"), null);
+  igual(parsearSerieFechaValor("<html>502</html>", "fecha", "valor"), null);
+});
+
+test("pegar a mano acepta el JSON o una línea por mes", ()=>{
+  igual(parsearSeriePegada('[{"fecha":"2026-07-31","valor":2.11}]'), {"2026-07":2.11});
+  igual(parsearSeriePegada("2026-07, 2.11\n2026-08; 1.9"), {"2026-07":2.11, "2026-08":1.9});
+  igual(parsearSeriePegada("   "), null);
+  igual(parsearSeriePegada("cualquier cosa"), null);
+});
+
+test("pegar a mano entiende la coma decimal", ()=>{
+  // Es como se escribe un número acá. Pedirle al usuario que use punto es pedirle que se
+  // acuerde de algo que no tiene por qué.
+  igual(parsearSeriePegada("2026-07, 2,11"), {"2026-07":2.11});
+  igual(parsearSeriePegada("2026-07, 0,5"), {"2026-07":0.5});
+  // El punto de miles se saca antes de convertir la coma, así "1.234,5" da 1234.5 — que
+  // después cae por el filtro de valores imposibles, como tiene que ser.
+  igual(parsearSeriePegada("2026-07, 1.234,5"), null);
+});
+
+// ── LA TABLA EFECTIVA ──
+
+test("sin serie guardada se usa la que trae la app", ()=>{
+  sinSerieGuardada(()=>{
+    igual(tablaInflacion(), INFLACION_MENSUAL_ARS);
+  });
+});
+
+test("la serie guardada pisa a la compilada, mes por mes", ()=>{
+  sinSerieGuardada(()=>{
+    guardarSerieInflacion({"2026-07": 9.99, "2026-11": 1.5}, "test");
+    const t=tablaInflacion();
+    igual(t["2026-07"], 9.99, "el mes descargado manda sobre el compilado");
+    igual(t["2026-11"], 1.5, "y los meses nuevos se suman");
+    igual(t["2025-06"], INFLACION_MENSUAL_ARS["2025-06"], "los que solo están compilados siguen");
+  });
+});
+
+test("borrar la serie deja la app como estaba, nunca peor", ()=>{
+  sinSerieGuardada(()=>{
+    guardarSerieInflacion({"2026-07": 9.99}, "test");
+    borrarSerieInflacion();
+    igual(tablaInflacion(), INFLACION_MENSUAL_ARS);
+  });
+});
+
+// ── QUE SIGA VALIENDO LA REGLA DE ORO ──
+
+test("con la serie cargada, el ajuste por inflación se puede calcular", ()=>{
+  sinSerieGuardada(()=>{
+    const tabla={};
+    serieSeguida("2025-09", 14, 2).forEach(f=>{ tabla[f.fecha.slice(0,7)]=f.valor; });
+    guardarSerieInflacion(tabla, "test");
+    igual(inflacionCompleta("2025-09","2026-09"), true, "el tramo quedó completo");
+    // 12 meses al 2% se encadenan (no se suman): 1,02^12 = 1,26824.
+    igual(deflactarARS(1000, "2025-09", "2026-09"), 1268.24,
+      "deflactar tiene que usar los valores que se bajaron");
+  });
+});
+
+test("sin la serie, deflactar se queda corto y por eso no se muestra nada", ()=>{
+  // Es el estado de antes: con 4 meses cargados, deflactar trata el resto como 0% y
+  // subestima muchísimo. Por eso inflacionCompleta() es la que decide si mostrar el % o no.
+  sinSerieGuardada(()=>{
+    igual(inflacionCompleta("2025-09","2026-09"), false);
+    cierto(deflactarARS(1000, "2025-09", "2026-09") < 1100,
+      "sin datos, el ajuste es casi nulo: mostrar un % con esto sería mentir");
+  });
+});
+
+test("si falta un mes del tramo, se sigue sin mostrar nada", ()=>{
+  // Es la regla que ya estaba y no se toca: un número que parece preciso y no lo es, en una
+  // app de plata, es peor que no decir nada.
+  sinSerieGuardada(()=>{
+    const tabla={};
+    serieSeguida("2025-09", 14, 2).forEach(f=>{ tabla[f.fecha.slice(0,7)]=f.valor; });
+    delete tabla["2026-02"];
+    guardarSerieInflacion(tabla, "test");
+    igual(inflacionCompleta("2025-09","2026-09"), false);
+    igual(compAnioAnterior(1500000, 1000000, true, false, false), "", "sin el tramo completo, nada");
+  });
+});
+
+test("una serie corta no sirve para comparar", ()=>{
+  igual(serieUtil({"2026-07":2}), false, "con un mes no se compara nada");
+  const larga={};
+  serieSeguida("2025-01", 12, 2).forEach(f=>{ larga[f.fecha.slice(0,7)]=f.valor; });
+  igual(serieUtil(larga), true);
+});
+
+// ── BAJARLA DE INTERNET ──
+// El fetch se mockea: no hay red en los tests, y encima el punto es probar qué pasa cuando
+// la red FALLA.
+
+test("baja la serie de la primera fuente que conteste bien", async ()=>{
+  const r=await bajarSerieInflacion(async ()=>({
+    ok:true, status:200,
+    json: async ()=>serieSeguida("2025-01", 24, 2.5)
+  }));
+  igual(r.ok, true);
+  igual(r.fuente, "ArgentinaDatos");
+  igual(Object.keys(r.tabla).length, 24);
+});
+
+test("si la primera fuente falla, prueba la siguiente", async ()=>{
+  let llamadas=0;
+  const r=await bajarSerieInflacion(async (url)=>{
+    llamadas++;
+    if(llamadas===1) throw Object.assign(new TypeError("Failed to fetch"));
+    // La segunda fuente devuelve {data:[[fecha, valor], ...]}
+    return {ok:true, status:200, json: async ()=>({data: serieSeguida("2025-01",24,2.5).map(f=>[f.fecha, f.valor])})};
+  });
+  igual(llamadas, 2);
+  igual(r.ok, true);
+  igual(r.fuente, "datos.gob.ar");
+});
+
+test("si no anda ninguna, lo dice fuente por fuente", async ()=>{
+  // Un fallo de CORS y un celular sin señal tiran el MISMO TypeError, así que no se puede
+  // distinguir: hay que nombrar las dos posibilidades en vez de inventar una.
+  const r=await bajarSerieInflacion(async ()=>{ throw new TypeError("Failed to fetch"); });
+  igual(r.ok, false);
+  igual(r.intentos.length, 2, "tiene que contar qué pasó con cada una");
+  cierto(/CORS/i.test(r.intentos[0].resultado), "hay que nombrar el CORS: es la causa que el usuario no puede adivinar");
+  cierto(/internet/i.test(r.intentos[0].resultado), "y la falta de internet, que es la otra");
+});
+
+test("una respuesta con formato raro no se guarda como si fuera la serie", async ()=>{
+  const r=await bajarSerieInflacion(async ()=>({ok:true, status:200, json: async ()=>({mensaje:"hola"})}));
+  igual(r.ok, false);
+  cierto(/formato/i.test(r.intentos[0].resultado), r.intentos[0].resultado);
+});
+
+test("un error HTTP no se confunde con datos", async ()=>{
+  const r=await bajarSerieInflacion(async ()=>({ok:false, status:503, json: async ()=>({})}));
+  igual(r.ok, false);
+  cierto(/503/.test(r.intentos[0].resultado), r.intentos[0].resultado);
 });
 
 // ═══════════════════════════════════════════
