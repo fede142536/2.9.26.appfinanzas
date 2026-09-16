@@ -77,6 +77,7 @@ function saveIconsCustom(){ setSensitiveRaw("ficons", JSON.stringify(iconsCustom
 // ("farmacia" antes que "salud" no hace falta porque son íconos distintos, pero "nafta" sí
 // tiene que ir antes que cualquier regla amplia de auto).
 const ICONOS_POR_PALABRA=[
+  [/cambio\s*de\s*moneda|\bmep\b|d[oó]lar|\bblue\b|\bccl\b|contado\s*con\s*liqui/, "💱"],
   [/supermercad|^super|almacen|verduler|carnicer|fiambrer|panader|kiosco|chino|coto|dia\b|jumbo|carrefour/, "🛒"],
   [/restaurant|resto|comida|delivery|pedido|rappi|cena|almuerzo|parrilla|pizzer|sushi/, "🍽️"],
   [/cafe|cafeter|starbuck|desayuno/, "☕"],
