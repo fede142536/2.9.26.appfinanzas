@@ -213,9 +213,17 @@ function renderTarjetas(){
   const cantidadMes = movsMes.length;
   // Subtotales por tarjeta (Visa, Master, etc.) — separados por moneda
   const porTarjeta = {};
+  // Subtotales por categoría del mes: "por tarjeta" dice con qué plástico pagaste, no en qué
+  // se te fue la plata. La clave lleva la moneda pegada por el mismo motivo que la de tarjeta:
+  // pesos y dólares no se suman entre sí.
+  const porCategoria = {};
   movsMes.forEach(m=>{
-    const key=`${m.tarjeta}|${m.moneda||"ARS"}`;
+    const moneda=m.moneda||"ARS";
+    const key=`${m.tarjeta}|${moneda}`;
     porTarjeta[key] = (porTarjeta[key]||0) + m.importe;
+    const cat=m.cat||"Sin categoría";
+    const keyCat=`${cat}|${moneda}`;
+    porCategoria[keyCat] = (porCategoria[keyCat]||0) + m.importe;
   });
   // La fila de chips de arriba (Total ARS/USD, Gastos, Pendiente ARS/USD) se sacó a pedido:
   // repetía números que ya están en las dos cards. El total del mes y la cantidad de gastos
@@ -234,19 +242,53 @@ function renderTarjetas(){
     const tarjEntries=Object.entries(porTarjeta).sort((a,b)=>b[1]-a[1]);
     if(tarjEntries.length){
       html+=`<div class="seccion-label mb-6">Por tarjeta</div>`;
-      const maxV=tarjEntries[0][1];
+      // Un solo máximo para las dos monedas hacía que, con una tarjeta en USD, su barra
+      // quedara invisible al lado de las de pesos: se comparaba 50 contra 300.000. Cada
+      // moneda se escala contra su propio máximo.
+      const maxTarjPorMoneda={};
+      tarjEntries.forEach(([key,val])=>{
+        const moneda=key.slice(key.lastIndexOf("|")+1);
+        maxTarjPorMoneda[moneda]=Math.max(maxTarjPorMoneda[moneda]||0, val);
+      });
       html+=tarjEntries.map(([key,val])=>{
-        const [tarj, moneda]=key.split("|");
+        const sep=key.lastIndexOf("|");
+        const tarj=key.slice(0,sep), moneda=key.slice(sep+1);
         const fmt=moneda==="USD"?`USD ${val.toFixed(2)}`:fmtS(val);
         const monedaBadge=moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
+        const max=maxTarjPorMoneda[moneda]||1;
         return `<div class="bar-row" style="margin-bottom:6px">
           <div class="bar-label">💳 ${escapeHtml(tarj)}${monedaBadge}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxV*100)}%;background:var(--warning)"></div></div>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/max*100)}%;background:var(--warning)"></div></div>
           <div class="bar-val">${fmt}</div>
         </div>`;
       }).join("");
     } else {
       html+=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:8px 0">Sin gastos en ${mesLbl(ymSel)}</p>`;
+    }
+    // Por categoría: mismo formato que "Por tarjeta", ordenado de mayor a menor.
+    // Las barras se comparan dentro de cada moneda, no entre monedas: si no, un gasto de
+    // USD 50 al lado de uno de $300.000 dibujaría una barra llena y otra invisible, comparando
+    // números que no son comparables.
+    const catEntries=Object.entries(porCategoria).sort((a,b)=>b[1]-a[1]);
+    if(catEntries.length){
+      html+=`<div class="seccion-label mt-14 mb-6">Por categoría</div>`;
+      const maxPorMoneda={};
+      catEntries.forEach(([key,val])=>{
+        const moneda=key.split("|")[1];
+        maxPorMoneda[moneda]=Math.max(maxPorMoneda[moneda]||0, val);
+      });
+      html+=catEntries.map(([key,val])=>{
+        const sep=key.lastIndexOf("|");
+        const cat=key.slice(0,sep), moneda=key.slice(sep+1);
+        const fmt=moneda==="USD"?`USD ${val.toFixed(2)}`:fmtS(val);
+        const monedaBadge=moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
+        const max=maxPorMoneda[moneda]||1;
+        return `<div class="bar-row" style="margin-bottom:6px">
+          <div class="bar-label">${getIcon(cat,"💳")} ${escapeHtml(cat)}${monedaBadge}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/max*100)}%;background:var(--warning)"></div></div>
+          <div class="bar-val">${fmt}</div>
+        </div>`;
+      }).join("");
     }
     // Lista detallada de gastos del mes
     if(movsMes.length){
