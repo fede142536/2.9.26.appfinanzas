@@ -327,6 +327,52 @@ function simularCuotas(monto, cuotas, mesInicio, lista, hoyYM){
 }
 
 // ═══════════════════════════════════════════
+// 5b. REGISTROS INCOMPLETOS
+// ═══════════════════════════════════════════
+// Un campo numérico que quedó vacío hace que los totales den NaN, y desde que NaN se muestra
+// como "—" (ver fmtTotal) eso se ve en pantalla. Pero el guión solo dice QUE algo está roto,
+// no CUÁL: sin esta lista habría que ir movimiento por movimiento a mano.
+
+// Devuelve [{que, id, desc, motivo}] — `que` es "tarjeta" o "movimiento".
+function registrosIncompletos(lista, tcsLista){
+  const rotos=[];
+
+  (tcsLista||[]).forEach(t=>{
+    const desc=t.desc||"(sin descripción)";
+    // En un gasto frecuente `total` es el monto mensual; en cuotas, el total de la compra.
+    if(numeroRoto(t.total) || Number(t.total)<=0){
+      rotos.push({que:"tarjeta", id:t.id, desc, motivo:t.frecuente?"le falta el monto mensual":"le falta el monto total"});
+      return;
+    }
+    if(!t.frecuente){
+      if(numeroRoto(t.cuotasTotal) || Number(t.cuotasTotal)<1){
+        rotos.push({que:"tarjeta", id:t.id, desc, motivo:"le falta en cuántas cuotas"});
+        return;
+      }
+      if(!t.mesInicio){
+        rotos.push({que:"tarjeta", id:t.id, desc, motivo:"le falta el mes de la primera cuota"});
+        return;
+      }
+    } else if(!t.mesInicio){
+      rotos.push({que:"tarjeta", id:t.id, desc, motivo:"le falta el mes de inicio"});
+    }
+  });
+
+  (lista||[]).forEach(m=>{
+    const enUSD=m.moneda==="USD";
+    const monto=enUSD ? m.importeOrig : m.importe;
+    // Un movimiento en USD guarda 0 en `importe` a propósito, así que solo se mira el campo
+    // que le corresponde a su moneda.
+    if(numeroRoto(monto)){
+      rotos.push({que:"movimiento", id:m.id, desc:m.nota||m.cat||"(sin descripción)",
+                  motivo:"el importe no es un número"});
+    }
+  });
+
+  return rotos;
+}
+
+// ═══════════════════════════════════════════
 // 6. ALERTAS
 // ═══════════════════════════════════════════
 // Arma la lista de avisos del momento. Cada uno es {nivel, icono, titulo, detalle}.
@@ -386,6 +432,20 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
       nivel:"warn", icono:"⚠️",
       titulo:`${inusuales.length} ${inusuales.length===1?"gasto":"gastos"} fuera de lo normal este mes`,
       detalle: inusuales.map(i=>`${i.mov.nota||i.mov.cat}: ${fmtS(i.mov.importe)} (${i.veces}× tu mediana de ${i.cat})`).join(" · ")
+    });
+  }
+
+  // ── Registros a los que les falta un dato ──
+  // Va al final pero se cuela primero si existe: un número que no se puede calcular ensucia
+  // todas las demás cuentas, así que arreglarlo es más urgente que cualquier otro aviso.
+  const rotos=registrosIncompletos(lista, tcsLista);
+  if(rotos.length){
+    out.unshift({
+      nivel:"danger", icono:"🔧",
+      titulo:`${rotos.length} ${rotos.length===1?"registro al que le falta":"registros a los que les falta"} un dato`,
+      detalle: rotos.slice(0,3).map(r=>`${r.desc}: ${r.motivo}`).join(" · ")
+        + (rotos.length>3?` · y ${rotos.length-3} más`:"")
+        + ". Donde no se puede calcular vas a ver un “—” en vez de un monto."
     });
   }
 

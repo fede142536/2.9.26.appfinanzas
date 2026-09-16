@@ -413,8 +413,23 @@ function escapeHtml(str){
     .replace(/'/g,"&#39;");
 }
 // ── FORMAT ──
+// Lo que se muestra cuando un número NO es un número: un registro cargado a medias, un
+// import raro, un campo que quedó vacío. No puede ser "$0".
+//
+// Un cero es un DATO ("este mes no gastaste nada"); esto es la AUSENCIA de dato. Mostrar los
+// dos igual es lo que escondió durante meses el saldo USD mal calculado: una tarjeta sin
+// `total` daba NaN, el total del mes daba NaN, y la pantalla decía "$0" como si estuviera
+// todo bien. Con "—" se ve que falta algo y se puede ir a buscarlo.
+const SIN_DATO = "—";
+
+// `isFinite(Number(x))` cubre NaN e Infinity de una. Los chequeos de antes son porque
+// Number(null) y Number("") dan 0, no NaN: sin ellos, un campo vacío pasaría como un cero.
+function numeroRoto(n){
+  return n===undefined || n===null || n==="" || typeof n==="boolean" || !isFinite(Number(n));
+}
+
 function fmt(n){
-  if(n===undefined||n===null||isNaN(n))return "$0,00";
+  if(numeroRoto(n))return SIN_DATO;
   const abs=Math.abs(n);
   const rounded=Math.round(abs*100)/100;
   const sign=n<0?"-":"";
@@ -427,7 +442,7 @@ function fmt(n){
 // "$2.1M" abajo, o sea tres precisiones distintas en la misma pantalla.
 // Los centavos siguen estando donde SÍ importan: en el importe de un movimiento (fmtS).
 function fmtTotal(n){
-  if(n===undefined||n===null||isNaN(n))return "$0";
+  if(numeroRoto(n))return SIN_DATO;
   const abs=Math.abs(n);
   const sign=n<0?"-":"";
   return sign+"$"+Math.round(abs).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:0});
@@ -459,7 +474,8 @@ function fmtSignoGrande(valor){
 }
 // fmtAbbr = versión abreviada solo para ejes de gráficos donde no hay espacio
 function fmtAbbr(n){
-  if(!n||isNaN(n))return "$0";
+  if(numeroRoto(n))return SIN_DATO;
+  if(n===0)return "$0";
   const abs=Math.abs(n);
   const sign=n<0?"-":"";
   if(abs>=1000000)return sign+"$"+(abs/1000000).toFixed(1)+"M";
@@ -469,6 +485,7 @@ function fmtAbbr(n){
 function mesLbl(ym){if(!ym)return"";const[y,m]=ym.split("-");return MESES[parseInt(m)-1]+" "+y;}
 // Formatea un monto según su moneda. ARS usa el formato es-AR ($), USD usa "USD X.XX"
 function fmtMoneda(n, moneda){
+  if(numeroRoto(n))return SIN_DATO;
   if(moneda==="USD"){
     const abs=Math.abs(n||0);
     const sign=(n||0)<0?"-":"";
