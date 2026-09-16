@@ -111,10 +111,15 @@ function mesesConCuotasPendientes(desde){
     const ym=addMonths(desde,i);
     const movs=getTcMovsEnMes(ym);
     if(!movs.length) continue;
+    const enARS=movs.filter(m=>m.moneda!=="USD");
+    const enUSD=movs.filter(m=>m.moneda==="USD");
     out.push({
       ym, movs,
-      totalARS: movs.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0),
-      totalUSD: movs.filter(m=>m.moneda==="USD").reduce((s,m)=>s+(m.importe||0),0)
+      totalARS: enARS.reduce((s,m)=>s+(m.importe||0),0),
+      totalUSD: enUSD.reduce((s,m)=>s+(m.importe||0),0),
+      // Alguna de las compras de este mes no tiene un monto usable: el total de abajo es una
+      // suma parcial, no el total del mes.
+      incompleto: movs.some(m=>numeroRoto(m.importe))
     });
   }
   return out;
@@ -143,19 +148,20 @@ function renderTcPendientes(){
 
   const totalARS=meses.reduce((s,m)=>s+m.totalARS,0);
   const totalUSD=meses.reduce((s,m)=>s+m.totalUSD,0);
+  const algunoIncompleto=meses.some(m=>m.incompleto);
 
   // Se aclara desde cuándo cuenta el total, para que no parezca que se perdió plata al no
   // incluir el mes en curso.
   let html=`<div class="txt-sm txt-muted mb-10">
     Después de ${escapeHtml(mesLbl(mesTc))} · ${meses.length} ${meses.length===1?"mes":"meses"} ·
-    <strong style="color:var(--warning)">${fmtTotal(totalARS)}</strong>${totalUSD>0?` + <strong style="color:var(--accent)">USD ${totalUSD.toFixed(2)}</strong>`:""} en total
-  </div>`;
+    <strong style="color:var(--warning)">${algunoIncompleto ? "—" : fmtTotal(totalARS)}</strong>${totalUSD>0?` + <strong style="color:var(--accent)">USD ${totalUSD.toFixed(2)}</strong>`:""} en total
+  </div>${algunoIncompleto?`<div class="txt-micro txt-muted mb-10">Hay una compra sin monto, así que el total no se puede calcular. Está en el aviso del Dashboard.</div>`:""}`;
 
   html+=`<div class="mes-grid">`+meses.map(m=>`
     <div class="mes-caja${tcMesAbierto===m.ym?" abierta":""}" role="button" tabindex="0"
          aria-expanded="${tcMesAbierto===m.ym}" onclick="toggleTcMes(${attrJS(m.ym)})">
       <div class="mes-caja-label">${escapeHtml(mesLbl(m.ym).replace(" "," ").slice(0,3))} ${m.ym.slice(2,4)}</div>
-      <div class="mes-caja-val">${fmtAbbr(m.totalARS)}</div>
+      <div class="mes-caja-val">${m.incompleto ? "—" : fmtAbbr(m.totalARS)}</div>
       ${m.totalUSD>0?`<div class="mes-caja-usd">USD ${m.totalUSD.toFixed(0)}</div>`:""}
       <div class="mes-caja-n">${m.movs.length} ${m.movs.length===1?"cuota":"cuotas"}</div>
     </div>`).join("")+`</div>`;

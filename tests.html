@@ -491,6 +491,36 @@ test("sin compras en cuotas no hay meses que proyectar", ()=>{
   igual(conTarjetas([], ()=>mesesConCuotasPendientes("2026-09")), []);
 });
 
+// Una compra sin monto hace NaN, y el `|| 0` de la suma lo cuenta como cero: un mes que SOLO
+// tiene esa compra mostraba "$0 · 1 cuota", que se contradice solo.
+test("un mes con una compra sin monto se marca como incompleto", ()=>{
+  const ROTA={id:9, desc:"Sin monto", cuotasTotal:6, mesInicio:"2026-09", tarjeta:"Visa", moneda:"ARS"};
+  const meses=conTarjetas([ROTA], ()=>mesesConCuotasPendientes("2026-10"));
+  cierto(meses.length>0, "la compra igual aparece en la proyección");
+  igual(meses[0].incompleto, true, "el mes tiene que quedar marcado");
+});
+
+test("un mes con todo completo no se marca", ()=>{
+  const meses=conTarjetas([NOTEBOOK], ()=>mesesConCuotasPendientes("2026-10"));
+  igual(meses[0].incompleto, false);
+});
+
+test("la card muestra el guión, no un cero inventado", ()=>{
+  const ROTA={id:9, desc:"Sin monto", cuotasTotal:6, mesInicio:"2026-09", tarjeta:"Visa", moneda:"ARS"};
+  const cont=document.createElement("div");
+  cont.id="tc-pendientes"; cont.style.display="none";
+  document.body.appendChild(cont);
+  const antesTcs=tcs, antesMes=mesTc, antesAbierto=tcMesAbierto;
+  try{
+    tcs=[ROTA]; mesTc="2026-10"; tcMesAbierto=null;
+    renderTcPendientes();
+    const html=cont.innerHTML;
+    cierto(!/\$0/.test(html), "no puede aparecer un $0 donde el monto es desconocido: "+html.slice(0,300));
+    cierto(html.includes("—"), "tiene que verse el guión");
+    cierto(/no se puede calcular/.test(html), "y explicar por qué, con dónde mirar");
+  } finally { tcs=antesTcs; mesTc=antesMes; tcMesAbierto=antesAbierto; cont.remove(); }
+});
+
 // ── LA CARD ARRANCA EN EL MES SIGUIENTE ──
 // mesesConCuotasPendientes(desde) sigue siendo inclusiva (los tests de arriba dependen de eso);
 // lo que cambia es QUIÉN la llama: renderTcPendientes() le pasa mesTc+1, porque el mes en curso
@@ -861,6 +891,63 @@ test("nunca muestra más de 5 alertas juntas", ()=>{
   const lista=mesesDeGasto("2026-09",6,100000).concat([g("Varios","Supermercado",null,"2026-09-15",900000)]);
   const a=conTarjetas([NOTEBOOK,HELADERA,ZAPATILLAS], ()=>alertasDelMomento(lista, [], "2026-09-30"));
   cierto(a.length<=5, "con más de 5 dejás de leerlas: "+a.length);
+});
+
+// ═══════════════════════════════════════════
+// REGISTROS INCOMPLETOS
+// ═══════════════════════════════════════════
+grupo("Registros incompletos");
+
+// Desde que un número roto se muestra como "—" en vez de "$0", el problema se ve. Pero el
+// guión solo dice QUE algo está roto, no CUÁL: sin esta lista habría que ir a mano.
+
+test("encuentra la tarjeta a la que le falta el monto", ()=>{
+  const r=registrosIncompletos([], [{id:1, desc:"Notebook", cuotasTotal:12, mesInicio:"2026-05"}]);
+  igual(r.length, 1);
+  igual(r[0].que, "tarjeta");
+  igual(r[0].desc, "Notebook");
+  cierto(/monto total/.test(r[0].motivo), r[0].motivo);
+});
+
+test("distingue qué dato falta en cada caso", ()=>{
+  const base={id:1, desc:"X", total:1000, cuotasTotal:6, mesInicio:"2026-05"};
+  const sinCuotas=registrosIncompletos([], [Object.assign({}, base, {cuotasTotal:undefined})]);
+  cierto(/cuántas cuotas/.test(sinCuotas[0].motivo), sinCuotas[0].motivo);
+  const sinMes=registrosIncompletos([], [Object.assign({}, base, {mesInicio:""})]);
+  cierto(/primera cuota/.test(sinMes[0].motivo), sinMes[0].motivo);
+  // En un gasto frecuente `total` es el monto mensual, así que el mensaje cambia.
+  const frec=registrosIncompletos([], [{id:2, desc:"Netflix", frecuente:true, mesInicio:"2026-01"}]);
+  cierto(/monto mensual/.test(frec[0].motivo), frec[0].motivo);
+});
+
+test("un registro completo no aparece", ()=>{
+  igual(registrosIncompletos([], [{id:1, desc:"Ok", total:1200, cuotasTotal:12, mesInicio:"2026-05"}]), []);
+});
+
+test("un movimiento en USD no se marca por tener importe 0", ()=>{
+  // Los movimientos en dólares guardan 0 en `importe` A PROPÓSITO y el monto vive en
+  // `importeOrig`. Si se mirara el campo equivocado, TODOS los movimientos en USD saldrían
+  // como rotos y la alerta se volvería ruido que se ignora.
+  const enUSD={id:5, tipo:"Gasto", nota:"Hosting", moneda:"USD", importe:0, importeOrig:30};
+  igual(registrosIncompletos([enUSD], []), []);
+  const rotoUSD={id:6, tipo:"Gasto", nota:"Roto", moneda:"USD", importe:0, importeOrig:undefined};
+  igual(registrosIncompletos([rotoUSD], []).length, 1);
+});
+
+test("un importe de cero no es un registro roto", ()=>{
+  // Cero es un dato válido. Si esto se marcara, la alerta gritaría por movimientos sanos.
+  igual(registrosIncompletos([{id:7, tipo:"Gasto", nota:"Regalo", moneda:"ARS", importe:0}], []), []);
+});
+
+test("la alerta de datos faltantes va primera", ()=>{
+  // Un número que no se puede calcular ensucia TODAS las demás cuentas, así que arreglarlo es
+  // más urgente que cualquier otro aviso.
+  const rota={id:1, desc:"Notebook", cuotasTotal:12, mesInicio:"2026-05"};
+  const a=conTarjetas([rota], ()=>alertasDelMomento([], [rota], "2026-09-15"));
+  cierto(a.length>0, "tendría que haber al menos la alerta de datos faltantes");
+  cierto(/falta/.test(a[0].titulo), "tiene que ir primera: "+JSON.stringify(a.map(x=>x.titulo)));
+  igual(a[0].nivel, "danger");
+  cierto(/—/.test(a[0].detalle), "hay que explicar qué es el guión que van a ver en pantalla");
 });
 
 // ═══════════════════════════════════════════
@@ -1620,10 +1707,34 @@ test("los totales van sin centavos y los movimientos con", ()=>{
   igual(fmtTotal(0), "$0");
 });
 
-test("fmtTotal tolera basura sin romper la pantalla", ()=>{
-  igual(fmtTotal(null), "$0");
-  igual(fmtTotal(undefined), "$0");
-  igual(fmtTotal(NaN), "$0");
+// Un número roto NO puede verse igual que un cero. Un cero es un dato ("no gastaste nada");
+// un roto es la ausencia de dato. Mostrar los dos como "$0" es lo que escondió durante meses
+// el saldo USD mal calculado: una tarjeta sin `total` daba NaN, el total daba NaN, y la
+// pantalla decía "$0" como si estuviera todo bien.
+test("un número roto se distingue de un cero", ()=>{
+  igual(fmtTotal(NaN), "—");
+  igual(fmtTotal(null), "—");
+  igual(fmtTotal(undefined), "—");
+  igual(fmtTotal(""), "—", "un campo vacío no es un cero: Number('') da 0 y se colaba");
+  igual(fmtTotal(Infinity), "—", "una división por cero tampoco");
+  igual(fmtTotal(0), "$0", "pero el cero de verdad se sigue viendo como cero");
+});
+
+test("todos los formatos de plata distinguen roto de cero", ()=>{
+  // Si uno solo se olvida, el número roto se escapa por ahí y vuelve a pasar desapercibido.
+  igual(fmt(NaN), "—");            igual(fmt(0), "$0,00");
+  igual(fmtS(NaN), "—");           igual(fmtS(0), "$0,00");
+  igual(fmtAbbr(NaN), "—");        igual(fmtAbbr(0), "$0");
+  igual(fmtMoneda(NaN,"USD"), "—");igual(fmtMoneda(0,"USD"), "USD 0.00");
+  igual(fmtMoneda(NaN,"ARS"), "—");igual(fmtMoneda(0,"ARS"), "$0,00");
+});
+
+test("no rompe la pantalla: sigue devolviendo un texto", ()=>{
+  // Lo que se buscaba antes con el "$0" era no reventar el render. Eso se mantiene.
+  [null, undefined, NaN, "", {}, [], true].forEach(basura=>{
+    igual(typeof fmtTotal(basura), "string", "fmtTotal tiene que devolver texto siempre");
+    igual(typeof fmtAbbr(basura), "string");
+  });
 });
 
 test("ningún chip de resumen quedó con centavos", async ()=>{
