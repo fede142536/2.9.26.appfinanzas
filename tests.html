@@ -862,6 +862,104 @@ test("nunca muestra más de 5 alertas juntas", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// FLUJO USD DEL AÑO (DASHBOARD)
+// ═══════════════════════════════════════════
+grupo("Dashboard: flujo USD");
+
+// Un movimiento en USD guarda el monto en `importeOrig` y deja `importe` en 0 (ver
+// form-cargar.js): `importe` es la columna en pesos y en USD no aplica.
+function u(nota, importeOrig, extra){
+  return Object.assign({id:Math.floor(Math.random()*1e9), tipo:"Gasto", nota, cat:"Varios",
+    subcat:"", fecha:"2026-05-10", moneda:"USD", importe:0, importeOrig, cuenta:"Efectivo"}, extra||{});
+}
+
+// EL BUG: una compra pagada con dólares del fondo se descontaba dos veces y el saldo daba
+// el doble en negativo (una compra de USD 500 mostraba un saldo de USD -1000). Pasaba porque
+// esRetiroAhorro() también es esGasto(), así que el retiro ya venía restado dentro de
+// `gastos` y la fórmula lo volvía a restar aparte.
+test("una compra pagada con el fondo no se descuenta dos veces", ()=>{
+  const r=conTarjetas([], ()=>resumenUSDdelAnio([u("Compra con ahorros",500,{usaAhorro:true})], 2026));
+  igual(r.neto, 0, "sacar 500 del fondo y gastarlos deja tu saldo a mano igual que antes");
+  igual(r.ret, 500, "pero los 500 tienen que seguir estando a la vista");
+  igual(r.gasComun, 0, 'no es un gasto "común": ya está contado como pago con el fondo');
+});
+
+test("pasar dólares al fondo de ahorro los saca de tu mano", ()=>{
+  const r=conTarjetas([], ()=>resumenUSDdelAnio([u("Guardo",100,{esAhorro:true})], 2026));
+  igual(r.neto, -100);
+  igual(r.aho, 100);
+  igual(r.gasComun, 0, "un depósito no puede aparecer además como gasto común");
+});
+
+test("un gasto común resta y un ingreso suma", ()=>{
+  const r=conTarjetas([], ()=>resumenUSDdelAnio([u("Zapatillas",200), u("Freelance",300,{tipo:"Ingreso"})], 2026));
+  igual(r.neto, 100);
+  igual(r.gasComun, 200);
+  igual(r.ing, 300);
+});
+
+// Antes, la línea "Gastos" del desglose incluía lo ahorrado y lo pagado con el fondo, así
+// que los mismos dólares figuraban en dos renglones y las líneas no sumaban el total.
+test("las líneas del desglose no se pisan y suman el neto", ()=>{
+  const lista=[u("Sueldo",1000,{tipo:"Ingreso"}), u("Zapatillas",200),
+               u("Guardo",300,{esAhorro:true}), u("Compra con ahorros",50,{usaAhorro:true})];
+  const r=conTarjetas([], ()=>resumenUSDdelAnio(lista, 2026));
+  igual(r.ing, 1000);
+  igual(r.gasComun, 200, "solo el gasto común: ni el depósito ni el pago con el fondo");
+  igual(r.aho, 300);
+  igual(r.ret, 50);
+  igual(r.ing + r.invEntrada - r.gasComun - r.aho - r.invSalida - r.tcUSD, r.neto,
+    "las seis líneas que se muestran tienen que dar exactamente el saldo de arriba");
+  igual(r.neto, 500);
+});
+
+test("las inversiones en USD entran al saldo", ()=>{
+  const inv=(nota,importeUSD,subcat)=>({id:Math.random(), tipo:"Inversion", nota, cat:"Bonos",
+    subcat, fecha:"2026-06-01", importeUSD, importe:0});
+  const r=conTarjetas([], ()=>resumenUSDdelAnio([inv("Compro AL30",400,"Suscripcion"),
+                                                 inv("Cobro cupón",120,"Cupón")], 2026));
+  igual(r.invSalida, 400, "comprar saca plata de la mano");
+  igual(r.invEntrada, 120, "un cupón la devuelve");
+  igual(r.neto, -280);
+});
+
+test("los gastos de tarjeta en USD restan, cuota por cuota", ()=>{
+  // 6 cuotas de USD 30 desde marzo 2026 → las 6 caen dentro de 2026.
+  const tc={id:1, desc:"Hosting", total:180, cuotasTotal:6, mesInicio:"2026-03",
+            tarjeta:"Visa", cat:"Tecnología", moneda:"USD"};
+  const r=conTarjetas([tc], ()=>resumenUSDdelAnio([], 2026));
+  igual(r.tcUSD, 180);
+  igual(r.neto, -180);
+  igual(r.movimientos.length, 6, "una entrada por cuota, no una sola por la compra");
+});
+
+test("solo cuenta el año que se está mirando", ()=>{
+  const lista=[u("De 2026",100), Object.assign(u("De 2025",999),{fecha:"2025-08-01"})];
+  const r=conTarjetas([], ()=>resumenUSDdelAnio(lista, 2026));
+  igual(r.neto, -100);
+  igual(r.movimientos.length, 1);
+});
+
+// El pedido concreto: poder VER los movimientos, para que el saldo sea auditable.
+test("la lista trae todo junto, del más nuevo al más viejo", ()=>{
+  const lista=[u("Viejo",10,{fecha:"2026-01-05"}), u("Nuevo",20,{fecha:"2026-11-20"}),
+               u("Medio",30,{fecha:"2026-06-15"})];
+  const r=conTarjetas([], ()=>resumenUSDdelAnio(lista, 2026));
+  igual(r.movimientos.map(m=>m.desc), ["Nuevo","Medio","Viejo"]);
+});
+
+test("cada movimiento dice qué efecto tiene sobre tu saldo", ()=>{
+  const lista=[u("Sueldo",100,{tipo:"Ingreso"}), u("Gasto",100),
+               u("Al fondo",100,{esAhorro:true}), u("Con el fondo",100,{usaAhorro:true})];
+  const r=conTarjetas([], ()=>resumenUSDdelAnio(lista, 2026));
+  const porDesc=Object.fromEntries(r.movimientos.map(m=>[m.desc, m.efecto]));
+  igual(porDesc["Sueldo"], 1);
+  igual(porDesc["Gasto"], -1);
+  igual(porDesc["Al fondo"], -1, "pasarlos al fondo los saca de tu mano");
+  igual(porDesc["Con el fondo"], 0, "salen del fondo y se gastan en el mismo acto");
+});
+
+// ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
 grupo("Números e íconos");

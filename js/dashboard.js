@@ -313,69 +313,151 @@ function renderDashCuentas(){
   renderDashUSD();
 }
 
-// Renderiza el flujo USD billete del año seleccionado en el dashboard
+// ═══════════════════════════════════════════
+// FLUJO USD DEL AÑO
+// ═══════════════════════════════════════════
+// Junta TODO lo que movés en dólares en un año: billete (Ingreso/Gasto), inversiones y
+// gastos de tarjeta en USD. Función pura (no toca el DOM) para poder probarla: la cuenta
+// de acá es la que antes daba mal.
+//
+// La regla de la plata es la misma que en el resto de la app (totalesDePlata):
+//   neto = ingresos + retiros del fondo − gastos − compras de inversión + rescates − tarjeta
+// `gastos` ya incluye los depósitos al fondo Y las compras pagadas con plata del fondo,
+// porque los dos son esGasto(). Por eso los retiros se SUMAN de vuelta: si no, una compra
+// pagada con dólares del fondo se descontaba dos veces (era el bug: una compra de USD 500
+// hacía figurar un saldo de USD −1000).
+function resumenUSDdelAnio(lista, anio){
+  const yrStr=String(anio);
+  const delAnio=(lista||[]).filter(m=>String(m.fecha||"").startsWith(yrStr));
+
+  // ── Billete: Ingreso/Gasto cargados en USD ──
+  const movsUSD=delAnio.filter(m=>m.tipo!=="Inversion" && m.moneda==="USD" && (m.importeOrig||0)>0);
+  const ing=movsUSD.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+m.importeOrig,0);
+  const aho=movsUSD.filter(esDepositoAhorro).reduce((s,m)=>s+m.importeOrig,0);
+  const ret=movsUSD.filter(esRetiroAhorro).reduce((s,m)=>s+m.importeOrig,0);
+  const gasTotal=movsUSD.filter(esGasto).reduce((s,m)=>s+m.importeOrig,0);
+  // Gasto "común": ni depósito al fondo ni compra pagada con plata del fondo. Se separa para
+  // que las líneas del desglose no se pisen entre ellas y sumen exactamente el neto.
+  const gasComun=gasTotal-aho-ret;
+
+  // ── Inversiones en USD ──
+  const invUSD=delAnio.filter(m=>m.tipo==="Inversion" && (m.importeUSD||0)>0);
+  const invEntrada=invUSD.filter(m=>isInvSalida(m)).reduce((s,m)=>s+m.importeUSD,0);
+  const invSalida=invUSD.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+m.importeUSD,0);
+
+  // ── Tarjeta en USD (cuotas y gastos fijos, expandidos mes a mes) ──
+  const tcMovs=[];
+  for(let i=1;i<=12;i++){
+    const ym=yrStr+"-"+String(i).padStart(2,"0");
+    getTcMovsEnMes(ym).forEach(t=>{ if(t.moneda==="USD") tcMovs.push(t); });
+  }
+  const tcUSD=tcMovs.reduce((s,t)=>s+(t.importe||0),0);
+
+  // ── La lista de movimientos, que es lo que permite auditar el número ──
+  // `efecto`: +1 entra a tu mano, -1 sale, 0 no cambia nada (una compra pagada con dólares
+  // del fondo: salen del fondo y se gastan en el mismo acto).
+  const movimientos=[];
+  movsUSD.forEach(m=>{
+    let etiqueta, efecto;
+    if(m.tipo==="Ingreso"){ etiqueta="Ingreso"; efecto=1; }
+    else if(esDepositoAhorro(m)){ etiqueta="Al fondo de ahorro"; efecto=-1; }
+    else if(esRetiroAhorro(m)){ etiqueta="Pagado con el fondo"; efecto=0; }
+    else { etiqueta="Gasto"; efecto=-1; }
+    movimientos.push({fecha:m.fecha, desc:m.nota||m.cat||"(sin descripción)", cat:m.cat,
+                      etiqueta, efecto, monto:m.importeOrig});
+  });
+  invUSD.forEach(m=>{
+    const entra=isInvSalida(m);
+    movimientos.push({fecha:m.fecha, desc:m.nota||m.subcat||m.cat||"Inversión", cat:m.cat,
+                      etiqueta: entra?"Rescate":"Compra de inversión", efecto: entra?1:-1,
+                      monto:m.importeUSD});
+  });
+  tcMovs.forEach(t=>{
+    const tag=t.frecuente?"Tarjeta · mensual fijo":`Tarjeta · cuota ${t.nCuota}/${t.cuotasTotal}`;
+    movimientos.push({fecha:t.fecha, desc:t.desc||"(sin descripción)", cat:t.cat,
+                      etiqueta:tag, efecto:-1, monto:t.importe||0});
+  });
+  movimientos.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+
+  return {
+    ing, gasComun, aho, ret, gasTotal, invEntrada, invSalida, tcUSD,
+    neto: Math.round((ing + ret + invEntrada - gasTotal - invSalida - tcUSD)*100)/100,
+    movimientos
+  };
+}
+
+// Si la lista de movimientos USD está abierta. Vive afuera del render porque cada toque
+// vuelve a dibujar la card entera.
+let usdListaAbierta=false;
+function toggleUsdLista(){ usdListaAbierta=!usdListaAbierta; renderDashUSD(); }
+
+// Renderiza el flujo USD del año seleccionado en el dashboard
 function renderDashUSD(){
   const card=document.getElementById("dash-usd-card");
   const el=document.getElementById("dash-usd");
   if(!card||!el) return;
-  const yrStr=String(dashYear);
-  // Movimientos USD "billete" del año (Ingreso/Gasto, sin inversión)
-  const movsUSD=movs.filter(m=>{
-    if(!m.fecha||!String(m.fecha).startsWith(yrStr)) return false;
-    if(m.tipo==="Inversion") return false;
-    return m.moneda==="USD" && (m.importeOrig||0)>0;
-  });
-  // Inversiones en USD del año: compra/suscripción = sale plata, rescate/venta = entra plata
-  const invUSD=movs.filter(m=>m.tipo==="Inversion" && String(m.fecha||"").startsWith(yrStr) && (m.importeUSD||0)>0);
-  const invEntrada=invUSD.filter(m=>isInvSalida(m)).reduce((s,m)=>s+m.importeUSD,0);
-  const invSalida=invUSD.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+m.importeUSD,0);
-  // Gastos de tarjeta en USD del año (cuotas y frecuentes, expandidos mes a mes)
-  const meses12=["01","02","03","04","05","06","07","08","09","10","11","12"];
-  let tcUSD=0, tcUSDcount=0;
-  meses12.forEach(mm=>{
-    getTcMovsEnMes(yrStr+"-"+mm).forEach(t=>{
-      if(t.moneda==="USD"){ tcUSD+=(t.importe||0); tcUSDcount++; }
-    });
-  });
-
-  const totalMovimientos=movsUSD.length+invUSD.length+tcUSDcount;
-  if(!totalMovimientos){card.style.display="none";return;}
+  const r=resumenUSDdelAnio(movs, dashYear);
+  if(!r.movimientos.length){card.style.display="none";return;}
   card.style.display="block";
 
-  // Acumular flujos del año
-  const ing=movsUSD.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+m.importeOrig,0);
-  const gas=movsUSD.filter(esGasto).reduce((s,m)=>s+m.importeOrig,0);
-  const aho=movsUSD.filter(esDepositoAhorro).reduce((s,m)=>s+m.importeOrig,0);
-  const ret=movsUSD.filter(esRetiroAhorro).reduce((s,m)=>s+m.importeOrig,0);
-
-  // Saldo neto del año en USD: billete + inversiones + tarjeta (antes solo contaba lo primero)
-  const netoYear = ing - gas + aho - ret + invEntrada - invSalida - tcUSD;
-  const netoColor=netoYear>=0?"var(--success)":"var(--danger)";
-
+  const netoColor=r.neto>=0?"var(--success)":"var(--danger)";
   let html=`<div class="inset">
-    <div class="seccion-label">Saldo neto USD ${yrStr}</div>
-    <div style="font-size:22px;font-weight:600;color:${netoColor};margin-top:3px">${netoYear>=0?"+":""}USD ${netoYear.toFixed(2)}</div>
-    <div style="font-size:12px;color:var(--muted);margin-top:3px">${totalMovimientos} ${totalMovimientos===1?"movimiento":"movimientos"} en USD</div>
+    <div class="seccion-label">Saldo neto USD ${dashYear}</div>
+    <div style="font-size:22px;font-weight:600;color:${netoColor};margin-top:3px">${r.neto>=0?"+":""}USD ${r.neto.toFixed(2)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px">Lo que te entró menos lo que se te fue de la mano</div>
   </div>`;
 
+  // Cada línea es una porción DISTINTA de la plata: las seis suman exactamente el neto de
+  // arriba. Antes "Gastos" incluía lo ahorrado y lo pagado con el fondo, así que los mismos
+  // dólares aparecían en dos renglones.
   const items=[
-    {label:"📥 Ingresos", val:ing, color:"var(--success)", sign:"+"},
-    {label:"📤 Gastos", val:gas, color:"var(--danger)", sign:"-"},
-    {label:"🏦 Ahorrado al fondo USD", val:aho, color:"var(--save)", sign:"+"},
-    {label:"💸 Retirado del fondo USD", val:ret, color:"var(--save)", sign:"-"},
-    {label:"📈 Rescates de inversión", val:invEntrada, color:"var(--success)", sign:"+"},
-    {label:"📉 Compras de inversión", val:invSalida, color:"var(--danger)", sign:"-"},
-    {label:"💳 Gastos con tarjeta", val:tcUSD, color:"var(--danger)", sign:"-"}
+    {label:"📥 Ingresos",                val:r.ing,        color:"var(--success)", sign:"+"},
+    {label:"📈 Rescates de inversión",   val:r.invEntrada, color:"var(--success)", sign:"+"},
+    {label:"📤 Gastos",                  val:r.gasComun,   color:"var(--danger)",  sign:"-"},
+    {label:"🏦 Pasado al fondo de ahorro",val:r.aho,       color:"var(--save)",    sign:"-"},
+    {label:"📉 Compras de inversión",    val:r.invSalida,  color:"var(--danger)",  sign:"-"},
+    {label:"💳 Gastos con tarjeta",      val:r.tcUSD,      color:"var(--danger)",  sign:"-"}
   ].filter(x=>x.val>0);
+  items.forEach(it=>{
+    html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span>${it.label}</span>
+      <strong style="color:${it.color}">${it.sign}USD ${it.val.toFixed(2)}</strong>
+    </div>`;
+  });
 
-  if(items.length){
-    items.forEach(it=>{
-      html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-        <span>${it.label}</span>
-        <strong style="color:${it.color}">${it.sign}USD ${it.val.toFixed(2)}</strong>
-      </div>`;
-    });
+  // Las compras pagadas con dólares del fondo no mueven el saldo a mano (salen del fondo y
+  // se gastan en el mismo acto), así que no van arriba — pero sí son plata que se fue, y
+  // callarlas sería peor que mostrarlas.
+  if(r.ret>0){
+    html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <span>💸 Pagado con dólares del fondo</span>
+      <strong style="color:var(--save)">USD ${r.ret.toFixed(2)}</strong>
+    </div>
+    <div class="txt-micro txt-muted" style="margin-top:4px">No suma ni resta al saldo de arriba: esos dólares salieron del fondo y se gastaron en el mismo movimiento.</div>`;
   }
+
+  // ── La lista, que es lo que permite ver de dónde sale cada número ──
+  const n=r.movimientos.length;
+  html+=`<div role="button" tabindex="0" class="mt-14" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:8px 0"
+       aria-expanded="${usdListaAbierta}" onclick="toggleUsdLista()">
+    <span class="seccion-label">Ver los ${n} ${n===1?"movimiento":"movimientos"} en USD</span>
+    <span class="txt-sm txt-muted">${usdListaAbierta?"▲":"▼"}</span>
+  </div>`;
+  if(usdListaAbierta){
+    html+=r.movimientos.map(m=>{
+      const signo=m.efecto>0?"+":(m.efecto<0?"-":"");
+      const color=m.efecto>0?"var(--success)":(m.efecto<0?"var(--danger)":"var(--muted)");
+      const fecha=String(m.fecha||"").split("-").reverse().join("/");
+      return `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <div class="u-min0">
+          <div class="txt-md">${escapeHtml(m.desc)}</div>
+          <div class="txt-micro txt-muted">${escapeHtml(fecha)} · ${escapeHtml(m.etiqueta)}</div>
+        </div>
+        <strong class="txt-md" style="color:${color};white-space:nowrap">${signo}USD ${m.monto.toFixed(2)}</strong>
+      </div>`;
+    }).join("");
+  }
+
   el.innerHTML=html;
 }
 
