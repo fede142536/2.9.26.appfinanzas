@@ -1149,6 +1149,82 @@ test('"Cambio de moneda" tiene su propio ícono', ()=>{
 });
 
 // ═══════════════════════════════════════════
+// ORDEN DE LA LISTA DE MOVIMIENTOS
+// ═══════════════════════════════════════════
+grupo("Movimientos: orden cronológico");
+
+// Antes solo se ordenaba la lista de "Todos". Las de Gastos, Ingresos y Tarjetas salían en el
+// orden del array `movs` —o sea, el orden en que los fuiste cargando—, así que un movimiento
+// nuevo aparecía al FONDO de la lista en vez de arriba bajo "Hoy", y con la carga por lotes
+// quedaba fuera de la primera pantalla.
+
+test("el comparador ordena del más nuevo al más viejo", ()=>{
+  const lista=[{id:1, fecha:"2026-09-01"}, {id:2, fecha:"2026-09-16"}, {id:3, fecha:"2026-09-05"}];
+  igual(lista.slice().sort(ordenCronologico).map(m=>m.id), [2,3,1]);
+});
+
+test("a igual fecha manda el id más alto, para que no salten entre renders", ()=>{
+  const lista=[{id:5, fecha:"2026-09-10"}, {id:9, fecha:"2026-09-10"}, {id:7, fecha:"2026-09-10"}];
+  igual(lista.slice().sort(ordenCronologico).map(m=>m.id), [9,7,5]);
+});
+
+// Corre renderMovs() de verdad con estos movimientos y devuelve las fechas de las filas, en el
+// orden en que quedaron. Hace falta un #tx-list real: el getElementById parcheado de esta
+// página devuelve un <div> descartable distinto en cada llamada.
+function fechasDeLaLista(lista, filtroTipo){
+  const cont=document.createElement("div");
+  cont.id="tx-list"; cont.style.display="none";
+  document.body.appendChild(cont);
+  const antesMovs=movs, antesFiltro=filtro, antesMes=mesActual,
+        antesCat=filtroCategoria, antesBusq=searchQuery, antesFecha=filtroFecha;
+  try{
+    movs=lista; filtro=filtroTipo; mesActual="2026-09";
+    filtroCategoria=""; searchQuery=""; filtroFecha=null;
+    renderMovs();
+    // El data-key del placeholder es "id|tipo|fecha" — sirve para leer el orden sin depender
+    // de que el custom element se haya "upgradeado".
+    return [...cont.querySelectorAll("tx-item")].map(e=>String(e.dataset.key).split("|")[2]);
+  } finally {
+    movs=antesMovs; filtro=antesFiltro; mesActual=antesMes;
+    filtroCategoria=antesCat; searchQuery=antesBusq; filtroFecha=antesFecha;
+    cont.remove();
+  }
+}
+
+// Cargados en orden cronológico (como en la vida real), así el array queda al revés de como
+// tiene que verse la lista. Si no se ordena, sale tal cual está cargado.
+const CARGA_DESORDENADA=[
+  {id:101, tipo:"Gasto",   nota:"Súper",  cat:"Supermercado", subcat:"", fecha:"2026-09-01", moneda:"ARS", importe:1000, importeOrig:null},
+  {id:102, tipo:"Ingreso", nota:"Sueldo", cat:"Sueldo",       subcat:"", fecha:"2026-09-02", moneda:"ARS", importe:9000, importeOrig:null},
+  {id:103, tipo:"Gasto",   nota:"Súper",  cat:"Supermercado", subcat:"", fecha:"2026-09-12", moneda:"ARS", importe:2000, importeOrig:null},
+  {id:104, tipo:"Ingreso", nota:"Extra",  cat:"Sueldo",       subcat:"", fecha:"2026-09-14", moneda:"ARS", importe:3000, importeOrig:null},
+  {id:105, tipo:"Gasto",   nota:"Nafta",  cat:"Auto",         subcat:"", fecha:"2026-09-16", moneda:"ARS", importe:5000, importeOrig:null}
+];
+
+test('la solapa "Gastos" ordena del más nuevo al más viejo', ()=>{
+  igual(fechasDeLaLista(CARGA_DESORDENADA, "Gasto"), ["2026-09-16","2026-09-12","2026-09-01"],
+    "el gasto de hoy tiene que salir primero, no último");
+});
+
+test('la solapa "Ingresos" ordena del más nuevo al más viejo', ()=>{
+  igual(fechasDeLaLista(CARGA_DESORDENADA, "Ingreso"), ["2026-09-14","2026-09-02"]);
+});
+
+test('la solapa "Todos" sigue ordenada (no se rompió lo que ya andaba)', ()=>{
+  igual(fechasDeLaLista(CARGA_DESORDENADA, "Todos"),
+    ["2026-09-16","2026-09-14","2026-09-12","2026-09-02","2026-09-01"]);
+});
+
+// Las dos patas de un cambio caen el mismo día: tienen que quedar juntas y arriba de todo.
+test("las dos patas de un cambio quedan juntas y arriba", ()=>{
+  const lista=[...CARGA_DESORDENADA,
+               ...crearCambio({fecha:"2026-09-17", montoARS:1500, montoUSD:1,
+                               sentido:"compra", idBase:9000})];
+  igual(fechasDeLaLista(lista, "Gasto")[0], "2026-09-17", "la pata en pesos va primera en Gastos");
+  igual(fechasDeLaLista(lista, "Ingreso")[0], "2026-09-17", "y la de dólares primera en Ingresos");
+});
+
+// ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
 grupo("Números e íconos");

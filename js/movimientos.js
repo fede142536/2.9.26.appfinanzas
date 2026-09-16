@@ -511,6 +511,15 @@ function renderLoteConSeparadores(lote){
 const TX_LOTE_SIZE=25;
 let txListObserver=null;
 let txListaCompleta=[]; // la lista filtrada completa (show), para que el observer sepa qué falta
+// Orden cronológico estricto: más reciente primero; a igual fecha, id más alto primero
+// (estabilidad para que no "salten" de lugar entre renders).
+function ordenCronologico(a, b){
+  const dateA = a.fecha || "";
+  const dateB = b.fecha || "";
+  if (dateA !== dateB) return dateB.localeCompare(dateA);
+  return (b.id || 0) - (a.id || 0);
+}
+
 function renderTxListaLazy(show){
   txListaCompleta=show;
   const list=document.getElementById("tx-list");
@@ -842,14 +851,7 @@ function renderMovs(){
   //   - Suscripciones/compras → con los Gastos (sale cash)
   //   - Rescates/ventas → con los Ingresos (entra cash)
   // En la pestaña Inversiones se ven todas con su lógica de portfolio.
-  // Orden cronológico estricto: más reciente primero; a igual fecha, id más alto primero
-  // (estabilidad para que no "salten" de lugar entre renders).
-  const todosMovsConInv = [...mesMovs, ...mesTcs].sort((a, b) => {
-    const dateA = a.fecha || "";
-    const dateB = b.fecha || "";
-    if (dateA !== dateB) return dateB.localeCompare(dateA);
-    return (b.id || 0) - (a.id || 0);
-  });
+  const todosMovsConInv = [...mesMovs, ...mesTcs].sort(ordenCronologico);
   let show;
   if(filtro==="Todos") show=todosMovsConInv;
   else if(filtro==="Tarjeta") show = filtroTarjeta ? mesTcs.filter(m=>m.tarjeta===filtroTarjeta) : mesTcs;
@@ -862,6 +864,13 @@ function renderMovs(){
     show=mesMovs.filter(m=>(m.tipo==="Ingreso") || (m.tipo==="Inversion"&&isInvSalida(m)));
     if(filtroCategoria) show=show.filter(m=>m.cat===filtroCategoria);
   }
+  // Ordenar SIEMPRE, sea cual sea la solapa. Antes solo se ordenaba la lista de "Todos": las
+  // de Gastos, Ingresos y Tarjetas salían en el orden del array `movs`, que es el orden en que
+  // los fuiste cargando. Como un movimiento nuevo se agrega al final, aparecía al fondo de la
+  // lista en vez de arriba bajo "Hoy" — y con la carga por lotes quedaba directamente fuera de
+  // la primera pantalla. Los encabezados de fecha, que se arman recorriendo la lista en orden,
+  // salían además salteados y repetidos.
+  show=show.slice().sort(ordenCronologico);
   // Aplicar búsqueda
   if(searchQuery) show=show.filter(matchSearch);
   const list=document.getElementById("tx-list");
