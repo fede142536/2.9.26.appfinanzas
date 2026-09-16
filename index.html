@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v107">
+<meta name="enola-version" content="enola-v108">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -625,15 +625,13 @@
     <div id="dash-alertas"></div>
   </div>
 
+  <!-- Ingresos, gastos y balance comparten unidad (pesos) y meses, así que van en un solo
+       gráfico con un solo eje Y: la línea del balance se lee contra las mismas barras en vez
+       de contra una escala aparte. -->
   <div class="card">
-    <div class="card-title">Ingresos vs Gastos</div>
-    <div id="dash-detail" style="background:var(--bg);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--muted);text-align:center">Tocá una columna para ver el detalle</div>
-    <div style="position:relative;height:200px"><canvas id="chart-mensual"></canvas></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Balance mensual</div>
-    <div id="dash-balance-detail" style="background:var(--bg);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--muted);text-align:center">Tocá un punto para ver el balance del mes</div>
-    <div style="position:relative;height:160px"><canvas id="chart-balance"></canvas></div>
+    <div class="card-title">Ingresos, gastos y balance</div>
+    <div id="dash-detail" style="background:var(--bg);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--muted);text-align:center">Tocá un mes para ver el detalle</div>
+    <div style="position:relative;height:230px"><canvas id="chart-mensual"></canvas></div>
   </div>
   <div class="card">
     <div class="card-title">Gastos por categoría</div>
@@ -669,7 +667,6 @@
     <div id="ahorro-view-selector" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
       <button class="btn-sm ahorro-view-btn active" data-view="acum" onclick="setAhorroView('acum')">📈 Acumulado</button>
       <button class="btn-sm ahorro-view-btn" data-view="mensual" onclick="setAhorroView('mensual')">📊 Por mes</button>
-      <button class="btn-sm ahorro-view-btn" data-view="categoria" onclick="setAhorroView('categoria')">🏷 Por categoría</button>
     </div>
 
     <!-- Dice en una línea qué se está mirando: el gráfico no tiene título propio y "Acumulado"
@@ -678,7 +675,10 @@
 
     <canvas id="chart-fondo" height="180"></canvas>
 
-    <!-- Ranking por categoría -->
+    <!-- Ranking por categoría. Acá vivía también una vista "Por categoría" del gráfico de
+         arriba, que mostraba lo mismo que este ranking pero peor: sumaba pesos y dólares en
+         un solo número, cortaba el nombre de la categoría a 15 caracteres y había que tocar
+         el botón para verla. El ranking se ve siempre y trae más. -->
     <div id="ahorro-ranking" style="margin-top:14px"></div>
 
     <!-- Detalle del punto seleccionado -->

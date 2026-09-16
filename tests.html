@@ -1718,6 +1718,129 @@ test("el ancho fijo de la etiqueta sigue ahí (para que las barras se alineen)",
 });
 
 // ═══════════════════════════════════════════
+// VISTAS DE AHORROS
+// ═══════════════════════════════════════════
+grupo("Vistas del gráfico de Ahorros");
+
+// La vista "Por categoría" del gráfico mostraba lo mismo que el ranking que está justo
+// abajo, pero peor: sumaba pesos y dólares en un solo número (el ranking los separa),
+// cortaba el nombre a 15 caracteres y había que tocar un botón para verla.
+test("ya no queda el botón \"Por categoría\"", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(!html.includes('data-view="categoria"'), "volvió el botón de la vista por categoría");
+});
+
+test("el gráfico de ahorros ya no dibuja la vista por categoría", async ()=>{
+  const js=await (await fetch("js/ahorros.js")).text();
+  cierto(!js.includes("drawInteractiveCatBars"), "sigue el dibujo de la vista por categoría");
+});
+
+test("no quedó código muerto de esa vista", async ()=>{
+  const js=await (await fetch("js/graficos-interactivos.js")).text();
+  cierto(!js.includes("function drawInteractiveCatBars"), "la función quedó sin uso pero sigue en el bundle");
+});
+
+test("quien tenía guardada la vista por categoría vuelve a Acumulado", async ()=>{
+  // Sin esto, al abrir Ahorros se encuentra con un gráfico vacío y ningún botón marcado,
+  // porque su preferencia guardada apunta a una vista que ya no existe.
+  cierto(typeof VISTAS_AHORRO!=="undefined", "no existe la lista de vistas válidas");
+  igual(VISTAS_AHORRO, ["acum","mensual"]);
+  const js=await (await fetch("js/ahorros.js")).text();
+  const linea=js.split("\n").find(l=>l.includes('localStorage.getItem("fahorrov")'));
+  cierto(!!linea, "no se encontró la lectura de la preferencia");
+  cierto(linea.includes("VISTAS_AHORRO"), "la preferencia guardada se usa sin validarla: " + linea.trim());
+});
+
+test("el ranking por categoría sigue separando pesos de dólares", async ()=>{
+  // Es lo que hace que el ranking sea el reemplazo y no una pérdida: la vista que sacamos
+  // los mezclaba en un solo total.
+  const js=await (await fetch("js/ahorros.js")).text();
+  cierto(js.includes("saldoUsd"), "el ranking perdió el saldo en dólares");
+  cierto(js.includes("saldoArs"), "el ranking perdió el saldo en pesos");
+});
+
+// ═══════════════════════════════════════════
+// GRÁFICO DEL DASHBOARD
+// ═══════════════════════════════════════════
+grupo("Ingresos, gastos y balance en un gráfico");
+
+// Arma el gráfico con un Chart falso que sólo guarda la config, y devuelve esa config.
+// Hace falta un <canvas> de verdad en el DOM: el harness devuelve un <div> para los ids
+// que no existen, y un div no tiene getContext().
+function configDelGrafico(yearData){
+  const canvas=document.createElement("canvas"); canvas.id="chart-mensual";
+  const detalle=document.createElement("div"); detalle.id="dash-detail";
+  document.body.appendChild(canvas); document.body.appendChild(detalle);
+  let capturada=null;
+  const ChartPrevio=window.Chart;
+  window.Chart=function(ctx, config){ capturada=config; this.destroy=function(){}; };
+  try{ renderChartMensualBI(yearData); }
+  finally{
+    window.Chart=ChartPrevio;
+    canvas.remove(); detalle.remove();
+    if(typeof chartMensualInstance!=="undefined") chartMensualInstance=null;
+  }
+  return capturada;
+}
+
+const DATOS_GRAFICO=[
+  {mes:"2026-01", ingreso:100000, gasto:60000, balance:40000},
+  {mes:"2026-02", ingreso:80000, gasto:95000, balance:-15000}
+];
+
+test("el balance va en el mismo gráfico que ingresos y gastos", ()=>{
+  const cfg=configDelGrafico(DATOS_GRAFICO);
+  cierto(!!cfg, "no se llegó a construir el gráfico");
+  const etiquetas=cfg.data.datasets.map(d=>d.label);
+  igual(etiquetas, ["Ingresos","Gastos","Balance"]);
+  igual(cfg.data.datasets[2].data, [40000,-15000]);
+});
+
+test("la línea del balance usa el mismo eje Y que las barras", ()=>{
+  const cfg=configDelGrafico(DATOS_GRAFICO);
+  // Dos escalas Y superpuestas (un "y1") alinean dos unidades de forma arbitraria e inventan
+  // una relación que los datos no tienen. Acá las tres series están en pesos: un solo eje.
+  const ejes=Object.keys(cfg.options.scales);
+  igual(ejes.sort(), ["x","y"]);
+  cfg.data.datasets.forEach(d=>{
+    cierto(d.yAxisID===undefined || d.yAxisID==="y", "la serie \"" + d.label + "\" se fue a otro eje: " + d.yAxisID);
+  });
+});
+
+test("con tres series la leyenda se muestra", ()=>{
+  const cfg=configDelGrafico(DATOS_GRAFICO);
+  // Si no, la única forma de saber cuál es cuál es el color, y verde vs rojo no se distinguen
+  // con daltonismo (que es justo el par ingresos/gastos).
+  cierto(cfg.options.plugins.legend.display===true, "la leyenda quedó oculta con 3 series");
+});
+
+test("tocar el gráfico toma el mes entero, no una barra suelta", ()=>{
+  const cfg=configDelGrafico(DATOS_GRAFICO);
+  // En un celular acertarle a una barra de 22px es difícil; con modo "index" alcanza con
+  // tocar la columna del mes.
+  igual(cfg.options.interaction.mode, "index");
+  cierto(cfg.options.interaction.intersect===false, "con intersect:true hay que acertarle igual a la barra");
+});
+
+test("el clic escribe el detalle del mes", ()=>{
+  const cfg=configDelGrafico(DATOS_GRAFICO);
+  const detalle=document.createElement("div"); detalle.id="dash-detail";
+  document.body.appendChild(detalle);
+  try{
+    cfg.options.onClick(null, [{index:1}]);
+    cierto(detalle.innerHTML.includes("Balance"), "no apareció el balance en el detalle");
+    cierto(detalle.innerHTML.includes("Ingresos") && detalle.innerHTML.includes("Gastos"),
+           "el detalle perdió ingresos o gastos");
+  } finally { detalle.remove(); }
+});
+
+test("ya no queda la tarjeta suelta de \"Balance mensual\"", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(!html.includes("chart-balance"), "sigue el canvas del gráfico de balance separado");
+  cierto(!html.includes("dash-balance-detail"), "sigue el cuadro de detalle del gráfico separado");
+});
+
+// ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
 grupo("Números e íconos");
