@@ -325,15 +325,26 @@ function construirCuerpoTxItem(m){
       sub=subtituloFila([subcatVisible(m.subcat)]);
     } else {
       let badge="";
-      // Las dos patas de un cambio de moneda van marcadas: sin el badge, en la lista se ven
-      // como un gasto suelto y un ingreso suelto, y no se entiende que son una sola operación.
-      if(esPataDeCambio(m)) badge=` <span class="badge badge-accent">💱 ${m.cambioPata==="sale"?"CAMBIO · SALE":"CAMBIO · ENTRA"}</span>`;
+      // Las dos patas de un cambio van marcadas: sin el badge, en la lista se ven como un
+      // gasto suelto y un ingreso suelto y no se entiende que son una sola operación. El
+      // badge dice QUÉ operación fue (compra o venta); cuál de las dos mitades es ya lo dice
+      // el color —rojo la que sale, verde la que entra— y repetirlo hacía tan largo el
+      // título que se truncaba y el badge no llegaba a verse.
+      const infoCambio = esPataDeCambio(m) ? leerCambio(patasDelCambio(m.cambioId, movs)) : null;
+      if(esPataDeCambio(m)) badge=` <span class="badge badge-accent">💱 ${infoCambio && infoCambio.sentido==="venta" ? "VENTA" : "COMPRA"}</span>`;
       else if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
       else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
       else if(m.frecuente) badge=` <span class="badge badge-warning">🔁 FRECUENTE</span>`;
       cat=`${escapeHtml(m.cat)}${badge}`;
       if(m.recuperable>0) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
-      sub=subtituloFila([subcatVisible(m.subcat)]);
+      // En un cambio, el tipo de cambio es EL dato de la operación y en la fila no se veía
+      // por ningún lado: hay que abrir el editor para saber a cuánto compraste. Se saca de
+      // las dos patas juntas, así que se busca la hermana.
+      if(esPataDeCambio(m)){
+        sub=infoCambio && infoCambio.tc ? `${fmtS(infoCambio.tc)} por dólar` : "";
+      } else {
+        sub=subtituloFila([subcatVisible(m.subcat)]);
+      }
     }
     // Ícono e iconClass siguen la misma lógica de color
     let icon, iconClass;

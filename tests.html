@@ -1107,6 +1107,47 @@ test("no se puede completar con un monto vacío o negativo", ()=>{
   igual(completarCambioDesde(null, 27), null);
 });
 
+// ── CÓMO SE VE EN LA LISTA DE MOVIMIENTOS ──
+// El pedido concreto: que la pata en pesos se lea como un gasto y la pata en dólares como un
+// ingreso. Se prueba sobre el HTML que arma la fila, que es lo que define el color y el signo.
+
+// Corre fn con estos movimientos cargados en el global (construirCuerpoTxItem busca la pata
+// hermana en `movs` para calcular el tipo de cambio) y después deja todo como estaba.
+function conMovsGlobales(lista, fn){
+  const antes=movs;
+  movs=lista;
+  try { return fn(); } finally { movs=antes; }
+}
+
+test("la pata en pesos se ve como gasto y la de dólares como ingreso", ()=>{
+  const patas=crearCambio({fecha:"2026-09-16", montoARS:1500, montoUSD:1,
+                           sentido:"compra", idBase:1});
+  conMovsGlobales(patas, ()=>{
+    const sale=construirCuerpoTxItem(patas[0]);
+    const entra=construirCuerpoTxItem(patas[1]);
+    cierto(/tx-amount gasto/.test(sale), "los pesos que salen tienen que leerse como un gasto");
+    cierto(sale.includes("-$1.500"), "y con signo negativo: "+sale.slice(0,200));
+    cierto(/tx-amount ingreso/.test(entra), "los dólares que entran tienen que leerse como un ingreso");
+    cierto(entra.includes("+USD 1.00"), "y con signo positivo: "+entra.slice(0,200));
+  });
+});
+
+test("la fila muestra a cuánto compraste el dólar", ()=>{
+  // Es EL dato de la operación y antes había que abrir el editor para verlo.
+  const patas=crearCambio({fecha:"2026-09-16", montoARS:1500, montoUSD:1,
+                           sentido:"compra", idBase:1});
+  conMovsGlobales(patas, ()=>{
+    cierto(construirCuerpoTxItem(patas[0]).includes("por dólar"), "falta el tipo de cambio en la fila");
+    cierto(construirCuerpoTxItem(patas[0]).includes("1.500"), "y tiene que ser el número correcto");
+  });
+});
+
+test('"Cambio de moneda" tiene su propio ícono', ()=>{
+  // Sin regla, getIcon() cae a la inicial y quedaba una "C" suelta al lado de los 🛒 y 💼.
+  igual(getIcon("Cambio de moneda"), "💱");
+  igual(getIcon("MEP"), "💱", "las categorías propias para lo mismo también");
+});
+
 // ═══════════════════════════════════════════
 // FORMATO DE NÚMEROS E ÍCONOS
 // ═══════════════════════════════════════════
