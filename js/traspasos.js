@@ -22,10 +22,12 @@ function idsIgnoradosTraspaso(){
 function ignorarTraspaso(id){
   const ids=idsIgnoradosTraspaso();
   if(!ids.includes(id)) ids.push(id);
-  guardarPreferencia(TRASPASO_IGNORADOS_KEY, JSON.stringify(ids));
+  // guardarJSONSeguro() y no guardarPreferencia(): la lista se LEE con leerJSONSeguro(), que con
+  // el PIN activo mira encCache. Escribir en localStorage la dejaba donde nadie la busca.
+  guardarJSONSeguro(TRASPASO_IGNORADOS_KEY, ids);
 }
 function limpiarIgnoradosTraspaso(){
-  localStorage.removeItem(TRASPASO_IGNORADOS_KEY);
+  guardarJSONSeguro(TRASPASO_IGNORADOS_KEY, []);
 }
 
 // Un candidato es una compra "pagada con el fondo" cuya categoría no describe algo que se
