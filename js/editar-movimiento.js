@@ -186,6 +186,10 @@ function renderEditForm(m){
           <input type="checkbox" id="edit-usa-ahorro" ${m.usaAhorro?"checked":""} style="width:18px;height:18px;cursor:pointer;accent-color:var(--save)" onchange="onEditUsaAhorroToggle()">
           <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (resta del fondo)</span>
         </label>
+        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm);margin-top:6px">
+          <input type="checkbox" id="edit-traspaso" ${m.traspaso?"checked":""} style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent)">
+          <span style="color:var(--accent);font-weight:500">↔️ Es un traspaso (cambia de bolsillo, no lo gastaste)</span>
+        </label>
       </div>
       <div class="form-group">
         <label class="form-label">Monto recuperable (opcional)</label>
@@ -302,6 +306,7 @@ function guardarEdit(){
     if(m.tipo==="Gasto" && !m.frecuente){
       m.esAhorro=document.getElementById("edit-ahorro").checked;
       m.usaAhorro=document.getElementById("edit-usa-ahorro").checked;
+      m.traspaso=document.getElementById("edit-traspaso").checked;
       // No pueden ser ambos
       if(m.esAhorro && m.usaAhorro) m.usaAhorro=false;
       m.recuperable=parseFloat(document.getElementById("edit-recup").value)||0;

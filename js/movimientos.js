@@ -52,7 +52,7 @@ function showPage(id,btn){
   if(id==="tc" && !yaAlDia) renderTarjetas();
   if(id==="inv" && !yaAlDia) renderInv();
   if(id==="ahorro" && !yaAlDia) renderAhorro();
-  if(id==="import"){ renderImportHistory(); renderMigrarCambios(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
+  if(id==="import"){ renderImportHistory(); renderMigrarCambios(); renderTraspasos(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
   if(id==="config"){renderExportStats();renderCatManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderTarjetasManager();renderEstadoBackup();renderInflacion();} // liviano
   if(["mov","dash","tc","inv","ahorro"].includes(id)) paginaVersionRenderizada[id]=datosVersion;
   // Reponer el scroll AL FINAL, no antes: los render de arriba cambian el alto de la página y
@@ -334,6 +334,7 @@ function construirCuerpoTxItem(m){
       // título que se truncaba y el badge no llegaba a verse.
       const infoCambio = esPataDeCambio(m) ? leerCambio(patasDelCambio(m.cambioId, movs)) : null;
       if(esPataDeCambio(m)) badge=` <span class="badge badge-accent">💱 ${infoCambio && infoCambio.sentido==="venta" ? "VENTA" : "COMPRA"}</span>`;
+      else if(esTraspaso(m)) badge=` <span class="badge badge-accent">↔️ TRASPASO</span>`;
       else if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
       else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
       else if(m.frecuente) badge=` <span class="badge badge-warning">🔁 FRECUENTE</span>`;
@@ -681,10 +682,10 @@ function renderMovs(){
     // lista llena de movimientos, porque esos montos no son consumo.
     const gastosTotalARS = filtroCategoria
       ? todoGastos.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0)
-      : todoGastos.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+      : todoGastos.filter(m=>esConsumo(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
     const gastosTotalUSD = filtroCategoria
       ? todoGastos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
-      : todoGastos.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+      : todoGastos.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
 
     let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Gastos ARS";
     let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val negative">${fmtTotal(gastosTotalARS)}</div></div>`;
@@ -790,7 +791,7 @@ function renderMovs(){
     // Gastos USD: gastos puros + compras de inversión en USD (sin ahorros)
     // Misma regla en dólares: el consumo resta, el capital invertido no, y de las inversiones
     // solo suma el resultado.
-    const gastosUSDTotal=mesMovs.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
+    const gastosUSDTotal=mesMovs.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
       + Math.max(-(ganInv.usd||0), 0);
     const ingresosUSDTotal=mesMovs.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
       + Math.max(ganInv.usd||0, 0);
@@ -832,7 +833,7 @@ function renderMovs(){
       partes.push(`💸 De ahorros: <strong style="color:var(--save)">${fmtS(retirado)}</strong>`);
     }
     // Total a recuperar (gastos compartidos)
-    const recup=mesMovs.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
+    const recup=mesMovs.filter(m=>esConsumo(m)&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
     if(recup>0){
       partes.push(`🔁 A recuperar: <strong style="color:var(--accent)">${fmtS(recup)}</strong>`);
     }
@@ -997,7 +998,7 @@ function getArrastre(ymActual){
     // ingreso ni gasto. Antes sumaba los rescates y restaba las suscripciones enteros, así que el
     // arrastre subía y bajaba con cada rotación sin que hubiera cambiado nada.
     if(esIngreso(m)) acum+=m.importe;
-    else if(esGasto(m) && !esDepositoAhorro(m)) acum-=m.importe;
+    else if(esConsumo(m)) acum-=m.importe;
   });
   // Y aparte, el resultado de las inversiones de esos meses: lo único que sí movió el patrimonio.
   acum += gananciaInvEntre(yrActual+"-01", addMonths(ymActual,-1)).ars;

@@ -363,6 +363,7 @@ function setTipo(t){
   if(t!=="Gasto"){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
+    document.getElementById("inp-traspaso").checked=false;
     const frecEl=document.getElementById("inp-frecuente");
     if(frecEl) frecEl.checked=false;
     document.getElementById("inp-recup").value="";
@@ -563,6 +564,7 @@ async function guardar(){
     tags: extraerTags(document.getElementById("inp-nota").value),
     esAhorro: tipo==="Gasto" && document.getElementById("inp-ahorro").checked,
     usaAhorro: tipo==="Gasto" && document.getElementById("inp-usa-ahorro").checked,
+    traspaso: tipo==="Gasto" && document.getElementById("inp-traspaso").checked,
     recuperable: tipo==="Gasto" ? (parseFloat(document.getElementById("inp-recup").value)||0) : 0};
   // Si es gasto frecuente, agregamos los flags. El "mesInicio" es el mes de la fecha cargada.
   if(esFrec){
@@ -577,6 +579,7 @@ async function guardar(){
   if(tipo==="Gasto"){
     if(esFrec) msg="🔁 Gasto frecuente guardado ✓";
     else if(document.getElementById("inp-ahorro").checked) msg="Ahorro guardado ✓";
+    else if(document.getElementById("inp-traspaso").checked) msg="Traspaso guardado ✓";
     else if(document.getElementById("inp-usa-ahorro").checked) msg="Retiro de ahorros guardado ✓";
     else msg="Gasto guardado ✓";
   }
@@ -607,6 +610,7 @@ function resetForm(t){
     document.getElementById("inp-moneda").value="ARS";
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
+    document.getElementById("inp-traspaso").checked=false;
     document.getElementById("inp-recup").value="";
     const sugEl=document.getElementById("sugerencia-cat");
     if(sugEl){sugEl.style.display="none";sugEl._sugerencia=null;}

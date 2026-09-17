@@ -190,7 +190,7 @@ const INU_FACTOR = 3;     // cuántas veces la mediana para considerarlo fuera d
 // (si no, un gasto enorme se hace subir su propia vara y nunca se detecta a sí mismo).
 function medianaDeCategoria(lista, cat, excluirId){
   const importes=(lista||[])
-    .filter(m=>esGasto(m) && !esDepositoAhorro(m) && m.cat===cat && m.id!==excluirId)
+    .filter(m=>esConsumo(m) && m.cat===cat && m.id!==excluirId)
     .map(m=>m.importe||0)
     .filter(n=>n>0);
   return {mediana: mediana(importes), n: importes.length};
@@ -230,7 +230,7 @@ const COMP_UMBRAL_PCT = 15;  // desvío mínimo para que valga la pena avisar
 // "te fuiste al carajo" que es exactamente al revés de lo que pasó.
 function gastosDelMes(lista, ym){
   return (lista||[])
-    .filter(m=>esGasto(m) && !esDepositoAhorro(m) && String(m.fecha||"").slice(0,7)===ym)
+    .filter(m=>esConsumo(m) && String(m.fecha||"").slice(0,7)===ym)
     .reduce((s,m)=>s+(m.importe||0),0);
 }
 
