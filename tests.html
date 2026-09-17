@@ -419,6 +419,79 @@ test("un traspaso no entra al balance de caja por ningún lado", async ()=>{
 });
 
 // ═══════════════════════════════════════════
+// ANIMACIONES
+// ═══════════════════════════════════════════
+grupo("Animaciones");
+
+test("las barras crecen desde cero", async ()=>{
+  // El transition:width que había nunca se disparaba: el div nace con su ancho final inline,
+  // así que no hay valor previo desde el cual transicionar. La entrada va por una animación.
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf(".bar-fill{");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(/animation:\s*barGrow/.test(regla), "la barra volvió a no animarse al aparecer: " + regla);
+  cierto(/transform-origin:\s*left/.test(regla), "sin origen a la izquierda crece desde el centro");
+  cierto(css.includes("@keyframes barGrow"), "falta el keyframe");
+});
+
+test("la barra crece con transform, no con width", async ()=>{
+  // width recalcula layout en cada cuadro; scaleX lo resuelve la GPU. En el celular se nota.
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf("@keyframes barGrow");
+  const kf=css.slice(i, css.indexOf("}}", i)+2);
+  cierto(kf.includes("scaleX"), "volvió a animarse el ancho: " + kf);
+  cierto(!/from\{width/.test(kf), "animar width dispara layout en cada cuadro: " + kf);
+});
+
+test("respeta el movimiento reducido del sistema", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  cierto(css.includes("@media (prefers-reduced-motion: reduce)"),
+         "se sacó el bloque de movimiento reducido");
+  const i=css.indexOf("@media (prefers-reduced-motion: reduce)");
+  const bloque=css.slice(i, i+400);
+  cierto(/animation-duration:\s*\.01ms/.test(bloque), "las animaciones tienen que quedar en .01ms");
+  cierto(!/animation-duration:\s*0s/.test(bloque),
+         "en 0s no disparan animationend y algo puede quedarse esperando ese evento");
+});
+
+test("las cards entran escalonadas y se reinician al cambiar de pestaña", ()=>{
+  const page=document.createElement("div");
+  page.className="page";
+  for(let i=0;i<4;i++){ const c=document.createElement("div"); c.className="card"; page.appendChild(c); }
+  document.body.appendChild(page);
+  try{
+    animarEntradaDeCards(page);
+    const delays=[...page.querySelectorAll(".card")].map(c=>c.style.animationDelay);
+    igual(delays, ["0ms","40ms","80ms","120ms"], "las cards arrancan todas juntas");
+  } finally { page.remove(); }
+});
+
+test("con muchas cards el escalonado se topea", ()=>{
+  // Con ocho, escalonar todas hace que la última tarde casi medio segundo y deja de sentirse ágil.
+  const page=document.createElement("div");
+  for(let i=0;i<9;i++){ const c=document.createElement("div"); c.className="card"; page.appendChild(c); }
+  document.body.appendChild(page);
+  try{
+    animarEntradaDeCards(page);
+    const delays=[...page.querySelectorAll(".card")].map(c=>parseInt(c.style.animationDelay));
+    igual(Math.max(...delays), 240, "el retraso máximo se fue de 240ms");
+  } finally { page.remove(); }
+});
+
+test("animarEntradaDeCards no explota sin página", ()=>{
+  animarEntradaDeCards(null);
+  animarEntradaDeCards(undefined);
+  cierto(true, "tiene que tolerar que no le pasen nada");
+});
+
+test("el toque devuelve señal en chips y filas", async ()=>{
+  // En el celular no hay hover: sin esto, tocar no devuelve nada hasta que cambia la pantalla.
+  const css=await (await fetch("styles.css")).text();
+  cierto(/\.chip:active\{transform:scale/.test(css), "los chips no responden al toque");
+  cierto(/\.tx-item:active\{transform:scale/.test(css), "las filas no responden al toque");
+});
+
+// ═══════════════════════════════════════════
 // ÍCONOS: NO PUEDEN TRAER HTML
 // ═══════════════════════════════════════════
 grupo("Íconos seguros");

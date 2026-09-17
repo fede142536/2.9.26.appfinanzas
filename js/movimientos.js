@@ -27,13 +27,40 @@ const scrollPorPagina={};
 // la vista. No tiene sentido devolverte al medio del formulario que ya guardaste.
 const PAGINAS_SIEMPRE_ARRIBA=["cargar"];
 
+// Las cards entran en cascada, no todas juntas.
+//
+// .card ya traía slideUpFade, pero las cards viven fijas en el HTML: la animación corría UNA vez,
+// al cargar la app, y nunca más. Cambiando de pestaña no se veía nada. Acá se reinicia a mano y
+// se le da a cada una un arranque escalonado, que es lo que hace que se lea como una secuencia
+// y no como un bloque que parpadea.
+//
+// El retraso se topea a los 6 pasos: con ocho cards, escalonar todas hace que la última tarde
+// casi medio segundo en aparecer y deja de sentirse ágil.
+function animarEntradaDeCards(pageEl){
+  if(!pageEl) return;
+  // Si pediste menos movimiento en el sistema, no se toca nada: el CSS ya deja las animaciones
+  // en .01ms, y poner delays acá las volvería a alargar.
+  try{
+    if(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  }catch(e){ /* matchMedia puede no existir en entornos de prueba */ }
+  const cards=pageEl.querySelectorAll(".card");
+  cards.forEach((c,i)=>{
+    c.style.animation="none";
+    void c.offsetWidth;            // fuerza un reflow: sin esto el navegador agrupa los dos
+    c.style.animation="";          // cambios y la animación no se reinicia
+    c.style.animationDelay=(Math.min(i,6)*40)+"ms";
+  });
+}
+
 function showPage(id,btn){
   // Anotar dónde queda la pestaña que estás dejando, antes de ocultarla.
   const saliendo=document.querySelector(".page.active");
   if(saliendo) scrollPorPagina[saliendo.id.replace(/^page-/,"")]=window.scrollY;
   document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
-  document.getElementById("page-"+id).classList.add("active");
+  const entrando=document.getElementById("page-"+id);
+  entrando.classList.add("active");
+  animarEntradaDeCards(entrando);
   if(btn) btn.classList.add("active");
   // El FAB abre directo a Cargar — no tiene sentido mostrarlo ESTANDO ya en Cargar.
   // Se chequea que exista antes de tocarlo: si faltara, un TypeError acá cortaría toda la
