@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v111">
+<meta name="enola-version" content="enola-v112">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -418,6 +418,12 @@
           <input type="checkbox" id="inp-usa-ahorro" style="width:18px;height:18px;cursor:pointer;accent-color:var(--save)" onchange="onUsaAhorroToggle()">
           <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (resta del fondo)</span>
         </label>
+        <!-- Sin esta casilla no había forma de registrar que la plata cambió de bolsillo sin
+             gastarse: sacarla del fondo para ponerla en CEDEARs obligaba a marcarla como gasto. -->
+        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm);margin-top:6px">
+          <input type="checkbox" id="inp-traspaso" style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent)">
+          <span style="color:var(--accent);font-weight:500">↔️ Es un traspaso (cambia de bolsillo, no lo gastaste)</span>
+        </label>
       </div>
       <div class="form-group" id="frecuente-toggle-group" style="display:none">
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--warning-light);border-radius:var(--radius-sm)">
@@ -763,6 +769,11 @@
     </label>
   </div>
   <div class="card"><div class="card-title">Historial</div><div id="import-history"></div></div>
+  <div class="card" id="card-traspasos" style="display:none">
+    <div class="card-title">↔️ Plata que quizás no gastaste</div>
+    <p class="txt-sm txt-muted mb-10">Estos salieron de tus ahorros pero la categoría dice que fueron a parar a una inversión, no a algo que consumiste. Si esa plata la seguís teniendo, marcala como traspaso y deja de contar como gasto.</p>
+    <div id="traspasos-lista"></div>
+  </div>
   <div class="card" id="card-migrar-cambios" style="display:none">
     <div class="card-title">💱 Compras de dólares sin completar</div>
     <p class="txt-sm txt-muted mb-10">Estos movimientos parecen compras o ventas de dólares cargadas como un gasto suelto: les falta la otra mitad de la operación. Completala y dejan de contar doble.</p>
@@ -918,6 +929,7 @@
 <script src="js/tarjetas-inversiones.js"></script>
 <script src="js/analisis.js"></script>
 <script src="js/cambio-moneda.js"></script>
+<script src="js/traspasos.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>

@@ -105,7 +105,7 @@ function getDashData(year){
       if(m.moneda==="USD") return; // No mezclar USD con totales ARS
       if(m.tipo==="Ingreso"){
         liveByMes[ym].ingreso += (m.importe||0);
-      } else if(esGasto(m) && !esDepositoAhorro(m)){
+      } else if(esConsumo(m)){
         // Consumo. Lo que fue a parar al fondo no entra: sigue siendo tuyo.
         liveByMes[ym].gasto += (m.importe||0);
       }
@@ -140,7 +140,7 @@ function getDashData(year){
       const ym = yrStr+"-"+mm;
       getMesMov(ym).forEach(m=>{
         if(m.moneda==="USD") return;
-        if(esGasto(m) && !esDepositoAhorro(m)){
+        if(esConsumo(m)){
           // El consumo entra en su categoría, incluido lo pagado con ahorros. Lo que fue al
           // fondo no: guardar plata no es un gasto, y mezclarlo acá haría que "Ahorro" apareciera
           // como una de tus mayores categorías de gasto.
@@ -275,7 +275,7 @@ function renderDashCuentas(){
     if(!porCuenta[c]) porCuenta[c]={ing:0,gas:0,count:0};
     // Misma regla que el balance: guardar no es gastar, y una inversión no es ingreso ni gasto.
     if(m.tipo==="Ingreso") porCuenta[c].ing+=(m.importe||0);
-    else if(esGasto(m) && !esDepositoAhorro(m)) porCuenta[c].gas+=(m.importe||0);
+    else if(esConsumo(m)) porCuenta[c].gas+=(m.importe||0);
     porCuenta[c].count++;
   });
   const cuentas=Object.entries(porCuenta)

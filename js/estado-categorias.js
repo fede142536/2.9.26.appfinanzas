@@ -358,9 +358,24 @@ function esGasto(m){
 function esDepositoAhorro(m){
   return esGasto(m) && !!m.esAhorro;
 }
-// Compra pagada con plata del fondo. Es un gasto Y devuelve plata a la mano.
+// Compra pagada con plata del fondo. Es un gasto: consumiste, y el fondo baja.
 function esRetiroAhorro(m){
   return esGasto(m) && !!m.usaAhorro;
+}
+// Un TRASPASO mueve plata entre bolsillos tuyos —del fondo a una inversión, de una cuenta a
+// otra— sin que dejes de tenerla. No es ingreso ni gasto.
+//
+// Hacía falta porque la app no tenía forma de decirlo: marcar "sale de mis ahorros" en un gasto
+// obliga a que el movimiento sea consumo. Para sacar plata del fondo y ponerla en CEDEARs no
+// había casilla correcta, y esa plata figuraba gastada. En los datos reales eran $1.040.321 en
+// cuatro movimientos, todos en los meses que daban rojo.
+function esTraspaso(m){
+  return !!m && !!m.traspaso;
+}
+// Plata que dejaste de tener. Es LA definición que usan el balance, el dashboard y los chips:
+// un gasto que no es ni un depósito al fondo ni un traspaso.
+function esConsumo(m){
+  return esGasto(m) && !esDepositoAhorro(m) && !esTraspaso(m);
 }
 // Plata que ENTRA a tu patrimonio: solo los ingresos propiamente dichos.
 //
@@ -393,8 +408,10 @@ function totalesDePlata(lista, gananciaInv){
   const ingresos = lista.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+(m.importe||0),0);
   const depositos= lista.filter(esDepositoAhorro).reduce((s,m)=>s+(m.importe||0),0);
   const retiros  = lista.filter(esRetiroAhorro).reduce((s,m)=>s+(m.importe||0),0);
-  // Todo lo que tiene tipo "Gasto" menos lo que fue a parar al fondo: eso último sigue siendo tuyo.
-  const gastos   = lista.filter(m=>esGasto(m) && !esDepositoAhorro(m)).reduce((s,m)=>s+(m.importe||0),0);
+  // Todo lo que tiene tipo "Gasto" menos lo que seguís teniendo: lo que fue a parar al fondo y
+  // los traspasos entre tus propios bolsillos.
+  const gastos   = lista.filter(m=>esConsumo(m)).reduce((s,m)=>s+(m.importe||0),0);
+  const traspasos= lista.filter(esTraspaso).reduce((s,m)=>s+(m.importe||0),0);
   const inversiones = lista.filter(m=>m.tipo==="Inversion");
   // Los flujos brutos quedan para mostrarlos como informativos. NO entran al balance: son la
   // misma plata yendo y viniendo, y contarlos enteros infla los dos totales en cada vuelta.
@@ -402,7 +419,7 @@ function totalesDePlata(lista, gananciaInv){
   const invSale  = inversiones.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
   const ganancia = (gananciaInv && gananciaInv.ars) || 0;
   return {
-    ingresos, gastos, depositos, retiros, invEntra, invSale,
+    ingresos, gastos, depositos, retiros, traspasos, invEntra, invSale,
     gananciaInv: ganancia,
     // Una ganancia suma a ingresos; una pérdida resta, y por eso se parte en dos.
     ingresosTotal: Math.round((ingresos + Math.max(ganancia,0))*100)/100,

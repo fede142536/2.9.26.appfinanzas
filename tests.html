@@ -78,6 +78,7 @@
 <script src="js/tarjetas-inversiones.js"></script>
 <script src="js/analisis.js"></script>
 <script src="js/cambio-moneda.js"></script>
+<script src="js/traspasos.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
@@ -321,6 +322,79 @@ test("un mes futuro con gastos frecuentes no entra en el año", ()=>{
     const futuros=d.monthly.filter(x=>x.mes>hoy);
     igual(futuros.length, 0, "se colaron meses posteriores al actual: " + futuros.map(x=>x.mes).join(", "));
   } finally { movs=movsAntes; mesActual=mesAntes; }
+});
+
+// ═══════════════════════════════════════════
+// TRASPASOS
+// ═══════════════════════════════════════════
+grupo("Traspasos: plata que cambia de bolsillo");
+
+// La casilla "💸 Sale de mis ahorros" está pensada para una COMPRA pagada con plata del fondo:
+// eso es consumo. Al no existir otra opción, sacar plata del fondo para invertirla se marcaba
+// igual, y esa plata figuraba gastada aunque la seguís teniendo. Con datos reales eran cuatro
+// movimientos "Fondo de Retiro / Cedears" por $1.040.321, todos en los meses que daban rojo.
+const VACACIONES = {id:7001, tipo:"Gasto", cat:"Vacaciones Gastos", subcat:"Alemania",
+                    importe:300000, fecha:"2026-05-19", usaAhorro:true, moneda:"ARS"};
+const A_CEDEARS  = {id:7002, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears",
+                    importe:520382.40, fecha:"2026-06-18", usaAhorro:true, moneda:"ARS"};
+
+test("un traspaso no es consumo", ()=>{
+  const gasto={...A_CEDEARS, traspaso:true};
+  cierto(esTraspaso(gasto), "no se reconoce la marca");
+  cierto(!esConsumo(gasto), "un traspaso no puede contar como plata que gastaste");
+  cierto(esGasto(gasto), "sigue siendo tipo Gasto: cambia cómo se cuenta, no cómo se cargó");
+  cierto(esRetiroAhorro(gasto), "y el fondo tiene que seguir bajando por ese monto");
+});
+
+test("marcarlo como traspaso saca ese monto de los gastos", ()=>{
+  const sueldo={tipo:"Ingreso", cat:"Sueldo", importe:3339481, fecha:"2026-06-05"};
+  const comoGasto=totalesDePlata([sueldo, A_CEDEARS]);
+  const comoTraspaso=totalesDePlata([sueldo, {...A_CEDEARS, traspaso:true}]);
+  igual(comoGasto.gastos, 520382.40);
+  igual(comoTraspaso.gastos, 0, "marcado como traspaso no puede quedar en los gastos");
+  igual(comoTraspaso.traspasos, 520382.40, "pero tiene que seguir siendo visible");
+  igual(Math.round(comoTraspaso.balance - comoGasto.balance), 520382, "el balance sube exactamente lo traspasado");
+});
+
+test("unas vacaciones pagadas con el fondo SÍ son un gasto", ()=>{
+  // El caso opuesto, y es el que hay que no romper: la plata salió del fondo y se consumió.
+  cierto(esConsumo(VACACIONES), "un gasto real pagado con ahorros sigue siendo un gasto");
+  igual(totalesDePlata([VACACIONES]).gastos, 300000);
+  igual(totalesDePlata([VACACIONES]).balance, -300000, "consumir del fondo baja tu patrimonio");
+});
+
+test("se proponen los que fueron a parar a una inversión", ()=>{
+  const c=candidatosATraspaso([VACACIONES, A_CEDEARS]);
+  igual(c.length, 1, "propuso de más o de menos");
+  igual(c[0].id, 7002, "el candidato es el que fue a CEDEARs, no las vacaciones");
+});
+
+test("no se propone lo que ya está marcado", ()=>{
+  igual(candidatosATraspaso([{...A_CEDEARS, traspaso:true}]).length, 0);
+});
+
+test("no se propone un depósito al fondo", ()=>{
+  // Un aporte mensual al fondo ya está fuera de los gastos por otro camino; proponerlo sería ruido.
+  const aporte={id:7003, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears",
+                importe:40809.79, fecha:"2026-09-02", esAhorro:true, moneda:"ARS"};
+  igual(candidatosATraspaso([aporte]).length, 0);
+  cierto(!esConsumo(aporte), "y sigue sin contar como gasto");
+});
+
+test("el total propuesto dice cuánta plata está mal contada", ()=>{
+  igual(totalCandidatosATraspaso([VACACIONES, A_CEDEARS]), 520382.40);
+});
+
+test("un traspaso no ensucia las categorías de gasto del dashboard", ()=>{
+  const movsAntes=movs;
+  try{
+    movs=[{id:1, tipo:"Ingreso", cat:"Sueldo", importe:1000000, fecha:"2026-01-05"},
+          {id:2, tipo:"Gasto", cat:"Comida", importe:200000, fecha:"2026-01-06"},
+          {id:3, ...A_CEDEARS, fecha:"2026-01-18", traspaso:true}];
+    const d=getDashData("2026");
+    igual(d.cats["Fondo de Retiro"], undefined, "el traspaso se coló como categoría de gasto");
+    igual(d.cats["Comida"], 200000);
+  } finally { movs=movsAntes; }
 });
 
 // ═══════════════════════════════════════════
