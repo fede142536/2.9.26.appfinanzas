@@ -419,6 +419,97 @@ test("un traspaso no entra al balance de caja por ningún lado", async ()=>{
 });
 
 // ═══════════════════════════════════════════
+// DETALLE DE "RESULTADO INVERSIONES"
+// ═══════════════════════════════════════════
+grupo("Detalle de Resultado inversiones");
+
+// Esta categoría no es un m.cat real: la arma el Dashboard con la ganancia del año. Sumar sus
+// movimientos como si fueran ingresos daba cualquier cosa: con datos reales, la barra decía
+// $179K y el detalle $15.424.748 — se sumaban suscripciones Y rescates, todos en positivo.
+function abrirDetalleInv(lista, anio){
+  const ids=["cat-detail-title","cat-detail-content","modal-cat-detail"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const movsAntes=movs, anioAntes=dashYear;
+  movs=lista; dashYear=anio||"2026";
+  invalidarResultadoInv();
+  try{
+    detalleResultadoInversiones("Resultado inversiones");
+    return {titulo:creados[0].textContent, html:creados[1].innerHTML, texto:creados[1].innerText||creados[1].textContent};
+  } finally {
+    creados.forEach(e=>e.remove());
+    movs=movsAntes; dashYear=anioAntes; invalidarResultadoInv();
+  }
+}
+
+// Rotación típica: se ponen 900.000 y se sacan 1.000.000 → la ganancia son 100.000, no 1.900.000.
+const INV_ANIO = [
+  {id:1, tipo:"Inversion", subcat:"FCI Suscripción",     ticker:"BCAHA", importe:900000,  fecha:"2026-05-10"},
+  {id:2, tipo:"Inversion", subcat:"FCI Rescate capital", ticker:"BCAHA", importe:1000000, fecha:"2026-05-20"},
+  {id:3, tipo:"Inversion", subcat:"Acciones Compra",     ticker:"YPF",   importe:300000,  fecha:"2026-06-05"}
+];
+
+test("el total es la ganancia, no la suma de todo lo movido", ()=>{
+  const r=abrirDetalleInv(INV_ANIO);
+  cierto(r.texto.includes("100.000"), "tiene que mostrar la ganancia: " + r.texto.slice(0,200));
+  cierto(!r.texto.includes("2.200.000") && !r.texto.includes("1.900.000"),
+         "volvió a sumar suscripciones y rescates juntos: " + r.texto.slice(0,200));
+});
+
+test("el mes a mes es de la ganancia, no del flujo", ()=>{
+  // Junio solo tiene una compra de 300.000: no ganó nada y no puede aparecer con una barra.
+  const r=abrirDetalleInv(INV_ANIO);
+  const i=r.texto.indexOf("Ganancia por mes");
+  const seccion=r.texto.slice(i, i+200);
+  cierto(seccion.includes("Mayo"), "falta el mes que sí tuvo ganancia: " + seccion);
+  cierto(!seccion.includes("Junio"), "un mes en que solo pusiste plata no ganó nada: " + seccion);
+});
+
+test("el movimiento de capital discrimina suscripción de rescate", ()=>{
+  // Era el pedido: "FCI Suscripción $5,2M" junto a "FCI Rescate capital $5,2M" no dice nada.
+  const r=abrirDetalleInv(INV_ANIO);
+  const i=r.texto.indexOf("Movimiento de capital");
+  const seccion=r.texto.slice(i);
+  cierto(/FCI Suscripción[\s\S]{0,40}-\$/.test(seccion), "poner plata tiene que ir en negativo: " + seccion.slice(0,300));
+  cierto(/FCI Rescate capital[\s\S]{0,40}\+\$/.test(seccion), "sacarla tiene que ir en positivo: " + seccion.slice(0,300));
+});
+
+test("las suscripciones no se pintan como si fueran una pérdida", ()=>{
+  // Poner plata en una inversión no es perderla: va en color de inversión, no en rojo de gasto.
+  const r=abrirDetalleInv(INV_ANIO);
+  const i=r.html.indexOf("Movimiento de capital");
+  const seccion=r.html.slice(i);
+  cierto(seccion.includes("--invest"), "se perdió el color de inversión: " + seccion.slice(0,400));
+});
+
+test("un año en que solo pusiste plata lo dice, no muestra cero y ya", ()=>{
+  const r=abrirDetalleInv([INV_ANIO[2]]);
+  cierto(r.texto.includes("sigue invertida"), "tendría que explicar por qué no hay ganancia: " + r.texto);
+});
+
+test("una pérdida se muestra como pérdida", ()=>{
+  const conPerdida=[
+    {id:1, tipo:"Inversion", subcat:"Acciones Compra", ticker:"X", importe:500000, fecha:"2026-03-01"},
+    {id:2, tipo:"Inversion", subcat:"Acciones Venta",  ticker:"X", importe:400000, fecha:"2026-04-01"},
+    {id:3, tipo:"Inversion", subcat:"Acciones Venta",  ticker:"X", importe:0,      fecha:"2026-05-01"}
+  ];
+  const r=abrirDetalleInv(conPerdida);
+  // Mientras quede capital sin recuperar todavía no es pérdida: se avisa que sigue invertida.
+  cierto(r.texto.includes("sigue invertida") || r.texto.includes("-$"),
+         "no queda claro qué pasó: " + r.texto.slice(0,200));
+});
+
+test("el título dice de qué año es", ()=>{
+  igual(abrirDetalleInv(INV_ANIO, "2026").titulo, "◈ Resultado inversiones · 2026");
+});
+
+test("showCatDetail delega en la pantalla dedicada", async ()=>{
+  const js=await (await fetch("js/dashboard.js")).text();
+  const i=js.indexOf("function showCatDetail");
+  const cuerpo=js.slice(i, i+400);
+  cierto(cuerpo.includes("detalleResultadoInversiones"), "volvió a tratarla como una categoría común");
+});
+
+// ═══════════════════════════════════════════
 // ANIMACIONES
 // ═══════════════════════════════════════════
 grupo("Animaciones");
