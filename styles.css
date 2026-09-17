@@ -310,6 +310,18 @@ canvas{width:100%!important;max-width:100%}
 .mes-desglose-fila:last-child{border-bottom:none}
 
 /* ═══════════════════════════════════════════
+   CAMBIO DE MES
+   ═══════════════════════════════════════════
+   El contenido entra desde el lado hacia el que fuiste: yendo al mes siguiente entra por la
+   derecha, volviendo al anterior por la izquierda. Sin eso el cambio es seco y no queda claro
+   en qué dirección te moviste — sobre todo tocando las flechas rápido, varias veces seguidas.
+   Es corto (.26s) y poco recorrido (16px): lo justo para dar la dirección, no para hacer esperar. */
+@keyframes mesDesdeDerecha{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+@keyframes mesDesdeIzquierda{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
+.mes-desde-der{animation:mesDesdeDerecha .26s cubic-bezier(.22,.9,.35,1)}
+.mes-desde-izq{animation:mesDesdeIzquierda .26s cubic-bezier(.22,.9,.35,1)}
+
+/* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO
    ═══════════════════════════════════════════
    Quien activó "reducir movimiento" en su teléfono lo hizo por algo — mareo, vértigo, o

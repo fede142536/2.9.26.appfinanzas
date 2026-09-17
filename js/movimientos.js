@@ -99,6 +99,7 @@ function cambiarMes(d){
   mesActual = addMonths(mesActual, d);
   document.getElementById("mes-label").textContent = mesLbl(mesActual);
   renderMovs();
+  animarCambioDeMes(d, document.getElementById("mov-summary"), document.getElementById("tx-list"));
 }
 
 // ═══════════════════════════════════════════

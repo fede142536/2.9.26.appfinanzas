@@ -806,6 +806,15 @@ function drawBarRoundedH(ctx, x, y, w, h, r, corners){
 // ═══════════════════════════════════════════
 // CHART.JS — Dashboard (Ingresos, gastos y balance)
 // ═══════════════════════════════════════════
+// Animación de los gráficos. Chart.js ya anima por defecto, pero el @media de movimiento
+// reducido es CSS y no llega al canvas: sin esto, quien pidió menos movimiento igual veía las
+// barras dibujarse. Se declara explícita para poder apagarla, y de paso para fijar la curva en
+// vez de depender del default de la librería.
+function animacionDeGrafico(){
+  if(typeof prefiereMenosMovimiento==="function" && prefiereMenosMovimiento()) return false;
+  return {duration:700, easing:"easeOutQuart"};
+}
+
 // Instancias guardadas para poder destruirlas antes de re-crear (Chart.js tira error
 // "Canvas is already in use" si no se destruye la instancia anterior sobre el mismo canvas).
 let chartMensualInstance=null;
@@ -846,6 +855,7 @@ function renderChartMensualBI(yearData){
     },
     options:{
       responsive:true, maintainAspectRatio:false,
+      animation:animacionDeGrafico(),
       // Con "index" el tooltip y el clic toman el mes entero: no hay que acertarle justo a una
       // barra de 22px en el celular, y el tooltip muestra las tres cifras juntas.
       interaction:{mode:"index", intersect:false},
@@ -895,6 +905,7 @@ function renderChartInvHistoricoBI(labels, values){
     },
     options:{
       responsive:true, maintainAspectRatio:false,
+      animation:animacionDeGrafico(),
       plugins:{
         legend:{display:false},
         tooltip:{callbacks:{label:ctx=>fmtS(ctx.parsed.y)}}
