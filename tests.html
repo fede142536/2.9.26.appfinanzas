@@ -419,6 +419,96 @@ test("un traspaso no entra al balance de caja por ningún lado", async ()=>{
 });
 
 // ═══════════════════════════════════════════
+// ÍCONOS: NO PUEDEN TRAER HTML
+// ═══════════════════════════════════════════
+grupo("Íconos seguros");
+
+// getIcon() se interpola en innerHTML en más de quince lugares, y su valor puede venir de
+// iconsCustom, que restaurarBackup() copia TAL CUAL desde el archivo. Un backup preparado a mala
+// fe traía, en vez de un emoji, código que se ejecutaba al renderizar cualquier pantalla — con la
+// app desbloqueada y los datos descifrados en memoria.
+const ICONO_ATAQUE = '<img src=x onerror="window.__hackeado=1">';
+
+test("un ícono con HTML se descarta", ()=>{
+  igual(iconoSeguro(ICONO_ATAQUE), "");
+  igual(iconoSeguro('" onmouseover="alert(1)'), "");
+  igual(iconoSeguro("<script>"), "");
+  igual(iconoSeguro("a&b"), "", "el & abre entidades y tampoco pinta en un emoji");
+});
+
+test("un emoji normal pasa intacto", ()=>{
+  igual(iconoSeguro("🏦"), "🏦");
+  igual(iconoSeguro("💱"), "💱");
+  igual(iconoSeguro("A"), "A", "la inicial de una categoría sin ícono");
+  igual(iconoSeguro("  🚗  "), "🚗", "se recortan los espacios");
+});
+
+test("un texto largo no es un ícono", ()=>{
+  // Sin tope, cualquier cosa sin < > & podría colarse como \"ícono\" y romper el layout.
+  igual(iconoSeguro("esto es una frase entera"), "");
+  igual(iconoSeguro(""), "");
+  igual(iconoSeguro(null), "");
+  igual(iconoSeguro(undefined), "");
+});
+
+test("getIcon nunca devuelve el ícono envenenado de un backup", ()=>{
+  const antes=iconsCustom;
+  try{
+    // Exactamente lo que dejaría restaurarBackup() con un archivo preparado.
+    iconsCustom={"Supermercado": ICONO_ATAQUE};
+    const ic=getIcon("Supermercado");
+    cierto(!ic.includes("<"), "el ícono del backup llegó entero hasta el render: " + ic);
+    cierto(ic.length<=8, "devolvió algo que no es un ícono: " + ic);
+  } finally { iconsCustom=antes; }
+});
+
+test("si todo lo que hay está envenenado, no se muestra nada", ()=>{
+  // Vacío es la respuesta correcta: mejor un hueco que inventar un ícono, y sobre todo mejor
+  // que dejar pasar el que venía en el backup.
+  const antes=iconsCustom;
+  try{
+    iconsCustom={"X": ICONO_ATAQUE};
+    igual(getIcon("X", ICONO_ATAQUE), "", "quedó algo del ícono envenenado");
+    // Pero una categoría con nombre y sin fallback explícito sigue cayendo en su inicial.
+    igual(getIcon("Xilofón"), "X", "se perdió la inicial como último recurso");
+  } finally { iconsCustom=antes; }
+});
+
+test("el render de una categoría con ícono envenenado no ejecuta nada", ()=>{
+  const antes=iconsCustom;
+  const dom=document.createElement("div");
+  document.body.appendChild(dom);
+  try{
+    window.__hackeado=undefined;
+    iconsCustom={"Supermercado": ICONO_ATAQUE};
+    // Se arma como lo hace cualquiera de las pantallas.
+    dom.innerHTML=`<div class="bar-label">${getIcon("Supermercado","")} ${escapeHtml("Supermercado")}</div>`;
+    igual(dom.querySelectorAll("img").length, 0, "el backup consiguió inyectar una etiqueta");
+    igual(window.__hackeado, undefined, "el código del backup se ejecutó");
+  } finally { dom.remove(); iconsCustom=antes; delete window.__hackeado; }
+});
+
+test("una meta con emoji envenenado no inyecta nada al renderizarse", ()=>{
+  // Se renderiza de verdad, no se prueba solo la función: el agujero estaba en la interpolación,
+  // así que un test que no pasa por renderMetas() no lo agarra (me pasó).
+  const ids=["metas-list","depositar-card","dep-meta"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const metasAntes=metas;
+  try{
+    window.__hackeado=undefined;
+    metas=[{id:1, nombre:"Auto", objetivo:1000000, actual:0, emoji:ICONO_ATAQUE}];
+    renderMetas();
+    const html=creados[0].innerHTML + creados[2].innerHTML;
+    igual(creados[0].querySelectorAll("img").length, 0, "el emoji consiguió inyectar una etiqueta");
+    cierto(!html.includes("onerror"), "quedó el código del emoji en el HTML: " + html.slice(0,200));
+    igual(window.__hackeado, undefined, "el código del emoji se ejecutó");
+    cierto(html.includes("🎯"), "tendría que caer al emoji por defecto");
+  } finally {
+    creados.forEach(e=>e.remove()); metas=metasAntes; delete window.__hackeado;
+  }
+});
+
+// ═══════════════════════════════════════════
 // TRASPASOS
 // ═══════════════════════════════════════════
 grupo("Traspasos: plata que cambia de bolsillo");
