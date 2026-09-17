@@ -457,6 +457,60 @@ test("unas vacaciones pagadas con el fondo SÍ son un gasto", ()=>{
   igual(totalesDePlata([VACACIONES]).balance, -300000, "consumir del fondo baja tu patrimonio");
 });
 
+// Con el PIN activo los datos NO viven en localStorage: viven en encCache, y se leen con
+// getSensitiveRaw(). Corre `fn` como si el PIN estuviera puesto y la app desbloqueada.
+function conPinActivo(fn){
+  const blobAntes=localStorage.getItem("fencblob");
+  const cacheAntes=encCache;
+  localStorage.setItem("fencblob", "x");   // con esto isEncActive() da true
+  encCache={};
+  try{ return fn(); }
+  finally{
+    if(blobAntes===null) localStorage.removeItem("fencblob"); else localStorage.setItem("fencblob", blobAntes);
+    encCache=cacheAntes;
+  }
+}
+
+test('"Sí lo gasté" tiene que seguir descartado con el PIN activo', ()=>{
+  // El bug: la lista de descartados se ESCRIBÍA en localStorage y se LEÍA de encCache, así que
+  // con el PIN puesto el descarte no se veía nunca y el movimiento reaparecía al instante.
+  // Desde afuera: tocabas el botón y no pasaba nada.
+  conPinActivo(()=>{
+    try{
+      limpiarIgnoradosTraspaso();
+      igual(candidatosATraspaso([A_CEDEARS]).length, 1, "tiene que aparecer antes de descartarlo");
+      ignorarTraspaso(A_CEDEARS.id);
+      igual(candidatosATraspaso([A_CEDEARS]).length, 0, "el descarte no sobrevive: se escribe donde no se lee");
+      limpiarIgnoradosTraspaso();
+      igual(candidatosATraspaso([A_CEDEARS]).length, 1, "y volver a revisarlos tiene que traerlo de vuelta");
+    } finally { limpiarIgnoradosTraspaso(); }
+  });
+  limpiarIgnoradosTraspaso();   // y también afuera del PIN, que es otro almacenamiento
+});
+
+test('"No es un cambio" tiene el mismo problema y también con el PIN', ()=>{
+  conPinActivo(()=>{
+    try{
+      limpiarIgnorados();
+      igual(candidatosAMigrar([MEP_COMO_INVERSION]).length, 1);
+      ignorarParaMigrar(MEP_COMO_INVERSION.id);
+      igual(candidatosAMigrar([MEP_COMO_INVERSION]).length, 0, "el descarte de cambios tampoco sobrevivía");
+      limpiarIgnorados();
+      igual(candidatosAMigrar([MEP_COMO_INVERSION]).length, 1);
+    } finally { limpiarIgnorados(); }
+  });
+  limpiarIgnorados();
+});
+
+test("sin PIN los descartes siguen funcionando igual", ()=>{
+  try{
+    limpiarIgnoradosTraspaso();
+    igual(candidatosATraspaso([A_CEDEARS]).length, 1);
+    ignorarTraspaso(A_CEDEARS.id);
+    igual(candidatosATraspaso([A_CEDEARS]).length, 0);
+  } finally { limpiarIgnoradosTraspaso(); }
+});
+
 test("se proponen los que fueron a parar a una inversión", ()=>{
   const c=candidatosATraspaso([VACACIONES, A_CEDEARS]);
   igual(c.length, 1, "propuso de más o de menos");

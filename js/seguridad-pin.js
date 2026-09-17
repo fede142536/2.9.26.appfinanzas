@@ -167,6 +167,23 @@ const NOMBRE_CLAVE_DATOS={
 //     vez de perderse apenas arranca la app. Recién se pisa si el usuario sigue usando la
 //     app y algo la guarda de nuevo — igual que pasaría con cualquier dato nuevo.
 let datosCorruptosAlArrancar=[];
+// Guarda una lista leída con leerJSONSeguro(). Tiene que existir al lado de la lectura, porque
+// el par leer/escribir se rompe fácil: leerJSONSeguro() pasa por getSensitiveRaw(), que con el
+// PIN activo lee de encCache, y si la escritura va derecho a localStorage el valor se guarda
+// donde nadie lo busca. Eso pasó con las listas de "no me lo muestres más" de la migración de
+// cambios y de traspasos: con PIN, tocabas el botón y el movimiento volvía a aparecer al
+// instante — desde afuera, el botón no hacía nada.
+function guardarJSONSeguro(clave, valor){
+  try{
+    setSensitiveRaw(clave, JSON.stringify(valor));
+    return true;
+  }catch(e){
+    // setSensitiveRaw tira si la app está bloqueada. Una preferencia no vale un error rojo.
+    console.warn(`No se pudo guardar "${clave}":`, e);
+    return false;
+  }
+}
+
 function leerJSONSeguro(clave, defaultJSON, tipo){
   const crudo=getSensitiveRaw(clave, defaultJSON);
   let valor;

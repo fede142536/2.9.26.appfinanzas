@@ -104,10 +104,12 @@ function idsIgnorados(){
 function ignorarParaMigrar(id){
   const ids=idsIgnorados();
   if(!ids.includes(id)) ids.push(id);
-  guardarPreferencia(CAMBIO_IGNORADOS_KEY, JSON.stringify(ids));
+  // Ver el comentario de guardarJSONSeguro(): esta lista se lee con leerJSONSeguro(), así que
+  // tiene que escribirse por el mismo camino o con el PIN puesto el descarte no se ve nunca.
+  guardarJSONSeguro(CAMBIO_IGNORADOS_KEY, ids);
 }
 function limpiarIgnorados(){
-  localStorage.removeItem(CAMBIO_IGNORADOS_KEY);
+  guardarJSONSeguro(CAMBIO_IGNORADOS_KEY, []);
 }
 
 // Devuelve [{mov, motivo, faltaPata}] — `faltaPata` dice qué mitad hay que pedirle al usuario:
