@@ -1526,6 +1526,44 @@ test("migrada, deja de figurar como capital invertido", ()=>{
   igual(despues.capitalPorTicker["AL30"], undefined, "después de migrarla ya no es una inversión");
 });
 
+const BONO_VENTA = {id:5010, tipo:"Inversion", importe:0, importeUSD:25.55, cat:"Bonos USD",
+                    subcat:"Bonos USD Venta", ticker:"AL30D", fecha:"2026-09-04", cuenta:"Balanz"};
+
+test("vender un bono no es comprar dólares", ()=>{
+  // "Bonos USD / Bonos USD Venta" tiene AL30 y USD en el texto, así que entraba en la lista de
+  // cambios sin completar. No es un cambio de moneda: es vender un bono. Se ofrecía completarlo
+  // con un monto en pesos que nunca existió.
+  igual(candidatosAMigrar([BONO_VENTA]).length, 0);
+});
+
+test("una compra MEP en dólares pide los PESOS, no los dólares", ()=>{
+  const c=candidatosAMigrar([MEP_INV_EN_USD]);
+  igual(c.length, 1);
+  igual(c[0].faltaPata, "ars", "le preguntaba cuántos dólares recibió a algo que YA está en dólares");
+});
+
+test("la card muestra el monto que ya está cargado, no $0,00", ()=>{
+  // Una inversión guarda el monto en dólares en importeUSD y deja m.moneda sin definir, así que
+  // leer m.importe daba 0: la fila decía "$0,00" y completar no hacía nada.
+  const card=document.createElement("div"); card.id="card-migrar-cambios";
+  const lista=document.createElement("div"); lista.id="migrar-cambios-lista";
+  document.body.appendChild(card); document.body.appendChild(lista);
+  const movsAntes=movs;
+  try{
+    movs=[MEP_INV_EN_USD];
+    renderMigrarCambios();
+    const txt=lista.innerText || lista.textContent;
+    cierto(txt.includes("54.21"), "no se ve el monto real: " + txt);
+    cierto(!txt.includes("$0,00"), "volvió el $0,00: " + txt);
+    cierto(txt.includes("cuántos pesos pagaste"), "pide la mitad equivocada: " + txt);
+  } finally { card.remove(); lista.remove(); movs=movsAntes; }
+});
+
+test("sin monto propio no hay nada que completar", ()=>{
+  const vacio={id:5011, tipo:"Inversion", importe:0, importeUSD:0, cat:"MEP", subcat:"MEP Compra", fecha:"2026-09-03"};
+  igual(candidatosAMigrar([vacio]).length, 0);
+});
+
 test("un cambio no se puede crear a medias", ()=>{
   igual(crearCambio({fecha:"2026-09-03", montoARS:0, montoUSD:27, sentido:"compra"}), null);
   igual(crearCambio({fecha:"2026-09-03", montoARS:100, montoUSD:0, sentido:"compra"}), null);
