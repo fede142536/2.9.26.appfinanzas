@@ -51,6 +51,11 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 @keyframes cuentaSugeridaFlash{0%{box-shadow:0 0 0 3px var(--accent-light);border-color:var(--accent)}100%{box-shadow:none;border-color:var(--border)}}
 .cuenta-sugerida-flash{animation:cuentaSugeridaFlash .7s ease}
 .card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:15px;margin:10px 16px;box-shadow:var(--shadow);animation:slideUpFade .4s ease forwards}
+/* Que el toque se sienta. En el celular no hay hover: sin esto, tocar una fila o un chip no
+   devuelve ninguna señal hasta que la pantalla cambia, y se siente trabado. */
+.chip,.tx-item{transition:transform .12s ease}
+.chip:active{transform:scale(.97)}
+.tx-item:active{transform:scale(.99)}
 .card-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
 /* FORM */
 .form-group{margin-bottom:18px}
@@ -163,7 +168,13 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
    más alta cuando hace falta, pero nunca se pierde información. */
 .bar-label{font-size:11px;width:108px;flex-shrink:0;line-height:1.3;word-break:break-word}
 .bar-track{flex:1;height:7px;background:var(--bg);border-radius:4px;overflow:hidden}
-.bar-fill{height:100%;border-radius:4px;transition:width .4s}
+/* Las barras crecen desde cero al aparecer. El `transition:width` que estaba acá nunca se
+   disparaba: el div nace con su ancho final puesto inline, así que no hay valor previo desde el
+   cual transicionar. Se deja igual porque sí sirve si una barra ya visible cambia de ancho.
+   La entrada va por scaleX y no por width a propósito: width recalcula layout en cada cuadro,
+   scaleX lo resuelve la GPU — en el celular se nota. */
+.bar-fill{height:100%;border-radius:4px;transition:width .4s;transform-origin:left center;animation:barGrow .55s cubic-bezier(.22,.9,.35,1) both}
+@keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 .bar-val{font-size:11px;color:var(--muted);width:74px;text-align:right;flex-shrink:0}
 /* FILTER */
 .filter-row{display:flex;gap:7px;padding:10px 16px 0;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x mandatory;scroll-padding-left:16px}
@@ -297,3 +308,20 @@ canvas{width:100%!important;max-width:100%}
 .mes-desglose-fila{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
   padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
 .mes-desglose-fila:last-child{border-bottom:none}
+
+/* ═══════════════════════════════════════════
+   MOVIMIENTO REDUCIDO
+   ═══════════════════════════════════════════
+   Quien activó "reducir movimiento" en su teléfono lo hizo por algo — mareo, vértigo, o
+   simplemente porque le molesta. Va al final para pisar todo lo de arriba, y con !important
+   porque muchas animaciones están declaradas junto a otras propiedades en la misma regla.
+   No se apaga del todo (.01ms en vez de 0): así los eventos animationend/transitionend siguen
+   disparando y nada que dependa de ellos se queda colgado esperando. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+    scroll-behavior:auto !important;
+  }
+}
