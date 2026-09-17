@@ -484,6 +484,123 @@ test("animarEntradaDeCards no explota sin página", ()=>{
   cierto(true, "tiene que tolerar que no le pasen nada");
 });
 
+// ── LOS NÚMEROS GRANDES CUENTAN ──
+
+test("los números marcados cuentan hasta su valor", async ()=>{
+  const cont=document.createElement("div");
+  cont.innerHTML=`<div class="chip-val" data-animar="1500000">${fmtTotal(0)}</div>`;
+  document.body.appendChild(cont);
+  try{
+    const el=cont.firstElementChild;
+    igual(el.textContent, fmtTotal(0), "el render tiene que empezar en cero");
+    animarNumerosDe(cont);
+    await new Promise(r=>setTimeout(r, 900));   // la animación dura 700 ms
+    igual(el.textContent, fmtTotal(1500000), "no llegó al valor final");
+  } finally { cont.remove(); }
+});
+
+test("un número roto ni siquiera se toca", async ()=>{
+  // Comparar el texto final no alcanza: fmtTotal(NaN) también devuelve "—", así que sacar el
+  // guard daría el mismo resultado y el test pasaría igual (me pasó). Lo que distingue es que
+  // el elemento no se ESCRIBA: sin el guard, animarNumero le pisa el textContent en cada cuadro.
+  const cont=document.createElement("div");
+  cont.innerHTML=`<div data-animar="">—</div><div data-animar="hola">—</div>`;
+  document.body.appendChild(cont);
+  let escrituras=0;
+  const obs=new MutationObserver(ms=>{ escrituras+=ms.length; });
+  obs.observe(cont, {childList:true, characterData:true, subtree:true});
+  try{
+    animarNumerosDe(cont);
+    await new Promise(r=>setTimeout(r, 400));
+    obs.disconnect();
+    igual(escrituras, 0, "se escribió sobre el guión de un dato roto " + escrituras + " veces");
+    igual([...cont.children].map(c=>c.textContent), ["—","—"]);
+  } finally { obs.disconnect(); cont.remove(); }
+});
+
+test("se puede elegir el formateador", async ()=>{
+  const cont=document.createElement("div");
+  cont.innerHTML=`<div data-animar="1234.56" data-animar-fmt="fmtS">x</div>`;
+  document.body.appendChild(cont);
+  try{
+    animarNumerosDe(cont);
+    await new Promise(r=>setTimeout(r, 900));
+    igual(cont.firstElementChild.textContent, fmtS(1234.56), "no usó fmtS");
+  } finally { cont.remove(); }
+});
+
+test("animarNumerosDe tolera que no le pasen contenedor", ()=>{
+  animarNumerosDe(null);
+  animarNumerosDe(undefined);
+  cierto(true);
+});
+
+// ── EL MES SE DESLIZA HACIA DONDE FUISTE ──
+
+test("avanzar de mes entra desde la derecha y retroceder desde la izquierda", ()=>{
+  const a=document.createElement("div"), b=document.createElement("div");
+  document.body.appendChild(a); document.body.appendChild(b);
+  try{
+    animarCambioDeMes(1, a);
+    cierto(a.classList.contains("mes-desde-der"), "yendo al mes siguiente tiene que entrar por la derecha");
+    animarCambioDeMes(-1, b);
+    cierto(b.classList.contains("mes-desde-izq"), "volviendo tiene que entrar por la izquierda");
+  } finally { a.remove(); b.remove(); }
+});
+
+test("cambiar dos veces seguidas vuelve a animar", ()=>{
+  // Si la clase quedara puesta, la animación no se reinicia y el segundo toque no se ve.
+  const el=document.createElement("div");
+  document.body.appendChild(el);
+  try{
+    animarCambioDeMes(1, el);
+    animarCambioDeMes(1, el);
+    igual([...el.classList].filter(c=>c.startsWith("mes-desde")), ["mes-desde-der"],
+          "quedaron clases encimadas o ninguna");
+  } finally { el.remove(); }
+});
+
+test("cambiar de dirección no deja las dos clases puestas", ()=>{
+  const el=document.createElement("div");
+  document.body.appendChild(el);
+  try{
+    animarCambioDeMes(1, el);
+    animarCambioDeMes(-1, el);
+    cierto(!el.classList.contains("mes-desde-der"), "quedó la clase de la dirección anterior");
+    cierto(el.classList.contains("mes-desde-izq"));
+  } finally { el.remove(); }
+});
+
+test("animarCambioDeMes ignora los elementos que no existen", ()=>{
+  animarCambioDeMes(1, null, undefined);
+  cierto(true, "tiene que tolerar un id que no está en esta pantalla");
+});
+
+test("las dos animaciones de mes están en el CSS", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  cierto(css.includes("@keyframes mesDesdeDerecha"), "falta el keyframe de la derecha");
+  cierto(css.includes("@keyframes mesDesdeIzquierda"), "falta el de la izquierda");
+  cierto(/translateX/.test(css.slice(css.indexOf("@keyframes mesDesdeDerecha"), css.indexOf("@keyframes mesDesdeDerecha")+140)),
+         "el deslizamiento tiene que ser lateral");
+});
+
+// ── LOS GRÁFICOS ──
+
+test("los gráficos se apagan con movimiento reducido", ()=>{
+  // El @media de CSS no llega al canvas: sin esto, quien pidió menos movimiento igual veía las
+  // barras dibujarse.
+  const cfg=animacionDeGrafico();
+  cierto(cfg===false || (cfg && cfg.duration>0), "devolvió algo que Chart.js no entiende");
+});
+
+test("la animación del gráfico es explícita, no el default de la librería", async ()=>{
+  const js=await (await fetch("js/dashboard.js")).text();
+  cierto(js.includes("animation:animacionDeGrafico()"), "algún gráfico volvió a depender del default");
+  igual((js.match(/animation:animacionDeGrafico\(\)/g)||[]).length, 2, "quedó un gráfico sin cablear");
+  cierto(/prefiereMenosMovimiento/.test(js.slice(js.indexOf("function animacionDeGrafico"), js.indexOf("function animacionDeGrafico")+300)),
+         "dejó de consultar la preferencia del sistema");
+});
+
 test("el toque devuelve señal en chips y filas", async ()=>{
   // En el celular no hay hover: sin esto, tocar no devuelve nada hasta que cambia la pantalla.
   const css=await (await fetch("styles.css")).text();

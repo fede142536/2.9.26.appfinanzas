@@ -197,6 +197,7 @@ function renderTcPendientes(){
 function cambiarMesTc(delta){
   mesTc = addMonths(mesTc, delta);
   renderTarjetas();
+  animarCambioDeMes(delta, document.getElementById("tc-balance"), document.getElementById("tc-pendientes"));
 }
 
 function renderTarjetas(){
@@ -235,7 +236,7 @@ function renderTarjetas(){
     const esMesActual = ymSel===hoyYM;
     let html=`<div class="seccion-label mb-6">${esMesActual?"A pagar este mes":"Total "+mesLbl(ymSel)}</div>
       <div style="display:flex;gap:14px;align-items:baseline;margin-bottom:6px;flex-wrap:wrap">
-        <div style="font-size:24px;font-weight:600;color:var(--warning)">${fmtTotal(totalMesARS)}</div>
+        <div style="font-size:24px;font-weight:600;color:var(--warning)" data-animar="${totalMesARS}">${fmtTotal(0)}</div>
         ${totalMesUSD>0?`<div style="font-size:18px;font-weight:600;color:var(--warning)">+ USD ${totalMesUSD.toFixed(2)}</div>`:""}
       </div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${cantidadMes} ${cantidadMes===1?"gasto":"gastos"} en este mes</div>`;
@@ -306,6 +307,7 @@ function renderTarjetas(){
     }
     // (La proyección mes a mes vive ahora en su propia card: renderTcPendientes())
     balanceEl.innerHTML=html;
+    animarNumerosDe(balanceEl);
   }
 
   renderTcPendientes();
@@ -326,6 +328,8 @@ function renderTarjetas(){
 function cambiarMesInv(delta){
   mesInv = addMonths(mesInv, delta);
   renderInv();
+  animarCambioDeMes(delta, document.getElementById("inv-summary"),
+                    document.getElementById("inv-balance"), document.getElementById("inv-movs"));
 }
 
 // Helper: detecta si una operación de inversión es SALIDA DEL PORTFOLIO
@@ -440,6 +444,7 @@ function renderInv(){
       }).join("");
     }
     balanceEl.innerHTML=html;
+    animarNumerosDe(balanceEl);
   }
 
   // ── LISTA DE MOVIMIENTOS DEL MES (con editar/eliminar) ──

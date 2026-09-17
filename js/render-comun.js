@@ -127,6 +127,50 @@ async function avisarGuardadoFallido(err, opciones){
 // resultado formateado en el elemento en cada frame. Uso: primero renderizar el chip con
 // el valor en 0 (o vacío), guardando un id en el elemento; después, en la MISMA función de
 // render, llamar animarNumero(document.getElementById(esteId), valorReal, 700, fmtS).
+// Una sola respuesta para toda la app. El @media de CSS no alcanza: no llega al canvas de los
+// gráficos ni a nada que decidamos en JS, así que hace falta poder preguntarlo desde acá.
+function prefiereMenosMovimiento(){
+  try{
+    return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }catch(e){ return false; }   // matchMedia puede no existir en entornos de prueba
+}
+
+// Desliza el contenido al cambiar de mes, en la dirección en la que te moviste.
+//
+// La clase se saca al terminar y se vuelve a poner en el próximo cambio: si quedara puesta, la
+// animación no se reiniciaría y tocando la flecha dos veces seguidas solo se vería la primera.
+// El reflow intermedio es lo que fuerza al navegador a tratarlo como una animación nueva.
+function animarCambioDeMes(direccion, ...elementos){
+  if(prefiereMenosMovimiento()) return;
+  const clase = direccion>=0 ? "mes-desde-der" : "mes-desde-izq";
+  elementos.filter(Boolean).forEach(el=>{
+    el.classList.remove("mes-desde-der","mes-desde-izq");
+    void el.offsetWidth;
+    el.classList.add(clase);
+    el.addEventListener("animationend", ()=>el.classList.remove(clase), {once:true});
+  });
+}
+
+// Anima todos los números marcados con data-animar dentro de un contenedor.
+//
+// El render pinta el valor final en el atributo y un cero formateado como texto; esto los hace
+// contar hasta el valor. Se resuelve con un atributo y no con un id por cada número porque los
+// chips se generan en lote: con ids habría que inventar uno por chip y acordarse de cablearlo.
+//
+// data-animar-fmt elige el formateador (fmtTotal por defecto). Son funciones declaradas en el
+// scope global de scripts clásicos, así que viven en window y se pueden buscar por nombre.
+function animarNumerosDe(cont){
+  if(!cont) return;
+  const menos=prefiereMenosMovimiento();
+  cont.querySelectorAll("[data-animar]").forEach(el=>{
+    const valor=parseFloat(el.dataset.animar);
+    if(!isFinite(valor)) return;      // un número roto se deja como lo dejó el render ("—")
+    const fn=(typeof window[el.dataset.animarFmt]==="function") ? window[el.dataset.animarFmt] : fmtTotal;
+    if(menos){ el.textContent=fn(valor); return; }
+    animarNumero(el, valor, 700, fn);
+  });
+}
+
 function animarNumero(elemento, valorFinal, duracion, formatoFn){
   if(!elemento) return;
   duracion = duracion || 700;
