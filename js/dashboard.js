@@ -455,17 +455,94 @@ function renderDashUSD(){
 
 // Detalle de categoría desde el dashboard (al tocar una barra)
 // tipo: "Gasto" (default) o "Ingreso"
+// ═══════════════════════════════════════════
+// DETALLE DE "RESULTADO INVERSIONES"
+// ═══════════════════════════════════════════
+// Esta categoría no es un m.cat real: la arma el Dashboard con la ganancia reconocida del año.
+// Necesita su propia pantalla porque sumar sus movimientos como si fueran ingresos da cualquier
+// cosa: con los datos reales, la barra decía $179K y el detalle $15.424.748 — se sumaban las
+// suscripciones Y los rescates, todos en positivo, como si poner plata y sacarla fueran las dos
+// un ingreso. "FCI Suscripción $5,2M" junto a "FCI Rescate capital $5,2M" no dice nada.
+//
+// Acá: arriba la ganancia (el mismo número que la barra), el mes a mes de esa ganancia, y el
+// movimiento de capital CON SIGNO — lo que pusiste en negativo, lo que sacaste en positivo.
+function detalleResultadoInversiones(cat){
+  const anio=String(dashYear);
+  const delAnio=movs.filter(m=>m.tipo==="Inversion" && String(m.fecha||"").slice(0,4)===anio);
+  const gan=gananciaInvEntre(anio+"-01", anio+"-12");
+  const tabla=resultadoInv().gananciaPorMes;
+
+  const puesto=delAnio.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  const sacado=delAnio.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  const colorGan=gan.ars>=0?"var(--success)":"var(--danger)";
+
+  document.getElementById("cat-detail-title").textContent=`◈ ${cat} · ${anio}`;
+  let html=`<div class="inset">
+    <div class="seccion-label">Ganancia reconocida ${anio}</div>
+    <div style="font-size:22px;font-weight:600;color:${colorGan};margin-top:3px">${gan.ars>=0?"+":""}${fmtS(gan.ars)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px">sobre ${fmtAbbr(puesto)} puestos en ${delAnio.length} ${delAnio.length===1?"operación":"operaciones"}</div>
+  </div>`;
+  if(Math.abs(gan.usd)>=0.01){
+    html+=`<div class="txt-xs txt-muted" style="margin-top:6px">Y ${gan.usd>=0?"+":""}USD ${gan.usd.toFixed(2)} en dólares, que se cuenta aparte.</div>`;
+  }
+
+  // Mes a mes de la GANANCIA, no del flujo: un mes en que solo pusiste plata no ganó nada, y
+  // mostrarlo con una barra larga haría pensar lo contrario.
+  const meses=Object.keys(tabla).filter(ym=>ym.slice(0,4)===anio && Math.round(tabla[ym].ars)!==0).sort();
+  if(meses.length){
+    const maxM=Math.max(...meses.map(ym=>Math.abs(tabla[ym].ars)));
+    html+=`<div class="seccion-label mt-14 mb-6">Ganancia por mes</div>`;
+    meses.forEach(ym=>{
+      const v=tabla[ym].ars;
+      const c=v>=0?"var(--success)":"var(--danger)";
+      html+=`<div class="bar-row" style="margin-bottom:5px">
+        <div class="bar-label" style="font-size:12px">${mesLbl(ym)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(v)/maxM*100)}%;background:${c}"></div></div>
+        <div class="bar-val" style="color:${c}">${v>=0?"+":""}${fmtAbbr(v)}</div>
+      </div>`;
+    });
+  } else {
+    html+=`<p class="txt-xs txt-muted" style="margin-top:10px">Todavía no se reconoció ninguna ganancia en ${anio}: la plata que pusiste sigue invertida.</p>`;
+  }
+
+  // Movimiento de capital, con signo. Poner plata sale, sacarla entra: mostrarlos con el mismo
+  // signo era lo que hacía que el desglose no dijera nada.
+  const porSub={};
+  delAnio.forEach(m=>{
+    const key=m.subcat||"(sin subcategoría)";
+    porSub[key]=(porSub[key]||0)+(m.importe||0)*(isInvSalida(m)?1:-1);
+  });
+  const subs=Object.entries(porSub).filter(([,v])=>Math.round(v)!==0)
+                                   .sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  if(subs.length){
+    html+=`<div class="seccion-label mt-14 mb-6">Movimiento de capital</div>`;
+    const maxS=Math.abs(subs[0][1])||1;
+    subs.forEach(([sub,v])=>{
+      const c=v>=0?"var(--success)":"var(--invest)";
+      html+=`<div class="bar-row" style="margin-bottom:5px">
+        <div class="bar-label" style="font-size:12px">${escapeHtml(sub)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(v)/maxS*100)}%;background:${c}"></div></div>
+        <div class="bar-val" style="color:${c}">${v>=0?"+":""}${fmtAbbr(v)}</div>
+      </div>`;
+    });
+    html+=`<div class="txt-xs txt-muted" style="margin-top:8px;line-height:1.45">
+      En negativo lo que pusiste (${fmtAbbr(puesto)}), en positivo lo que sacaste (${fmtAbbr(sacado)}).
+      Casi todo se compensa: es la misma plata yendo y volviendo. Lo que queda es la ganancia de arriba.</div>`;
+  }
+  document.getElementById("cat-detail-content").innerHTML=html;
+  document.getElementById("modal-cat-detail").classList.add("open");
+}
+
 function showCatDetail(cat, tipo){
   tipo=tipo||"Gasto";
+  if(cat==="Resultado inversiones" || cat==="Pérdida en inversiones"){
+    detalleResultadoInversiones(cat);
+    return;
+  }
   const esIngreso=tipo==="Ingreso";
   const color=esIngreso?"var(--success)":"var(--danger)";
-  // "Resultado inversiones" y "Pérdida en inversiones" son agrupaciones que arma el Dashboard
-  // (no son m.cat reales), así que se filtran distinto: se muestran las operaciones del año,
-  // que son las que armaron ese resultado.
   let movsCat;
-  if(cat==="Resultado inversiones" || cat==="Pérdida en inversiones"){
-    movsCat=movs.filter(m=>m.tipo==="Inversion" && String(m.fecha||"").slice(0,4)===String(dashYear));
-  } else {
+  {
     movsCat=movs.filter(m=>{
       if(esIngreso){
         if(m.tipo!=="Ingreso") return false;
@@ -478,7 +555,7 @@ function showCatDetail(cat, tipo){
   }
   movsCat=movsCat.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   const total=movsCat.reduce((s,m)=>s+(m.importe||0),0);
-  const iconCat=(cat==="Resultado inversiones"||cat==="Pérdida en inversiones")?"◈":getIcon(cat);
+  const iconCat=getIcon(cat);
   document.getElementById("cat-detail-title").textContent=`${iconCat} ${cat} · ${dashYear}`;
   let html=`<div class="inset">
     <div class="seccion-label">Total ${dashYear} · ${esIngreso?"Ingresos":"Gastos"}</div>
