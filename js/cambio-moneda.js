@@ -122,6 +122,12 @@ function candidatosAMigrar(lista){
     // Las que quedaron como inversión son peores: el capital queda "puesto" en un ticker que
     // nunca se va a vender, así que el AL30 figura eternamente invertido por esa plata.
     if(!esGasto(m) && m.tipo!=="Inversion") return false;
+    // Pero SOLO las compras. Una "Bonos USD Venta" tiene AL30 y USD en el texto y entraba acá,
+    // y no es un cambio de moneda: es vender un bono. Se ofrecía completarla con un monto en
+    // pesos que nunca existió.
+    if(m.tipo==="Inversion" && isInvSalida(m)) return false;
+    // Sin un monto propio no hay mitad desde la cual completar nada.
+    if(montoPropioDeCambio(m).monto<=0) return false;
     const texto=`${m.cat||""} ${m.subcat||""} ${m.nota||""}`;
     return CAMBIO_PISTAS.test(texto);
   }).map(m=>{
@@ -214,8 +220,12 @@ function renderMigrarCambios(){
 
   el.innerHTML=cands.map(c=>{
     const m=c.mov;
-    const enUSD=m.moneda==="USD";
-    const monto=enUSD ? `USD ${(m.importeOrig||0).toFixed(2)}` : fmtS(m.importe||0);
+    // El monto que ya está cargado sale de montoPropioDeCambio(): mirar m.moneda no alcanza,
+    // porque una inversión guarda el monto en USD en importeUSD y deja moneda sin definir. Por
+    // eso una compra MEP en dólares se mostraba como "$0,00".
+    const propio=montoPropioDeCambio(m);
+    const enUSD=propio.moneda==="USD";
+    const monto=enUSD ? `USD ${propio.monto.toFixed(2)}` : fmtS(propio.monto);
     const fecha=String(m.fecha||"").split("-").reverse().join("/");
     const pide=c.faltaPata==="usd" ? "cuántos dólares recibiste" : "cuántos pesos pagaste";
     return `<div class="inset mb-10">
@@ -244,8 +254,13 @@ async function completarCandidato(idStr){
   const id=Number(idStr);
   const mov=movs.find(m=>m.id===id);
   if(!mov){ showToast("Ese movimiento ya no está"); renderMigrarCambios(); return; }
-  const enUSD=mov.moneda==="USD";
-  const propio = enUSD ? `USD ${(mov.importeOrig||0).toFixed(2)}` : fmtS(mov.importe||0);
+  // Misma corrección que en el render: la moneda de la mitad cargada la decide
+  // montoPropioDeCambio(), no m.moneda. Con lo de antes, a una compra MEP que YA estaba en
+  // dólares se le preguntaba cuántos dólares recibió — la pregunta equivocada, y completar no
+  // hacía nada.
+  const info=montoPropioDeCambio(mov);
+  const enUSD=info.moneda==="USD";
+  const propio = enUSD ? `USD ${info.monto.toFixed(2)}` : fmtS(info.monto);
   const pregunta = enUSD
     ? `Este movimiento dice que salieron ${propio}.\n\n¿Cuántos PESOS pagaste por esos dólares?`
     : `Este movimiento dice que salieron ${propio}.\n\n¿Cuántos DÓLARES recibiste a cambio?`;
