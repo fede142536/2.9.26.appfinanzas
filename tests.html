@@ -325,6 +325,100 @@ test("un mes futuro con gastos frecuentes no entra en el año", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// CHIPS DE INVERSIÓN POR TICKER
+// ═══════════════════════════════════════════
+grupo("Chips por ticker en la vista Todos");
+
+// Los montos de inversión son de otra escala que el sueldo y el supermercado: mezclados en
+// Ingresos y Gastos tapan la lectura de todos los días. Van aparte, un chip por ticker, y el
+// Balance los vuelve a sumar porque el bolsillo sí los siente:
+//     Balance = Ingresos − Gastos + Σ (neto de cada ticker)
+const MES_INV = [
+  {id:1, tipo:"Ingreso", cat:"Sueldo", importe:2000000, fecha:"2026-08-04", moneda:"ARS"},
+  {id:2, tipo:"Gasto",   cat:"Supermercado", importe:500000, fecha:"2026-08-06", moneda:"ARS"},
+  // BCAHA: entra más de lo que sale (rescataste) → neto +100.000
+  {id:3, tipo:"Inversion", subcat:"FCI Suscripción",     ticker:"BCAHA", cat:"FCI", importe:900000,  fecha:"2026-08-10"},
+  {id:4, tipo:"Inversion", subcat:"FCI Rescate capital", ticker:"BCAHA", cat:"FCI", importe:1000000, fecha:"2026-08-20"},
+  // YPF: solo compraste → neto −300.000 (plata puesta, todavía sin rescatar)
+  {id:5, tipo:"Inversion", subcat:"Acciones Compra",     ticker:"YPF",   cat:"Acciones", importe:300000, fecha:"2026-08-12"}
+];
+
+test("el neto por ticker es rescates menos compras", ()=>{
+  const n=netoPorTickerDelPeriodo(MES_INV);
+  const bcaha=n.find(t=>t.ticker==="BCAHA"), ypf=n.find(t=>t.ticker==="YPF");
+  igual(bcaha.ars, 100000, "1.000.000 rescatados − 900.000 suscriptos");
+  igual(ypf.ars, -300000, "solo compraste: la plata está puesta ahí");
+  igual(bcaha.movs, 2);
+});
+
+test("los tickers vienen ordenados de mayor a menor", ()=>{
+  // Para que los que tienen más plata en juego queden primero entre los chips.
+  const n=netoPorTickerDelPeriodo(MES_INV);
+  igual(n.map(t=>t.ticker), ["YPF","BCAHA"], "300.000 en juego pesa más que 100.000");
+});
+
+test("Ingresos y Gastos quedan limpios de inversiones", async ()=>{
+  const txt=await chipsDeMovsAnimados(MES_INV, "Todos", "", "2026-08");
+  cierto(txt.includes("2.000.000"), "Ingresos tiene que ser solo el sueldo: " + txt);
+  cierto(txt.includes("500.000"), "Gastos tiene que ser solo el supermercado: " + txt);
+  cierto(!txt.includes("2.900.000") && !txt.includes("3.000.000"),
+         "se colaron los rescates en Ingresos: " + txt);
+  cierto(!txt.includes("1.400.000") && !txt.includes("1.700.000"),
+         "se colaron las compras en Gastos: " + txt);
+});
+
+test("hay un chip por cada ticker operado en el mes", ()=>{
+  const txt=chipsDeMovs(MES_INV, "Todos", "", "2026-08");
+  cierto(txt.includes("BCAHA"), "falta el chip de BCAHA: " + txt);
+  cierto(txt.includes("YPF"), "falta el chip de YPF: " + txt);
+});
+
+test("el neto positivo lleva signo + y el negativo no es rojo de gasto", ()=>{
+  const dom=document.createElement("div");
+  document.body.appendChild(dom);
+  try{
+    dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
+    const chips=[...dom.querySelectorAll(".chip")].map(c=>c.innerHTML);
+    const bcaha=chips.find(c=>c.includes("BCAHA")), ypf=chips.find(c=>c.includes("YPF"));
+    cierto(/\+\$?1?00\.000/.test(bcaha.replace(/<[^>]*>/g,"")), "el neto positivo va con signo +: " + bcaha);
+    cierto(ypf.includes("--invest"), "poner plata en una inversión no es perderla: no va en rojo de gasto. " + ypf);
+    cierto(bcaha.includes("--success"), "el neto positivo va en verde: " + bcaha);
+  } finally { dom.remove(); }
+});
+
+test("Balance = Ingresos − Gastos + la suma de los netos", async ()=>{
+  // 2.000.000 − 500.000 + (100.000 − 300.000) = 1.300.000
+  const txt=await chipsDeMovsAnimados(MES_INV, "Todos", "", "2026-08");
+  cierto(txt.includes("1.300.000"), "el balance no cierra con sus propias partes: " + txt);
+  igual(netoInvTotal(MES_INV).ars, -200000);
+});
+
+test("un mes sin inversiones no agrega chips de más", async ()=>{
+  const txt=await chipsDeMovsAnimados(MES_INV.slice(0,2), "Todos", "", "2026-08");
+  cierto(!txt.includes("◈"), "aparecieron chips de inversión sin inversiones: " + txt);
+  cierto(txt.includes("1.500.000"), "y el balance sigue siendo ingresos − gastos: " + txt);
+});
+
+test("los tickers en dólares no se mezclan con los pesos", ()=>{
+  const conUSD=[...MES_INV,
+    {id:6, tipo:"Inversion", subcat:"Bonos USD Venta", ticker:"AL30D", cat:"Bonos USD", importe:0, importeUSD:25.55, moneda:"USD", fecha:"2026-08-15"}];
+  const n=netoPorTickerDelPeriodo(conUSD);
+  const al30=n.find(t=>t.ticker==="AL30D");
+  igual(al30.usd, 25.55);
+  igual(al30.ars, 0, "una venta en dólares no puede sumar pesos");
+  igual(netoInvTotal(conUSD).ars, -200000, "y no puede ensuciar el neto en pesos");
+});
+
+test("un traspaso no entra al balance de caja por ningún lado", async ()=>{
+  // No lo gastaste (no está en Gastos) y tampoco es plata que te entró (no está en Ingresos).
+  const conTraspaso=[...MES_INV.slice(0,2),
+    {id:7, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears", importe:520382,
+     fecha:"2026-08-18", usaAhorro:true, traspaso:true, moneda:"ARS"}];
+  const txt=await chipsDeMovsAnimados(conTraspaso, "Todos", "", "2026-08");
+  cierto(txt.includes("1.500.000"), "el traspaso movió el balance: " + txt);
+});
+
+// ═══════════════════════════════════════════
 // TRASPASOS
 // ═══════════════════════════════════════════
 grupo("Traspasos: plata que cambia de bolsillo");
@@ -2184,7 +2278,7 @@ grupo("Chips al filtrar por categoría");
 // El bug: la ganancia de inversión del mes (que es del mes entero, no de una categoría) se le
 // sumaba a cualquier categoría filtrada. Con datos reales, agosto 2026: un único movimiento de
 // Salario de $1.607.621,32 mostraba $1.655.232 — los $47.610 de más eran la ganancia del FCI.
-function chipsDeMovs(lista, filtroTab, categoria, ym){
+function chipsDeMovs(lista, filtroTab, categoria, ym, devolverHTML){
   const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list","mov-mes-label"];
   const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
   // `filtro` se declara con let en estado-categorias.js, así que es global pero NO vive en
@@ -2192,8 +2286,30 @@ function chipsDeMovs(lista, filtroTab, categoria, ym){
   // todos en $0, mostrando la vista "Todos").
   const prev={movs, filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
   movs=lista; filtro=filtroTab; filtroCategoria=categoria||""; mesActual=ym||"2026-08"; filtroFecha=null;
-  try{ renderMovs(); return creados[0].innerText || creados[0].textContent; }
+  try{ renderMovs(); return devolverHTML ? creados[0].innerHTML : (creados[0].innerText || creados[0].textContent); }
   finally{
+    creados.forEach(e=>e.remove());
+    movs=prev.movs; filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff;
+  }
+}
+
+function chipsDeMovsHTML(lista, filtroTab, categoria, ym){
+  return chipsDeMovs(lista, filtroTab, categoria, ym, true);
+}
+
+// Los chips de Ingresos, Gastos y Balance se llenan con animarNumero(), que arranca en $0 y va
+// subiendo por requestAnimationFrame. Leerlos apenas renderiza da siempre $0 — hay que esperar a
+// que la animación termine. Los chips por ticker no se animan, así que esos se leen directo.
+async function chipsDeMovsAnimados(lista, filtroTab, categoria, ym){
+  const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list","mov-mes-label"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const prev={movs, filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
+  movs=lista; filtro=filtroTab; filtroCategoria=categoria||""; mesActual=ym||"2026-08"; filtroFecha=null;
+  try{
+    renderMovs();
+    await new Promise(r=>setTimeout(r, 900));   // la animación dura 700 ms
+    return creados[0].innerText || creados[0].textContent;
+  } finally {
     creados.forEach(e=>e.remove());
     movs=prev.movs; filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff;
   }

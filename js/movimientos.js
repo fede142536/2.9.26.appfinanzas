@@ -778,28 +778,45 @@ function renderMovs(){
     arrastreEl.style.display="none";
     document.getElementById("mov-tarjeta-filtro").style.display="none";
   } else {
-    // Vista "Todos": ingresos / gastos / balance del mes
-    // INGRESOS: ingresos puros + la ganancia de inversión del mes.
-    // GASTOS  : consumo. Los depósitos al fondo quedan afuera; los retiros, adentro.
-    const ingTotal=totales.ingresosTotal;
-    const gasTotal=totales.gastosTotal;
-    // Lo que pusiste a trabajar este mes: al fondo de ahorro + capital neto a inversiones.
-    // No entra al balance — sigue siendo tuyo, solo cambió de lugar.
-    const guardado=aho+((flujoInv&&flujoInv.ars)||0);
+    // Vista "Todos": ingresos / gastos / balance del mes, más un chip por cada ticker operado.
+    //
+    // Ingresos y Gastos quedan LIMPIOS de inversiones. Los montos que movés al mercado son de
+    // otra escala que tu sueldo y el supermercado: mezclados ahí tapan la única lectura que se
+    // mira todos los días, que es cuánto entró y cuánto se fue.
+    //
+    // Las inversiones van aparte, un chip por ticker con su neto del mes. Y el Balance las vuelve
+    // a sumar, porque el bolsillo sí las siente:
+    //
+    //     Balance = Ingresos − Gastos + Σ (neto de cada ticker)
+    //
+    // INGRESOS: ingresos puros + los retiros del fondo que se consumieron. El retiro entra a la
+    //           mano y su compra sale, así que se cancelan solos y el fondo baja: es lo que pasó.
+    //           Un traspaso no entra por ningún lado — no lo gastaste, solo cambió de bolsillo.
+    // GASTOS  : consumo (esConsumo).
+    const retirosGastados=mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda!=="USD")
+      .reduce((s,m)=>s+(m.importe||0),0);
+    const ingTotal=totales.ingresos+retirosGastados;
+    const gasTotal=totales.gastos;
 
-    // Totales USD del mes (gastos e ingresos en moneda extranjera)
-    // Gastos USD: gastos puros + compras de inversión en USD (sin ahorros)
-    // Misma regla en dólares: el consumo resta, el capital invertido no, y de las inversiones
-    // solo suma el resultado.
-    const gastosUSDTotal=mesMovs.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
-      + Math.max(-(ganInv.usd||0), 0);
+    // Un chip por ticker: neto = rescates − suscripciones. Negativo significa "hay plata puesta
+    // ahí, todavía sin rescatar", no que hayas perdido; por eso va en color de inversión y no en
+    // rojo de gasto.
+    const netosTicker=netoPorTickerDelPeriodo(mesMovs);
+    const netoInv=netoInvTotal(mesMovs);
+    const balCaja=Math.round((ingTotal-gasTotal+netoInv.ars)*100)/100;
+
+    // Lo que pusiste a trabajar este mes en el fondo de ahorro (las inversiones ya tienen su chip).
+    const guardado=aho;
+
+    // Misma separación en dólares.
+    const gastosUSDTotal=mesMovs.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
     const ingresosUSDTotal=mesMovs.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
-      + Math.max(ganInv.usd||0, 0);
+      + mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
 
     let chipsHtml=`
       <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtTotal(0)}</div></div>
       <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>
-      <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balMes>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
+      <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balCaja>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
     if(Math.round(guardado)!==0){
       chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Guardado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(guardado)}</div></div>`;
     }
@@ -809,19 +826,29 @@ function renderMovs(){
     if(gastosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Gastos USD</div><div class="chip-val negative">USD ${gastosUSDTotal.toFixed(2)}</div></div>`;
     }
+    // Los chips de inversión van al final, ya ordenados de mayor a menor por el módulo.
+    netosTicker.forEach(t=>{
+      const etiqueta=`◈ ${escapeHtml(t.ticker)}`;
+      if(Math.round(t.ars)!==0){
+        const color=t.ars>=0?"var(--success)":"var(--invest)";
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${color}">${etiqueta}</div><div class="chip-val" style="color:${color}">${t.ars>0?"+":""}${fmtTotal(t.ars)}</div></div>`;
+      }
+      if(Math.abs(t.usd)>=0.01){
+        const colorU=t.usd>=0?"var(--success)":"var(--invest)";
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorU}">${etiqueta} USD</div><div class="chip-val" style="color:${colorU}">${t.usd>0?"+":""}USD ${t.usd.toFixed(2)}</div></div>`;
+      }
+    });
     document.getElementById("mov-summary").innerHTML=chipsHtml;
     animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
-    animarNumero(document.getElementById("chip-mov-bal"), balMes, 700, fmtTotal);
+    animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
     // Línea informativa: extras del mes (sin arrastre)
     const partes=[];
-    // Los movimientos de inversión no son ingreso ni gasto, así que acá se cuentan como lo que
-    // son: capital que entró o salió, y aparte el resultado, que es lo único que mueve el balance.
-    if(invIngresos>0 || invGastos>0){
-      partes.push(`◈ Movido: <strong>${fmtS(invGastos)} → ${fmtS(invIngresos)}</strong>`);
-    }
+    // El movido bruto ya lo dicen los chips por ticker. Acá queda el resultado, que es otra cosa:
+    // el neto de un chip es el FLUJO del mes (negativo si pusiste plata y no la sacaste), y esto
+    // es lo que realmente ganaste o perdiste, llevando el capital por ticker desde el principio.
     if(Math.round(ganInv.ars)!==0){
       const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
       partes.push(`◈ Resultado: <strong style="color:${cg}">${ganInv.ars>=0?"+":""}${fmtS(ganInv.ars)}</strong>`);
