@@ -177,7 +177,7 @@ function guardarNuevaCat(){
   if(!nombre){showToast("Ingresá un nombre");return;}
   const subs=subsRaw?subsRaw.split(",").map(s=>s.trim()).filter(Boolean):["Otros"];
   if(!custom[t])custom[t]={};custom[t][nombre]=subs;
-  if(nuevoCatIcono){ iconsCustom[nombre]=nuevoCatIcono; saveIconsCustom(); }
+  if(iconoSeguro(nuevoCatIcono)){ iconsCustom[nombre]=iconoSeguro(nuevoCatIcono); saveIconsCustom(); }
   save();
   document.getElementById("new-cat-name").value="";document.getElementById("new-cat-subs").value="";
   nuevoCatIcono=null; document.getElementById("new-cat-icon-preview").textContent="📦";

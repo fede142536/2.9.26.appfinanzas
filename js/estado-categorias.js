@@ -126,14 +126,37 @@ function iconoPorPalabra(cat){
   return "";
 }
 
+// Un ícono es un emoji o una letra. Nunca tiene por qué contener HTML.
+//
+// Importa porque getIcon() se interpola en innerHTML en más de quince lugares, y su valor puede
+// venir de iconsCustom, que se restaura TAL CUAL desde un backup. Un backup preparado a mala fe
+// podía traer, en vez de un emoji, código que se ejecutaba al renderizar cualquier pantalla —
+// con la app ya desbloqueada y los datos descifrados en memoria.
+//
+// Se corta acá y no en cada interpolación a propósito: escapar en dieciséis lugares es cuestión
+// de tiempo hasta que alguien agregue el diecisiete y se olvide. Además el valor sale limpio
+// también para los usos con textContent, donde escapar mostraría "&amp;" literal.
+const ICONO_MAX_LARGO = 8;
+function iconoSeguro(valor){
+  const t=String(valor==null ? "" : valor).trim();
+  if(!t || t.length>ICONO_MAX_LARGO) return "";
+  // Cualquier carácter con el que se pueda abrir una etiqueta o un atributo lo descalifica.
+  if(/[<>&"'`]/.test(t)) return "";
+  return t;
+}
+
 function getIcon(cat, fallback){
   // Sin fallback explícito se usa la inicial en vez de un punto: dos categorías distintas
   // se veían exactamente igual, y la letra al menos las diferencia de un vistazo.
-  if(fallback===undefined){
+  // Con fallback explícito se respeta lo que pidió quien llama, incluido el vacío: los chips
+  // de filtro pasan "" justamente para no mostrar nada cuando la categoría no tiene ícono.
+  const sinFallback = fallback===undefined;
+  if(sinFallback){
     const t=String(cat||"").trim();
     fallback = t ? t[0].toUpperCase() : "•";
   }
-  return iconsCustom[cat] || ICONS[cat] || iconoPorPalabra(cat) || fallback;
+  return iconoSeguro(iconsCustom[cat]) || iconoSeguro(ICONS[cat]) || iconoSeguro(iconoPorPalabra(cat))
+      || iconoSeguro(fallback) || (sinFallback ? "•" : "");
 }
 
 // Set curado de emojis para elegir, agrupados por tema (se muestran todos juntos en una grilla)
@@ -152,7 +175,7 @@ function elegirIcono(ic){
     nuevoCatIcono=ic;
     document.getElementById("new-cat-icon-preview").textContent=ic;
   } else if(iconPickerTarget && iconPickerTarget.mode==="edit"){
-    iconsCustom[iconPickerTarget.cat]=ic;
+    iconsCustom[iconPickerTarget.cat]=iconoSeguro(ic);
     saveIconsCustom();
     renderCatManager();
     buildCats(); buildTcCats(); buildInvCats();

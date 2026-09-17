@@ -221,7 +221,7 @@ function closeMetaModal(){document.getElementById("modal-meta").classList.remove
 function guardarMeta(){
   const nombre=document.getElementById("meta-nombre").value.trim();
   const objetivo=parseFloat(document.getElementById("meta-objetivo").value)||0;
-  const emoji=document.getElementById("meta-emoji").value||"🎯";
+  const emoji=iconoSeguro(document.getElementById("meta-emoji").value) || "🎯";
   if(!nombre||objetivo<=0){showToast("Completá nombre y objetivo");return;}
   metas.push({id:Date.now(),nombre,objetivo,actual:0,emoji});
   save();closeMetaModal();
@@ -234,14 +234,14 @@ function renderMetas(){
   const depCard=document.getElementById("depositar-card");
   if(!metas.length){el.innerHTML=`<div class="empty" style="padding:24px"><div class="empty-icon">🎯</div>Creá tu primera meta</div>`;depCard.style.display="none";return;}
   depCard.style.display="block";
-  document.getElementById("dep-meta").innerHTML=metas.map(m=>`<option value="${m.id}">${m.emoji} ${escapeHtml(m.nombre)}</option>`).join("");
+  document.getElementById("dep-meta").innerHTML=metas.map(m=>`<option value="${m.id}">${iconoSeguro(m.emoji)||"🎯"} ${escapeHtml(m.nombre)}</option>`).join("");
   el.innerHTML=metas.map(m=>{
     const pct=Math.min(100,Math.round((m.actual/m.objetivo)*100));
     const resta=Math.max(0,m.objetivo-m.actual);
     return `<div style="padding:12px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div style="font-size:14px;font-weight:600">${m.emoji} ${escapeHtml(m.nombre)}</div>
+          <div style="font-size:14px;font-weight:600">${iconoSeguro(m.emoji)||"🎯"} ${escapeHtml(m.nombre)}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmt(m.actual)} de ${fmt(m.objetivo)} · ${pct}% logrado</div>
           ${resta>0?`<div style="font-size:11px;color:var(--save)">Faltan ${fmt(resta)}</div>`:`<div style="font-size:11px;color:var(--success);font-weight:600">✓ Meta alcanzada!</div>`}
         </div>
