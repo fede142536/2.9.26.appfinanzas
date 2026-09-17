@@ -70,6 +70,7 @@
 <!-- La app real. NO se carga js/main.js a propósito: ese archivo arranca la app
      (bootApp), y acá solo queremos las funciones, no la aplicación andando. -->
 <script src="js/estado-categorias.js"></script>
+<script src="js/resultado-inversiones.js"></script>
 <script src="js/render-comun.js"></script>
 <script src="js/form-cargar.js"></script>
 <script src="js/movimientos.js"></script>
@@ -244,40 +245,43 @@ const SUELDO         = {tipo:"Ingreso",  cat:"Sueldo", importe:1000000};
 
 test("cada movimiento se clasifica una sola vez", ()=>{
   cierto(esGasto(GASTO_NORMAL) && !esDepositoAhorro(GASTO_NORMAL) && !esRetiroAhorro(GASTO_NORMAL), "el gasto normal se clasificó mal");
-  cierto(esGasto(DEPOSITO) && esDepositoAhorro(DEPOSITO), "un depósito al fondo también es un gasto");
+  cierto(esGasto(DEPOSITO) && esDepositoAhorro(DEPOSITO), "un depósito al fondo sigue teniendo tipo Gasto");
   cierto(esGasto(COMPRA_CON_AHO) && esRetiroAhorro(COMPRA_CON_AHO), "una compra pagada con ahorros sigue siendo un gasto");
   cierto(!esGasto(SUELDO), "un ingreso no es un gasto");
-  cierto(esIngreso(SUELDO) && esIngreso(COMPRA_CON_AHO), "el retiro devuelve plata a la mano: cuenta como ingreso");
-  cierto(!esIngreso(DEPOSITO) && !esIngreso(GASTO_NORMAL), "un gasto común no puede contar como ingreso");
+  cierto(esIngreso(SUELDO), "el sueldo es un ingreso");
+  // Sacar plata de tu propio fondo no te hace más rico: el balance mide cuánto creció tu
+  // patrimonio, no cuánta plata tenés en la mano. Lo que baja el patrimonio es la compra que
+  // pagaste con ese retiro, y eso ya está contado como gasto.
+  cierto(!esIngreso(COMPRA_CON_AHO), "un retiro del fondo no puede contar como ingreso");
+  cierto(!esIngreso(DEPOSITO) && !esIngreso(GASTO_NORMAL), "un gasto no puede contar como ingreso");
 });
 
-// El bug: el retiro sumaba como ingreso y la compra no restaba NUNCA, así que el balance
-// quedaba inflado en exactamente la plata que sacabas del fondo.
-test("pagar con ahorros no infla el balance", ()=>{
+test("guardar plata no es gastarla", ()=>{
+  const t=totalesDePlata([SUELDO, GASTO_NORMAL, DEPOSITO]);
+  igual(t.gastos, 200000, "el depósito al fondo se coló en los gastos: esa plata sigue siendo tuya");
+  igual(t.depositos, 180000, "pero tiene que seguir siendo visible como depósito");
+  // Cobraste 1.000.000 y consumiste 200.000: creciste 800.000, estén donde estén (600.000 en la
+  // cuenta y 180.000 en el fondo... más los 20.000 que quedaron dando vueltas).
+  igual(t.balance, 800000, "guardar en el fondo no puede bajar el balance");
+});
+
+test("gastar plata del fondo sí es un gasto", ()=>{
   const t=totalesDePlata([SUELDO, GASTO_NORMAL, COMPRA_CON_AHO]);
   igual(t.gastos, 500000, "la compra pagada con ahorros tiene que estar en los gastos");
   igual(t.retiros, 300000, "el retiro tiene que reconocerse");
-  // Cobraste 1.000.000, gastaste 500.000, sacaste 300.000 del fondo → te quedan 800.000.
-  igual(t.balance, 800000, "el balance se infló con la plata sacada del fondo");
-});
-
-test("un retiro no cambia el balance por sí solo", ()=>{
-  const sinRetiro=totalesDePlata([SUELDO, GASTO_NORMAL]);
-  const conRetiro=totalesDePlata([SUELDO, GASTO_NORMAL, COMPRA_CON_AHO]);
-  // El retiro entra y su compra sale: se cancelan. Lo que baja es el fondo, no el balance:
-  // esa plata ya se había descontado de la mano cuando la guardaste.
-  igual(conRetiro.balance, sinRetiro.balance,
-    "gastar plata del fondo no puede mover el balance del mes: entra por el retiro y sale por la compra");
-  igual(conRetiro.gastos, sinRetiro.gastos + 300000,
-    "pero sí tiene que aparecer en los gastos: la plata se gastó");
+  // Antes el retiro sumaba 300.000 como ingreso y el balance daba 800.000, como si gastar del
+  // fondo fuera gratis. Consumiste 500.000 de 1.000.000: creciste 500.000.
+  igual(t.balance, 500000, "el retiro volvió a sumar como ingreso y tapó el gasto");
 });
 
 test("cada peso se cuenta una sola vez en la cadena completa", ()=>{
-  // Guardás 180.000, después sacás 180.000 y los gastás: consumiste 180.000, no 0 ni 360.000.
+  // Guardás 180.000 y después sacás esos 180.000 para gastarlos: consumiste 180.000 en total,
+  // no 0 ni 360.000. Lo que cambió respecto del modelo viejo es CUÁNDO se cuenta: antes pesaba
+  // al guardar, ahora al gastar, que es cuando realmente dejás de tener la plata.
   const guardar=totalesDePlata([DEPOSITO]);
   const gastarDelFondo=totalesDePlata([{tipo:"Gasto", cat:"Comida", importe:180000, usaAhorro:true}]);
-  igual(guardar.balance, -180000, "guardar en el fondo saca esa plata de la mano");
-  igual(gastarDelFondo.balance, 0, "sacar del fondo y gastarlo en el acto no cambia la plata a mano");
+  igual(guardar.balance, 0, "guardar no cambia el patrimonio: la plata sigue siendo tuya");
+  igual(gastarDelFondo.balance, -180000, "gastarla sí lo baja, y ahí se cuenta");
   igual(guardar.balance + gastarDelFondo.balance, -180000, "la cadena entera tiene que costar 180.000, una sola vez");
 });
 
@@ -285,8 +289,149 @@ test("los depósitos y retiros siguen siendo distinguibles", ()=>{
   const t=totalesDePlata([SUELDO, GASTO_NORMAL, DEPOSITO, COMPRA_CON_AHO]);
   igual(t.depositos, 180000, "se perdió el desglose de lo ahorrado");
   igual(t.retiros, 300000, "se perdió el desglose de lo retirado");
-  igual(t.gastos, 680000, "los gastos son el consumo + el depósito + la compra con ahorros");
-  igual(t.balance, 1000000 + 300000 - 680000, "el balance no cierra con sus propias partes");
+  igual(t.gastos, 500000, "los gastos son el consumo + la compra con ahorros, sin el depósito");
+  igual(t.balance, 1000000 - 500000, "el balance no cierra con sus propias partes");
+});
+
+// ═══════════════════════════════════════════
+// EL AÑO DEL DASHBOARD NO INCLUYE MESES QUE NO PASARON
+// ═══════════════════════════════════════════
+grupo("Dashboard: meses futuros");
+
+test("el año no cuenta meses que todavía no pasaron", async ()=>{
+  // Los gastos frecuentes se proyectan hacia adelante, pero los ingresos de un mes que no pasó
+  // no están cargados. Contarlos sumaba meses de solo-gastos y daba vuelta el signo del año.
+  const js=await (await fetch("js/dashboard.js")).text();
+  const i=js.indexOf("function getDashData");
+  const cuerpo=js.slice(i, js.indexOf("\n}", i));
+  cierto(/ym\s*>\s*hastaYM/.test(cuerpo) || /ym\s*>\s*currentYM\(\)/.test(cuerpo),
+         "getDashData volvió a recorrer los 12 meses sin cortar en el mes actual");
+});
+
+test("un mes futuro con gastos frecuentes no entra en el año", ()=>{
+  // Con el mes actual en marzo, diciembre no puede aportar nada aunque haya un frecuente activo.
+  const mesAntes=mesActual;
+  const movsAntes=movs;
+  try{
+    movs=[{id:1, tipo:"Ingreso", cat:"Sueldo", importe:1000000, fecha:"2026-03-05"},
+          {id:2, tipo:"Gasto", cat:"Netflix", importe:9000, fecha:"2026-01-01", frecuente:true}];
+    const hoy=currentYM();
+    const anio=hoy.slice(0,4);
+    const d=getDashData(anio);
+    const futuros=d.monthly.filter(x=>x.mes>hoy);
+    igual(futuros.length, 0, "se colaron meses posteriores al actual: " + futuros.map(x=>x.mes).join(", "));
+  } finally { movs=movsAntes; mesActual=mesAntes; }
+});
+
+// ═══════════════════════════════════════════
+// RESULTADO DE INVERSIONES
+// ═══════════════════════════════════════════
+grupo("Resultado de inversiones");
+
+// Comprar una inversión no es un gasto y venderla no es un ingreso: es la misma plata cambiando
+// de lugar. Lo único que mueve tu patrimonio es el RESULTADO.
+let _idInv=1000;
+function compra(fecha, ticker, monto, extra){
+  return Object.assign({id:++_idInv, tipo:"Inversion", subcat:"FCI Suscripción", ticker, fecha, importe:monto}, extra||{});
+}
+function venta(fecha, ticker, monto, extra){
+  return Object.assign({id:++_idInv, tipo:"Inversion", subcat:"FCI Rescate capital", ticker, fecha, importe:monto}, extra||{});
+}
+
+test("primero recuperás capital, después ganás", ()=>{
+  const r=calcularResultadoInv([compra("2026-04-01","BCMMA",250000), venta("2026-05-01","BCMMA",252000)]);
+  igual(r.gananciaPorMes["2026-05"].ars, 2000, "de una venta de 252.000 sobre 250.000 puestos, lo ganado son 2.000");
+  igual(r.gananciaPorMes["2026-04"].ars, 0, "el mes en que solo compraste no tiene ganancia");
+  igual(r.capitalPorTicker["BCMMA"].ars, 0, "después de recuperar todo no queda capital");
+});
+
+test("un mes en que solo ponés plata no figura como pérdida", ()=>{
+  // Esto es lo que hacía mal el chip viejo: calculaba rescates − suscripciones, así que un mes
+  // de solo invertir daba un número negativo enorme como si hubieras perdido.
+  const r=calcularResultadoInv([compra("2026-04-01","BCMMA",250000)]);
+  igual(r.gananciaPorMes["2026-04"].ars, 0, "poner plata no es perderla");
+  igual(r.capitalPorTicker["BCMMA"].ars, 250000, "esa plata sigue siendo tuya, invertida");
+});
+
+test("comprar y vender el mismo día sale bien", ()=>{
+  // El caso real: YPF, 10/09/2026. Con las dos operaciones en la misma fecha, ordenar solo por
+  // fecha dejaba la venta primero, sin capital detrás, y la ganancia daba 992.169 en vez de 8.878.
+  const c=compra("2026-09-10","YPF",983290.54); c.id=1789047881839;
+  const v=venta("2026-09-10","YPF",1057359.87);  v.id=1789054597970;
+  const previa=compra("2026-09-02","YPF",65190.92);
+  const r=calcularResultadoInv([v, c, previa]);   // a propósito desordenados
+  igual(r.gananciaPorMes["2026-09"].ars, 8878.41, "el desempate dentro del mismo día tiene que ser por id");
+});
+
+test("una venta parcial no inventa ganancia", ()=>{
+  const r=calcularResultadoInv([compra("2026-04-01","X",100000), venta("2026-05-01","X",40000)]);
+  igual(r.gananciaPorMes["2026-05"].ars, 0, "sacar parte del capital no es ganancia");
+  igual(r.capitalPorTicker["X"].ars, 60000);
+});
+
+test("vender a pérdida se reconoce como pérdida", ()=>{
+  const r=calcularResultadoInv([compra("2026-04-01","X",100000), venta("2026-05-01","X",90000),
+                                venta("2026-06-01","X",0)]);
+  // Mientras quede capital sin recuperar no se sabe si es pérdida: podés estar esperando.
+  igual(r.capitalPorTicker["X"].ars, 10000, "quedan 10.000 de capital sin recuperar");
+});
+
+test("cada ticker lleva su propia cuenta", ()=>{
+  const r=calcularResultadoInv([compra("2026-04-01","A",100000), compra("2026-04-01","B",50000),
+                                venta("2026-05-01","B",55000)]);
+  igual(r.gananciaPorMes["2026-05"].ars, 5000, "la ganancia de B no puede taparse con el capital de A");
+  igual(r.capitalPorTicker["A"].ars, 100000);
+});
+
+test("los pesos y los dólares no se mezclan", ()=>{
+  const r=calcularResultadoInv([
+    compra("2026-04-01","AL30",0,{importeUSD:500, moneda:"USD"}),
+    venta("2026-05-01","AL30",0,{importeUSD:520, moneda:"USD"}),
+    compra("2026-04-01","AL30",100000)
+  ]);
+  igual(r.gananciaPorMes["2026-05"].usd, 20, "la ganancia en dólares se calcula contra el capital en dólares");
+  igual(r.gananciaPorMes["2026-05"].ars, 0, "una venta en dólares no puede generar ganancia en pesos");
+  igual(r.capitalPorTicker["AL30"].ars, 100000, "el capital en pesos sigue intacto");
+});
+
+test("una venta sin su compra cargada se nota, no se esconde", ()=>{
+  // Si la compra no está (se hizo antes de usar la app), toda la venta cuenta como ganancia.
+  // Es deliberado: queda un número llamativo que invita a cargar la operación que falta.
+  const r=calcularResultadoInv([venta("2026-05-01","VIEJO",300000)]);
+  igual(r.gananciaPorMes["2026-05"].ars, 300000);
+  igual(r.eventos.length, 1);
+  igual(r.eventos[0].ticker, "VIEJO");
+});
+
+test("rotar la misma plata no infla ingresos ni gastos", ()=>{
+  // El problema de fondo, en chico: 250.000 dando 12 vueltas con 2.000 de ganancia cada una.
+  const lista=[];
+  for(let i=1;i<=12;i++){
+    const mm=String(i).padStart(2,"0");
+    lista.push(compra("2026-"+mm+"-05","FCI",250000));
+    lista.push(venta("2026-"+mm+"-25","FCI",252000));
+  }
+  const r=calcularResultadoInv(lista);
+  const total=Object.values(r.gananciaPorMes).reduce((s,g)=>s+g.ars,0);
+  igual(total, 24000, "la ganancia del año son 12 × 2.000, no los 3.024.000 que se rescataron");
+  igual(r.capitalPorTicker["FCI"].ars, 0);
+});
+
+test("el balance del mes suma la ganancia y resta la pérdida", ()=>{
+  const conGanancia=totalesDePlata([SUELDO, GASTO_NORMAL], {ars:5000});
+  igual(conGanancia.ingresosTotal, 1005000, "la ganancia suma a los ingresos");
+  igual(conGanancia.balance, 805000);
+  const conPerdida=totalesDePlata([SUELDO, GASTO_NORMAL], {ars:-5000});
+  igual(conPerdida.gastosTotal, 205000, "la pérdida suma a los gastos");
+  igual(conPerdida.balance, 795000);
+});
+
+test("sin dato de ganancia las inversiones son neutras", ()=>{
+  // totalesDePlata() ve una lista suelta: no puede saber si una venta fue ganancia. Ante la duda,
+  // neutro — nunca inflar.
+  const t=totalesDePlata([SUELDO, GASTO_NORMAL, compra("2026-04-01","X",900000), venta("2026-04-20","X",910000)]);
+  igual(t.gastos, 200000, "una compra de inversión no puede contarse como gasto");
+  igual(t.balance, 800000, "ni una venta como ingreso");
 });
 
 test("totalesDePlata tolera una lista vacía", ()=>{
@@ -1162,6 +1307,55 @@ test("los pesos salen del balance y los dólares entran, en la misma operación"
   const usd=conTarjetas([], ()=>resumenUSDdelAnio(patas, 2026));
   igual(usd.ing, 27, "y los dólares tienen que ENTRAR — esto es lo que antes no existía");
   igual(usd.neto, 27);
+});
+
+// Una compra de dólares por MEP se pudo cargar como inversión en vez de como gasto. Esas son
+// peores que las cargadas como gasto: el capital queda "puesto" en un ticker (AL30) que nunca se
+// va a vender, así que la cartera muestra esa plata eternamente invertida.
+const MEP_COMO_INVERSION = {id:5000, tipo:"Inversion", importe:39467.53, importeUSD:0,
+                            cat:"MEP", subcat:"MEP Compra", ticker:"AL30", fecha:"2026-09-03", cuenta:"Balanz"};
+const MEP_INV_EN_USD     = {id:5002, tipo:"Inversion", importe:0, importeUSD:54.21,
+                            cat:"MEP", subcat:"MEP Compra", ticker:"AL30", fecha:"2026-05-19", cuenta:"Balanz"};
+
+test("una compra MEP cargada como inversión aparece para migrar", ()=>{
+  const c=candidatosAMigrar([MEP_COMO_INVERSION]);
+  igual(c.length, 1, "se quedó afuera de la migración por no ser un Gasto");
+  igual(c[0].faltaPata, "usd", "está en pesos: lo que falta son los dólares que recibiste");
+});
+
+test("y también la que se cargó con el monto en dólares", ()=>{
+  // Una inversión guarda el monto USD en importeUSD, no en importeOrig: mirar solo m.moneda
+  // la daba por "en pesos" y pedía la mitad equivocada.
+  const c=candidatosAMigrar([MEP_INV_EN_USD]);
+  igual(c.length, 1);
+  igual(c[0].faltaPata, "ars", "está en dólares: lo que falta son los pesos que pagaste");
+});
+
+test("al completarla deja de ser una inversión", ()=>{
+  const r=completarCambioDesde(MEP_COMO_INVERSION, 27);
+  cierto(!!r, "no se pudo completar");
+  igual(r.sale.tipo, "Gasto", "si sigue siendo Inversion, esa plata queda como capital invertido para siempre");
+  igual(r.sale.ticker, undefined, "un cambio de moneda no tiene ticker");
+  igual(r.sale.importe, 39467.53);
+  igual(r.entra.tipo, "Ingreso");
+  igual(r.entra.moneda, "USD");
+  igual(r.entra.importeOrig, 27);
+  igual(r.montoARS, 39467.53); igual(r.montoUSD, 27);
+});
+
+test("completar la que estaba en dólares pide los pesos, no al revés", ()=>{
+  const r=completarCambioDesde(MEP_INV_EN_USD, 75731.37);
+  igual(r.sale.moneda, "USD"); igual(r.sale.importeOrig, 54.21);
+  igual(r.entra.moneda, "ARS"); igual(r.entra.importe, 75731.37);
+  igual(r.montoUSD, 54.21); igual(r.montoARS, 75731.37);
+});
+
+test("migrada, deja de figurar como capital invertido", ()=>{
+  const antes=calcularResultadoInv([MEP_COMO_INVERSION]);
+  igual(antes.capitalPorTicker["AL30"].ars, 39467.53, "hoy figura como plata puesta en AL30");
+  const r=completarCambioDesde(MEP_COMO_INVERSION, 27);
+  const despues=calcularResultadoInv([r.sale, r.entra]);
+  igual(despues.capitalPorTicker["AL30"], undefined, "después de migrarla ya no es una inversión");
 });
 
 test("un cambio no se puede crear a medias", ()=>{

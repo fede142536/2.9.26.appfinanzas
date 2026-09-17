@@ -81,15 +81,23 @@ function inflacionCompleta(ymOrigen, ymDestino){
 function getDashData(year){
   // Merge: historical hardcoded data + live imported movs
   const yrStr = String(year);
-  // Regla de balance:
-  // - INGRESOS = ingresos puros + retiros del ahorro (usaAhorro) + rescates de inversión
-  // - GASTOS = gastos puros + compras/suscripciones de inversión (sale cash, queda expuesto a riesgo de mercado)
-  // - El ahorro (depósito) sigue siendo neutral: es la misma plata líquida, solo cambia de "cajón".
+  // Regla de balance — la misma que totalesDePlata() en estado-categorias.js:
+  // - INGRESOS = ingresos puros + la ganancia de inversión reconocida en el mes
+  // - GASTOS   = consumo. Los depósitos al fondo quedan afuera (guardar no es gastar); los
+  //              retiros quedan adentro (gastar del fondo sí es consumo).
+  // - Las inversiones NO son ingreso ni gasto: son la misma plata cambiando de lugar. Contarlas
+  //   enteras hacía que un mes con un rescate grande figurara como el mejor del año.
   const meses12=["01","02","03","04","05","06","07","08","09","10","11","12"];
   const liveByMes = {};
   let hayDatosLive = false;
+  // Los gastos frecuentes se proyectan a los meses que vienen, pero los ingresos de un mes que
+  // todavía no pasó no están cargados. Contar esos meses es garantía de error: sumaban tres meses
+  // de gastos contra cero ingresos y daban vuelta el signo del año (2026 pasaba de +$1,84M a
+  // −$1,54M). Un mes que no ocurrió no entra en el balance del año.
+  const hastaYM = currentYM();
   meses12.forEach(mm=>{
     const ym = yrStr+"-"+mm;
+    if(ym > hastaYM) return;
     const movsDelMes = getMesMov(ym);
     if(movsDelMes.length) hayDatosLive = true;
     liveByMes[ym] = {mes:ym, ingreso:0, gasto:0};
@@ -97,22 +105,15 @@ function getDashData(year){
       if(m.moneda==="USD") return; // No mezclar USD con totales ARS
       if(m.tipo==="Ingreso"){
         liveByMes[ym].ingreso += (m.importe||0);
-      } else if(esGasto(m)){
-        // Todo gasto resta (consumo, depósito al fondo y compra pagada con ahorros).
+      } else if(esGasto(m) && !esDepositoAhorro(m)){
+        // Consumo. Lo que fue a parar al fondo no entra: sigue siendo tuyo.
         liveByMes[ym].gasto += (m.importe||0);
-        // Y si fue pagado con ahorros, el retiro además devuelve esa plata a la mano:
-        // las dos puntas se cancelan y el fondo baja. Antes solo se contaba la entrada.
-        if(esRetiroAhorro(m)) liveByMes[ym].ingreso += (m.importe||0);
-      } else if(m.tipo==="Inversion"){
-        if(isInvSalida(m)){
-          // Rescate/venta → suma como ingreso (entra cash)
-          liveByMes[ym].ingreso += (m.importe||0);
-        } else {
-          // Suscripción/compra → suma como gasto (sale cash al mercado)
-          liveByMes[ym].gasto += (m.importe||0);
-        }
       }
+      // Las inversiones no caen en ninguna de las dos: solo su resultado, que se suma abajo.
     });
+    const g=gananciaInvDelMes(ym).ars;
+    if(g>0) liveByMes[ym].ingreso += g;
+    else if(g<0) liveByMes[ym].gasto += -g;
   });
 
   // Merge with hist: live takes priority si hay datos del año
@@ -131,7 +132,7 @@ function getDashData(year){
 
   // Desglose por categoría usando los mismos movs expandidos
   // Gastos por categoría: gastos puros + compras/suscripciones de inversión (agrupadas)
-  // Ingresos por categoría: ingresos puros + retiros (agrupados como "De ahorros") + rescates (agrupados como "Inversiones (rescates)")
+  // Ingresos por categoría: ingresos puros + la ganancia de inversión, agrupada como "Resultado inversiones"
   let catData = {};
   let catIngreso = {};
   if(hayDatosLive){
@@ -139,23 +140,20 @@ function getDashData(year){
       const ym = yrStr+"-"+mm;
       getMesMov(ym).forEach(m=>{
         if(m.moneda==="USD") return;
-        if(esGasto(m)){
-          // Todo gasto entra en su categoría, incluidos los pagados con ahorros.
+        if(esGasto(m) && !esDepositoAhorro(m)){
+          // El consumo entra en su categoría, incluido lo pagado con ahorros. Lo que fue al
+          // fondo no: guardar plata no es un gasto, y mezclarlo acá haría que "Ahorro" apareciera
+          // como una de tus mayores categorías de gasto.
           catData[m.cat] = (catData[m.cat]||0) + (m.importe||0);
-          // El retiro además aparece como ingreso, agrupado bajo "De ahorros".
-          if(esRetiroAhorro(m)) catIngreso["De ahorros"] = (catIngreso["De ahorros"]||0) + (m.importe||0);
         } else if(m.tipo==="Ingreso"){
           catIngreso[m.cat] = (catIngreso[m.cat]||0) + (m.importe||0);
-        } else if(m.tipo==="Inversion"){
-          if(isInvSalida(m)){
-            // Rescates → ingreso, categoría agrupada
-            catIngreso["Inversiones (rescates)"] = (catIngreso["Inversiones (rescates)"]||0) + (m.importe||0);
-          } else {
-            // Compras/suscripciones → gasto, categoría agrupada
-            catData["Inversiones (compras)"] = (catData["Inversiones (compras)"]||0) + (m.importe||0);
-          }
         }
+        // Las inversiones ya no arman categorías propias de ingreso y gasto: lo que aparece es
+        // su resultado, abajo, porque los flujos brutos eran la misma plata yendo y viniendo.
       });
+      const g=gananciaInvDelMes(ym).ars;
+      if(g>0) catIngreso["Resultado inversiones"] = (catIngreso["Resultado inversiones"]||0) + g;
+      else if(g<0) catData["Pérdida en inversiones"] = (catData["Pérdida en inversiones"]||0) + (-g);
     });
     Object.keys(catData).forEach(k=>catData[k]=Math.round(catData[k]*100)/100);
     Object.keys(catIngreso).forEach(k=>catIngreso[k]=Math.round(catIngreso[k]*100)/100);
@@ -275,19 +273,9 @@ function renderDashCuentas(){
     if(m.moneda==="USD") return; // los USD se ven en otra card
     const c=m.cuenta||"Sin cuenta";
     if(!porCuenta[c]) porCuenta[c]={ing:0,gas:0,count:0};
+    // Misma regla que el balance: guardar no es gastar, y una inversión no es ingreso ni gasto.
     if(m.tipo==="Ingreso") porCuenta[c].ing+=(m.importe||0);
-    else if(esGasto(m)){
-      porCuenta[c].gas+=(m.importe||0);                      // todo gasto resta
-      if(esRetiroAhorro(m)) porCuenta[c].ing+=(m.importe||0); // y el retiro además entra
-    } else if(m.tipo==="Inversion"){
-      if(isInvSalida(m)){
-        // Rescate/venta → ingreso (entra cash)
-        porCuenta[c].ing+=(m.importe||0);
-      } else {
-        // Suscripción/compra → gasto (sale cash)
-        porCuenta[c].gas+=(m.importe||0);
-      }
-    }
+    else if(esGasto(m) && !esDepositoAhorro(m)) porCuenta[c].gas+=(m.importe||0);
     porCuenta[c].count++;
   });
   const cuentas=Object.entries(porCuenta)
@@ -471,15 +459,12 @@ function showCatDetail(cat, tipo){
   tipo=tipo||"Gasto";
   const esIngreso=tipo==="Ingreso";
   const color=esIngreso?"var(--success)":"var(--danger)";
-  // Las categorías "De ahorros", "Inversiones (rescates)" e "Inversiones (compras)" son agrupaciones
-  // creadas por el Dashboard (no son m.cat reales), así que se filtran distinto.
+  // "Resultado inversiones" y "Pérdida en inversiones" son agrupaciones que arma el Dashboard
+  // (no son m.cat reales), así que se filtran distinto: se muestran las operaciones del año,
+  // que son las que armaron ese resultado.
   let movsCat;
-  if(cat==="De ahorros"){
-    movsCat=movs.filter(m=>esRetiroAhorro(m) && String(m.fecha||"").slice(0,4)===String(dashYear));
-  } else if(cat==="Inversiones (rescates)"){
-    movsCat=movs.filter(m=>m.tipo==="Inversion" && isInvSalida(m) && String(m.fecha||"").slice(0,4)===String(dashYear));
-  } else if(cat==="Inversiones (compras)"){
-    movsCat=movs.filter(m=>m.tipo==="Inversion" && !isInvSalida(m) && String(m.fecha||"").slice(0,4)===String(dashYear));
+  if(cat==="Resultado inversiones" || cat==="Pérdida en inversiones"){
+    movsCat=movs.filter(m=>m.tipo==="Inversion" && String(m.fecha||"").slice(0,4)===String(dashYear));
   } else {
     movsCat=movs.filter(m=>{
       if(esIngreso){
@@ -493,7 +478,7 @@ function showCatDetail(cat, tipo){
   }
   movsCat=movsCat.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   const total=movsCat.reduce((s,m)=>s+(m.importe||0),0);
-  const iconCat=cat==="Inversiones (rescates)"||cat==="Inversiones (compras)"?"◈":(cat==="De ahorros"?"🏦":(getIcon(cat)));
+  const iconCat=(cat==="Resultado inversiones"||cat==="Pérdida en inversiones")?"◈":getIcon(cat);
   document.getElementById("cat-detail-title").textContent=`${iconCat} ${cat} · ${dashYear}`;
   let html=`<div class="inset">
     <div class="seccion-label">Total ${dashYear} · ${esIngreso?"Ingresos":"Gastos"}</div>

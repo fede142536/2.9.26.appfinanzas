@@ -117,12 +117,15 @@ function candidatosAMigrar(lista){
   return (lista||[]).filter(m=>{
     if(esPataDeCambio(m)) return false;          // ya está completo
     if(ignorados.has(m.id)) return false;         // lo descartaste a mano
-    if(!esGasto(m)) return false;                 // una compra de dólares se cargó como gasto
     if(m.frecuente) return false;                 // un gasto mensual fijo no es un cambio
+    // Una compra de dólares se pudo cargar como gasto o, si fue por MEP, como inversión.
+    // Las que quedaron como inversión son peores: el capital queda "puesto" en un ticker que
+    // nunca se va a vender, así que el AL30 figura eternamente invertido por esa plata.
+    if(!esGasto(m) && m.tipo!=="Inversion") return false;
     const texto=`${m.cat||""} ${m.subcat||""} ${m.nota||""}`;
     return CAMBIO_PISTAS.test(texto);
   }).map(m=>{
-    const enUSD=m.moneda==="USD";
+    const enUSD=montoPropioDeCambio(m).moneda==="USD";
     return {
       mov: m,
       faltaPata: enUSD ? "ars" : "usd",
@@ -133,6 +136,21 @@ function candidatosAMigrar(lista){
   }).sort((a,b)=>String(b.mov.fecha).localeCompare(String(a.mov.fecha)));
 }
 
+// Qué mitad del cambio ya está cargada, y en qué moneda. Un gasto en dólares la guarda en
+// importeOrig; una inversión MEP, en importeUSD. Mirar solo m.moneda no alcanza: las inversiones
+// no lo usan igual.
+function montoPropioDeCambio(mov){
+  if(!mov) return {monto:0, moneda:"ARS"};
+  if(mov.tipo==="Inversion"){
+    return (mov.importeUSD||0)>0 && !(mov.importe||0)
+      ? {monto:mov.importeUSD, moneda:"USD"}
+      : {monto:mov.importe||0, moneda:"ARS"};
+  }
+  return mov.moneda==="USD"
+    ? {monto:mov.importeOrig||0, moneda:"USD"}
+    : {monto:mov.importe||0, moneda:"ARS"};
+}
+
 // Completa un movimiento existente convirtiéndolo en un cambio: le pone los campos de pata
 // que sale y devuelve además la pata que faltaba. NO toca `movs`: devuelve
 // {sale, entra} para que el que llama decida. Conserva la categoría original a propósito —
@@ -140,18 +158,28 @@ function candidatosAMigrar(lista){
 function completarCambioDesde(mov, montoFaltante){
   const falta=Math.round((Number(montoFaltante)||0)*100)/100;
   if(!mov || falta<=0) return null;
-  const enUSD=mov.moneda==="USD";
-  const montoPropio = enUSD ? (mov.importeOrig||0) : (mov.importe||0);
+  const propio=montoPropioDeCambio(mov);
+  const enUSD=propio.moneda==="USD";
+  const montoPropio=propio.monto;
   if(montoPropio<=0) return null;
 
   const cambioId=mov.id;
-  const sale={...mov, cambioId, cambioPata:"sale",
+  // Una inversión que en realidad era un cambio pasa a ser la pata que sale: deja de ser
+  // Inversion (si no, seguiría contando como capital puesto en un ticker) y se le acomodan los
+  // campos de monto a la forma que usa un gasto.
+  const base = mov.tipo==="Inversion"
+    ? {...mov, tipo:"Gasto", moneda:enUSD?"USD":"ARS",
+       importe: enUSD ? montoPropio : montoPropio,
+       importeOrig: enUSD ? montoPropio : null,
+       importeUSD: undefined, ticker: undefined}
+    : mov;
+  const sale={...base, cambioId, cambioPata:"sale",
               // Un cambio no es un depósito al fondo ni una compra pagada con él: los flags
               // de ahorro se limpian, si no la plata se contaría por dos caminos.
               esAhorro:false, usaAhorro:false};
   const entra={
-    id: cambioId+1, tipo:"Ingreso", cat:mov.cat, subcat:mov.subcat, fecha:mov.fecha,
-    nota:mov.nota||"", cuenta:mov.cuenta||"", cambioId, cambioPata:"entra",
+    id: cambioId+1, tipo:"Ingreso", cat:base.cat, subcat:base.subcat, fecha:base.fecha,
+    nota:base.nota||"", cuenta:base.cuenta||"", cambioId, cambioPata:"entra",
     esAhorro:false, usaAhorro:false, recuperable:0,
     moneda: enUSD ? "ARS" : "USD",
     importe: enUSD ? falta : 0,
