@@ -317,10 +317,12 @@ function construirCuerpoTxItem(m){
         sub=subtituloFila([subcatVisible(m.subcat), `Cuota ${m.nCuota}/${m.cuotasTotal}`, `${tot} total`]);
       }
     } else if(isInv){
-      // Badge de cash flow para diferenciar rescate vs suscripción
+      // Un rescate no es un ingreso y una suscripción no es un gasto: es plata tuya que entra o
+      // sale de la inversión. El badge dice eso, no "INGRESO"/"GASTO", que contradecía el
+      // balance —donde estas operaciones no suman ni restan— y era lo que más confundía.
       const invBadge=invEsIngreso
-        ?` <span class="badge badge-success">📥 INGRESO</span>`
-        :` <span class="badge badge-danger">📤 GASTO</span>`;
+        ?` <span class="badge badge-accent">📥 RECUPERO</span>`
+        :` <span class="badge badge-accent">📤 INVERTIDO</span>`;
       cat=`${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${invBadge}`;
       sub=subtituloFila([subcatVisible(m.subcat)]);
     } else {
@@ -674,8 +676,15 @@ function renderMovs(){
     const ahorradoARS=todoGastos.filter(m=>esDepositoAhorro(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
     const suscripcionesARS=todoGastos.filter(m=>m.tipo==="Inversion"&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
     const suscripcionesUSD=todoGastos.filter(m=>m.tipo==="Inversion"&&(m.importeUSD||0)>0).reduce((s,m)=>s+m.importeUSD,0);
-    const gastosTotalARS=todoGastos.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
-    const gastosTotalUSD=todoGastos.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+    // Con una categoría elegida el chip suma LO QUE SE VE en la lista, igual que en Ingresos.
+    // Si no, al filtrar por una categoría de ahorro o de inversión el chip marcaba $0 con la
+    // lista llena de movimientos, porque esos montos no son consumo.
+    const gastosTotalARS = filtroCategoria
+      ? todoGastos.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0)
+      : todoGastos.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+    const gastosTotalUSD = filtroCategoria
+      ? todoGastos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
+      : todoGastos.filter(m=>esGasto(m)&&!esDepositoAhorro(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
 
     let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Gastos ARS";
     let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val negative">${fmtTotal(gastosTotalARS)}</div></div>`;
@@ -728,10 +737,17 @@ function renderMovs(){
 
     const todoIngresos = filtroCategoria ? todoIngresosOriginal.filter(m=>m.cat===filtroCategoria) : todoIngresosOriginal;
 
-    const ingTotalARS = todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda!=="USD")
-      .reduce((s,m)=>s+(m.importe||0),0) + Math.max(ganInv.ars||0, 0);
-    const ingTotalUSD = todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig)
-      .reduce((s,m)=>s+m.importeOrig,0) + Math.max(ganInv.usd||0, 0);
+    // Con una categoría elegida, el chip tiene que ser la suma de LO QUE SE VE en la lista: si
+    // decís "Salario", el número al lado tiene que ser tu salario. La ganancia de inversión es
+    // del mes entero, no de una categoría, así que sumarla ahí hacía que "Salario" mostrara
+    // $1.655.232 cuando el único movimiento era de $1.607.621 — el resto era la ganancia del FCI.
+    // Sin filtro, en cambio, el chip responde "cuánto entró de verdad": ingresos + ganancia.
+    const ingTotalARS = filtroCategoria
+      ? todoIngresos.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0)
+      : todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0) + Math.max(ganInv.ars||0, 0);
+    const ingTotalUSD = filtroCategoria
+      ? todoIngresos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
+      : todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(ganInv.usd||0, 0);
     let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Ingresos ARS";
     let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val positive">${fmtTotal(ingTotalARS)}</div></div>`;
     if(ingTotalUSD>0){
@@ -762,8 +778,8 @@ function renderMovs(){
     document.getElementById("mov-tarjeta-filtro").style.display="none";
   } else {
     // Vista "Todos": ingresos / gastos / balance del mes
-    // INGRESOS REALES: ingresos puros + retiros del ahorro (vuelve a la mano) + rescates de inversión (entra cash)
-    // GASTOS REALES: solo gastos puros (depósitos a ahorro y compras de inversión NO cuentan)
+    // INGRESOS: ingresos puros + la ganancia de inversión del mes.
+    // GASTOS  : consumo. Los depósitos al fondo quedan afuera; los retiros, adentro.
     const ingTotal=totales.ingresosTotal;
     const gasTotal=totales.gastosTotal;
     // Lo que pusiste a trabajar este mes: al fondo de ahorro + capital neto a inversiones.

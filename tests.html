@@ -2102,6 +2102,73 @@ test("las categorías en pesos se miden entre ellas, sin contar las de dólares"
 });
 
 // ═══════════════════════════════════════════
+// CHIPS POR CATEGORÍA EN MOVIMIENTOS
+// ═══════════════════════════════════════════
+grupo("Chips al filtrar por categoría");
+
+// Con una categoría elegida, el chip tiene que ser la suma de LO QUE SE VE en la lista.
+// El bug: la ganancia de inversión del mes (que es del mes entero, no de una categoría) se le
+// sumaba a cualquier categoría filtrada. Con datos reales, agosto 2026: un único movimiento de
+// Salario de $1.607.621,32 mostraba $1.655.232 — los $47.610 de más eran la ganancia del FCI.
+function chipsDeMovs(lista, filtroTab, categoria, ym){
+  const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list","mov-mes-label"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  // `filtro` se declara con let en estado-categorias.js, así que es global pero NO vive en
+  // window: asignarle window.filtro no cambia nada (fue el primer intento y los chips salían
+  // todos en $0, mostrando la vista "Todos").
+  const prev={movs, filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
+  movs=lista; filtro=filtroTab; filtroCategoria=categoria||""; mesActual=ym||"2026-08"; filtroFecha=null;
+  try{ renderMovs(); return creados[0].innerText || creados[0].textContent; }
+  finally{
+    creados.forEach(e=>e.remove());
+    movs=prev.movs; filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff;
+  }
+}
+
+const AGOSTO = [
+  {id:1, tipo:"Ingreso", cat:"Salario", importe:1607621.32, fecha:"2026-08-04", moneda:"ARS"},
+  // Un FCI que se suscribió y se rescató con ganancia dentro del mismo mes.
+  {id:2, tipo:"Inversion", subcat:"FCI Suscripción",     ticker:"INSTITUA", cat:"FCI", importe:214533.60, fecha:"2026-08-01"},
+  {id:3, tipo:"Inversion", subcat:"FCI Rescate capital", ticker:"INSTITUA", cat:"FCI", importe:261414.60, fecha:"2026-08-11"}
+];
+
+test("filtrando por Salario, el chip muestra el salario y nada más", ()=>{
+  const txt=chipsDeMovs(AGOSTO, "Ingreso", "Salario");
+  cierto(txt.includes("1.607.621"), "el chip no coincide con el único movimiento de la categoría: " + txt);
+  cierto(!txt.includes("1.655.232") && !txt.includes("1.654") && !txt.includes("1.6552"),
+         "se le volvió a sumar la ganancia de inversión del mes: " + txt);
+});
+
+test("filtrando por FCI, el chip suma los movimientos listados", ()=>{
+  const txt=chipsDeMovs(AGOSTO, "Ingreso", "FCI");
+  cierto(txt.includes("261.415"), "el chip tiene que sumar el rescate que se ve en la lista (fmtTotal redondea): " + txt);
+});
+
+test("sin filtro de categoría, el chip sí cuenta la ganancia", ()=>{
+  // 261.414,60 − 214.533,60 = 46.881 de ganancia, que sí es un ingreso real.
+  const txt=chipsDeMovs(AGOSTO, "Ingreso", "");
+  cierto(txt.includes("1.654.502"), "sin filtro el chip es ingresos + ganancia: " + txt);
+});
+
+test("filtrando un ahorro, el chip no queda en cero con la lista llena", ()=>{
+  const conAhorro=[{id:9, tipo:"Gasto", cat:"Fondo de Retiro", importe:150000, fecha:"2026-08-08", esAhorro:true, moneda:"ARS"},
+                   {id:10, tipo:"Gasto", cat:"Comida", importe:50000, fecha:"2026-08-09", moneda:"ARS"}];
+  const txt=chipsDeMovs(conAhorro, "Gasto", "Fondo de Retiro");
+  cierto(txt.includes("150.000"), "la categoría filtrada tiene que sumar lo que se ve: " + txt);
+});
+
+test("un rescate no se muestra como INGRESO en la lista", async ()=>{
+  // Decía "📥 INGRESO" en verde, contradiciendo al balance, donde no suma. Es plata tuya
+  // que vuelve de la inversión, no un ingreso.
+  const js=await (await fetch("js/movimientos.js")).text();
+  const i=js.indexOf("} else if(isInv){");
+  const bloque=js.slice(i, i+700);
+  cierto(!/badge-success">📥 INGRESO/.test(bloque), "volvió el badge de INGRESO en un rescate");
+  cierto(!/badge-danger">📤 GASTO/.test(bloque), "volvió el badge de GASTO en una suscripción");
+  cierto(/RECUPERO/.test(bloque) && /INVERTIDO/.test(bloque), "se perdieron los badges nuevos");
+});
+
+// ═══════════════════════════════════════════
 // GRÁFICO DEL DASHBOARD
 // ═══════════════════════════════════════════
 grupo("Ingresos, gastos y balance en un gráfico");
