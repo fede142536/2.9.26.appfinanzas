@@ -58,6 +58,9 @@ function fotoEnDisco(){
 }
 
 function save(){
+  // El resultado de inversiones se calcula sobre toda la historia y se guarda cacheado; si no se
+  // invalida acá, un alta, una edición o un borrado siguen viéndose con el cálculo viejo.
+  if(typeof invalidarResultadoInv==="function") invalidarResultadoInv();
   if(!ultimoGuardadoOk) ultimoGuardadoOk = fotoEnDisco();
   const nuevo={};
   Object.entries(CLAVES_GUARDADO).forEach(([k,def])=>{ nuevo[k]=def.valor(); });

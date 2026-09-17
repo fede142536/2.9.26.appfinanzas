@@ -362,26 +362,52 @@ function esDepositoAhorro(m){
 function esRetiroAhorro(m){
   return esGasto(m) && !!m.usaAhorro;
 }
-// Plata que ENTRA a la mano en el mes: los ingresos propiamente dichos y los retiros del fondo.
-// (Los rescates de inversión se suman aparte, donde corresponde.)
+// Plata que ENTRA a tu patrimonio: solo los ingresos propiamente dichos.
+//
+// Antes un retiro del fondo también contaba como ingreso, porque el balance medía "plata a la
+// mano". Ya no: el balance mide cuánto creció tu patrimonio, y sacar plata de tu propio fondo
+// no te hace más rico. La compra que pagaste con ese retiro sí es un gasto, y ahí baja el
+// patrimonio — una sola vez, donde corresponde.
 function esIngreso(m){
-  return !!m && (m.tipo==="Ingreso" || esRetiroAhorro(m));
+  return !!m && m.tipo==="Ingreso";
 }
 
 // Totales de plata de un conjunto de movimientos, en un solo lugar y sin tocar el DOM,
 // para que la regla de arriba se pueda probar de verdad y no haya dos versiones dando vueltas.
 // `balance` es cuánto cambió la plata que tenés a mano en ese período.
-function totalesDePlata(lista){
+// EL MODELO DE LA PLATA, en un solo lugar.
+//
+// Ingresos = lo que entró a tu patrimonio.
+// Gastos   = lo que consumiste. Guardar plata NO es consumirla, así que los depósitos al fondo
+//            y el capital que ponés en inversiones quedan afuera. Gastar plata del fondo SÍ es
+//            consumo, y por eso los retiros se quedan adentro.
+// Balance  = cuánto creció tu patrimonio este mes, esté donde esté esa plata (en la cuenta, en
+//            el fondo o invertida).
+//
+// De las inversiones solo cuenta el RESULTADO, y lo calcula resultado-inversiones.js, que
+// necesita toda la historia (para saber si una venta es ganancia hay que saber cuánto capital
+// venías poniendo desde antes). Por eso llega como parámetro en vez de calcularse acá:
+// totalesDePlata() ve una lista suelta y no puede saberlo. Sin ese parámetro las inversiones
+// son neutras, que es la respuesta correcta cuando no se sabe.
+function totalesDePlata(lista, gananciaInv){
   const ingresos = lista.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+(m.importe||0),0);
-  const gastos   = lista.filter(esGasto).reduce((s,m)=>s+(m.importe||0),0);
   const depositos= lista.filter(esDepositoAhorro).reduce((s,m)=>s+(m.importe||0),0);
   const retiros  = lista.filter(esRetiroAhorro).reduce((s,m)=>s+(m.importe||0),0);
+  // Todo lo que tiene tipo "Gasto" menos lo que fue a parar al fondo: eso último sigue siendo tuyo.
+  const gastos   = lista.filter(m=>esGasto(m) && !esDepositoAhorro(m)).reduce((s,m)=>s+(m.importe||0),0);
   const inversiones = lista.filter(m=>m.tipo==="Inversion");
+  // Los flujos brutos quedan para mostrarlos como informativos. NO entran al balance: son la
+  // misma plata yendo y viniendo, y contarlos enteros infla los dos totales en cada vuelta.
   const invEntra = inversiones.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
   const invSale  = inversiones.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  const ganancia = (gananciaInv && gananciaInv.ars) || 0;
   return {
     ingresos, gastos, depositos, retiros, invEntra, invSale,
-    balance: Math.round((ingresos + retiros + invEntra - gastos - invSale)*100)/100
+    gananciaInv: ganancia,
+    // Una ganancia suma a ingresos; una pérdida resta, y por eso se parte en dos.
+    ingresosTotal: Math.round((ingresos + Math.max(ganancia,0))*100)/100,
+    gastosTotal:   Math.round((gastos   + Math.max(-ganancia,0))*100)/100,
+    balance: Math.round((ingresos + ganancia - gastos)*100)/100
   };
 }
 
