@@ -145,3 +145,42 @@ function capitalInvertido(lista){
   out.usd=Math.round(out.usd*100)/100;
   return out;
 }
+
+// ═══════════════════════════════════════════
+// NETO POR TICKER (para los chips de Movimientos)
+// ═══════════════════════════════════════════
+// Agrupa las operaciones de un período por ticker y devuelve, para cada uno, cuánta plata entró
+// menos cuánta salió:  neto = rescates/ventas − suscripciones/compras.
+//
+// OJO con qué significa este número: es el FLUJO del mes, no la ganancia. Un mes en que solo
+// comprás da negativo aunque no hayas perdido nada — significa "hay plata puesta ahí, todavía sin
+// rescatar". La ganancia de verdad la calcula gananciaInvDelMes(), que lleva el capital por
+// ticker a lo largo de toda la historia. Los dos números son útiles y responden cosas distintas.
+//
+// Devuelve la lista ordenada por monto, de mayor a menor, para que los tickers con más plata en
+// juego queden primero entre los chips.
+function netoPorTickerDelPeriodo(lista){
+  const porTicker={};
+  (lista||[]).filter(m=>m && m.tipo==="Inversion").forEach(m=>{
+    const t=m.ticker || "Sin ticker";
+    if(!porTicker[t]) porTicker[t]={ticker:t, cat:m.cat||"", ars:0, usd:0, movs:0};
+    // Rescate o venta: entra plata (+). Suscripción o compra: sale (−).
+    const signo=isInvSalida(m) ? 1 : -1;
+    porTicker[t].ars += (m.moneda==="USD" ? 0 : (m.importe||0)) * signo;
+    porTicker[t].usd += (m.importeUSD||0) * signo;
+    porTicker[t].movs++;
+  });
+  return Object.values(porTicker).map(p=>({
+    ...p,
+    ars: Math.round(p.ars*100)/100,
+    usd: Math.round(p.usd*100)/100
+  })).sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars) || Math.abs(b.usd)-Math.abs(a.usd));
+}
+
+// La suma de todos los netos: el efecto total de las inversiones sobre el bolsillo en el período.
+function netoInvTotal(lista){
+  return netoPorTickerDelPeriodo(lista).reduce((acc,p)=>({
+    ars: Math.round((acc.ars+p.ars)*100)/100,
+    usd: Math.round((acc.usd+p.usd)*100)/100
+  }), {ars:0, usd:0});
+}
