@@ -83,6 +83,36 @@ function guardarEditCambio(){
   renderMovs();
 }
 
+// Un solo handler para los dos selectores de moneda del modal de edición (el de un movimiento
+// normal y el de uno frecuente): actualizan el mismo prefijo y, si corresponde, el label.
+// El label de un frecuente siempre dice "Monto base" — no depende de la moneda, así que no se
+// toca; el de un movimiento normal sí, igual que en el alta (toggleUSD).
+// querySelector y no getElementById: los dos selectores son mutuamente excluyentes (un
+// movimiento es frecuente o no lo es, nunca los dos a la vez), así que el que falta tiene que
+// leerse como "no está" — y getElementById() no sirve para eso: en tests.html está parcheado
+// para devolver un <div> descartable ante cualquier id ausente, así que a||b nunca cae al
+// segundo. querySelector no está parcheado y sí devuelve null cuando el id no existe.
+function onEditMonedaChange(){
+  const monedaEl=document.querySelector("#edit-moneda")||document.querySelector("#edit-moneda-frec");
+  if(!monedaEl) return;
+  const isUSD=monedaEl.value==="USD";
+  document.querySelectorAll(".edit-prefix-frec").forEach(p=>p.textContent=isUSD?"USD":"$");
+  if(monedaEl.id==="edit-moneda"){
+    const lbl=document.getElementById("edit-importe-label");
+    if(lbl) lbl.textContent=isUSD?"Importe (USD)":"Importe (ARS)";
+  }
+}
+
+// El alta deja crear una categoría nueva sin salir del formulario ("+ Cat."); el modal de
+// edición no tenía ese botón. openCatModal() es el mismo de siempre — lo único que hace falta
+// es que, al volver, el select de categoría DE ESTE modal se actualice (buildCats() solo toca
+// el del alta). La bandera se consume una sola vez, en guardarNuevaCat().
+let catModalDesdeEdit=false;
+function openCatModalEdit(){
+  catModalDesdeEdit=true;
+  openCatModal();
+}
+
 function closeEditModal(){
   document.getElementById("modal-edit").classList.remove("open");
   editingId=null;
@@ -102,22 +132,37 @@ function renderEditForm(m){
           <div style="font-size:18px;font-weight:600;color:var(--danger)">${fmtMoneda(montoVigente, m.moneda)}</div>
         </div>
       `:""}
-      <div class="form-group"><label class="form-label">${esFrec?"Monto base":(m.moneda==="USD"?"Importe (USD)":"Importe (ARS)")}</label>
-        <div class="amount-wrap"><span class="amount-prefix">${m.moneda==="USD"?"USD":"$"}</span>
+      <div class="form-group"><label class="form-label" id="edit-importe-label">${esFrec?"Monto base":(m.moneda==="USD"?"Importe (USD)":"Importe (ARS)")}</label>
+        <div class="amount-wrap"><span class="amount-prefix edit-prefix-frec" id="edit-importe-prefix">${m.moneda==="USD"?"USD":"$"}</span>
           <input type="number" id="edit-importe" class="form-input amount-input" value="${m.moneda==="USD"?(m.importeOrig||0):(m.importe||0)}" inputmode="decimal" step="any">
         </div>
         ${esFrec?'<p style="font-size:10px;color:var(--muted);margin-top:4px">Monto inicial. Si querés actualizarlo desde un mes en adelante, usá "Registrar aumento" más abajo.</p>':""}
       </div>
+      <!-- El alta siempre deja elegir Moneda; acá faltaba. Sin este selector, guardar un
+           movimiento en USD sin tocar nada le escribía el valor en ARS TAMBIÉN (quedaban
+           importe e importeOrig con el mismo número, y moneda="USD"): abrir y cerrar el modal
+           corrompía el registro. Un select por rama porque cada una dispara algo distinto al
+           cambiar — la frecuente además actualiza el prefijo de "Registrar aumento". -->
       ${esFrec?`
         <div class="form-group"><label class="form-label">Moneda</label>
-          <select id="edit-moneda-frec" class="form-select" onchange="document.querySelectorAll('.edit-prefix-frec').forEach(p=>p.textContent=this.value==='USD'?'USD':'$')">
+          <select id="edit-moneda-frec" class="form-select" onchange="onEditMonedaChange()">
             <option value="ARS" ${(m.moneda||'ARS')==='ARS'?'selected':''}>🇦🇷 Pesos (ARS)</option>
             <option value="USD" ${m.moneda==='USD'?'selected':''}>🇺🇸 Dólares (USD)</option>
           </select>
         </div>
-      `:""}
+      `:`
+        <div class="form-group"><label class="form-label">Moneda</label>
+          <select id="edit-moneda" class="form-select" onchange="onEditMonedaChange()">
+            <option value="ARS" ${(m.moneda||'ARS')==='ARS'?'selected':''}>🇦🇷 Pesos (ARS)</option>
+            <option value="USD" ${m.moneda==='USD'?'selected':''}>🇺🇸 Dólares (USD)</option>
+          </select>
+        </div>
+      `}
       <div class="form-group"><label class="form-label">Categoría</label>
-        <select id="edit-cat" class="form-select" onchange="updateEditSubcats()"></select>
+        <div class="u-row">
+          <select id="edit-cat" class="form-select u-flex1" onchange="updateEditSubcats()"></select>
+          <button type="button" class="btn-sm" onclick="openCatModalEdit()">+ Cat.</button>
+        </div>
       </div>
       <div class="form-group"><label class="form-label">Subcategoría</label>
         <select id="edit-subcat" class="form-select"></select>
@@ -172,6 +217,12 @@ function renderEditForm(m){
       `:`
       <div class="form-group"><label class="form-label">Fecha</label>
         <input type="date" id="edit-fecha" class="form-input" value="${(m.fecha||'').slice(0,10)}">
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('edit-fecha',0)">Hoy</button>
+          <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('edit-fecha',-1)">Ayer</button>
+          <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('edit-fecha',-2)">-2d</button>
+          <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('edit-fecha',-7)">-7d</button>
+        </div>
       </div>`}
       <div class="form-group"><label class="form-label">Nota</label>
         <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
@@ -268,10 +319,16 @@ function guardarEdit(){
   if(m.tipo==="Gasto"||m.tipo==="Ingreso"){
     const imp=parseFloat(document.getElementById("edit-importe").value)||0;
     if(imp<=0){showToast("Ingresá un importe válido");return;}
-    // Para frecuentes guardamos en importe (ARS) o importeOrig (USD) según moneda elegida
-    const monedaFrecEl=document.getElementById("edit-moneda-frec");
-    if(m.frecuente && monedaFrecEl){
-      const nuevaMoneda=monedaFrecEl.value;
+    // Se guarda en importe (ARS) o importeOrig (USD) según la moneda elegida — para un
+    // movimiento frecuente y para uno normal por igual. Antes esto SOLO pasaba si era
+    // frecuente: un Gasto o Ingreso en USD normal no tenía selector de moneda, así que
+    // guardarEdit() le escribía el número en `importe` sin tocar `importeOrig` ni `moneda`.
+    // Resultado: abrir el modal y guardar sin cambiar nada dejaba el registro con el mismo
+    // monto en las dos monedas a la vez.
+    // querySelector, no getElementById — ver el comentario de onEditMonedaChange() más arriba.
+    const monedaEl=document.querySelector("#edit-moneda-frec")||document.querySelector("#edit-moneda");
+    if(monedaEl){
+      const nuevaMoneda=monedaEl.value;
       m.moneda=nuevaMoneda;
       const isUSD=nuevaMoneda==="USD";
       m.importe = isUSD ? 0 : Math.round(imp*100)/100;

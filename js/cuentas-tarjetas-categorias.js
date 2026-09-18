@@ -169,7 +169,13 @@ function openCatModal(){
   if(prev) prev.textContent="📦";
   document.getElementById("modal-cat").classList.add("open");
 }
-function closeCatModal(){document.getElementById("modal-cat").classList.remove("open");}
+function closeCatModal(){
+  document.getElementById("modal-cat").classList.remove("open");
+  // Cancelar (tocar afuera) también tiene que soltar la bandera: si no, la próxima vez que se
+  // abra "+ Cat." desde el ALTA (sin pasar por Editar) esta función igual intentaría refrescar
+  // el select de edición.
+  catModalDesdeEdit=false;
+}
 function guardarNuevaCat(){
   const t=document.getElementById("new-cat-tipo").value;
   const nombre=document.getElementById("new-cat-name").value.trim();
@@ -181,7 +187,21 @@ function guardarNuevaCat(){
   save();
   document.getElementById("new-cat-name").value="";document.getElementById("new-cat-subs").value="";
   nuevoCatIcono=null; document.getElementById("new-cat-icon-preview").textContent="📦";
+  // Se guarda ANTES de closeCatModal(): esa función también apaga la bandera (para el caso de
+  // cancelar tocando afuera), así que leerla después de cerrarla siempre daría false.
+  const veniaDeEdit=catModalDesdeEdit;
   closeCatModal();showToast("Categoría agregada ✓");buildCats();buildTcCats();buildInvCats();renderCatManager();
+  // El "+ Cat." del modal de edición usa este mismo modal (no hay uno aparte), pero
+  // buildCats() de arriba solo refresca el select del alta (#inp-cat). Sin esto, la categoría
+  // recién creada quedaba invisible en el modal de edición hasta cerrarlo y volver a abrirlo.
+  if(veniaDeEdit){
+    const em=editingId!=null && movs.find(x=>x.id===editingId);
+    if(em && (em.tipo==="Gasto"||em.tipo==="Ingreso") && document.getElementById("edit-cat")){
+      const catActual=document.getElementById("edit-cat").value||em.cat;
+      const subActual=document.getElementById("edit-subcat").value||em.subcat;
+      populateEditCatSelect(em.tipo, catActual, subActual);
+    }
+  }
 }
 function renderCatManager(){
   const el=document.getElementById("cat-manager");let html="";

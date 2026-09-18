@@ -3669,6 +3669,222 @@ test("migrateStorage no tira con una clave legacy corrupta", ()=>{
 });
 
 // ═══════════════════════════════════════════
+// EDITAR GASTO/INGRESO: PARIDAD CON EL ALTA
+// ═══════════════════════════════════════════
+grupo("Editar Gasto/Ingreso: paridad con el alta");
+
+// El alta de un Gasto o Ingreso deja elegir Moneda, agregar una categoría al vuelo ("+ Cat.")
+// y usar los atajos de fecha (Hoy/Ayer/-2d/-7d). El modal de EDICIÓN no tenía ninguno de los
+// tres para un movimiento normal — solo la variante frecuente tenía selector de moneda.
+//
+// El más grave de los tres: sin selector de moneda, guardarEdit() igual escribía el número en
+// `importe` sin tocar `importeOrig` ni `moneda`. Reproducido en la app real antes de este
+// cambio: abrir un gasto en USD 54,21 y tocar "Guardar cambios" SIN CAMBIAR NADA dejaba el
+// registro con importe=54.21 e importeOrig=54.21 a la vez, moneda="USD" — el mismo monto en
+// las dos monedas.
+//
+// Se clona cada movimiento antes de usarlo: guardarEdit() muta el objeto en el lugar, y estas
+// son const compartidas por todos los tests del grupo.
+function abrirEdicion(mov){
+  const clon={...mov};
+  const ids=["modal-edit","edit-form-content"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const movsAntes=movs, editingIdAntes=editingId;
+  movs=[clon];
+  openEditModal(clon.id);
+  return {
+    mov: clon,
+    cerrar(){
+      closeEditModal();
+      creados.forEach(e=>e.remove());
+      movs=movsAntes; editingId=editingIdAntes;
+    }
+  };
+}
+const GASTO_ARS_EDIT   = ()=>({id:9001, tipo:"Gasto", cat:"Supermercado", subcat:"Almacen", moneda:"ARS", importe:50000, fecha:"2026-09-10", cuenta:"Efectivo", nota:""});
+const GASTO_USD_EDIT   = ()=>({id:9002, tipo:"Gasto", cat:"Vacaciones", subcat:"Alemania", moneda:"USD", importe:0, importeOrig:54.21, fecha:"2026-05-20", cuenta:"Balanz", nota:""});
+const INGRESO_ARS_EDIT = ()=>({id:9003, tipo:"Ingreso", cat:"Sueldo", subcat:"Sueldo", moneda:"ARS", importe:900000, fecha:"2026-09-04", cuenta:"Banco", nota:""});
+const INGRESO_USD_EDIT = ()=>({id:9005, tipo:"Ingreso", cat:"Freelance", subcat:"Freelance", moneda:"USD", importe:0, importeOrig:502.94, fecha:"2026-08-12", cuenta:"Balanz", nota:""});
+const GASTO_FREC_EDIT  = ()=>({id:9004, tipo:"Gasto", cat:"Casa", subcat:"Alquiler", moneda:"ARS", importe:300000, frecuente:true, mesInicio:"2026-01", nota:""});
+
+// ── MONEDA ──
+
+test("hay selector de moneda al editar un Gasto normal", ()=>{
+  const e=abrirEdicion(GASTO_ARS_EDIT());
+  try{ cierto(!!document.querySelector("#edit-moneda"), "no aparece #edit-moneda"); }
+  finally{ e.cerrar(); }
+});
+
+test("hay selector de moneda al editar un Ingreso", ()=>{
+  const e=abrirEdicion(INGRESO_ARS_EDIT());
+  try{ cierto(!!document.querySelector("#edit-moneda"), "no aparece #edit-moneda en un Ingreso"); }
+  finally{ e.cerrar(); }
+});
+
+test("un gasto frecuente sigue con su propio selector, no aparecen los dos", ()=>{
+  const e=abrirEdicion(GASTO_FREC_EDIT());
+  try{
+    cierto(!!document.querySelector("#edit-moneda-frec"), "el frecuente perdió su selector de moneda");
+    cierto(!document.querySelector("#edit-moneda"), "aparecieron los dos selectores de moneda a la vez");
+  } finally { e.cerrar(); }
+});
+
+test("cambiar a USD actualiza el prefijo y el label en vivo", ()=>{
+  const e=abrirEdicion(GASTO_ARS_EDIT());
+  try{
+    document.getElementById("edit-moneda").value="USD";
+    onEditMonedaChange();
+    igual(document.getElementById("edit-importe-prefix").textContent, "USD");
+    igual(document.getElementById("edit-importe-label").textContent, "Importe (USD)");
+  } finally { e.cerrar(); }
+});
+
+test("cambiar a ARS devuelve el prefijo y el label", ()=>{
+  const e=abrirEdicion(GASTO_USD_EDIT());
+  try{
+    document.getElementById("edit-moneda").value="ARS";
+    onEditMonedaChange();
+    igual(document.getElementById("edit-importe-prefix").textContent, "$");
+    igual(document.getElementById("edit-importe-label").textContent, "Importe (ARS)");
+  } finally { e.cerrar(); }
+});
+
+test("el label de un frecuente no depende de la moneda (siempre \"Monto base\")", ()=>{
+  const e=abrirEdicion(GASTO_FREC_EDIT());
+  try{
+    document.getElementById("edit-moneda-frec").value="USD";
+    onEditMonedaChange();
+    igual(document.getElementById("edit-importe-label").textContent, "Monto base");
+  } finally { e.cerrar(); }
+});
+
+test("cambiar de ARS a USD y guardar mueve el monto a importeOrig", ()=>{
+  const e=abrirEdicion(GASTO_ARS_EDIT());
+  try{
+    document.getElementById("edit-moneda").value="USD";
+    onEditMonedaChange();
+    document.getElementById("edit-importe").value="120.5";
+    guardarEdit();
+    const m=movs.find(x=>x.id===e.mov.id);
+    igual(m.moneda, "USD");
+    igual(m.importe, 0, "en pesos tiene que quedar en cero");
+    igual(m.importeOrig, 120.5);
+  } finally { e.cerrar(); }
+});
+
+test("cambiar de USD a ARS y guardar mueve el monto a importe y limpia importeOrig", ()=>{
+  const e=abrirEdicion(GASTO_USD_EDIT());
+  try{
+    document.getElementById("edit-moneda").value="ARS";
+    onEditMonedaChange();
+    document.getElementById("edit-importe").value="75000";
+    guardarEdit();
+    const m=movs.find(x=>x.id===e.mov.id);
+    igual(m.moneda, "ARS");
+    igual(m.importe, 75000);
+    igual(m.importeOrig, null, "no puede quedar un resto en dólares de la moneda anterior");
+  } finally { e.cerrar(); }
+});
+
+test("abrir y guardar un GASTO en USD sin tocar nada no lo corrompe (regresión)", ()=>{
+  const e=abrirEdicion(GASTO_USD_EDIT());
+  try{
+    guardarEdit();
+    const m=movs.find(x=>x.id===e.mov.id);
+    igual(m.moneda, "USD");
+    igual(m.importe, 0, "el importe en pesos no puede aparecer de la nada");
+    igual(m.importeOrig, 54.21, "el monto en dólares no puede cambiar solo por abrir y guardar");
+  } finally { e.cerrar(); }
+});
+
+test("abrir y guardar un INGRESO en USD sin tocar nada no lo corrompe", ()=>{
+  const e=abrirEdicion(INGRESO_USD_EDIT());
+  try{
+    guardarEdit();
+    const m=movs.find(x=>x.id===e.mov.id);
+    igual(m.moneda, "USD");
+    igual(m.importe, 0);
+    igual(m.importeOrig, 502.94);
+  } finally { e.cerrar(); }
+});
+
+test("un gasto en ARS sin cambios sigue guardando bien (no se rompió lo que ya andaba)", ()=>{
+  const e=abrirEdicion(GASTO_ARS_EDIT());
+  try{
+    guardarEdit();
+    const m=movs.find(x=>x.id===e.mov.id);
+    igual(m.moneda, "ARS");
+    igual(m.importe, 50000);
+    igual(m.importeOrig, null);
+  } finally { e.cerrar(); }
+});
+
+// ── "+ CAT." ──
+
+test('hay botón "+ Cat." al editar un Gasto/Ingreso', ()=>{
+  const e=abrirEdicion(INGRESO_ARS_EDIT());
+  try{ cierto(!!document.querySelector('[onclick="openCatModalEdit()"]'), 'falta el botón "+ Cat."'); }
+  finally { e.cerrar(); }
+});
+
+test('cancelar el modal de categoría suelta la bandera de "vino de Editar"', ()=>{
+  openCatModalEdit();
+  igual(catModalDesdeEdit, true);
+  closeCatModal();
+  igual(catModalDesdeEdit, false,
+    "si no se suelta, el próximo '+ Cat.' del ALTA intentaría refrescar el select de Editar");
+});
+
+test('crear una categoría desde "+ Cat." en Editar la deja disponible sin cerrar el modal', async ()=>{
+  await conDatosGuardados(async ()=>{
+    const e=abrirEdicion(INGRESO_ARS_EDIT());
+    const camposDiv=["modal-cat","new-cat-icon-preview"].map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+    const camposInput=["new-cat-tipo","new-cat-name","new-cat-subs"].map(id=>{ const i=document.createElement("input"); i.id=id; document.body.appendChild(i); return i; });
+    try{
+      openCatModalEdit();
+      document.getElementById("new-cat-tipo").value="Ingreso";
+      document.getElementById("new-cat-name").value="Categoría de prueba XYZ";
+      guardarNuevaCat();
+      const opciones=[...document.querySelectorAll("#edit-cat option")].map(o=>o.value);
+      cierto(opciones.includes("Categoría de prueba XYZ"),
+        "la categoría nueva no apareció en el select de Editar sin cerrar el modal");
+      igual(catModalDesdeEdit, false, "la bandera tiene que soltarse después de usarla");
+    } finally {
+      camposDiv.forEach(el=>el.remove()); camposInput.forEach(el=>el.remove());
+      e.cerrar();
+    }
+  });
+});
+
+// ── FECHA RÁPIDA ──
+
+test("hay atajos de fecha (Hoy/Ayer/-2d/-7d) al editar un Gasto normal", ()=>{
+  const e=abrirEdicion(GASTO_ARS_EDIT());
+  try{
+    cierto(!!document.querySelector(`[onclick="setFechaQuick('edit-fecha',-1)"]`), "falta el atajo 'Ayer'");
+    cierto(!!document.querySelector(`[onclick="setFechaQuick('edit-fecha',-7)"]`), "falta el atajo '-7d'");
+  } finally { e.cerrar(); }
+});
+
+test("un gasto frecuente no tiene atajos de fecha (usa mes de inicio/fin)", ()=>{
+  const e=abrirEdicion(GASTO_FREC_EDIT());
+  try{
+    cierto(!document.querySelector(`[onclick^="setFechaQuick('edit-fecha'"]`),
+      "un frecuente muestra mesInicio/mesFin, no una fecha puntual con atajos");
+  } finally { e.cerrar(); }
+});
+
+test("setFechaQuick actualiza la fecha en el formulario de edición", ()=>{
+  const e=abrirEdicion(GASTO_ARS_EDIT());
+  try{
+    setFechaQuick("edit-fecha", -1);
+    const ayer=new Date(); ayer.setDate(ayer.getDate()-1);
+    const ymd=ayer.getFullYear()+"-"+String(ayer.getMonth()+1).padStart(2,"0")+"-"+String(ayer.getDate()).padStart(2,"0");
+    igual(document.getElementById("edit-fecha").value, ymd);
+  } finally { e.cerrar(); }
+});
+
+// ═══════════════════════════════════════════
 // AISLAMIENTO
 // ═══════════════════════════════════════════
 grupo("Aislamiento de los tests");
