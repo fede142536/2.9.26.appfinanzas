@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v121">
+<meta name="enola-version" content="enola-v122">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -607,6 +607,11 @@
   <div class="month-nav"><button onclick="cambiarMesInv(-1)" aria-label="Mes anterior">‹</button><span id="inv-mes-label"></span><button onclick="cambiarMesInv(1)" aria-label="Mes siguiente">›</button></div>
   <div class="summary-row" id="inv-summary"></div>
   <div style="height:4px"></div>
+  <div class="card" id="card-posicion-inicial" style="display:none">
+    <div class="card-title">◈ Lo que ya tenías antes de la app</div>
+    <p class="txt-sm txt-muted mb-10">Para saber si ganaste hace falta saber cuánto habías puesto. Si vendiste algo comprado antes de usar la app, esa compra no está cargada y la venta entera figura como ganancia.</p>
+    <div id="posicion-inicial-lista"></div>
+  </div>
   <div class="card"><div class="card-title">Balance del mes</div><div id="inv-balance"></div></div>
   <div class="card"><div class="card-title">Movimientos del mes</div><div id="inv-movs"></div></div>
   <div class="card">
@@ -931,6 +936,7 @@
 <script src="js/analisis.js"></script>
 <script src="js/cambio-moneda.js"></script>
 <script src="js/traspasos.js"></script>
+<script src="js/posicion-inicial.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>

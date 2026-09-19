@@ -516,6 +516,8 @@ function renderInv(){
 
   // ── HISTÓRICO TOTAL ──
   renderInvHistorico();
+
+  if(typeof renderPosicionInicial==="function") renderPosicionInicial();
 }
 
 // Renderiza el card de histórico total: KPIs, gráfico mensual y top tickers

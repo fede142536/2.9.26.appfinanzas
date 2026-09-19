@@ -41,9 +41,18 @@ function montoInv(m, moneda){
 //   flujoPorMes     {"2026-06": {ars, usd}}   capital neto que ENTRÓ a inversiones ese mes
 //                                             (negativo = sacaste capital)
 //   eventos         lista de ganancias reconocidas, para poder auditarlas
-function calcularResultadoInv(lista){
+// `posIni` es lo que ya tenías puesto en cada ticker ANTES del primer movimiento cargado.
+// Sin eso, una venta de algo comprado antes de usar la app no encuentra capital detrás y se
+// cuenta entera como ganancia (ver posicion-inicial.js). Se pasa como parámetro y no se lee
+// del global adentro para que el cálculo siga siendo probable con una lista suelta.
+function calcularResultadoInv(lista, posIni){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion").slice().sort(ordenDeOperacion);
   const capital={};   // capital[ticker] = {ars, usd}
+  Object.keys(posIni||{}).forEach(t=>{
+    const p=posIni[t]||{};
+    const ars=Number(p.ars)||0, usd=Number(p.usd)||0;
+    if(ars>0 || usd>0) capital[t]={ars, usd};
+  });
   const ganancia={};  // ganancia[ym]    = {ars, usd}
   const flujo={};     // flujo[ym]       = {ars, usd}
   const eventos=[];
@@ -93,17 +102,23 @@ function calcularResultadoInv(lista){
 // id alcanza porque los movimientos se agregan, se editan o se borran pasando siempre por save().
 let _resultadoInvCache=null;
 let _resultadoInvFirma="";
-function firmaDeLista(lista){
+function firmaDeLista(lista, posIni){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion");
   let suma=0;
   inv.forEach(m=>{ suma += (m.id||0) + (m.importe||0) + (m.importeUSD||0); });
-  return inv.length+"|"+suma;
+  // La posición inicial entra a la firma: cambiarla cambia el resultado, y sin esto la
+  // pantalla seguía mostrando el cálculo viejo hasta el próximo alta.
+  return inv.length+"|"+suma+"|"+JSON.stringify(posIni||{});
+}
+function posicionInicialActual(){
+  return (typeof posicionInicial!=="undefined" && posicionInicial) ? posicionInicial : {};
 }
 function resultadoInv(lista){
   const fuente = lista || (typeof movs!=="undefined" ? movs : []);
-  const firma=firmaDeLista(fuente);
+  const posIni = posicionInicialActual();
+  const firma=firmaDeLista(fuente, posIni);
   if(_resultadoInvCache && firma===_resultadoInvFirma) return _resultadoInvCache;
-  _resultadoInvCache=calcularResultadoInv(fuente);
+  _resultadoInvCache=calcularResultadoInv(fuente, posIni);
   _resultadoInvFirma=firma;
   return _resultadoInvCache;
 }
@@ -194,7 +209,7 @@ function netoInvTotal(lista){
 function capitalPorTickerHasta(ym, lista){
   const fuente = lista || (typeof movs!=="undefined" ? movs : []);
   const hasta = (fuente||[]).filter(m => m && m.tipo==="Inversion" && String(m.fecha||"").slice(0,7) <= ym);
-  return calcularResultadoInv(hasta).capitalPorTicker;
+  return calcularResultadoInv(hasta, posicionInicialActual()).capitalPorTicker;
 }
 function capitalInvertidoHasta(ym, lista){
   const tabla=capitalPorTickerHasta(ym, lista);
