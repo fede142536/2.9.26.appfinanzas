@@ -79,6 +79,7 @@
 <script src="js/analisis.js"></script>
 <script src="js/cambio-moneda.js"></script>
 <script src="js/traspasos.js"></script>
+<script src="js/posicion-inicial.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
@@ -4007,6 +4008,145 @@ test("la etiqueta del chip de Gastos dice que es del mes", ()=>{
   const txt=chipsDeMovs(MES_INV, "Gasto", "", "2026-08");
   cierto(txt.toLowerCase().includes("invertido en el mes"),
          "la etiqueta no aclara que es del mes: " + txt);
+});
+
+// ═══════════════════════════════════════════
+// POSICIÓN INICIAL
+// ═══════════════════════════════════════════
+grupo("Posición inicial");
+
+// "Primero recuperás capital, después ganás" necesita saber cuánto pusiste, y eso sale de las
+// compras cargadas. Lo comprado antes de usar la app no está en ninguna parte: el capital da 0
+// y la venta entera se cuenta como ganancia. En los datos reales son USD 666,53 así contados,
+// y ESTRA1A sola aporta USD 551,21 en una única venta de mayo 2026.
+function conPosIni(mapa, fn){
+  const antes=posicionInicial;
+  posicionInicial=mapa||{};
+  invalidarResultadoInv();
+  try { return fn(); } finally { posicionInicial=antes; invalidarResultadoInv(); }
+}
+// Una venta en dólares: importe queda en 0 y el monto va en importeUSD.
+function ventaUSD(fecha, ticker, usd){
+  return {id:++_idInv, tipo:"Inversion", subcat:"FCI Rescate capital", cat:"FCI",
+          ticker, fecha, importe:0, importeUSD:usd, moneda:"USD"};
+}
+
+const SOLO_VENTA = [venta("2026-05-08","ESTRA1A",551210)];
+
+test("sin la compra cargada, la venta entera figura como ganancia", ()=>{
+  // El síntoma. No es un bug del cálculo: con capital 0 no hay otra lectura posible.
+  const r=calcularResultadoInv(SOLO_VENTA);
+  igual(r.gananciaPorMes["2026-05"].ars, 551210, "la venta sin capital detrás cuenta entera");
+});
+
+test("con la posición inicial cargada, la venta deja de ser ganancia", ()=>{
+  const r=calcularResultadoInv(SOLO_VENTA, {ESTRA1A:{ars:551210, usd:0}});
+  igual(r.gananciaPorMes["2026-05"].ars, 0, "recuperaste lo tuyo: no ganaste nada");
+  igual(r.capitalPorTicker["ESTRA1A"].ars, 0, "y no queda capital dando vueltas");
+});
+
+test("la posición inicial que sobra queda como capital invertido", ()=>{
+  // Tenías 800.000 y vendiste 551.210: te quedan 248.790 puestos ahí.
+  const r=calcularResultadoInv(SOLO_VENTA, {ESTRA1A:{ars:800000, usd:0}});
+  igual(r.capitalPorTicker["ESTRA1A"].ars, 248790);
+  igual(r.gananciaPorMes["2026-05"].ars, 0);
+});
+
+test("si vendiste por más de lo que tenías, la diferencia sí es ganancia", ()=>{
+  const r=calcularResultadoInv(SOLO_VENTA, {ESTRA1A:{ars:500000, usd:0}});
+  igual(r.gananciaPorMes["2026-05"].ars, 51210, "551.210 vendidos sobre 500.000 puestos");
+});
+
+test("las monedas no se cruzan", ()=>{
+  // Una posición inicial en pesos no puede respaldar una venta en dólares.
+  const l=[ventaUSD("2026-05-08","ESTRA1A",551.21)];
+  const r=calcularResultadoInv(l, {ESTRA1A:{ars:551210, usd:0}});
+  igual(r.gananciaPorMes["2026-05"].usd, 551.21, "los pesos no respaldan una venta en dólares");
+  const r2=calcularResultadoInv(l, {ESTRA1A:{ars:0, usd:551.21}});
+  igual(r2.gananciaPorMes["2026-05"].usd, 0, "en la misma moneda sí");
+});
+
+// ── La detección ──
+
+test("propone el ticker que vendiste sin haber comprado nunca", ()=>{
+  conPosIni({}, ()=>{
+    const c=candidatosAPosicionInicial(SOLO_VENTA);
+    igual(c.length, 1);
+    igual(c[0].ticker, "ESTRA1A");
+    igual(c[0].faltante, 551210, "propone lo que falta, que es no haber ganado ni perdido");
+    igual(c[0].moneda, "ARS");
+  });
+});
+
+test("una ganancia de verdad no se propone", ()=>{
+  // Compraste 250.000 y vendiste 252.000: los 2.000 son ganancia, no capital faltante.
+  conPosIni({}, ()=>{
+    const l=[compra("2026-04-01","BCMMA",250000), venta("2026-05-01","BCMMA",252000)];
+    igual(candidatosAPosicionInicial(l).length, 0, "hay compras cargadas: ganaste de verdad");
+  });
+});
+
+test("un cupón no necesita capital detrás", ()=>{
+  // Un cupón, un dividendo o un rendimiento son renta pura: no devuelven lo que pusiste, así
+  // que no tener una compra detrás es lo normal.
+  conPosIni({}, ()=>{
+    const cupon={id:++_idInv, tipo:"Inversion", subcat:"Bonos Cupón", cat:"Bonos",
+                 ticker:"AL30", fecha:"2026-05-08", importe:12000};
+    igual(candidatosAPosicionInicial([cupon]).length, 0, "un cupón es ganancia pura");
+  });
+});
+
+test("cargar la posición hace desaparecer la propuesta", ()=>{
+  conPosIni({ESTRA1A:{ars:551210, usd:0}}, ()=>{
+    igual(candidatosAPosicionInicial(SOLO_VENTA).length, 0);
+  });
+});
+
+test("cada moneda se propone por separado", ()=>{
+  // El caso real de INSTITUA: compras en pesos cargadas, y una venta en dólares sin ninguna
+  // compra en dólares detrás. La pata en pesos está bien; la de dólares no.
+  conPosIni({}, ()=>{
+    const l=[compra("2026-04-17","INSTITUA",200000), venta("2026-05-06","INSTITUA",201787),
+             ventaUSD("2026-07-08","INSTITUA",36.36)];
+    const c=candidatosAPosicionInicial(l);
+    igual(c.length, 1, "solo la pata en dólares");
+    igual(c[0].moneda, "USD");
+    igual(c[0].faltante, 36.36);
+  });
+});
+
+test("el total sin respaldo separa pesos de dólares", ()=>{
+  conPosIni({}, ()=>{
+    const l=[...SOLO_VENTA, ventaUSD("2026-07-08","AL30D",78.96)];
+    const t=totalSinRespaldo(l);
+    igual(t.ars, 551210);
+    igual(t.usd, 78.96);
+  });
+});
+
+test("la posición inicial entra en la firma de la caché", ()=>{
+  // Sin esto, cargar una posición no cambiaba nada en pantalla hasta el próximo alta: el
+  // resultado se calcula sobre toda la historia y queda cacheado.
+  const a=firmaDeLista(SOLO_VENTA, {});
+  const b=firmaDeLista(SOLO_VENTA, {ESTRA1A:{ars:551210, usd:0}});
+  cierto(a!==b, "la firma no distingue dos posiciones iniciales distintas: la caché queda vieja");
+});
+
+test("una posición que cubre justo no deja un candidato de cero", ()=>{
+  // El caso real de AL30D: cuatro ventas en dólares que suman exactamente la posición cargada.
+  // Cada resta deja un residuo de coma flotante, y con `> 0` la última venta seguía figurando
+  // como candidata por USD 0 — imposible de cerrar, porque cargarla no cambiaba nada.
+  conPosIni({AL30D:{ars:0, usd:78.96}}, ()=>{
+    const l=[ventaUSD("2026-07-08","AL30D",37.85), ventaUSD("2026-08-10","AL30D",1.24),
+             ventaUSD("2026-09-03","AL30D",13.98), ventaUSD("2026-09-04","AL30D",25.89)];
+    igual(candidatosAPosicionInicial(l).length, 0, "quedó un candidato fantasma por residuo de coma flotante");
+  });
+});
+
+test("un ticker raro no puede romper el id del input", ()=>{
+  // El ticker lo escribe el usuario y termina adentro de un id y de un querySelector.
+  igual(cssIdSeguro('AL30" onerror=x'), "AL30__onerror_x");
+  igual(cssIdSeguro("BCMMA|usd"), "BCMMA_usd");
 });
 
 grupo("Aislamiento de los tests");

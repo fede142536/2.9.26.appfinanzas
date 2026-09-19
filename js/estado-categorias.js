@@ -268,6 +268,9 @@ function saveCatOrder(){ setSensitiveRaw("fcatorder", JSON.stringify(catOrder));
 // declararla con `let` más abajo, el primer render tiraba ReferenceError por temporal dead
 // zone y cortaba la función entera, dejando la pantalla de Movimientos completamente vacía.
 let presupuestos = {};
+// Lo que ya tenías invertido en cada ticker antes del primer movimiento cargado, por moneda:
+// {"AL30D": {ars:0, usd:78.96}}. Ver posicion-inicial.js.
+let posicionInicial = {};
 
 // Devuelve los nombres de categoría de `catsObj` en el orden guardado por el usuario.
 // Si no hay orden guardado para ese tipo, devuelve el orden natural del objeto.
