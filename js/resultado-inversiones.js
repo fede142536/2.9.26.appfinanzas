@@ -184,3 +184,23 @@ function netoInvTotal(lista){
     usd: Math.round((acc.usd+p.usd)*100)/100
   }), {ars:0, usd:0});
 }
+
+// ═══════════════════════════════════════════
+// CAPITAL AL CIERRE DE UN MES
+// ═══════════════════════════════════════════
+// capitalInvertido() mira toda la historia, así que sirve para "cuánto tengo puesto hoy" y para
+// nada más: parado en un mes viejo diría que tenías invertido lo que pusiste después. Para una
+// pantalla que se navega por mes hace falta el corte a esa fecha.
+function capitalPorTickerHasta(ym, lista){
+  const fuente = lista || (typeof movs!=="undefined" ? movs : []);
+  const hasta = (fuente||[]).filter(m => m && m.tipo==="Inversion" && String(m.fecha||"").slice(0,7) <= ym);
+  return calcularResultadoInv(hasta).capitalPorTicker;
+}
+function capitalInvertidoHasta(ym, lista){
+  const tabla=capitalPorTickerHasta(ym, lista);
+  const out={ars:0, usd:0};
+  Object.keys(tabla).forEach(t=>{ out.ars+=tabla[t].ars; out.usd+=tabla[t].usd; });
+  out.ars=Math.round(out.ars*100)/100;
+  out.usd=Math.round(out.usd*100)/100;
+  return out;
+}
