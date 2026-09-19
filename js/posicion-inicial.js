@@ -130,6 +130,23 @@ function aplicarPosIniDesdeInput(clave){
   refrescarTrasPosIni();
 }
 
+// Cargar todas de una. Con tres o cuatro propuestas, aceptar el valor sugerido una por una es
+// puro trámite: el valor que se toma es el que está en cada input, así que lo que hayas
+// corregido a mano se respeta igual.
+function aplicarTodasLasPosIni(){
+  const cands=candidatosAPosicionInicial(movs);
+  if(!cands.length) return;
+  let cargadas=0;
+  cands.forEach(c=>{
+    const input=document.querySelector("#posini-"+cssIdSeguro(c.clave));
+    const escrito=input ? parseFloat(input.value) : NaN;
+    const monto=(isFinite(escrito) && escrito>0) ? escrito : c.faltante;
+    if(fijarPosicionInicial(c.ticker, c.moneda, monto)) cargadas++;
+  });
+  showToast(`${cargadas} ${cargadas===1?"posición cargada":"posiciones cargadas"} ✓`);
+  refrescarTrasPosIni();
+}
+
 function descartarPosIni(clave){
   ignorarPosIni(clave);
   refrescarTrasPosIni();
@@ -195,6 +212,9 @@ function renderPosicionInicial(){
       <div class="txt-md txt-strong">${montos.join(" + ")} contados como ganancia</div>
       <div class="txt-xs txt-muted" style="margin-top:4px">Vendiste esto sin que haya ninguna compra cargada. Si ya lo tenías antes de usar la app, decí cuánto te había costado y deja de figurar como ganado. Dejando el número como viene, no ganaste ni perdiste con lo que ya tenías.</div>
     </div>`;
+    if(cands.length>1){
+      html+=`<button class="btn-primary" style="width:100%;margin-bottom:10px" onclick="aplicarTodasLasPosIni()">Ya tenía las ${cands.length} · cargarlas todas</button>`;
+    }
     html+=cands.map(c=>{
       const id="posini-"+cssIdSeguro(c.clave);
       const monto=c.moneda==="USD" ? `USD ${c.faltante.toFixed(2)}` : fmtS(c.faltante);

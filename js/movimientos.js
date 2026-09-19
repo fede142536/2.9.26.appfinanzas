@@ -581,28 +581,21 @@ function renderTxListaLazy(show){
 }
 
 // ═══════════════════════════════════════════
-// CUADRO DE INVERSIONES (vista "Todos")
+// CUADRO DE INVERSIONES DEL MES (vista "Todos")
 // ═══════════════════════════════════════════
-// La pantalla mostraba el movimiento de inversiones del mes —lo que entró y lo que salió— y en
-// ningún lado cuánto seguía puesto. No es lo mismo ni se parece: con un fondo de liquidez que
-// se suscribe y se rescata todo el tiempo, un mes puede mover $2.800.000 y dejar $385.000
-// invertidos. Mirando solo el movimiento, la cifra grande se lee como si fuera la posición.
+// Movimientos se navega mes a mes: acá va lo que pasó DENTRO del mes y nada más. Lo que venís
+// teniendo puesto desde siempre vive en la pestaña Inversiones, que es la que mira la cartera
+// entera; mezclar las dos escalas en una pantalla mensual fue justamente lo que confundía.
 //
-// Acá van las dos, separadas y con nombre: arriba lo que tenés puesto al cierre del período,
-// abajo lo que se movió dentro de él y el resultado que dejó.
-function renderCuadroInversiones(lista, ymCierre, periodoLbl, ganInv){
+// El número grande es el RESULTADO, que es lo único que suma o resta a tu plata: lo que entró y
+// salió hacia inversiones es la misma plata cambiando de lugar, y va abajo, con su nombre.
+function renderCuadroInversiones(lista, periodoLbl, ganInv){
   const card=document.getElementById("card-mov-inversiones");
   const el=document.getElementById("mov-inversiones");
   if(!card||!el) return;
 
   const invs=(lista||[]).filter(m=>m.tipo==="Inversion");
-  const capital=capitalInvertidoHasta(ymCierre);
-  const porTicker=capitalPorTickerHasta(ymCierre);
-  // Sin nada invertido y sin movimientos en el período, el cuadro no tiene qué decir.
-  if(!invs.length && Math.round(capital.ars)===0 && Math.abs(capital.usd)<0.01){
-    card.style.display="none";
-    return;
-  }
+  if(!invs.length){ card.style.display="none"; return; }
   card.style.display="block";
 
   const puestoARS=invs.filter(m=>!isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
@@ -610,51 +603,29 @@ function renderCuadroInversiones(lista, ymCierre, periodoLbl, ganInv){
   const puestoUSD=invs.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
   const sacadoUSD=invs.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
 
-  let html=`<div class="seccion-label mb-6">Invertido al cierre de ${escapeHtml(periodoLbl)}</div>
-    <div style="font-size:24px;font-weight:600;color:var(--invest);margin-bottom:2px" data-animar="${capital.ars}" data-animar-fmt="fmtTotal">${fmtTotal(0)}</div>`;
-  if(Math.abs(capital.usd)>=0.01){
-    html+=`<div style="font-size:13px;font-weight:600;color:var(--invest);margin-bottom:4px">USD ${capital.usd.toFixed(2)}</div>`;
+  const colorRes=Math.round(ganInv.ars)===0 ? "var(--muted)"
+               : (ganInv.ars>0 ? "var(--success)" : "var(--danger)");
+  let html=`<div class="seccion-label mb-6">Resultado en ${escapeHtml(periodoLbl)}</div>
+    <div style="font-size:24px;font-weight:600;color:${colorRes};margin-bottom:2px" data-animar="${ganInv.ars}" data-animar-fmt="fmtTotal">${fmtTotal(0)}</div>`;
+  if(Math.abs(ganInv.usd||0)>=0.01){
+    const cu=ganInv.usd>=0?"var(--success)":"var(--danger)";
+    html+=`<div style="font-size:13px;font-weight:600;color:${cu};margin-bottom:4px">${ganInv.usd>=0?"+":""}USD ${ganInv.usd.toFixed(2)}</div>`;
   }
 
-  // El movimiento del período y el resultado van en renglones distintos a propósito: lo que
-  // entró y salió es plata cambiando de lugar, y el resultado es lo único que suma o resta.
   const mov=[];
   if(puestoARS>0) mov.push(`📤 invertido en el mes <strong style="color:var(--invest)">${fmtS(puestoARS)}</strong>`);
   if(sacadoARS>0) mov.push(`📥 rescatado <strong style="color:var(--success)">${fmtS(sacadoARS)}</strong>`);
   if(puestoUSD>0) mov.push(`📤 invertido USD <strong style="color:var(--invest)">${puestoUSD.toFixed(2)}</strong>`);
   if(sacadoUSD>0) mov.push(`📥 rescatado USD <strong style="color:var(--success)">${sacadoUSD.toFixed(2)}</strong>`);
-  const res=[];
-  if(Math.round(ganInv.ars)!==0){
-    const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
-    res.push(`<strong style="color:${cg}">${ganInv.ars>=0?"+":""}${fmtS(ganInv.ars)}</strong>`);
-  }
-  if(Math.abs(ganInv.usd||0)>=0.01){
-    const cu=ganInv.usd>=0?"var(--success)":"var(--danger)";
-    res.push(`<strong style="color:${cu}">${ganInv.usd>=0?"+":""}USD ${ganInv.usd.toFixed(2)}</strong>`);
-  }
-  html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${mov.length?mov.join(" · "):"Sin movimientos en el período"}</div>`;
-  if(res.length){
-    html+=`<div style="font-size:12px;color:var(--muted)">📊 resultado ${res.join(" · ")}</div>`;
-  }
+  html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${mov.join(" · ")}</div>`;
   html+=`<div style="height:14px"></div>`;
 
-  const items=Object.keys(porTicker)
-    .map(t=>({ticker:t, ars:porTicker[t].ars, usd:porTicker[t].usd}))
-    .filter(p=>Math.round(p.ars)!==0 || Math.abs(p.usd)>=0.01)
-    .sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars) || Math.abs(b.usd)-Math.abs(a.usd));
-  if(items.length){
-    const maxV=Math.max(...items.map(p=>Math.abs(p.ars)), 1);
-    html+=`<div class="seccion-label mb-6">Por ticker (lo que sigue puesto)</div>`;
-    html+=items.map(p=>{
-      const tickerEsc=attrJS(p.ticker);
-      const valor=Math.round(p.ars)!==0 ? fmtS(p.ars) : `USD ${p.usd.toFixed(2)}`;
-      const extraUSD=(Math.round(p.ars)!==0 && Math.abs(p.usd)>=0.01) ? `<div class="txt-xs txt-muted">USD ${p.usd.toFixed(2)}</div>` : "";
-      return `<div role="button" tabindex="0" class="bar-row" style="margin-bottom:6px;cursor:pointer" onclick="showInstrumentoDetail(${tickerEsc})">
-        <div class="bar-label">${escapeHtml(p.ticker)}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(p.ars)/maxV*100)}%;background:var(--invest)"></div></div>
-        <div class="bar-val" style="color:var(--invest)">${valor}${extraUSD}</div>
-      </div>`;
-    }).join("");
+  // Neto del mes por ticker: negativo = pusiste plata y no la sacaste (color de inversión, no
+  // rojo de gasto); positivo = sacaste más de lo que pusiste.
+  const barras=barrasDeTickers(netoPorTickerDelPeriodo(lista),
+                               p=>(p.ars>=0 && p.usd>=0) ? "var(--success)" : "var(--invest)", true);
+  if(barras){
+    html+=`<div class="seccion-label mb-6">Por ticker (movimiento del mes)</div>`+barras;
   }
   el.innerHTML=html;
   animarNumerosDe(el);
@@ -966,9 +937,8 @@ function renderMovs(){
     } else {
       arrastreEl.style.display="none";
     }
-    const ymCierre = filtroFecha ? String(filtroFecha.hasta).slice(0,7) : mesActual;
-    const periodoLbl = filtroFecha ? "del período" : mesLbl(mesActual);
-    renderCuadroInversiones(mesMovs, ymCierre, periodoLbl, ganInv);
+    const periodoLbl = filtroFecha ? "el período" : mesLbl(mesActual);
+    renderCuadroInversiones(mesMovs, periodoLbl, ganInv);
   }
 
   // ── RESUMEN DE PRESUPUESTOS (solo cuando filtro = Gasto) ──

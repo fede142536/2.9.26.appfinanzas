@@ -518,6 +518,7 @@ function renderInv(){
   renderInvHistorico();
 
   if(typeof renderPosicionInicial==="function") renderPosicionInicial();
+  renderInvertidoHoy();
 }
 
 // Renderiza el card de histórico total: KPIs, gráfico mensual y top tickers
@@ -874,3 +875,69 @@ function guardarEditTc(){
   editingTcId=null;
 }
 
+
+// ═══════════════════════════════════════════
+// INVERTIDO HOY (acumulado, toda la historia)
+// ═══════════════════════════════════════════
+// Movimientos mira un mes; esta pestaña mira la cartera entera. Acá va todo lo que venís
+// invirtiendo: cuánto sigue puesto hoy, cuánto pasó por ahí en total y qué resultado dejó.
+//
+// No es lo mismo que "Cartera (acumulado)", que está más abajo: esa muestra el neto de CAJA por
+// posición (lo que te dio o te costó), y esta el CAPITAL que sigue adentro. Con un fondo que se
+// suscribe y se rescata todo el tiempo, las dos dan números muy distintos y las dos son ciertas.
+function renderInvertidoHoy(){
+  const card=document.getElementById("card-invertido-hoy");
+  const el=document.getElementById("invertido-hoy");
+  if(!card||!el) return;
+
+  const todas=movs.filter(m=>m.tipo==="Inversion");
+  if(!todas.length){ card.style.display="none"; return; }
+  card.style.display="block";
+
+  const capital=capitalInvertido(movs);
+  const puestoARS=todas.filter(m=>!isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  const sacadoARS=todas.filter(m=>isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  const puestoUSD=todas.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+  const sacadoUSD=todas.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+  const gan=resultadoInv(movs).gananciaPorMes;
+  const total={ars:0, usd:0};
+  Object.keys(gan).forEach(ym=>{ total.ars+=gan[ym].ars; total.usd+=gan[ym].usd; });
+  total.ars=Math.round(total.ars*100)/100;
+  total.usd=Math.round(total.usd*100)/100;
+
+  let html=`<div class="seccion-label mb-6">Lo que sigue puesto</div>
+    <div style="font-size:24px;font-weight:600;color:var(--invest);margin-bottom:2px" data-animar="${capital.ars}" data-animar-fmt="fmtTotal">${fmtTotal(0)}</div>`;
+  if(Math.abs(capital.usd)>=0.01){
+    html+=`<div style="font-size:13px;font-weight:600;color:var(--invest);margin-bottom:4px">USD ${capital.usd.toFixed(2)}</div>`;
+  }
+
+  const mov=[];
+  if(puestoARS>0) mov.push(`📤 invertido en total <strong style="color:var(--invest)">${fmtS(puestoARS)}</strong>`);
+  if(sacadoARS>0) mov.push(`📥 rescatado <strong style="color:var(--success)">${fmtS(sacadoARS)}</strong>`);
+  if(puestoUSD>0) mov.push(`📤 invertido USD <strong style="color:var(--invest)">${puestoUSD.toFixed(2)}</strong>`);
+  if(sacadoUSD>0) mov.push(`📥 rescatado USD <strong style="color:var(--success)">${sacadoUSD.toFixed(2)}</strong>`);
+  html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${mov.join(" · ")}</div>`;
+
+  const res=[];
+  if(Math.round(total.ars)!==0){
+    const c=total.ars>=0?"var(--success)":"var(--danger)";
+    res.push(`<strong style="color:${c}">${total.ars>=0?"+":""}${fmtS(total.ars)}</strong>`);
+  }
+  if(Math.abs(total.usd)>=0.01){
+    const c=total.usd>=0?"var(--success)":"var(--danger)";
+    res.push(`<strong style="color:${c}">${total.usd>=0?"+":""}USD ${total.usd.toFixed(2)}</strong>`);
+  }
+  if(res.length){
+    html+=`<div style="font-size:12px;color:var(--muted)">📊 resultado acumulado ${res.join(" · ")}</div>`;
+  }
+  html+=`<div style="height:14px"></div>`;
+
+  const barras=barrasDeTickers(capitalPorTicker(movs), ()=>"var(--invest)", false);
+  if(barras){
+    html+=`<div class="seccion-label mb-6">Por ticker (capital adentro)</div>`+barras;
+  } else {
+    html+=`<div class="txt-xs txt-muted">Hoy no queda capital invertido: rescataste todo lo que habías puesto.</div>`;
+  }
+  el.innerHTML=html;
+  animarNumerosDe(el);
+}
