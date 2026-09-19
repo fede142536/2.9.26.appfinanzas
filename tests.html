@@ -367,23 +367,13 @@ test("Ingresos y Gastos quedan limpios de inversiones", async ()=>{
          "se colaron las compras en Gastos: " + txt);
 });
 
-test("hay un chip por cada ticker operado en el mes", ()=>{
+// Los tickers ya no van como chips: el neto del mes es FLUJO, y puesto al lado de "Ingresos" y
+// "Gastos" se lee como si fuera la posición. Todo eso vive ahora en el cuadro de Inversiones,
+// que muestra las dos cosas con nombre distinto. Los chips quedan para la plata de todos los días.
+test("la fila de chips no lleva netos por ticker", ()=>{
   const txt=chipsDeMovs(MES_INV, "Todos", "", "2026-08");
-  cierto(txt.includes("BCAHA"), "falta el chip de BCAHA: " + txt);
-  cierto(txt.includes("YPF"), "falta el chip de YPF: " + txt);
-});
-
-test("el neto positivo lleva signo + y el negativo no es rojo de gasto", ()=>{
-  const dom=document.createElement("div");
-  document.body.appendChild(dom);
-  try{
-    dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
-    const chips=[...dom.querySelectorAll(".chip")].map(c=>c.innerHTML);
-    const bcaha=chips.find(c=>c.includes("BCAHA")), ypf=chips.find(c=>c.includes("YPF"));
-    cierto(/\+\$?1?00\.000/.test(bcaha.replace(/<[^>]*>/g,"")), "el neto positivo va con signo +: " + bcaha);
-    cierto(ypf.includes("--invest"), "poner plata en una inversión no es perderla: no va en rojo de gasto. " + ypf);
-    cierto(bcaha.includes("--success"), "el neto positivo va en verde: " + bcaha);
-  } finally { dom.remove(); }
+  cierto(!txt.includes("BCAHA") && !txt.includes("YPF"),
+         "el neto del mes por ticker volvió a la fila de chips, donde se lee como posición: " + txt);
 });
 
 test("Balance = Ingresos − Gastos + la suma de los netos", async ()=>{
@@ -3887,6 +3877,138 @@ test("setFechaQuick actualiza la fecha en el formulario de edición", ()=>{
 // ═══════════════════════════════════════════
 // AISLAMIENTO
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// CUADRO DE INVERSIONES EN MOVIMIENTOS
+// ═══════════════════════════════════════════
+grupo("Cuadro de inversiones en Movimientos");
+
+// La pantalla decía cuánto se movió hacia y desde inversiones en el mes, y en ningún lado
+// cuánto seguía puesto. Con un fondo de liquidez que se suscribe y se rescata todo el tiempo
+// las dos cifras no se parecen: en los datos reales, septiembre 2026 movió $2.866.732 hacia
+// inversiones y dejó $385.692 invertidos. Mirando solo el movimiento, el número grande se lee
+// como si fuera la posición — que es exactamente lo que pasó.
+function cuadroInv(lista, ym, devolverHTML){
+  const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list",
+             "mov-mes-label","card-mov-inversiones","mov-inversiones"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const cuadro=creados[ids.indexOf("mov-inversiones")];
+  const prev={movs, filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
+  movs=lista; filtro="Todos"; filtroCategoria=""; mesActual=ym; filtroFecha=null;
+  invalidarResultadoInv();
+  try{
+    renderMovs();
+    return devolverHTML ? cuadro.innerHTML : (cuadro.innerText || cuadro.textContent);
+  } finally {
+    creados.forEach(e=>e.remove());
+    movs=prev.movs; filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff;
+    invalidarResultadoInv();
+  }
+}
+// El número grande arranca en $0 y sube con animarNumerosDe(). Para leerlo sin esperar, el valor
+// de destino está en data-animar, que es justamente el que la animación tiene que alcanzar.
+function capitalDelCuadro(lista, ym){
+  const dom=document.createElement("div");
+  document.body.appendChild(dom);
+  try{
+    dom.innerHTML=cuadroInv(lista, ym, true);
+    const el=dom.querySelector("[data-animar]");
+    return el ? parseFloat(el.dataset.animar) : null;
+  } finally { dom.remove(); }
+}
+
+// ── capitalInvertidoHasta(): el corte al cierre de un mes ──
+
+test("el capital al cierre es lo comprado menos lo que ya recuperaste", ()=>{
+  const l=[compra("2026-04-01","X",100000), venta("2026-05-01","X",40000)];
+  igual(capitalInvertidoHasta("2026-04", l).ars, 100000, "en abril todavía no habías vendido nada");
+  igual(capitalInvertidoHasta("2026-05", l).ars, 60000, "en mayo recuperaste 40.000 de los 100.000");
+});
+
+test("el corte no mira lo que pusiste después", ()=>{
+  // El acumulado de hoy, parado en un mes viejo, diría que tenías puesto lo que pusiste recién.
+  const l=[compra("2026-04-01","X",100000), compra("2026-09-01","X",900000)];
+  igual(capitalInvertidoHasta("2026-04", l).ars, 100000, "septiembre no existía todavía en abril");
+  igual(capitalInvertidoHasta("2026-09", l).ars, 1000000);
+});
+
+test("una venta con ganancia no deja capital negativo", ()=>{
+  // Vendiste por más de lo que pusiste: el excedente es ganancia, no capital en contra.
+  const l=[compra("2026-04-01","X",100000), venta("2026-05-01","X",150000)];
+  igual(capitalInvertidoHasta("2026-05", l).ars, 0, "recuperaste todo; lo de más fue ganancia");
+});
+
+test("los dólares llevan su propia cuenta", ()=>{
+  const l=[compra("2026-04-01","AL30",0,{importeUSD:100, moneda:"USD"}),
+           compra("2026-04-02","BCMMA",50000)];
+  const c=capitalInvertidoHasta("2026-04", l);
+  igual(c.usd, 100);
+  igual(c.ars, 50000, "una compra en dólares no puede sumar pesos");
+});
+
+// ── El cuadro en pantalla ──
+
+test("el cuadro muestra lo que sigue invertido, no lo que se movió", ()=>{
+  // BCAHA: 900.000 suscriptos y 1.000.000 rescatados → no queda capital, quedó ganancia.
+  // YPF: 300.000 comprados y nada vendido → eso es lo que sigue puesto.
+  // El mes movió 1.200.000 hacia inversiones; la posición es 300.000.
+  igual(capitalDelCuadro(MES_INV, "2026-08"), 300000,
+        "el número grande tiene que ser la posición, no el bruto movido en el mes");
+});
+
+test("el bruto movido en el mes aparece aparte y con nombre", ()=>{
+  const txt=cuadroInv(MES_INV, "2026-08");
+  cierto(txt.includes("invertido en el mes"), "falta decir que 1.200.000 es del mes: " + txt);
+  cierto(txt.includes("1.200.000"), "falta lo puesto en el mes: " + txt);
+  cierto(txt.includes("1.000.000"), "falta lo rescatado en el mes: " + txt);
+});
+
+test("el resultado del mes vive en el cuadro", ()=>{
+  // Rescatar capital es neutro; de BCAHA lo único que movió tu plata fueron 100.000 de ganancia.
+  const txt=cuadroInv(MES_INV, "2026-08");
+  cierto(txt.includes("resultado"), "el cuadro no dice el resultado: " + txt);
+  cierto(txt.includes("100.000"), "el resultado del mes no aparece: " + txt);
+});
+
+test("las barras por ticker son la posición, no el neto del mes", ()=>{
+  // El neto del mes de BCAHA es +100.000, pero no le queda capital: no va como barra.
+  const html=cuadroInv(MES_INV, "2026-08", true);
+  cierto(html.includes("YPF"), "falta la barra de YPF, que es lo único que sigue puesto: " + html);
+  cierto(!html.includes("BCAHA"), "BCAHA no tiene capital puesto: su +100.000 es el neto del mes, no posición");
+});
+
+test("con inversiones viejas y un mes quieto, la posición se sigue viendo", ()=>{
+  // Es el caso que más importa: no operaste este mes, pero tenés plata invertida.
+  const l=[...MES_INV.slice(0,2), compra("2026-05-01","SPY",158486)];
+  igual(capitalDelCuadro(l, "2026-08"), 158486, "dejó de mostrar lo invertido porque el mes no tuvo operaciones");
+  cierto(cuadroInv(l, "2026-08").includes("Sin movimientos"), "y tiene que decir que el mes no tuvo operaciones");
+});
+
+test("sin ninguna inversión el cuadro no se muestra", ()=>{
+  const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list",
+             "mov-mes-label","card-mov-inversiones","mov-inversiones"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const card=creados[ids.indexOf("card-mov-inversiones")];
+  const prev={movs, filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
+  movs=MES_INV.slice(0,2); filtro="Todos"; filtroCategoria=""; mesActual="2026-08"; filtroFecha=null;
+  invalidarResultadoInv();
+  try{
+    renderMovs();
+    igual(card.style.display, "none", "el cuadro se muestra vacío sin una sola inversión cargada");
+  } finally {
+    creados.forEach(e=>e.remove());
+    movs=prev.movs; filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff;
+    invalidarResultadoInv();
+  }
+});
+
+test("la etiqueta del chip de Gastos dice que es del mes", ()=>{
+  // Decía "◈ Invertido" a secas, arriba de un total mensual que en los datos reales daba
+  // $2.866.732 contra $385.692 realmente invertidos: se leía como la posición acumulada.
+  const txt=chipsDeMovs(MES_INV, "Gasto", "", "2026-08");
+  cierto(txt.toLowerCase().includes("invertido en el mes"),
+         "la etiqueta no aclara que es del mes: " + txt);
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

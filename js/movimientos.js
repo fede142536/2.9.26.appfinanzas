@@ -580,6 +580,86 @@ function renderTxListaLazy(show){
   txListObserver.observe(sentinel);
 }
 
+// ═══════════════════════════════════════════
+// CUADRO DE INVERSIONES (vista "Todos")
+// ═══════════════════════════════════════════
+// La pantalla mostraba el movimiento de inversiones del mes —lo que entró y lo que salió— y en
+// ningún lado cuánto seguía puesto. No es lo mismo ni se parece: con un fondo de liquidez que
+// se suscribe y se rescata todo el tiempo, un mes puede mover $2.800.000 y dejar $385.000
+// invertidos. Mirando solo el movimiento, la cifra grande se lee como si fuera la posición.
+//
+// Acá van las dos, separadas y con nombre: arriba lo que tenés puesto al cierre del período,
+// abajo lo que se movió dentro de él y el resultado que dejó.
+function renderCuadroInversiones(lista, ymCierre, periodoLbl, ganInv){
+  const card=document.getElementById("card-mov-inversiones");
+  const el=document.getElementById("mov-inversiones");
+  if(!card||!el) return;
+
+  const invs=(lista||[]).filter(m=>m.tipo==="Inversion");
+  const capital=capitalInvertidoHasta(ymCierre);
+  const porTicker=capitalPorTickerHasta(ymCierre);
+  // Sin nada invertido y sin movimientos en el período, el cuadro no tiene qué decir.
+  if(!invs.length && Math.round(capital.ars)===0 && Math.abs(capital.usd)<0.01){
+    card.style.display="none";
+    return;
+  }
+  card.style.display="block";
+
+  const puestoARS=invs.filter(m=>!isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  const sacadoARS=invs.filter(m=>isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  const puestoUSD=invs.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+  const sacadoUSD=invs.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+
+  let html=`<div class="seccion-label mb-6">Invertido al cierre de ${escapeHtml(periodoLbl)}</div>
+    <div style="font-size:24px;font-weight:600;color:var(--invest);margin-bottom:2px" data-animar="${capital.ars}" data-animar-fmt="fmtTotal">${fmtTotal(0)}</div>`;
+  if(Math.abs(capital.usd)>=0.01){
+    html+=`<div style="font-size:13px;font-weight:600;color:var(--invest);margin-bottom:4px">USD ${capital.usd.toFixed(2)}</div>`;
+  }
+
+  // El movimiento del período y el resultado van en renglones distintos a propósito: lo que
+  // entró y salió es plata cambiando de lugar, y el resultado es lo único que suma o resta.
+  const mov=[];
+  if(puestoARS>0) mov.push(`📤 invertido en el mes <strong style="color:var(--invest)">${fmtS(puestoARS)}</strong>`);
+  if(sacadoARS>0) mov.push(`📥 rescatado <strong style="color:var(--success)">${fmtS(sacadoARS)}</strong>`);
+  if(puestoUSD>0) mov.push(`📤 invertido USD <strong style="color:var(--invest)">${puestoUSD.toFixed(2)}</strong>`);
+  if(sacadoUSD>0) mov.push(`📥 rescatado USD <strong style="color:var(--success)">${sacadoUSD.toFixed(2)}</strong>`);
+  const res=[];
+  if(Math.round(ganInv.ars)!==0){
+    const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
+    res.push(`<strong style="color:${cg}">${ganInv.ars>=0?"+":""}${fmtS(ganInv.ars)}</strong>`);
+  }
+  if(Math.abs(ganInv.usd||0)>=0.01){
+    const cu=ganInv.usd>=0?"var(--success)":"var(--danger)";
+    res.push(`<strong style="color:${cu}">${ganInv.usd>=0?"+":""}USD ${ganInv.usd.toFixed(2)}</strong>`);
+  }
+  html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${mov.length?mov.join(" · "):"Sin movimientos en el período"}</div>`;
+  if(res.length){
+    html+=`<div style="font-size:12px;color:var(--muted)">📊 resultado ${res.join(" · ")}</div>`;
+  }
+  html+=`<div style="height:14px"></div>`;
+
+  const items=Object.keys(porTicker)
+    .map(t=>({ticker:t, ars:porTicker[t].ars, usd:porTicker[t].usd}))
+    .filter(p=>Math.round(p.ars)!==0 || Math.abs(p.usd)>=0.01)
+    .sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars) || Math.abs(b.usd)-Math.abs(a.usd));
+  if(items.length){
+    const maxV=Math.max(...items.map(p=>Math.abs(p.ars)), 1);
+    html+=`<div class="seccion-label mb-6">Por ticker (lo que sigue puesto)</div>`;
+    html+=items.map(p=>{
+      const tickerEsc=attrJS(p.ticker);
+      const valor=Math.round(p.ars)!==0 ? fmtS(p.ars) : `USD ${p.usd.toFixed(2)}`;
+      const extraUSD=(Math.round(p.ars)!==0 && Math.abs(p.usd)>=0.01) ? `<div class="txt-xs txt-muted">USD ${p.usd.toFixed(2)}</div>` : "";
+      return `<div role="button" tabindex="0" class="bar-row" style="margin-bottom:6px;cursor:pointer" onclick="showInstrumentoDetail(${tickerEsc})">
+        <div class="bar-label">${escapeHtml(p.ticker)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(p.ars)/maxV*100)}%;background:var(--invest)"></div></div>
+        <div class="bar-val" style="color:var(--invest)">${valor}${extraUSD}</div>
+      </div>`;
+    }).join("");
+  }
+  el.innerHTML=html;
+  animarNumerosDe(el);
+}
+
 function renderMovs(){
   const mesMovs = filtroFecha ? getMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getMesMov(mesActual);
   const mesTcs = filtroFecha ? getTcMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getTcMovsEnMes(mesActual);
@@ -622,6 +702,9 @@ function renderMovs(){
 
   // ── CHIPS ADAPTADOS AL FILTRO ──
   const arrastreEl=document.getElementById("mov-arrastre");
+  // El cuadro de inversiones es de la vista "Todos"; esa rama lo enciende.
+  const cardInvEl=document.getElementById("card-mov-inversiones");
+  if(cardInvEl) cardInvEl.style.display="none";
   if(filtro==="Tarjeta"){
     // Sub-filtro por nombre de tarjeta (Visa, Mastercard, etc.)
     // Listamos las tarjetas únicas que aparecen este mes
@@ -728,10 +811,10 @@ function renderMovs(){
       }
       // En verde, no en rojo: poner plata en una inversión no es perderla.
       if(suscripcionesARS>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(suscripcionesARS)}</div></div>`;
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido en el mes</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(suscripcionesARS)}</div></div>`;
       }
       if(suscripcionesUSD>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido USD</div><div class="chip-val" style="color:var(--invest)">USD ${suscripcionesUSD.toFixed(2)}</div></div>`;
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido en el mes USD</div><div class="chip-val" style="color:var(--invest)">USD ${suscripcionesUSD.toFixed(2)}</div></div>`;
       }
     }
     document.getElementById("mov-summary").innerHTML=chipsHtml;
@@ -829,7 +912,6 @@ function renderMovs(){
     // Un chip por ticker: neto = rescates − suscripciones. Negativo significa "hay plata puesta
     // ahí, todavía sin rescatar", no que hayas perdido; por eso va en color de inversión y no en
     // rojo de gasto.
-    const netosTicker=netoPorTickerDelPeriodo(mesMovs);
     const netoInv=netoInvTotal(mesMovs);
     const balCaja=Math.round((ingTotal-gasTotal+netoInv.ars)*100)/100;
 
@@ -854,18 +936,9 @@ function renderMovs(){
     if(gastosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Gastos USD</div><div class="chip-val negative">USD ${gastosUSDTotal.toFixed(2)}</div></div>`;
     }
-    // Los chips de inversión van al final, ya ordenados de mayor a menor por el módulo.
-    netosTicker.forEach(t=>{
-      const etiqueta=`◈ ${escapeHtml(t.ticker)}`;
-      if(Math.round(t.ars)!==0){
-        const color=t.ars>=0?"var(--success)":"var(--invest)";
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${color}">${etiqueta}</div><div class="chip-val" style="color:${color}">${t.ars>0?"+":""}${fmtTotal(t.ars)}</div></div>`;
-      }
-      if(Math.abs(t.usd)>=0.01){
-        const colorU=t.usd>=0?"var(--success)":"var(--invest)";
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorU}">${etiqueta} USD</div><div class="chip-val" style="color:${colorU}">${t.usd>0?"+":""}USD ${t.usd.toFixed(2)}</div></div>`;
-      }
-    });
+    // Los tickers ya no van como chips: un chip por ticker llenaba la fila de netos del mes
+    // —que son flujo, no posición— y no había dónde leer cuánto seguía invertido. Todo eso
+    // ahora vive en el cuadro de Inversiones, abajo.
     document.getElementById("mov-summary").innerHTML=chipsHtml;
     animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
@@ -874,13 +947,8 @@ function renderMovs(){
     document.getElementById("mov-cat-filtro").style.display="none";
     // Línea informativa: extras del mes (sin arrastre)
     const partes=[];
-    // El movido bruto ya lo dicen los chips por ticker. Acá queda el resultado, que es otra cosa:
-    // el neto de un chip es el FLUJO del mes (negativo si pusiste plata y no la sacaste), y esto
-    // es lo que realmente ganaste o perdiste, llevando el capital por ticker desde el principio.
-    if(Math.round(ganInv.ars)!==0){
-      const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
-      partes.push(`◈ Resultado: <strong style="color:${cg}">${ganInv.ars>=0?"+":""}${fmtS(ganInv.ars)}</strong>`);
-    }
+    // Las inversiones no van más acá: tienen su cuadro propio, con la posición y el resultado
+    // juntos. Esta línea queda para el fondo de ahorro y lo compartido.
     if(aho>0){
       partes.push(`🏦 Ahorrado: <strong style="color:var(--save)">${fmtS(aho)}</strong>`);
     }
@@ -898,6 +966,9 @@ function renderMovs(){
     } else {
       arrastreEl.style.display="none";
     }
+    const ymCierre = filtroFecha ? String(filtroFecha.hasta).slice(0,7) : mesActual;
+    const periodoLbl = filtroFecha ? "del período" : mesLbl(mesActual);
+    renderCuadroInversiones(mesMovs, ymCierre, periodoLbl, ganInv);
   }
 
   // ── RESUMEN DE PRESUPUESTOS (solo cuando filtro = Gasto) ──
