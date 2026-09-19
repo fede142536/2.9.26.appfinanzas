@@ -442,3 +442,30 @@ function mostrarPrompt(mensaje, opts){
   return _dialogoAbrir(Object.assign({tipo:"prompt", mensaje}, opts||{}));
 }
 
+
+// ═══════════════════════════════════════════
+// BARRAS POR TICKER
+// ═══════════════════════════════════════════
+// Las usan los dos cuadros de inversiones, que dicen cosas distintas con la misma forma: el de
+// Movimientos, lo que se movió en el mes; el de Inversiones, lo que sigue puesto. Cada item es
+// {ticker, ars, usd}; `colorDe(item)` decide el color y `signo` agrega el + de los positivos.
+function barrasDeTickers(items, colorDe, signo){
+  const visibles=(items||[])
+    .filter(p=>Math.round(p.ars)!==0 || Math.abs(p.usd)>=0.01)
+    .sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars) || Math.abs(b.usd)-Math.abs(a.usd));
+  if(!visibles.length) return "";
+  const maxV=Math.max(...visibles.map(p=>Math.abs(p.ars)), 1);
+  return visibles.map(p=>{
+    const color=colorDe(p);
+    const mas=(signo && p.ars>0) ? "+" : "";
+    const masU=(signo && p.usd>0) ? "+" : "";
+    const valor=Math.round(p.ars)!==0 ? mas+fmtS(p.ars) : `${masU}USD ${p.usd.toFixed(2)}`;
+    const extraUSD=(Math.round(p.ars)!==0 && Math.abs(p.usd)>=0.01)
+      ? `<div class="txt-xs txt-muted">${masU}USD ${p.usd.toFixed(2)}</div>` : "";
+    return `<div role="button" tabindex="0" class="bar-row" style="margin-bottom:6px;cursor:pointer" onclick="showInstrumentoDetail(${attrJS(p.ticker)})">
+      <div class="bar-label">${escapeHtml(p.ticker)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(p.ars)/maxV*100)}%;background:${color}"></div></div>
+      <div class="bar-val" style="color:${color}">${valor}${extraUSD}</div>
+    </div>`;
+  }).join("");
+}
