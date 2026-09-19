@@ -4012,6 +4012,143 @@ test("sin ninguna inversión el cuadro acumulado no se muestra", ()=>{
   igual(cuadroHoy(MES_INV.slice(0,2), "display"), "none");
 });
 
+// ── Las dos pantallas, el mismo mes ──
+
+// El bug: Movimientos encabezaba con "Resultado en Septiembre 2026 $15.042" y la pestaña
+// Inversiones, con los MISMOS movimientos del MISMO mes, con "Gasto neto en Septiembre 2026
+// −$110.918". Una llamaba a las compras "invertido en el mes" y la otra "Gastos"; una pintaba
+// una compra de violeta y la otra de rojo. Los dos cuadros salen ahora del mismo renderizador.
+function cuadroDeInversionesTab(lista, ym){
+  const ids=["inv-mes-label","inv-summary","inv-balance","inv-movs","inv-curva-wrap",
+             "chart-inv-historico","card-posicion-inicial","posicion-inicial-lista",
+             "card-invertido-hoy","invertido-hoy"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const prev={movs, mes:mesInv};
+  const chartPrevio=window.renderChartInvHistoricoBI;
+  window.renderChartInvHistoricoBI=function(){};   // sin Chart.js en los tests
+  movs=lista; mesInv=ym;
+  invalidarResultadoInv();
+  try{
+    renderInv();
+    return {
+      chips: creados[ids.indexOf("inv-summary")].innerText || "",
+      cuadro: creados[ids.indexOf("inv-balance")].innerHTML || ""
+    };
+  } finally {
+    creados.forEach(e=>e.remove());
+    movs=prev.movs; mesInv=prev.mes;
+    window.renderChartInvHistoricoBI=chartPrevio;
+    invalidarResultadoInv();
+  }
+}
+// El cuadro de Inversiones agrega el desglose por categoría; sacándoselo tiene que quedar
+// exactamente el mismo HTML que el de Movimientos.
+function sinCategorias(html){
+  const i=html.indexOf("Por categoría (movimiento del mes)");
+  if(i<0) return html;
+  const j=html.indexOf("Por ticker (movimiento del mes)");
+  return html.slice(0,html.lastIndexOf("<div class=\"seccion-label", i))
+       + html.slice(html.lastIndexOf("<div class=\"seccion-label", j));
+}
+
+test("las dos pantallas dicen lo mismo del mismo mes", ()=>{
+  const deMov=cuadroInv(MES_INV, "2026-08", true);
+  const deInv=cuadroDeInversionesTab(MES_INV, "2026-08").cuadro;
+  igual(sinCategorias(deInv).replace(/mt-14 /g,""), deMov,
+        "los dos cuadros del mismo mes no coinciden palabra por palabra");
+});
+
+test("la pestaña Inversiones ya no llama gasto a una compra", ()=>{
+  const r=cuadroDeInversionesTab(MES_INV, "2026-08");
+  const todo=r.cuadro+" "+r.chips;
+  cierto(!/Gasto neto|Ingreso neto/.test(todo), "volvió el encabezado de caja: " + todo);
+  cierto(!/Gastos:|Ingresos:/.test(todo), "volvió a llamar Ingresos/Gastos a las inversiones: " + todo);
+  cierto(!/--danger/.test(r.cuadro.split("Por ticker")[1]||""), "una compra volvió a ir en rojo de gasto");
+});
+
+test("los chips del mes no contradicen al cuadro", ()=>{
+  // Decían "Balance ARS −$200.000" (el neto de caja) arriba de un cuadro que encabezaba
+  // con +$100.000 de resultado: dos números para el mismo mes.
+  const chips=cuadroDeInversionesTab(MES_INV, "2026-08").chips;
+  cierto(chips.includes("100.000"), "el chip no muestra el resultado del mes: " + chips);
+  cierto(!/[-−]\$\s?200\.000/.test(chips), "el chip volvió al neto de caja: " + chips);
+  cierto(!/Balance/i.test(chips), "el chip sigue diciendo Balance: " + chips);
+});
+
+test("la lista de Inversiones no llama gasto a una compra", ()=>{
+  // Decía "GASTO" en rojo sobre una suscripción, justo debajo de un cuadro que a eso mismo lo
+  // llamaba "invertido".
+  const ids=["inv-mes-label","inv-summary","inv-balance","inv-movs","inv-curva-wrap",
+             "chart-inv-historico","card-posicion-inicial","posicion-inicial-lista",
+             "card-invertido-hoy","invertido-hoy"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const prev={movs, mes:mesInv};
+  const chartPrevio=window.renderChartInvHistoricoBI;
+  window.renderChartInvHistoricoBI=function(){};
+  movs=MES_INV; mesInv="2026-08";
+  invalidarResultadoInv();
+  try{
+    renderInv();
+    const html=creados[ids.indexOf("inv-movs")].innerHTML;
+    cierto(!/INGRESO|GASTO/.test(html), "volvió a llamar INGRESO/GASTO a las inversiones: " + html);
+    const compra=html.split("tx-item").find(x=>x.includes("YPF"));
+    cierto(compra.includes("--invest"), "una compra va en color de inversión, no en rojo: " + compra);
+    cierto(!compra.includes("--danger"), "una compra volvió a ir en rojo de gasto: " + compra);
+  } finally {
+    creados.forEach(e=>e.remove());
+    movs=prev.movs; mesInv=prev.mes;
+    window.renderChartInvHistoricoBI=chartPrevio;
+    invalidarResultadoInv();
+  }
+});
+
+test("el cuadro de Inversiones agrega el desglose por categoría", ()=>{
+  const html=cuadroDeInversionesTab(MES_INV, "2026-08").cuadro;
+  cierto(html.includes("Por categoría (movimiento del mes)"), "falta el desglose por categoría");
+  cierto(html.includes("FCI"), "falta la categoría FCI: " + html);
+  cierto(!cuadroInv(MES_INV, "2026-08", true).includes("Por categoría"),
+         "el de Movimientos no necesita el desglose por categoría");
+});
+
+test("el neto por categoría agrupa igual que el de tickers", ()=>{
+  // FCI = BCAHA (900.000 puestos, 1.000.000 sacados) → +100.000. Acciones = YPF → −300.000.
+  const n=netoPorCategoriaDelPeriodo(MES_INV);
+  igual(n.find(c=>c.ticker==="FCI").ars, 100000);
+  igual(n.find(c=>c.ticker==="Acciones").ars, -300000);
+  igual(netoPorCategoriaDelPeriodo([]).length, 0);
+});
+
+test("las barras de categoría no llevan al detalle de un instrumento", ()=>{
+  // Una categoría no es un ticker: tocarla no puede abrir la ficha de un instrumento.
+  const html=cuadroDeInversionesTab(MES_INV, "2026-08").cuadro;
+  const cat=html.slice(html.indexOf("Por categoría"), html.indexOf("Por ticker"));
+  cierto(!cat.includes("showInstrumentoDetail"), "la barra de categoría abre una ficha que no existe");
+});
+
+// ── La curva de capital ──
+
+test("la curva es el capital al cierre de cada mes", ()=>{
+  const l=[compra("2026-04-01","X",100000), compra("2026-05-01","X",50000),
+           venta("2026-06-01","X",40000)];
+  const serie=capitalInvertidoPorMes(l);
+  igual(serie.map(d=>d.ym), ["2026-04","2026-05","2026-06"]);
+  igual(serie.map(d=>d.ars), [100000, 150000, 110000]);
+});
+
+test("una ganancia no mueve la curva de capital", ()=>{
+  // Vender con ganancia devuelve el capital y deja la diferencia como resultado: el capital
+  // baja hasta cero y no más. Con el neto de caja de antes, la curva se iba a positivo.
+  const l=[compra("2026-04-01","X",100000), venta("2026-05-01","X",130000)];
+  igual(capitalInvertidoPorMes(l).map(d=>d.ars), [100000, 0]);
+});
+
+test("la curva arranca de la posición inicial que hayas cargado", ()=>{
+  conPosIni({X:{ars:80000, usd:0}}, ()=>{
+    const l=[venta("2026-05-01","X",30000)];
+    igual(capitalInvertidoPorMes(l).map(d=>d.ars), [50000]);
+  });
+});
+
 test("la etiqueta del chip de Gastos dice que es del mes", ()=>{
   // Decía "◈ Invertido" a secas, arriba de un total mensual que en los datos reales daba
   // $2.866.732 contra $385.692 realmente invertidos: se leía como la posición acumulada.

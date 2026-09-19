@@ -443,13 +443,21 @@ function mostrarPrompt(mensaje, opts){
 }
 
 
+// Un total con el + de los positivos, para que el titular del resultado se lea igual que su
+// chip. Va por nombre en data-animar-fmt, así que animarNumerosDe() lo encuentra en window.
+function fmtTotalMas(v){
+  return (v>0 ? "+" : "")+fmtTotal(v);
+}
+
 // ═══════════════════════════════════════════
-// BARRAS POR TICKER
+// BARRAS Y CUADRO DEL MES DE INVERSIONES
 // ═══════════════════════════════════════════
-// Las usan los dos cuadros de inversiones, que dicen cosas distintas con la misma forma: el de
-// Movimientos, lo que se movió en el mes; el de Inversiones, lo que sigue puesto. Cada item es
-// {ticker, ars, usd}; `colorDe(item)` decide el color y `signo` agrega el + de los positivos.
-function barrasDeTickers(items, colorDe, signo){
+// Cada item es {ticker, ars, usd}. `opts.color(item)` decide el color, `opts.signo` agrega el +
+// de los positivos, `opts.icono` va delante de la etiqueta y `opts.link:false` apaga el tap al
+// detalle del instrumento (las categorías no son instrumentos).
+function barrasDeTickers(items, opts){
+  const o=opts||{};
+  const colorDe=o.color || (()=>"var(--invest)");
   const visibles=(items||[])
     .filter(p=>Math.round(p.ars)!==0 || Math.abs(p.usd)>=0.01)
     .sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars) || Math.abs(b.usd)-Math.abs(a.usd));
@@ -457,15 +465,66 @@ function barrasDeTickers(items, colorDe, signo){
   const maxV=Math.max(...visibles.map(p=>Math.abs(p.ars)), 1);
   return visibles.map(p=>{
     const color=colorDe(p);
-    const mas=(signo && p.ars>0) ? "+" : "";
-    const masU=(signo && p.usd>0) ? "+" : "";
+    const mas=(o.signo && p.ars>0) ? "+" : "";
+    const masU=(o.signo && p.usd>0) ? "+" : "";
     const valor=Math.round(p.ars)!==0 ? mas+fmtS(p.ars) : `${masU}USD ${p.usd.toFixed(2)}`;
     const extraUSD=(Math.round(p.ars)!==0 && Math.abs(p.usd)>=0.01)
       ? `<div class="txt-xs txt-muted">${masU}USD ${p.usd.toFixed(2)}</div>` : "";
-    return `<div role="button" tabindex="0" class="bar-row" style="margin-bottom:6px;cursor:pointer" onclick="showInstrumentoDetail(${attrJS(p.ticker)})">
-      <div class="bar-label">${escapeHtml(p.ticker)}</div>
+    const etiqueta=(o.icono ? o.icono+" " : "")+escapeHtml(p.ticker);
+    const tap=o.link===false ? ""
+      : ` role="button" tabindex="0" onclick="showInstrumentoDetail(${attrJS(p.ticker)})"`;
+    return `<div class="bar-row" style="margin-bottom:6px${o.link===false?"":";cursor:pointer"}"${tap}>
+      <div class="bar-label">${etiqueta}</div>
       <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(p.ars)/maxV*100)}%;background:${color}"></div></div>
       <div class="bar-val" style="color:${color}">${valor}${extraUSD}</div>
     </div>`;
   }).join("");
 }
+
+// El mes de inversiones se mira en DOS pantallas —Movimientos y la pestaña Inversiones— y tiene
+// que decir lo mismo en las dos. Antes cada una armaba su propio cuadro: una encabezaba con el
+// "resultado" y la otra con el "gasto neto"; una llamaba a las compras "invertido" y la otra
+// "Gastos"; una pintaba una compra de violeta y la otra de rojo. Mismos movimientos, mismo mes,
+// dos lecturas distintas — y la de Inversiones seguía tratando una compra como un gasto, que es
+// justo lo que el modelo dejó de hacer hace rato.
+//
+// El número grande es el RESULTADO: lo único que suma o resta a tu plata. Lo que entró y salió
+// hacia inversiones es la misma plata cambiando de lugar y va abajo, con su nombre.
+function cuadroMesInversionesHTML(invs, periodoLbl, ganInv, opciones){
+  const op=opciones||{};
+  const puestoARS=invs.filter(m=>!isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  const sacadoARS=invs.filter(m=>isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  const puestoUSD=invs.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+  const sacadoUSD=invs.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+
+  const colorRes=Math.round(ganInv.ars)===0 ? "var(--muted)"
+               : (ganInv.ars>0 ? "var(--success)" : "var(--danger)");
+  let html=`<div class="seccion-label mb-6">Resultado en ${escapeHtml(periodoLbl)}</div>
+    <div style="font-size:24px;font-weight:600;color:${colorRes};margin-bottom:2px" data-animar="${ganInv.ars}" data-animar-fmt="fmtTotalMas">${fmtTotal(0)}</div>`;
+  if(Math.abs(ganInv.usd||0)>=0.01){
+    const cu=ganInv.usd>=0?"var(--success)":"var(--danger)";
+    html+=`<div style="font-size:13px;font-weight:600;color:${cu};margin-bottom:4px">${ganInv.usd>=0?"+":""}USD ${ganInv.usd.toFixed(2)}</div>`;
+  }
+
+  const mov=[];
+  if(puestoARS>0) mov.push(`📤 invertido en el mes <strong style="color:var(--invest)">${fmtS(puestoARS)}</strong>`);
+  if(sacadoARS>0) mov.push(`📥 rescatado <strong style="color:var(--success)">${fmtS(sacadoARS)}</strong>`);
+  if(puestoUSD>0) mov.push(`📤 invertido USD <strong style="color:var(--invest)">${puestoUSD.toFixed(2)}</strong>`);
+  if(sacadoUSD>0) mov.push(`📥 rescatado USD <strong style="color:var(--success)">${sacadoUSD.toFixed(2)}</strong>`);
+  html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${mov.join(" · ")}</div>`;
+  html+=`<div style="height:14px"></div>`;
+
+  // Negativo = pusiste plata y no la sacaste: color de inversión, no rojo de gasto.
+  const colorNeto=p=>(p.ars>=0 && p.usd>=0) ? "var(--success)" : "var(--invest)";
+  if(op.porCategoria){
+    const barrasCat=barrasDeTickers(netoPorCategoriaDelPeriodo(invs),
+                                    {color:colorNeto, signo:true, link:false, icono:"◈"});
+    if(barrasCat) html+=`<div class="seccion-label mb-6">Por categoría (movimiento del mes)</div>`+barrasCat;
+  }
+  const barras=barrasDeTickers(netoPorTickerDelPeriodo(invs), {color:colorNeto, signo:true});
+  if(barras){
+    html+=`<div class="seccion-label ${op.porCategoria?"mt-14 ":""}mb-6">Por ticker (movimiento del mes)</div>`+barras;
+  }
+  return html;
+}
+

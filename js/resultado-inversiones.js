@@ -55,6 +55,7 @@ function calcularResultadoInv(lista, posIni){
   });
   const ganancia={};  // ganancia[ym]    = {ars, usd}
   const flujo={};     // flujo[ym]       = {ars, usd}
+  const capPorMes={}; // capPorMes[ym]   = {ars, usd} capital al CIERRE de ese mes
   const eventos=[];
   const caja=(obj,k)=>(obj[k] || (obj[k]={ars:0, usd:0}));
 
@@ -82,6 +83,10 @@ function calcularResultadoInv(lista, posIni){
         flu[k]+=monto;
       }
     });
+    // Foto del capital después de cada operación: la última de cada mes queda como el cierre.
+    const foto={ars:0, usd:0};
+    Object.keys(capital).forEach(t=>{ foto.ars+=capital[t].ars; foto.usd+=capital[t].usd; });
+    capPorMes[ym]=foto;
   });
 
   const redondear=o=>{ Object.keys(o).forEach(k=>{
@@ -93,6 +98,7 @@ function calcularResultadoInv(lista, posIni){
     gananciaPorMes: redondear(ganancia),
     capitalPorTicker: redondear(capital),
     flujoPorMes: redondear(flujo),
+    capitalPorMes: redondear(capPorMes),
     eventos
   };
 }
@@ -151,6 +157,14 @@ function flujoInvDelMes(ym, lista){
   return resultadoInv(lista).flujoPorMes[ym] || {ars:0, usd:0};
 }
 
+// La curva de la cartera: cuánto capital quedaba adentro al cierre de cada mes. Sube cuando
+// ponés y baja cuando recuperás; una ganancia NO la mueve, porque no es capital. Solo aparecen
+// los meses en que hubo alguna operación.
+function capitalInvertidoPorMes(lista){
+  const tabla=resultadoInv(lista).capitalPorMes;
+  return Object.keys(tabla).sort().map(ym=>({ym, ars:tabla[ym].ars, usd:tabla[ym].usd}));
+}
+
 // Total que seguís teniendo invertido, sumando todos los tickers.
 function capitalPorTicker(lista){
   const tabla=resultadoInv(lista).capitalPorTicker;
@@ -193,6 +207,25 @@ function netoPorTickerDelPeriodo(lista){
     porTicker[t].movs++;
   });
   return Object.values(porTicker).map(p=>({
+    ...p,
+    ars: Math.round(p.ars*100)/100,
+    usd: Math.round(p.usd*100)/100
+  })).sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars) || Math.abs(b.usd)-Math.abs(a.usd));
+}
+
+// Lo mismo agrupado por categoría (FCI, MEP, Acciones...). Misma convención de signo: negativo
+// significa que pusiste plata y no la sacaste, no que hayas perdido.
+function netoPorCategoriaDelPeriodo(lista){
+  const porCat={};
+  (lista||[]).filter(m=>m && m.tipo==="Inversion").forEach(m=>{
+    const c=m.cat || "Sin categoría";
+    if(!porCat[c]) porCat[c]={ticker:c, ars:0, usd:0, movs:0};
+    const signo=isInvSalida(m) ? 1 : -1;
+    porCat[c].ars += (m.moneda==="USD" ? 0 : (m.importe||0)) * signo;
+    porCat[c].usd += (m.importeUSD||0) * signo;
+    porCat[c].movs++;
+  });
+  return Object.values(porCat).map(p=>({
     ...p,
     ars: Math.round(p.ars*100)/100,
     usd: Math.round(p.usd*100)/100
