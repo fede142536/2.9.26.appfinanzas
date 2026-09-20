@@ -80,6 +80,7 @@
 <script src="js/cambio-moneda.js"></script>
 <script src="js/traspasos.js"></script>
 <script src="js/posicion-inicial.js"></script>
+<script src="js/posicion-cerrada.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
@@ -4340,6 +4341,192 @@ test("un ticker raro no puede romper el id del input", ()=>{
   // El ticker lo escribe el usuario y termina adentro de un id y de un querySelector.
   igual(cssIdSeguro('AL30" onerror=x'), "AL30__onerror_x");
   igual(cssIdSeguro("BCMMA|usd"), "BCMMA_usd");
+});
+
+// ═══════════════════════════════════════════
+// POSICIONES CERRADAS (LAS PÉRDIDAS)
+// ═══════════════════════════════════════════
+grupo("Posiciones cerradas");
+
+// El modelo NO PODÍA expresar una pérdida. Vender por menos de lo comprado dejaba la diferencia
+// como "capital invertido" para siempre, así que todo resultado salía positivo o cero. Con los
+// datos reales, MCD —comprado a $54.238,57 y vendido a $53.581,03— figuraba con $657,54 todavía
+// invertidos en vez de $657,54 perdidos, y aparecía en "Por ticker (capital adentro)" como si
+// la posición siguiera abierta.
+function ventaCierra(fecha, ticker, monto){
+  const v=venta(fecha, ticker, monto);
+  v.cierraPosicion=true;
+  return v;
+}
+const MCD_REAL=[compra("2026-07-27","MCD",54238.57), venta("2026-08-10","MCD",53581.03)];
+
+test("sin marcar, lo que no recuperaste sigue figurando como capital", ()=>{
+  // Es el comportamiento ambiguo a propósito: la app guarda montos, no cantidades, así que no
+  // puede saber sola si vendiste todo a pérdida o si vendiste una parte.
+  const r=calcularResultadoInv(MCD_REAL);
+  igual(r.capitalPorTicker["MCD"].ars, 657.54);
+  igual(r.gananciaPorMes["2026-08"].ars, 0, "y no reconoce ninguna pérdida");
+});
+
+test("marcando la venta como cierre, la diferencia es una pérdida", ()=>{
+  const r=calcularResultadoInv([MCD_REAL[0], ventaCierra("2026-08-10","MCD",53581.03)]);
+  igual(r.capitalPorTicker["MCD"].ars, 0, "la posición ya no existe: no queda capital adentro");
+  igual(r.gananciaPorMes["2026-08"].ars, -657.54, "y los $657,54 son lo que perdiste");
+});
+
+test("la pérdida cae en el mes de la venta", ()=>{
+  const r=calcularResultadoInv([compra("2026-04-01","X",100000), ventaCierra("2026-07-01","X",60000)]);
+  igual(r.gananciaPorMes["2026-04"].ars, 0, "no puede caer en el mes de la compra");
+  igual(r.gananciaPorMes["2026-07"].ars, -40000);
+});
+
+test("cerrar una posición que dio ganancia no inventa una pérdida", ()=>{
+  const r=calcularResultadoInv([compra("2026-04-01","X",100000), ventaCierra("2026-05-01","X",130000)]);
+  igual(r.gananciaPorMes["2026-05"].ars, 30000);
+  igual(r.capitalPorTicker["X"].ars, 0);
+});
+
+test("el resultado de un período puede ser negativo", ()=>{
+  // Antes era imposible: gananciaPorMes nunca podía bajar de cero.
+  const l=[compra("2026-04-01","X",100000), ventaCierra("2026-05-01","X",60000),
+           compra("2026-04-01","Y",50000), venta("2026-05-01","Y",55000)];
+  igual(gananciaInvEntre("2026-01","2026-12", l).ars, -35000, "-40.000 de X y +5.000 de Y");
+});
+
+test("los dólares llevan su propia pérdida", ()=>{
+  const c=compra("2026-04-01","AL30D",0,{importeUSD:100, moneda:"USD"});
+  const v=venta("2026-05-01","AL30D",0,{importeUSD:70, moneda:"USD"});
+  v.cierraPosicion=true;
+  const r=calcularResultadoInv([c, v]);
+  igual(r.gananciaPorMes["2026-05"].usd, -30);
+  igual(r.gananciaPorMes["2026-05"].ars, 0, "una pérdida en dólares no puede restar pesos");
+});
+
+test("marcar el cierre cambia la firma de la caché", ()=>{
+  // Sin esto, marcar una posición no cambiaba nada en pantalla hasta el próximo alta.
+  // El MISMO movimiento con y sin la marca: si se usan dos ventas distintas, la firma cambia
+  // por el id y el test pasa aunque la marca no cuente para nada (pasó, al escribirlo).
+  const v=venta("2026-08-10","MCD",53581.03);
+  const sinMarcar=[MCD_REAL[0], {...v}];
+  const marcada=[MCD_REAL[0], {...v, cierraPosicion:true}];
+  cierto(firmaDeLista(sinMarcar,{})!==firmaDeLista(marcada,{}),
+         "la firma no distingue una venta marcada de una sin marcar: la caché queda vieja");
+});
+
+// ── La detección ──
+
+function conPosCerr(lista, fn){
+  const prev=movs;
+  movs=lista;
+  invalidarResultadoInv();
+  limpiarIgnoradosPosCerr();
+  try{ return fn(); }
+  finally{ movs=prev; limpiarIgnoradosPosCerr(); invalidarResultadoInv(); }
+}
+
+test("propone la venta que devolvió casi todo el capital", ()=>{
+  conPosCerr(MCD_REAL, ()=>{
+    const c=candidatosAPosicionCerrada(MCD_REAL);
+    igual(c.length, 1);
+    igual(c[0].ticker, "MCD");
+    igual(c[0].perdida, 657.54);
+    igual(c[0].puesto, 54238.57);
+    igual(c[0].recuperado, 53581.03);
+  });
+});
+
+test("vender un tercio no es cerrar la posición", ()=>{
+  // El caso real de SPY: $77.916 vendidos sobre $236.403 puestos. Eso es vender una parte, y
+  // preguntarlo sería ruido en una card que tiene que ser corta para que se lea.
+  const spy=[compra("2026-07-02","SPY",236403.31), venta("2026-07-13","SPY",77916.83)];
+  conPosCerr(spy, ()=>igual(candidatosAPosicionCerrada(spy).length, 0));
+});
+
+test("si después seguiste operando el ticker, no se propone", ()=>{
+  const l=[...MCD_REAL, compra("2026-09-01","MCD",20000)];
+  conPosCerr(l, ()=>igual(candidatosAPosicionCerrada(l).length, 0,
+    "volviste a comprar: la posición está abierta otra vez"));
+});
+
+test("una venta ya marcada deja de proponerse", ()=>{
+  const l=[MCD_REAL[0], ventaCierra("2026-08-10","MCD",53581.03)];
+  conPosCerr(l, ()=>igual(candidatosAPosicionCerrada(l).length, 0));
+});
+
+test("descartarla la saca de la lista", ()=>{
+  conPosCerr(MCD_REAL, ()=>{
+    const c=candidatosAPosicionCerrada(MCD_REAL)[0];
+    ignorarPosCerr(c.clave);
+    igual(candidatosAPosicionCerrada(MCD_REAL).length, 0);
+    limpiarIgnoradosPosCerr();
+    igual(candidatosAPosicionCerrada(MCD_REAL).length, 1, "y se puede volver a revisar");
+  });
+});
+
+test("una venta sin ninguna compra detrás no es una posición cerrada", ()=>{
+  // Eso es lo otro (posición anterior a la app): no hay capital que perder, hay uno que falta.
+  const l=[venta("2026-05-08","ESTRA1A",551210)];
+  conPosCerr(l, ()=>igual(candidatosAPosicionCerrada(l).length, 0));
+});
+
+test("el total sin reconocer separa pesos de dólares", ()=>{
+  const c=compra("2026-04-01","AL30D",0,{importeUSD:100, moneda:"USD"});
+  const v=venta("2026-05-01","AL30D",0,{importeUSD:95, moneda:"USD"});
+  const l=[...MCD_REAL, c, v];
+  conPosCerr(l, ()=>{
+    const t=totalPerdidaSinReconocer(l);
+    igual(t.ars, 657.54);
+    igual(t.usd, 5);
+  });
+});
+
+test("ultimaVentaDe encuentra la última venta, no la última operación", ()=>{
+  const l=[...MCD_REAL, compra("2026-09-01","MCD",20000)];
+  conPosCerr(l, ()=>igual(ultimaVentaDe("MCD").fecha, "2026-08-10"));
+});
+
+// ── La ficha del instrumento ──
+
+function fichaDe(ticker, lista){
+  const ids=["instrumento-detail-title","instrumento-detail-content","modal-instrumento-detail"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const prev=movs;
+  movs=lista;
+  invalidarResultadoInv();
+  try{ showInstrumentoDetail(ticker); return creados[1].innerHTML; }
+  finally{ creados.forEach(e=>e.remove()); movs=prev; invalidarResultadoInv(); }
+}
+
+test("la ficha no llama gasto a una compra", ()=>{
+  // Decía "Balance acumulado −$210.688" en rojo sobre BCMMA, que es una posición ABIERTA: ese
+  // número era la plata que tenés puesta, pintada como si la hubieras perdido.
+  const html=fichaDe("MCD", MCD_REAL);
+  cierto(!/Balance acumulado/.test(html), "volvió el encabezado de caja: " + html);
+  cierto(!/📤 GASTO/.test(html), "una compra volvió a ser un GASTO: " + html);
+  cierto(html.includes("Capital adentro"), "no dice qué es el número grande: " + html);
+});
+
+test("la ficha ofrece cerrar la posición cuando puede haber una pérdida escondida", ()=>{
+  const html=fichaDe("MCD", MCD_REAL);
+  cierto(html.includes("cerrarPosicionDesdeFicha"), "no ofrece marcarla como cerrada: " + html);
+  const cerrada=fichaDe("MCD", [MCD_REAL[0], ventaCierra("2026-08-10","MCD",53581.03)]);
+  cierto(cerrada.includes("reabrirPosicionDesdeFicha"), "marcada, no ofrece deshacer: " + cerrada);
+  cierto(!cerrada.includes("Capital adentro"), "marcada, sigue diciendo que hay capital adentro");
+});
+
+test("si volviste a comprar, la ficha no ofrece cerrar la posición", ()=>{
+  // La ficha de BCMMA ofrecía marcar como pérdida $165.645 que se habían comprado nueve días
+  // antes: buscaba la última VENTA en vez de mirar si la posición seguía abierta.
+  const l=[...MCD_REAL, compra("2026-09-01","MCD",20000)];
+  const html=fichaDe("MCD", l);
+  cierto(!html.includes("cerrarPosicionDesdeFicha"),
+         "compraste después: la posición está abierta. " + html);
+  conPosCerr(l, ()=>igual(ventaQueCerraria("MCD"), null));
+});
+
+test("una posición abierta que nunca vendiste no ofrece cerrarse", ()=>{
+  const html=fichaDe("X", [compra("2026-04-01","X",100000)]);
+  cierto(!html.includes("cerrarPosicionDesdeFicha"), "no hay ninguna venta que marcar: " + html);
 });
 
 grupo("Aislamiento de los tests");

@@ -620,31 +620,55 @@ function showInstrumentoDetail(ticker){
     document.getElementById("modal-instrumento-detail").classList.add("open");
     return;
   }
-  // Totales acumulados (misma lógica de cash flow que la cartera)
-  let totalArs=0, totalUsd=0;
-  movsTicker.forEach(m=>{
-    const sg=invSignoCash(m);
-    totalArs+=(m.importe||0)*sg;
-    totalUsd+=(m.importeUSD||0)*sg;
-  });
-  const colorTotal=totalArs>=0?"var(--success)":"var(--danger)";
+  // La ficha decía "Balance acumulado −$210.688" en rojo sobre BCMMA, que es una posición
+  // ABIERTA: ese número era el neto de caja, o sea la plata que tenés puesta, pintada como si
+  // la hubieras perdido. Ahora dice las dos cosas por separado y con su nombre.
+  const puesto=movsTicker.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.moneda==="USD"?0:(m.importe||0)),0);
+  const sacado=movsTicker.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.moneda==="USD"?0:(m.importe||0)),0);
+  const puestoU=movsTicker.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+  const sacadoU=movsTicker.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+  const tabla=resultadoInv(movs).capitalPorTicker[ticker] || {ars:0, usd:0};
+  const res=resultadoInv(movs).eventos.filter(e=>e.ticker===ticker)
+    .reduce((a,e)=>{ a[e.moneda==="USD"?"usd":"ars"]+=e.ganancia; return a; }, {ars:0, usd:0});
+  res.ars=Math.round(res.ars*100)/100; res.usd=Math.round(res.usd*100)/100;
+  const abierta=Math.round(tabla.ars)!==0 || Math.abs(tabla.usd)>=0.01;
   let html=`<div class="inset">
-    <div class="seccion-label">Balance acumulado</div>
-    <div style="font-size:20px;font-weight:600;color:${colorTotal};margin-top:3px">${fmtSignoGrande(totalArs)}</div>
-    ${totalUsd!==0?`<div class="txt-md txt-muted">USD ${totalUsd.toFixed(2)}</div>`:""}
+    <div class="seccion-label">${abierta?"Capital adentro":"Resultado"}</div>`;
+  if(abierta){
+    html+=`<div style="font-size:20px;font-weight:600;color:var(--invest);margin-top:3px">${fmtS(tabla.ars)}</div>
+      ${Math.abs(tabla.usd)>=0.01?`<div class="txt-md txt-muted">USD ${tabla.usd.toFixed(2)}</div>`:""}`;
+  }
+  if(!abierta || Math.round(res.ars)!==0 || Math.abs(res.usd)>=0.01){
+    const cr=res.ars>=0?"var(--success)":"var(--danger)";
+    html+=`<div style="font-size:${abierta?"14":"20"}px;font-weight:600;color:${cr};margin-top:3px">${res.ars>=0?"+":""}${fmtS(res.ars)}${abierta?" de resultado":""}</div>
+      ${Math.abs(res.usd)>=0.01?`<div class="txt-md" style="color:${res.usd>=0?"var(--success)":"var(--danger)"}">${res.usd>=0?"+":""}USD ${res.usd.toFixed(2)}</div>`:""}`;
+  }
+  html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">
+      📤 invertido ${fmtS(puesto)}${puestoU>0?" + USD "+puestoU.toFixed(2):""} · 📥 recuperado ${fmtS(sacado)}${sacadoU>0?" + USD "+sacadoU.toFixed(2):""}
+    </div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">${movsTicker.length} ${movsTicker.length===1?"movimiento":"movimientos"}</div>
   </div>`;
+  // Si figura capital adentro pero ya vendiste, puede que la posición esté cerrada a pérdida:
+  // la app no guarda cantidades, así que sola no lo puede saber.
+  const ultVenta=(typeof ventaQueCerraria==="function") ? ventaQueCerraria(ticker) : null;
+  if(abierta && ultVenta && !ultVenta.cierraPosicion){
+    html+=`<div class="txt-xs txt-muted" style="margin-top:10px">¿Ya no tenés ${escapeHtml(ticker)}? Entonces ${fmtS(tabla.ars)} no siguen invertidos: son lo que perdiste.</div>
+      <button class="btn-sm" style="width:100%;margin-top:6px" onclick="cerrarPosicionDesdeFicha(${ultVenta.id},${attrJS(ticker)})">Ya no la tengo: es una pérdida</button>`;
+  } else if(ultVenta && ultVenta.cierraPosicion){
+    html+=`<div class="txt-xs txt-muted" style="margin-top:10px">Marcaste esta posición como cerrada, así que lo que no recuperaste cuenta como pérdida.</div>
+      <button class="btn-sm" style="width:100%;margin-top:6px" onclick="reabrirPosicionDesdeFicha(${ultVenta.id},${attrJS(ticker)})">Deshacer: la sigo teniendo</button>`;
+  }
   html+=movsTicker.map(m=>{
     const esIngreso=isInvSalida(m);
-    const color=esIngreso?"var(--success)":"var(--danger)";
+    const color=esIngreso?"var(--success)":"var(--invest)";
     const sign=esIngreso?"+":"-";
     const fecha=(m.fecha||"").split("-").reverse().join("/");
     const montoTxt = (m.importeUSD||0)>0
       ? `${sign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`
       : `${sign}${fmtS(m.importe||0)}`;
     const badge=esIngreso
-      ?`<span class="badge badge-success">📥 INGRESO</span>`
-      :`<span class="badge badge-danger">📤 GASTO</span>`;
+      ?`<span class="badge badge-accent">📥 RECUPERO</span>`
+      :`<span class="badge badge-accent">📤 INVERTIDO</span>`;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
       <div class="u-flex1 u-min0">
         <div class="txt-md txt-strong">${escapeHtml(m.subcat||m.cat)} ${badge}</div>

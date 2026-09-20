@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v124">
+<meta name="enola-version" content="enola-v125">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -614,6 +614,11 @@
   </div>
   <div class="card"><div class="card-title">Inversiones del mes</div><div id="inv-balance"></div></div>
   <div class="card"><div class="card-title">Movimientos del mes</div><div id="inv-movs"></div></div>
+  <div class="card" id="card-posicion-cerrada" style="display:none">
+    <div class="card-title">◈ Posiciones que parecen cerradas</div>
+    <p class="txt-sm txt-muted mb-10">Vendiste casi todo y el resto quedó figurando como invertido. Si ya no tenés la posición, eso no está invertido: es lo que perdiste.</p>
+    <div id="posicion-cerrada-lista"></div>
+  </div>
   <div class="card" id="card-invertido-hoy" style="display:none">
     <div class="card-title">Invertido hoy</div>
     <div id="invertido-hoy"></div>
@@ -938,6 +943,7 @@
 <script src="js/cambio-moneda.js"></script>
 <script src="js/traspasos.js"></script>
 <script src="js/posicion-inicial.js"></script>
+<script src="js/posicion-cerrada.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
