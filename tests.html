@@ -4408,6 +4408,82 @@ test("el botón de cargar todas solo aparece si hay más de una", ()=>{
          "con una sola propuesta el botón de 'todas' sobra");
 });
 
+// La detección solo propone tickers con una venta sin ninguna compra detrás. Falta el otro
+// caso, que con los datos reales resultó el más grande: un ticker cuyas compras viejas NO están
+// cargadas y que no tiene ninguna venta huérfana que lo delate. SPY: el broker dice 38 CEDEARs
+// por $772.160 y en la app hay una sola compra de $236.402. Nada lo detecta solo.
+function conModalPosIni(lista, fn){
+  const ids=["card-posicion-inicial","posicion-inicial-lista","modal-posini","posini-form"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const prevM=movs, prevP=posicionInicial;
+  movs=lista; posicionInicial={};
+  invalidarResultadoInv(); limpiarIgnoradosPosIni();
+  try{ return fn(creados[3], creados[1]); }
+  finally{
+    creados.forEach(e=>e.remove());
+    movs=prevM; posicionInicial=prevP;
+    limpiarIgnoradosPosIni(); invalidarResultadoInv();
+  }
+}
+const SOLO_COMPRAS=[compra("2026-07-02","SPY",236402.86), venta("2026-07-13","SPY",77916.38)];
+
+test("un ticker sin ventas huérfanas no se propone, pero se puede cargar a mano", ()=>{
+  conModalPosIni(SOLO_COMPRAS, ()=>{
+    igual(candidatosAPosicionInicial(SOLO_COMPRAS).length, 0, "no hay nada que detectar solo");
+    igual(tickersConMovimientos(SOLO_COMPRAS).map(t=>t.ticker), ["SPY"],
+          "pero tiene que estar en la lista para cargarlo a mano");
+  });
+});
+
+test("el modal dice el capital que calcula la app, para poder compararlo", ()=>{
+  conModalPosIni(SOLO_COMPRAS, (form)=>{
+    abrirModalPosIni();
+    cierto(form.innerHTML.includes("158.486"), "no muestra el capital calculado: " + form.innerText);
+    cierto(form.querySelector("#posini-ars-SPY"), "falta el campo de SPY");
+  });
+});
+
+test("cargar a mano cambia el capital de la posición", ()=>{
+  conModalPosIni(SOLO_COMPRAS, (form)=>{
+    abrirModalPosIni();
+    form.querySelector("#posini-ars-SPY").value="600000";
+    guardarModalPosIni();
+    igual(posicionInicial["SPY"].ars, 600000);
+    invalidarResultadoInv();
+    igual(capitalInvertido(SOLO_COMPRAS).ars, 758486.48, "600.000 + 236.402,86 − 77.916,38");
+  });
+});
+
+test("vaciar los dos campos borra la posición inicial", ()=>{
+  conModalPosIni(SOLO_COMPRAS, (form)=>{
+    abrirModalPosIni();
+    form.querySelector("#posini-ars-SPY").value="600000";
+    guardarModalPosIni();
+    abrirModalPosIni();
+    form.querySelector("#posini-ars-SPY").value="";
+    form.querySelector("#posini-usd-SPY").value="";
+    guardarModalPosIni();
+    cierto(!posicionInicial["SPY"], "quedó cargada: " + JSON.stringify(posicionInicial));
+  });
+});
+
+test("la card queda a la vista aunque no haya nada que proponer", ()=>{
+  conModalPosIni(SOLO_COMPRAS, (form, lista)=>{
+    renderPosicionInicial();
+    igual(document.getElementById("card-posicion-inicial").style.display, "block");
+    cierto(lista.innerHTML.includes("abrirModalPosIni"), "falta la puerta para cargar a mano");
+    cierto(/no tiene cómo delatarse sola/.test(lista.innerText),
+           "no avisa que la detección no lo ve todo: " + lista.innerText);
+  });
+});
+
+test("sin ninguna inversión la card sigue oculta", ()=>{
+  conModalPosIni([{id:1, tipo:"Gasto", cat:"Super", importe:1000, fecha:"2026-08-01"}], (form, lista)=>{
+    renderPosicionInicial();
+    igual(document.getElementById("card-posicion-inicial").style.display, "none");
+  });
+});
+
 test("una posición que cubre justo no deja un candidato de cero", ()=>{
   // El caso real de AL30D: cuatro ventas en dólares que suman exactamente la posición cargada.
   // Cada resta deja un residuo de coma flotante, y con `> 0` la última venta seguía figurando
