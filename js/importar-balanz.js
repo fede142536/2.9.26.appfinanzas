@@ -365,12 +365,82 @@ function aplicarCorreccionesBalanz(correcciones){
 }
 
 // ═══════════════════════════════════════════
+// LO QUE SE PARECE A ALGO CARGADO A MANO
+// ═══════════════════════════════════════════
+// Reconocer por fecha + ticker + importe exactos alcanza para el PDF contra sí mismo, pero no
+// contra lo que cargaste a mano, donde casi nunca coincide todo: anotaste el bruto y el
+// resumen trae el neto (XLK: $12.863,82 contra $12.794,29), pusiste la fecha en que se
+// liquidó y el PDF usa la de concertación, redondeaste el monto, o le pusiste al fondo el
+// nombre que usás vos y no el de Balanz. En los cuatro casos entraba una copia.
+//
+// Y la copia no se nota: unificar tickers después junta las dos posiciones en una, así que
+// una suscripción de $261.414,64 termina figurando como $522.829,28 sin que nada lo avise.
+//
+// Por eso acá se buscan parecidos, no iguales. Un parecido no se importa solo: se muestra al
+// lado del movimiento tuyo y vos decidís. Errar de más es barato —la operación sigue en el
+// PDF y se puede agregar— y errar de menos mete plata que no existe.
+
+function montoComparable(m){
+  const usd=Number((m&&m.importeUSD)||0), ars=Number((m&&m.importe)||0);
+  return (m&&m.moneda==="USD") || (!ars && usd)
+    ? {moneda:"USD", monto:usd}
+    : {moneda:"ARS", monto:ars};
+}
+function diasEntreFechas(a, b){
+  const ta=Date.parse(String(a).slice(0,10)), tb=Date.parse(String(b).slice(0,10));
+  if(isNaN(ta) || isNaN(tb)) return Infinity;
+  return Math.abs(ta-tb)/86400000;
+}
+// Con el mismo ticker se puede ser generoso: la fecha y el monto bailan por las razones de
+// arriba. Con tickers distintos hace falta el mismo día y prácticamente el mismo monto: el
+// caso que hay que atrapar es tu fondo con el nombre de Balanz (BCMMA contra BMMA), que es la
+// misma operación y cae el mismo día. Aflojar la fecha acá marcaba dos CEDEARs distintos
+// comprados en días seguidos por montos parecidos, que no tienen nada que ver.
+const PAR_DIAS_MISMO_TICKER=5, PAR_PCT_MISMO_TICKER=0.02;
+const PAR_DIAS_OTRO_TICKER=0, PAR_PCT_OTRO_TICKER=0.005;
+
+function parecidoAManual(cand, mov){
+  const a=montoComparable(cand), b=montoComparable(mov);
+  if(a.moneda!==b.moneda) return false;
+  if(!a.monto || !b.monto) return false;
+  // Una compra no se confunde con una venta aunque coincida todo lo demás.
+  if(isInvSalida(cand)!==isInvSalida(mov)) return false;
+  const rel=Math.abs(a.monto-b.monto)/Math.max(Math.abs(a.monto), Math.abs(b.monto));
+  const dias=diasEntreFechas(cand.fecha, mov.fecha);
+  return tickerDeOrigen(cand)===tickerDeOrigen(mov)
+    ? (dias<=PAR_DIAS_MISMO_TICKER && rel<=PAR_PCT_MISMO_TICKER)
+    : (dias<=PAR_DIAS_OTRO_TICKER  && rel<=PAR_PCT_OTRO_TICKER);
+}
+
+// Solo se miran los movimientos SIN número de operación: los que ya vinieron de un PDF se
+// reconocen por el número y no necesitan adivinanza. Cada movimiento tuyo se reclama una vez
+// sola, para que dos operaciones del PDF no apunten las dos al mismo.
+function parecidosDeBalanz(candidatos, lista){
+  const aMano=(lista||[]).filter(m=>m && m.tipo==="Inversion" && !m.refBalanz);
+  const usados=new Set();
+  const out=[];
+  (candidatos||[]).forEach(c=>{
+    const mov=aMano.find(m=>!usados.has(m.id) && parecidoAManual(c, m));
+    if(!mov) return;
+    usados.add(mov.id);
+    out.push({nuevo:c, mov});
+  });
+  return out;
+}
+
+// ═══════════════════════════════════════════
 // 7. LA PANTALLA
 // ═══════════════════════════════════════════
 // Nunca se importa de una: primero se muestra qué se encontró y qué se va a agregar, y el
 // usuario confirma. Un PDF mal leído no puede ensuciar los datos en silencio.
 let balanzPendientes=[];
 let balanzCorrecciones=[];
+let balanzParecidos=[];
+// Las que vos marcaste como "son distintas": son las únicas parecidas que se importan.
+let balanzIncluir=new Set();
+// Lo que hizo falta para pintar la vista previa, guardado para poder repintarla cuando
+// cambiás de opinión sobre un parecido sin tener que volver a leer el PDF.
+let balanzLeidos=0, balanzNombre="", balanzFallados=[];
 
 // Varios PDF de una vez: recuperar el histórico son doce resúmenes, y de a uno es un trámite.
 // Un archivo que no se puede leer no cancela a los demás — se cuenta y se avisa al final.
@@ -399,7 +469,12 @@ async function handleBalanz(input){
     encontrados.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
     balanzPendientes=nuevosDeBalanz(encontrados, movs);
     balanzCorrecciones=correccionesDeBalanz(encontrados, movs);
-    renderPreviewBalanz(encontrados.length, archivos.length===1 ? archivos[0].name : `${archivos.length} archivos`, fallados);
+    balanzParecidos=parecidosDeBalanz(balanzPendientes, movs);
+    balanzIncluir=new Set();
+    balanzLeidos=encontrados.length;
+    balanzNombre=archivos.length===1 ? archivos[0].name : `${archivos.length} archivos`;
+    balanzFallados=fallados;
+    renderPreviewBalanz(balanzLeidos, balanzNombre, balanzFallados);
   }finally{
     input.value="";
   }
@@ -421,6 +496,7 @@ function renderPreviewBalanz(totalLeidos, nombre, fallados){
   est.textContent=`${totalLeidos} ${totalLeidos===1?"operación leída":"operaciones leídas"} de ${nombre}.${avisoMalos}`;
   if(!balanzPendientes.length){
     prev.innerHTML=(balanzCorrecciones.length ? bloqueCorreccionesBalanz() : "")
+      + (balanzParecidos.length ? bloqueParecidosBalanz() : "")
       + `<div class="inset"><div class="txt-md">Ya estaban todas cargadas.</div>
       <div class="txt-xs txt-muted" style="margin-top:4px">No hay nada nuevo que agregar.</div></div>`;
     return;
@@ -444,22 +520,27 @@ function renderPreviewBalanz(totalLeidos, nombre, fallados){
   const detalleMeses = meses.length>1
     ? `<div class="txt-xs txt-muted" style="margin-top:6px">${meses.map(k=>`${escapeHtml(mesLbl(k))}: ${porMes[k]}`).join(" · ")}</div>`
     : "";
+  const van=aImportarBalanz();
+  const frenadas=balanzPendientes.length-van.length;
   prev.innerHTML=(balanzCorrecciones.length ? bloqueCorreccionesBalanz() : "")
+    + (balanzParecidos.length ? bloqueParecidosBalanz() : "")
     + `<div class="inset mb-10">
-      <div class="txt-md txt-strong">${balanzPendientes.length} ${balanzPendientes.length===1?"operación nueva":"operaciones nuevas"}${meses.length>1?` en ${meses.length} meses`:""}</div>
-      <div class="txt-xs txt-muted" style="margin-top:4px">${resumen}${repetidos?` · ${repetidos} ya ${repetidos===1?"estaba":"estaban"} cargada${repetidos===1?"":"s"}`:""}</div>
+      <div class="txt-md txt-strong">${van.length} ${van.length===1?"operación para agregar":"operaciones para agregar"}${meses.length>1?` en ${meses.length} meses`:""}</div>
+      <div class="txt-xs txt-muted" style="margin-top:4px">${resumen}${repetidos?` · ${repetidos} ya ${repetidos===1?"estaba":"estaban"} cargada${repetidos===1?"":"s"}`:""}${frenadas?` · ${frenadas} frenada${frenadas===1?"":"s"} por parecido`:""}</div>
       ${detalleMeses}
       ${avisoTickers}
     </div>`
-    + balanzPendientes.slice(0,12).map(m=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+    + van.slice(0,12).map(m=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
         <div class="u-flex1 u-min0">
           <div class="txt-md">${escapeHtml(m.ticker)} <span class="txt-xs txt-muted">${escapeHtml(m.subcat)}</span></div>
           <div class="txt-xs txt-muted">${escapeHtml(m.fecha)}</div>
         </div>
         <div class="txt-md txt-strong" style="white-space:nowrap">${montoLeidoBalanz(m)}</div>
       </div>`).join("")
-    + (balanzPendientes.length>12 ? `<div class="txt-xs txt-muted" style="margin-top:6px">…y ${balanzPendientes.length-12} más.</div>` : "")
-    + `<button class="btn-primary" style="width:100%;margin-top:12px" onclick="confirmarImportBalanz()">Agregar ${balanzPendientes.length} ${balanzPendientes.length===1?"operación":"operaciones"}</button>`;
+    + (van.length>12 ? `<div class="txt-xs txt-muted" style="margin-top:6px">…y ${van.length-12} más.</div>` : "")
+    + (van.length
+        ? `<button class="btn-primary" style="width:100%;margin-top:12px" onclick="confirmarImportBalanz()">Agregar ${van.length} ${van.length===1?"operación":"operaciones"}</button>`
+        : `<div class="inset txt-xs txt-muted">Todas las operaciones nuevas se parecen a algo que ya tenías. Si alguna es distinta, marcala arriba.</div>`);
 }
 
 // Corregir NO es importar: se muestra aparte, con el monto viejo al lado del nuevo, y se
@@ -511,12 +592,61 @@ function confirmarCorreccionBalanz(){
   if(typeof renderDash==="function") renderDash();
 }
 
+function bloqueParecidosBalanz(){
+  const n=balanzParecidos.length;
+  const filas=balanzParecidos.map(({nuevo, mov})=>{
+    const k=claveParecido(nuevo);
+    const incluida=balanzIncluir.has(k);
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div class="u-flex1 u-min0">
+          <div class="txt-xs txt-muted">Ya tenías</div>
+          <div class="txt-md">${escapeHtml(mov.ticker||"")} · ${escapeHtml(String(mov.fecha||"").slice(0,10))}</div>
+        </div>
+        <div class="txt-md txt-strong" style="white-space:nowrap">${montoLeidoBalanz(mov)}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px">
+        <div class="u-flex1 u-min0">
+          <div class="txt-xs txt-muted">El resumen trae</div>
+          <div class="txt-md">${escapeHtml(nuevo.ticker||"")} · ${escapeHtml(String(nuevo.fecha||"").slice(0,10))}</div>
+        </div>
+        <div class="txt-md txt-strong" style="white-space:nowrap">${montoLeidoBalanz(nuevo)}</div>
+      </div>
+      <button class="btn-sm" style="width:100%;margin-top:8px" onclick="alternarParecido(${attrJS(k)})">
+        ${incluida ? "Son distintas: se va a agregar ✓" : "Es la misma: no se agrega"}
+      </button>
+    </div>`;
+  }).join("");
+  return `<div class="inset mb-10">
+      <div class="txt-md txt-strong" style="color:var(--warning)">${n} ${n===1?"se parece":"se parecen"} a algo que cargaste a mano</div>
+      <div class="txt-xs txt-muted" style="margin-top:4px">No coinciden exacto —el resumen trae el neto, otra fecha o el nombre que usa Balanz— así que no puedo saberlo solo. Por las dudas <strong>no se agregan</strong>: si alguna es una operación distinta, marcala.</div>
+    </div>`
+    + filas
+    + `<div style="height:14px"></div>`;
+}
+
+function claveParecido(m){
+  return `${refDeMov(m)||claveDeMov(m)}`;
+}
+function aImportarBalanz(){
+  const frenados=new Set(balanzParecidos.map(x=>claveParecido(x.nuevo)));
+  return balanzPendientes.filter(m=>{
+    const k=claveParecido(m);
+    return !frenados.has(k) || balanzIncluir.has(k);
+  });
+}
+function alternarParecido(clave){
+  if(balanzIncluir.has(clave)) balanzIncluir.delete(clave); else balanzIncluir.add(clave);
+  renderPreviewBalanz(balanzLeidos, balanzNombre, balanzFallados);
+}
+
 function confirmarImportBalanz(){
-  if(!balanzPendientes.length) return;
-  const cuantos=balanzPendientes.length;
+  const van=aImportarBalanz();
+  if(!van.length) return;
+  const cuantos=van.length;
   let id=Date.now();
-  balanzPendientes.forEach(m=>{ movs.push({...m, id:id++}); });
-  balanzPendientes=[];
+  van.forEach(m=>{ movs.push({...m, id:id++}); });
+  balanzPendientes=[]; balanzParecidos=[]; balanzIncluir=new Set();
   save();
   showToast(`${cuantos} ${cuantos===1?"operación agregada":"operaciones agregadas"} ✓`);
   const prev=document.getElementById("balanz-preview");

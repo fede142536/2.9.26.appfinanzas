@@ -5399,6 +5399,101 @@ test("una operación que todavía no está cargada no es una corrección", ()=>{
   igual(nuevosDeBalanz(leido, []).length, 1);
 });
 
+// ── Chocar con lo que cargaste a mano ──
+// Reconocer por fecha + ticker + importe exactos alcanza para el PDF contra sí mismo, pero
+// contra lo cargado a mano casi nunca coincide todo, y cada desajuste metía una copia. Peor:
+// la copia no se nota, porque unificar tickers después junta las dos en una sola posición.
+function aMano(ticker, fecha, importe, extra){
+  return Object.assign({id:1, tipo:"Inversion", cat:"FCI", subcat:"FCI Compra",
+                        ticker, fecha, importe, importeUSD:0}, extra||{});
+}
+function delPDF(ticker, fecha, importe, extra){
+  return Object.assign({tipo:"Inversion", cat:"FCI", subcat:"FCI Compra", ticker, fecha,
+                        importe, importeUSD:0, refBalanz:"999"}, extra||{});
+}
+function frena(mano, pdf){
+  return parecidosDeBalanz([pdf], [mano]).length===1;
+}
+
+test("el neto del resumen se reconoce contra el bruto que cargaste", ()=>{
+  // El caso real: XLK figuraba $12.863,82 en la app y $12.794,29 en el resumen.
+  cierto(frena(aMano("XLK","2026-08-10",12863.82), delPDF("XLK","2026-08-10",12794.29)),
+    "medio punto porcentual de diferencia no es otra operación");
+});
+
+test("la fecha de liquidación se reconoce contra la de concertación", ()=>{
+  cierto(frena(aMano("SPY","2026-08-07",40930.59), delPDF("SPY","2026-08-05",40930.59)));
+});
+
+test("el mismo fondo con el nombre que usás vos se reconoce", ()=>{
+  // Vos lo tenés como BCMMA y Balanz le dice BMMA: mismo día, mismo monto.
+  cierto(frena(aMano("BCMMA","2026-08-11",261414.64), delPDF("BMMA","2026-08-11",261414.64)));
+});
+
+test("un monto redondeado se reconoce", ()=>{
+  cierto(frena(aMano("MCD","2026-08-10",53581), delPDF("MCD","2026-08-10",53581.03)));
+});
+
+test("dos operaciones de verdad distintas NO se frenan", ()=>{
+  cierto(!frena(aMano("SPY","2026-08-05",40930.59), delPDF("SPY","2026-08-05",81772.16)),
+    "el doble de plata es otra operación");
+  cierto(!frena(aMano("SPY","2026-08-05",40930.59), delPDF("SPY","2026-08-20",40930.59)),
+    "quince días después es otra operación");
+  cierto(!frena(aMano("SPY","2026-08-05",40930.59), delPDF("XLK","2026-08-06",40930.59)),
+    "otro ticker y otro día no se parecen");
+  cierto(!frena(aMano("SPY","2026-08-05",40930.59), delPDF("XLK","2026-08-05",40000)),
+    "otro ticker con otro monto tampoco");
+});
+
+test("otro ticker con la MISMA fecha y el MISMO monto sí se marca", ()=>{
+  // Acá no hay nada en los datos que los separe: puede ser tu fondo con el nombre de Balanz
+  // (BCMMA/BMMA) o dos instrumentos distintos que dieron igual. Se marca a propósito: la
+  // pantalla muestra los dos tickers uno al lado del otro y decidís en un clic, mientras que
+  // dejarlo pasar duplica plata sin que se note.
+  cierto(frena(aMano("SPY","2026-08-05",40930.59), delPDF("XLK","2026-08-05",40930.59)),
+    "ante la duda se pregunta, no se agrega");
+});
+
+test("una compra no se confunde con una venta", ()=>{
+  cierto(!frena(aMano("SPY","2026-08-05",40930.59, {subcat:"FCI Suscripción"}),
+                delPDF("SPY","2026-08-05",40930.59, {subcat:"FCI Rescate capital"})),
+    "coincide todo menos lo único que importa");
+});
+
+test("pesos y dólares no se mezclan", ()=>{
+  cierto(!frena(aMano("AL30","2026-05-20",54.21),
+                delPDF("AL30","2026-05-20",0,{importeUSD:54.21, moneda:"USD"})),
+    "USD 54,21 y $54,21 no son la misma plata");
+});
+
+test("lo que ya vino de un PDF no entra en la adivinanza", ()=>{
+  // Esos se reconocen por número de operación; compararlos por parecido sobra y podría
+  // frenar una operación real.
+  const yaImportado=aMano("XLK","2026-08-10",12863.82,{refBalanz:"5555"});
+  cierto(!frena(yaImportado, delPDF("XLK","2026-08-10",12794.29)));
+});
+
+test("cada movimiento tuyo frena una sola operación", ()=>{
+  // Tres rescates parecidos contra un solo movimiento cargado a mano: dos son nuevos.
+  const mano=[aMano("BMMA","2026-08-24",20000)];
+  const leidos=[delPDF("BMMA","2026-08-24",20000,{refBalanz:"1"}),
+                delPDF("BMMA","2026-08-24",20000,{refBalanz:"2"}),
+                delPDF("BMMA","2026-08-24",20000,{refBalanz:"3"})];
+  igual(parecidosDeBalanz(leidos, mano).length, 1, "un movimiento no puede tapar tres");
+});
+
+test("por defecto la parecida no se agrega, y marcarla la agrega", ()=>{
+  const mano=[aMano("BCMMA","2026-08-11",261414.64)];
+  const leido=delPDF("BMMA","2026-08-11",261414.64);
+  balanzPendientes=[leido];
+  balanzParecidos=parecidosDeBalanz(balanzPendientes, mano);
+  balanzIncluir=new Set();
+  igual(aImportarBalanz().length, 0, "agregar de más mete plata que no existe");
+  balanzIncluir.add(claveParecido(leido));
+  igual(aImportarBalanz().length, 1, "si decís que son distintas, se agrega");
+  balanzPendientes=[]; balanzParecidos=[]; balanzIncluir=new Set();
+});
+
 test("la fuente desplazada se decodifica", ()=>{
   // "Boleto" se guarda como "%ROHWR": cada glifo corrido 29 lugares.
   igual(decodificaBalanz("%ROHWR"), "Boleto");
