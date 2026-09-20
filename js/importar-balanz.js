@@ -471,6 +471,7 @@ async function handleBalanz(input){
     balanzCorrecciones=correccionesDeBalanz(encontrados, movs);
     balanzParecidos=parecidosDeBalanz(balanzPendientes, movs);
     balanzIncluir=new Set();
+    balanzVerParecidos=false;
     balanzLeidos=encontrados.length;
     balanzNombre=archivos.length===1 ? archivos[0].name : `${archivos.length} archivos`;
     balanzFallados=fallados;
@@ -592,8 +593,25 @@ function confirmarCorreccionBalanz(){
   if(typeof renderDash==="function") renderDash();
 }
 
+// Antes esto era una lista de preguntas con un botón por fila. Pedido explícito: que no
+// pregunte, que las saque y listo. Así que el bloque arranca CERRADO y dice una sola cosa —
+// cuántas sacó— con un "ver" para el que quiera revisarlas. Lo que no se toca es que sigan
+// estando: sacarlas en silencio sería lo mismo que perderlas.
+let balanzVerParecidos=false;
+function alternarVerParecidos(){
+  balanzVerParecidos=!balanzVerParecidos;
+  renderPreviewBalanz(balanzLeidos, balanzNombre, balanzFallados);
+}
+
 function bloqueParecidosBalanz(){
   const n=balanzParecidos.length;
+  if(!balanzVerParecidos){
+    return `<div class="inset mb-10">
+      <div class="txt-md">${n} ${n===1?"no se agrega":"no se agregan"}: ya ${n===1?"la tenías":"las tenías"} cargada${n===1?"":"s"}</div>
+      <div class="txt-xs txt-muted" style="margin-top:4px">Mismo monto y misma fecha que algo que ya está en la app.
+        <span role="button" tabindex="0" style="color:var(--accent);cursor:pointer" onclick="alternarVerParecidos()">ver cuáles</span></div>
+    </div>`;
+  }
   const filas=balanzParecidos.map(({nuevo, mov})=>{
     const k=claveParecido(nuevo);
     const incluida=balanzIncluir.has(k);
@@ -618,8 +636,9 @@ function bloqueParecidosBalanz(){
     </div>`;
   }).join("");
   return `<div class="inset mb-10">
-      <div class="txt-md txt-strong" style="color:var(--warning)">${n} ${n===1?"se parece":"se parecen"} a algo que cargaste a mano</div>
-      <div class="txt-xs txt-muted" style="margin-top:4px">No coinciden exacto —el resumen trae el neto, otra fecha o el nombre que usa Balanz— así que no puedo saberlo solo. Por las dudas <strong>no se agregan</strong>: si alguna es una operación distinta, marcala.</div>
+      <div class="txt-md">${n} ${n===1?"no se agrega":"no se agregan"}: ya ${n===1?"la tenías":"las tenías"} cargada${n===1?"":"s"}</div>
+      <div class="txt-xs txt-muted" style="margin-top:4px">Si alguna es una operación distinta de verdad, marcala y se agrega.
+        <span role="button" tabindex="0" style="color:var(--accent);cursor:pointer" onclick="alternarVerParecidos()">ocultar</span></div>
     </div>`
     + filas
     + `<div style="height:14px"></div>`;

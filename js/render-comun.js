@@ -497,9 +497,13 @@ function cuadroMesInversionesHTML(invs, periodoLbl, ganInv, opciones){
   const puestoUSD=invs.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
   const sacadoUSD=invs.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
 
-  const colorRes=Math.round(ganInv.ars)===0 ? "var(--muted)"
-               : (ganInv.ars>0 ? "var(--success)" : "var(--danger)");
-  let html=`<div class="seccion-label mb-6">Resultado en ${escapeHtml(periodoLbl)}</div>
+  // El título dice la palabra, no solo el signo. "Resultado: −$50.000" obliga a interpretar un
+  // menos; "Pérdida" se entiende sin pensarlo, que es de lo que se trata esta pantalla.
+  const cero=Math.round(ganInv.ars)===0 && Math.abs(ganInv.usd||0)<0.01;
+  const hayGanancia=(ganInv.ars>0) || (Math.round(ganInv.ars)===0 && (ganInv.usd||0)>0);
+  const colorRes=cero ? "var(--muted)" : (hayGanancia ? "var(--success)" : "var(--danger)");
+  const palabra=cero ? "Sin ganancia ni pérdida en" : (hayGanancia ? "Ganancia en" : "Pérdida en");
+  let html=`<div class="seccion-label mb-6">${palabra} ${escapeHtml(periodoLbl)}</div>
     <div style="font-size:24px;font-weight:600;color:${colorRes};margin-bottom:2px" data-animar="${ganInv.ars}" data-animar-fmt="fmtTotalMas">${fmtTotal(0)}</div>`;
   if(Math.abs(ganInv.usd||0)>=0.01){
     const cu=ganInv.usd>=0?"var(--success)":"var(--danger)";
