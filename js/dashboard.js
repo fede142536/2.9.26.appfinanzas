@@ -103,7 +103,7 @@ function getDashData(year){
     liveByMes[ym] = {mes:ym, ingreso:0, gasto:0};
     movsDelMes.forEach(m=>{
       if(m.moneda==="USD") return; // No mezclar USD con totales ARS
-      if(m.tipo==="Ingreso"){
+      if(esIngreso(m)){
         liveByMes[ym].ingreso += (m.importe||0);
       } else if(esConsumo(m)){
         // Consumo. Lo que fue a parar al fondo no entra: sigue siendo tuyo.
@@ -145,7 +145,7 @@ function getDashData(year){
           // fondo no: guardar plata no es un gasto, y mezclarlo acá haría que "Ahorro" apareciera
           // como una de tus mayores categorías de gasto.
           catData[m.cat] = (catData[m.cat]||0) + (m.importe||0);
-        } else if(m.tipo==="Ingreso"){
+        } else if(esIngreso(m)){
           catIngreso[m.cat] = (catIngreso[m.cat]||0) + (m.importe||0);
         }
         // Las inversiones ya no arman categorías propias de ingreso y gasto: lo que aparece es
@@ -274,7 +274,7 @@ function renderDashCuentas(){
     const c=m.cuenta||"Sin cuenta";
     if(!porCuenta[c]) porCuenta[c]={ing:0,gas:0,count:0};
     // Misma regla que el balance: guardar no es gastar, y una inversión no es ingreso ni gasto.
-    if(m.tipo==="Ingreso") porCuenta[c].ing+=(m.importe||0);
+    if(esIngreso(m)) porCuenta[c].ing+=(m.importe||0);
     else if(esConsumo(m)) porCuenta[c].gas+=(m.importe||0);
     porCuenta[c].count++;
   });
@@ -755,7 +755,8 @@ function showCuentaDetail(cuentaNombre){
   // Totales (misma convención que renderDashCuentas: retiros y rescates suman, compras/depósitos restan o son neutros)
   let ing=0, gas=0;
   movsCuenta.forEach(m=>{
-    if(m.tipo==="Ingreso") ing+=(m.importe||0);
+    if(esPataDeCambio(m)) return;   // un cambio no mueve el patrimonio de la cuenta
+    if(esIngreso(m)) ing+=(m.importe||0);
     else if(m.tipo==="Gasto"){
       gas+=(m.importe||0);                                  // todo gasto resta
       if(esRetiroAhorro(m)) ing+=(m.importe||0);            // y el retiro además entra

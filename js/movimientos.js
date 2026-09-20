@@ -748,6 +748,11 @@ function renderMovs(){
         chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Ahorrado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(ahorradoARS)}</div></div>`;
       }
       // En verde, no en rojo: poner plata en una inversión no es perderla.
+      const cambiadoARS=todoGastos.filter(m=>esPataDeCambio(m)&&m.cambioPata==="sale"&&m.moneda!=="USD")
+        .reduce((s,m)=>s+(m.importe||0),0);
+      if(cambiadoARS>0){
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--accent)">💱 A dólares</div><div class="chip-val" style="color:var(--accent)">${fmtTotal(cambiadoARS)}</div></div>`;
+      }
       if(suscripcionesARS>0){
         chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido en el mes</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(suscripcionesARS)}</div></div>`;
       }
@@ -794,10 +799,10 @@ function renderMovs(){
     // Sin filtro, en cambio, el chip responde "cuánto entró de verdad": ingresos + ganancia.
     const ingTotalARS = filtroCategoria
       ? todoIngresos.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0)
-      : todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0) + Math.max(ganInv.ars||0, 0);
+      : todoIngresos.filter(m=>esIngreso(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0) + Math.max(ganInv.ars||0, 0);
     const ingTotalUSD = filtroCategoria
       ? todoIngresos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
-      : todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(ganInv.usd||0, 0);
+      : todoIngresos.filter(m=>esIngreso(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(ganInv.usd||0, 0);
     let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Ingresos ARS";
     let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val positive">${fmtTotal(ingTotalARS)}</div></div>`;
     if(ingTotalUSD>0){
@@ -858,7 +863,7 @@ function renderMovs(){
 
     // Misma separación en dólares.
     const gastosUSDTotal=mesMovs.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
-    const ingresosUSDTotal=mesMovs.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
+    const ingresosUSDTotal=mesMovs.filter(m=>esIngreso(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
       + mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
 
     let chipsHtml=`
@@ -889,6 +894,11 @@ function renderMovs(){
     // juntos. Esta línea queda para el fondo de ahorro y lo compartido.
     if(aho>0){
       partes.push(`🏦 Ahorrado: <strong style="color:var(--save)">${fmtS(aho)}</strong>`);
+    }
+    // Los pesos que se fueron a dólares. No son gasto —la plata la seguís teniendo— pero se
+    // dicen, porque si no una compra de dólares grande desaparece de la pantalla.
+    if(totales.cambios>0){
+      partes.push(`💱 A dólares: <strong style="color:var(--accent)">${fmtS(totales.cambios)}</strong>`);
     }
     if(retirado>0){
       partes.push(`💸 De ahorros: <strong style="color:var(--save)">${fmtS(retirado)}</strong>`);

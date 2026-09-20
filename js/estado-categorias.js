@@ -401,10 +401,23 @@ function esRetiroAhorro(m){
 function esTraspaso(m){
   return !!m && !!m.traspaso;
 }
+// Un CAMBIO DE MONEDA son dos movimientos que se corresponden: los pesos que salen y los
+// dólares que entran. Es la misma plata cambiando de bolsillo, igual que un traspaso.
+//
+// Antes los pesos contaban como GASTO: el balance se leía como un balance en pesos, y comprar
+// dólares lo bajaba. Es defendible, pero era el único caso así — guardar en el fondo, traspasar
+// entre bolsillos y poner plata en una inversión ya salían de Gastos y se mostraban en un chip
+// aparte, porque esa plata la seguís teniendo. Comprar dólares es exactamente lo mismo.
+// Con los datos reales eran once meses con pesos contados como gastados: diciembre 2025 solo,
+// $305.947.
+//
+// En las vistas POR MONEDA cada pata sigue siendo real para su moneda: los dólares que entran
+// por un cambio son dólares que entraron, y por eso la card de USD los cuenta.
+function esPataDeCambio(m){ return !!m && !!m.cambioId; }
 // Plata que dejaste de tener. Es LA definición que usan el balance, el dashboard y los chips:
 // un gasto que no es ni un depósito al fondo ni un traspaso.
 function esConsumo(m){
-  return esGasto(m) && !esDepositoAhorro(m) && !esTraspaso(m);
+  return esGasto(m) && !esDepositoAhorro(m) && !esTraspaso(m) && !esPataDeCambio(m);
 }
 // Plata que ENTRA a tu patrimonio: solo los ingresos propiamente dichos.
 //
@@ -413,7 +426,7 @@ function esConsumo(m){
 // no te hace más rico. La compra que pagaste con ese retiro sí es un gasto, y ahí baja el
 // patrimonio — una sola vez, donde corresponde.
 function esIngreso(m){
-  return !!m && m.tipo==="Ingreso";
+  return !!m && m.tipo==="Ingreso" && !esPataDeCambio(m);
 }
 
 // Totales de plata de un conjunto de movimientos, en un solo lugar y sin tocar el DOM,
@@ -434,13 +447,16 @@ function esIngreso(m){
 // totalesDePlata() ve una lista suelta y no puede saberlo. Sin ese parámetro las inversiones
 // son neutras, que es la respuesta correcta cuando no se sabe.
 function totalesDePlata(lista, gananciaInv){
-  const ingresos = lista.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+(m.importe||0),0);
+  const ingresos = lista.filter(esIngreso).reduce((s,m)=>s+(m.importe||0),0);
   const depositos= lista.filter(esDepositoAhorro).reduce((s,m)=>s+(m.importe||0),0);
   const retiros  = lista.filter(esRetiroAhorro).reduce((s,m)=>s+(m.importe||0),0);
   // Todo lo que tiene tipo "Gasto" menos lo que seguís teniendo: lo que fue a parar al fondo y
   // los traspasos entre tus propios bolsillos.
   const gastos   = lista.filter(m=>esConsumo(m)).reduce((s,m)=>s+(m.importe||0),0);
   const traspasos= lista.filter(esTraspaso).reduce((s,m)=>s+(m.importe||0),0);
+  // Los pesos que se fueron a dólares. No son gasto, pero se muestran: es plata que se movió.
+  const cambios  = lista.filter(m=>esPataDeCambio(m) && m.cambioPata==="sale" && m.moneda!=="USD")
+                        .reduce((s,m)=>s+(m.importe||0),0);
   const inversiones = lista.filter(m=>m.tipo==="Inversion");
   // Los flujos brutos quedan para mostrarlos como informativos. NO entran al balance: son la
   // misma plata yendo y viniendo, y contarlos enteros infla los dos totales en cada vuelta.
@@ -448,7 +464,7 @@ function totalesDePlata(lista, gananciaInv){
   const invSale  = inversiones.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
   const ganancia = (gananciaInv && gananciaInv.ars) || 0;
   return {
-    ingresos, gastos, depositos, retiros, traspasos, invEntra, invSale,
+    ingresos, gastos, depositos, retiros, traspasos, cambios, invEntra, invSale,
     gananciaInv: ganancia,
     // Una ganancia suma a ingresos; una pérdida resta, y por eso se parte en dos.
     ingresosTotal: Math.round((ingresos + Math.max(ganancia,0))*100)/100,
