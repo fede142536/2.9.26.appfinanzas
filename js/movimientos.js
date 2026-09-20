@@ -854,7 +854,7 @@ function renderMovs(){
     // ahí, todavía sin rescatar", no que hayas perdido; por eso va en color de inversión y no en
     // rojo de gasto.
     // El BALANCE sale de totalesDePlata(), que es la única definición del modelo:
-    //     Balance = Ingresos + resultado de inversiones − Gastos
+    //     Balance = Ingresos − Gastos − Invertido
     //
     // Antes esta pantalla usaba otra: Ingresos − Gastos + Σ(flujo neto por ticker), y además le
     // sumaba a Ingresos los retiros del fondo que se gastaron. Las dos cosas la hacían discrepar
@@ -862,10 +862,10 @@ function renderMovs(){
     // en junio 2026 los dos signos opuestos: el Dashboard decía −$578.680 y esta pantalla
     // +$623.552, por el mismo mes.
     //
-    // La del modelo es la correcta por lo mismo que vale para el ahorro, el traspaso y el cambio
-    // de moneda: poner plata en una inversión no es gastarla, la seguís teniendo. Lo único que
-    // mueve tu patrimonio es el RESULTADO, que está en el cuadro de abajo. Y sacar plata de tu
-    // propio fondo no es un ingreso: la compra que pagaste con ella ya figura como gasto.
+    // Los tres términos están en la fila de chips, así que el balance se puede verificar a
+    // ojo: antes el que faltaba —lo invertido— estaba repartido en las barras por ticker de
+    // abajo y no había forma de llegar al número. Sacar plata del propio fondo no es un
+    // ingreso: la compra que pagaste con ella ya figura como gasto.
     const balCaja=totales.balance;
 
     // Lo que pusiste a trabajar este mes en el fondo de ahorro (las inversiones ya tienen su chip).
@@ -876,10 +876,17 @@ function renderMovs(){
     const ingresosUSDTotal=mesMovs.filter(m=>esIngreso(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
       + mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
 
+    // Los cuatro chips son exactamente las partes del balance: Ingresos − Gastos − Invertido.
+    // El de Invertido aparece solo si hubo movimiento, para no ensuciar un mes sin inversiones.
     let chipsHtml=`
       <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtTotal(0)}</div></div>
-      <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>
-      <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balCaja>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
+      <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>`;
+    if(Math.round(totales.invertido)!==0){
+      // Positivo = pusiste plata (baja el balance). Negativo = rescataste más de lo que pusiste.
+      const cInv=totales.invertido>0 ? "var(--invest)" : "var(--success)";
+      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${cInv}">◈ Invertido</div><div class="chip-val" style="color:${cInv}" id="chip-mov-inv">${fmtTotal(0)}</div></div>`;
+    }
+    chipsHtml+=`<div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balCaja>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
     if(Math.round(guardado)!==0){
       chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Guardado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(guardado)}</div></div>`;
     }
@@ -896,6 +903,9 @@ function renderMovs(){
     animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);
+    if(document.querySelector("#chip-mov-inv")){
+      animarNumero(document.getElementById("chip-mov-inv"), totales.invertido, 700, fmtTotal);
+    }
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
     // Línea informativa: extras del mes (sin arrastre)

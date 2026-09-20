@@ -380,16 +380,28 @@ test("la fila de chips no lleva netos por ticker", ()=>{
          "el neto del mes por ticker volvió a la fila de chips, donde se lee como posición: " + txt);
 });
 
-// El balance es el del MODELO: Ingresos + resultado − Gastos. Antes esta pantalla usaba otra
-// fórmula —Ingresos − Gastos + Σ(flujo neto por ticker)— y discrepaba del Dashboard, que sí
-// usa el modelo. Con los datos reales eran seis meses en desacuerdo, y en junio 2026 los dos
-// con SIGNOS OPUESTOS: −$578.680 en el Dashboard y +$623.552 en Movimientos, el mismo mes.
-test("Balance = Ingresos + resultado − Gastos", async ()=>{
-  // 2.000.000 + 100.000 (la ganancia de BCAHA) − 500.000 = 1.600.000.
-  // Los 300.000 de YPF NO lo bajan: esa plata la seguís teniendo, invertida.
+// El balance es de CAJA: cuánta plata te quedó a mano. Y sus tres partes están en la fila de
+// chips, para que se pueda verificar a ojo — antes el término que faltaba (lo invertido) estaba
+// repartido en las barras por ticker y no había forma de llegar al número.
+test("Balance = Ingresos − Gastos − Invertido, y los chips lo muestran", async ()=>{
+  // 2.000.000 − 500.000 − 200.000 = 1.300.000.
+  // Invertido neto: 900.000 + 300.000 puestos − 1.000.000 rescatados = 200.000.
   const txt=await chipsDeMovsAnimados(MES_INV, "Todos", "", "2026-08");
-  cierto(txt.includes("1.600.000"), "el balance no cierra con sus propias partes: " + txt);
-  cierto(!txt.includes("1.300.000"), "volvió a restar la plata que pusiste a invertir: " + txt);
+  cierto(txt.includes("1.300.000"), "el balance no cierra con sus propias partes: " + txt);
+  cierto(/Invertido/i.test(txt), "falta el chip que hace verificable el balance: " + txt);
+  cierto(txt.includes("200.000"), "el chip no muestra lo invertido neto: " + txt);
+});
+
+test("un mes sin inversiones no agrega el chip de Invertido", async ()=>{
+  const txt=await chipsDeMovsAnimados(MES_INV.slice(0,2), "Todos", "", "2026-08");
+  cierto(!/Invertido/i.test(txt), "el chip aparece en un mes sin inversiones: " + txt);
+  cierto(txt.includes("1.500.000"), "y el balance sigue siendo ingresos − gastos: " + txt);
+});
+
+test("rescatar más de lo que pusiste sube el balance", async ()=>{
+  const l=[MES_INV[0], MES_INV[1], MES_INV[3]];   // sueldo, super y el rescate de 1.000.000
+  const txt=await chipsDeMovsAnimados(l, "Todos", "", "2026-08");
+  cierto(txt.includes("2.500.000"), "2.000.000 − 500.000 + 1.000.000 que volvieron: " + txt);
 });
 
 test("Movimientos y el Dashboard dan el mismo balance", async ()=>{
@@ -1029,21 +1041,35 @@ test("rotar la misma plata no infla ingresos ni gastos", ()=>{
   igual(r.capitalPorTicker["FCI"].ars, 0);
 });
 
-test("el balance del mes suma la ganancia y resta la pérdida", ()=>{
+// El BALANCE es de CAJA: cuánta plata te quedó a mano. La ganancia reconocida no entra —
+// entra la plata cuando la rescatás, con la ganancia adentro. Se muestra aparte, en el cuadro
+// de inversiones, porque responde otra pregunta: cuánto ganaste, no cuánto te quedó.
+test("la ganancia no entra al balance del mes, pero sí a los totales informativos", ()=>{
   const conGanancia=totalesDePlata([SUELDO, GASTO_NORMAL], {ars:5000});
-  igual(conGanancia.ingresosTotal, 1005000, "la ganancia suma a los ingresos");
-  igual(conGanancia.balance, 805000);
+  igual(conGanancia.ingresosTotal, 1005000, "la ganancia suma a los ingresos informativos");
+  igual(conGanancia.balance, 800000, "pero el balance es la plata a mano: 1.000.000 − 200.000");
   const conPerdida=totalesDePlata([SUELDO, GASTO_NORMAL], {ars:-5000});
-  igual(conPerdida.gastosTotal, 205000, "la pérdida suma a los gastos");
-  igual(conPerdida.balance, 795000);
+  igual(conPerdida.gastosTotal, 205000, "la pérdida suma a los gastos informativos");
+  igual(conPerdida.balance, 800000, "y tampoco baja el balance mientras no la realices");
 });
 
-test("sin dato de ganancia las inversiones son neutras", ()=>{
-  // totalesDePlata() ve una lista suelta: no puede saber si una venta fue ganancia. Ante la duda,
-  // neutro — nunca inflar.
-  const t=totalesDePlata([SUELDO, GASTO_NORMAL, compra("2026-04-01","X",900000), venta("2026-04-20","X",910000)]);
-  igual(t.gastos, 200000, "una compra de inversión no puede contarse como gasto");
-  igual(t.balance, 800000, "ni una venta como ingreso");
+test("lo que pusiste a invertir baja el balance, y rescatarlo lo sube", ()=>{
+  const puse=totalesDePlata([SUELDO, GASTO_NORMAL, compra("2026-04-01","X",300000)]);
+  igual(puse.gastos, 200000, "una compra de inversión no puede contarse como gasto");
+  igual(puse.invertido, 300000);
+  igual(puse.balance, 500000, "1.000.000 − 200.000 − 300.000: esa plata no la tenés a mano");
+
+  const saque=totalesDePlata([SUELDO, GASTO_NORMAL, venta("2026-04-20","X",310000)]);
+  igual(saque.invertido, -310000, "sacaste más de lo que pusiste");
+  igual(saque.balance, 1110000, "y vuelve a la mano, con la ganancia adentro");
+});
+
+test("comprar y vender dentro del mismo mes deja el balance donde estaba", ()=>{
+  // Rotar un fondo de liquidez mueve millones y no cambia lo que tenés a mano, salvo la ganancia.
+  const t=totalesDePlata([SUELDO, GASTO_NORMAL,
+    compra("2026-04-01","X",900000), venta("2026-04-20","X",910000)]);
+  igual(t.invertido, -10000, "entró 10.000 más de lo que salió: es la ganancia realizada");
+  igual(t.balance, 810000, "1.000.000 − 200.000 + 10.000");
 });
 
 test("totalesDePlata tolera una lista vacía", ()=>{

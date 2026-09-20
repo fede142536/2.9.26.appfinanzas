@@ -111,9 +111,10 @@ function getDashData(year){
       }
       // Las inversiones no caen en ninguna de las dos: solo su resultado, que se suma abajo.
     });
-    const g=gananciaInvDelMes(ym).ars;
-    if(g>0) liveByMes[ym].ingreso += g;
-    else if(g<0) liveByMes[ym].gasto += -g;
+    // El balance es de CAJA, igual que en Movimientos: lo que entró menos lo que consumiste,
+    // menos lo que pusiste a invertir. La ganancia NO se suma acá — entra sola cuando rescatás,
+    // porque entonces `invertido` baja. Sumarla además la contaba dos veces.
+    liveByMes[ym].invertido = totalesDePlata(movsDelMes).invertido;
   });
 
   // Merge with hist: live takes priority si hay datos del año
@@ -123,7 +124,8 @@ function getDashData(year){
       mes:d.mes,
       ingreso:Math.round(d.ingreso*100)/100,
       gasto:Math.round(d.gasto*100)/100,
-      balance:Math.round((d.ingreso-d.gasto)*100)/100
+      invertido:Math.round((d.invertido||0)*100)/100,
+      balance:Math.round((d.ingreso-d.gasto-(d.invertido||0))*100)/100
     })).sort((a,b)=>a.mes.localeCompare(b.mes));
   } else {
     // Fall back a hardcoded (vacío en versión actual)
@@ -941,7 +943,7 @@ let chartInvHistoricoInstance=null;
 // Ingresos, gastos y balance en un solo gráfico.
 //
 // Antes esto eran dos tarjetas separadas: las barras de ingresos/gastos y, abajo, una línea
-// con el balance. Como el balance es exactamente ingreso − gasto, está en la misma unidad
+// con el balance. El balance es ingreso − gasto − lo invertido, así que está en la misma unidad
 // (pesos) y sobre los mismos meses, ponerlo encima de las barras deja leer de un vistazo
 // "cuánto entró, cuánto salió y qué quedó" sin saltar entre dos gráficos ni comparar dos
 // escalas distintas. Es un solo eje Y para las tres series — nunca dos escalas superpuestas,
