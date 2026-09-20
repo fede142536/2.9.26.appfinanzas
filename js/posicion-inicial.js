@@ -199,7 +199,11 @@ function renderPosicionInicial(){
   });
   const descartados=idsIgnoradosPosIni().length;
 
-  if(!cands.length && !cargadas.length && !descartados){ card.style.display="none"; return; }
+  // La card queda a la vista mientras haya inversiones: aunque no haya nada que proponer, es
+  // la puerta para cargar a mano un ticker cuyas compras viejas no están (SPY, en los datos
+  // reales: el broker dice 38 CEDEARs y en la app hay una sola compra).
+  const hayInversiones=(movs||[]).some(m=>m && m.tipo==="Inversion");
+  if(!cands.length && !cargadas.length && !descartados && !hayInversiones){ card.style.display="none"; return; }
   card.style.display="block";
 
   let html="";
@@ -241,6 +245,7 @@ function renderPosicionInicial(){
   } else {
     html+=`<div class="inset mb-10">
       <div class="txt-md">No queda ninguna venta sin respaldo.</div>
+      <div class="txt-xs txt-muted" style="margin-top:4px">Eso no quiere decir que esté todo: una posición cuyas compras viejas no están cargadas no tiene cómo delatarse sola. Si el capital de algún ticker no coincide con tu broker, cargalo a mano.</div>
     </div>`;
   }
 
@@ -261,5 +266,94 @@ function renderPosicionInicial(){
   if(descartados){
     html+=`<button class="btn-sm" style="width:100%;margin-top:10px" onclick="revisarDescartadosPosIni()">Volver a revisar ${descartados===1?"el descartado":"los "+descartados+" descartados"}</button>`;
   }
+  if(hayInversiones){
+    html+=`<button class="btn-sm" style="width:100%;margin-top:10px" onclick="abrirModalPosIni()">Cargar a mano cualquier posición</button>`;
+  }
   el.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════
+// CARGAR A MANO CUALQUIER POSICIÓN
+// ═══════════════════════════════════════════
+// La detección de arriba solo propone los tickers que tienen una venta sin ninguna compra
+// detrás. Pero falta el otro caso, que con los datos reales resultó ser el más grande: un
+// ticker cuyas compras viejas NO están cargadas, sin ninguna venta huérfana que lo delate.
+//
+// SPY es el ejemplo: el broker dice 38 CEDEARs por $772.160 y en la app hay una sola compra
+// de $236.402, porque las anteriores a julio nunca se cargaron. Nada lo detecta solo, así que
+// tiene que haber una puerta para decirlo a mano.
+//
+// Lo que se carga es lo MISMO que propone la card: cuánto valía lo que ya tenías antes del
+// primer movimiento cargado. Se siembra como capital y el recorrido sigue desde ahí.
+function tickersConMovimientos(lista){
+  const fuente=lista || (typeof movs!=="undefined" ? movs : []);
+  const vistos=new Set();
+  (fuente||[]).forEach(m=>{ if(m && m.tipo==="Inversion") vistos.add(m.ticker||"Sin ticker"); });
+  const cap=resultadoInv(fuente).capitalPorTicker;
+  return [...vistos].sort().map(t=>({
+    ticker:t,
+    capital:{ars:(cap[t]&&cap[t].ars)||0, usd:(cap[t]&&cap[t].usd)||0},
+    inicial:valorPosIni(t)
+  }));
+}
+function valorPosIni(ticker){
+  const p=(posicionInicial||{})[ticker];
+  return {ars:Number(p&&p.ars)||0, usd:Number(p&&p.usd)||0};
+}
+
+function abrirModalPosIni(){
+  const cont=document.getElementById("posini-form");
+  const modal=document.getElementById("modal-posini");
+  if(!cont||!modal) return;
+  const filas=tickersConMovimientos(movs);
+  cont.innerHTML = !filas.length
+    ? `<p class="txt-md txt-muted">No hay ninguna inversión cargada.</p>`
+    : filas.map(f=>{
+        const id=cssIdSeguro(f.ticker);
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div class="txt-md txt-strong">${escapeHtml(f.ticker)}</div>
+          <div class="txt-xs txt-muted" style="margin-bottom:6px">Con lo cargado hoy, la app calcula ${fmtS(f.capital.ars)}${Math.abs(f.capital.usd)>=0.01?" + USD "+f.capital.usd.toFixed(2):""} de capital adentro.</div>
+          <div class="amount-wrap">
+            <span class="amount-prefix">$</span>
+            <input type="number" inputmode="decimal" step="0.01" min="0" class="form-input" style="padding-left:28px"
+                   id="posini-ars-${id}" placeholder="¿Cuánto ya tenías antes?" value="${f.inicial.ars||""}">
+          </div>
+          <div class="amount-wrap" style="margin-top:6px">
+            <span class="amount-prefix">USD</span>
+            <input type="number" inputmode="decimal" step="0.01" min="0" class="form-input" style="padding-left:46px"
+                   id="posini-usd-${id}" placeholder="…y en dólares" value="${f.inicial.usd||""}">
+          </div>
+        </div>`;
+      }).join("");
+  modal.classList.add("open");
+}
+
+function cerrarModalPosIni(){
+  const modal=document.getElementById("modal-posini");
+  if(modal) modal.classList.remove("open");
+}
+
+function guardarModalPosIni(){
+  let cargadas=0, borradas=0;
+  tickersConMovimientos(movs).forEach(f=>{
+    const id=cssIdSeguro(f.ticker);
+    const ta=document.querySelector("#posini-ars-"+id), tu=document.querySelector("#posini-usd-"+id);
+    const sa=ta ? String(ta.value).trim() : "", su=tu ? String(tu.value).trim() : "";
+    // Vaciar los dos campos borra la posición inicial de ese ticker.
+    if(!sa && !su){
+      if(posicionInicial[f.ticker]){ delete posicionInicial[f.ticker]; borradas++; }
+      return;
+    }
+    const a=parseFloat(sa)||0, u=parseFloat(su)||0;
+    if(a<0 || u<0) return;
+    posicionInicial[f.ticker]={ars:Math.round(a*100)/100, usd:Math.round(u*100)/100};
+    cargadas++;
+  });
+  savePosicionInicial();
+  cerrarModalPosIni();
+  const partes=[];
+  if(cargadas) partes.push(`${cargadas} ${cargadas===1?"posición":"posiciones"}`);
+  if(borradas) partes.push(`${borradas} ${borradas===1?"borrada":"borradas"}`);
+  showToast(partes.length ? partes.join(" · ")+" ✓" : "Sin cambios");
+  refrescarTrasPosIni();
 }
