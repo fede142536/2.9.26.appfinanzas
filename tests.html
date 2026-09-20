@@ -84,6 +84,7 @@
 <script src="js/valuaciones.js"></script>
 <script src="js/mep.js"></script>
 <script src="js/importar-balanz.js"></script>
+<script src="js/unificar-tickers.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
@@ -5209,6 +5210,219 @@ test("la fuente desplazada se decodifica", ()=>{
   // "Boleto" se guarda como "%ROHWR": cada glifo corrido 29 lugares.
   igual(decodificaBalanz("%ROHWR"), "Boleto");
   igual(decodificaBalanz("63<"), "SPY");
+});
+
+grupo("Unificar tickers");
+
+// Balanz usa sus propios nombres: al money market le dice BMMA y en la app está cargado como
+// BCMMA. Importando el resumen quedan DOS posiciones de la misma plata, cada una con su
+// capital y su resultado, y ninguna de las dos dice la verdad.
+function invDe(ticker, fecha, importe, subcat){
+  return {id:++_idInv, tipo:"Inversion", cat:"FCI", subcat:subcat||"FCI Compra",
+          ticker, fecha, importe, importeUSD:0};
+}
+function conTickers(lista, fn){
+  const prevM=movs, prevP=posicionInicial, prevV=(typeof valuaciones!=="undefined"?valuaciones:{});
+  movs=lista; posicionInicial={}; if(typeof valuaciones!=="undefined") valuaciones={};
+  invalidarResultadoInv();
+  limpiarIgnoradosTicker();
+  try{ return fn(); }
+  finally{
+    movs=prevM; posicionInicial=prevP;
+    if(typeof valuaciones!=="undefined") valuaciones=prevV;
+    limpiarIgnoradosTicker(); invalidarResultadoInv();
+  }
+}
+function paresDe(sugs){ return sugs.map(x=>[x.a,x.b].sort().join("/")).sort(); }
+// capitalPorTicker() devuelve un array y filtra los que quedaron en cero.
+function capDe(lista, ticker){ return capitalPorTicker(lista).find(p=>p.ticker===ticker); }
+
+test("lista los tickers de inversión con sus movimientos y su capital", ()=>{
+  const l=[invDe("BCMMA","2026-08-01",100000), invDe("BCMMA","2026-08-05",65646),
+           invDe("BMMA","2026-08-20",62575)];
+  conTickers(l, ()=>{
+    const ts=tickersDeInversion(l);
+    igual(ts.map(t=>t.ticker), ["BCMMA","BMMA"]);
+    igual(ts[0].movs, 2);
+    igual(ts[0].capital.ars, 165646);
+    igual(ts[1].capital.ars, 62575);
+  });
+});
+
+test("propone el par que difiere en una letra", ()=>{
+  const l=[invDe("BCMMA","2026-08-01",100000), invDe("BMMA","2026-08-20",62575)];
+  conTickers(l, ()=>{
+    igual(paresDe(sugerenciasDeTicker(l)), ["BCMMA/BMMA"]);
+    igual(sugerenciasDeTicker(l)[0].ojo, false, "no hay ninguna D de por medio");
+  });
+});
+
+test("no propone tickers que no se parecen en nada", ()=>{
+  // MCD y META arrancan con la misma letra: lo que los descarta es la distancia (3), no el
+  // filtro de la inicial. Sin tope, la card propondría cualquier par de la cartera.
+  const l=[invDe("SPY","2026-08-01",100000), invDe("XLK","2026-08-20",62575),
+           invDe("MCD","2026-08-21",54238), invDe("META","2026-08-22",40000)];
+  conTickers(l, ()=>{ igual(sugerenciasDeTicker(l), []); });
+});
+
+test("el par que se diferencia por una D va propuesto PERO marcado", ()=>{
+  // Es el caso ambiguo del mercado argentino: AL30/AL30D son las dos patas de un MEP y no hay
+  // que unirlas, pero YPF/YPFD es la misma acción con el nombre que le pone Balanz. Ninguna
+  // regla automática los separa, así que se propone con la advertencia puesta.
+  const l=[invDe("YPF","2026-08-01",31508), invDe("YPFD","2026-08-20",35040)];
+  conTickers(l, ()=>{
+    const s=sugerenciasDeTicker(l);
+    igual(paresDe(s), ["YPF/YPFD"], "descartarlo a ciegas taparía el caso real de Balanz");
+    igual(s[0].ojo, true, "sin la marca, unir AL30 con AL30D parecería buena idea");
+  });
+});
+
+test("lo más parecido va primero", ()=>{
+  // El orden en que salen de los dos for anidados es BCAHA/BCAHB (1), BCAHA/BCMMA (2),
+  // BCMMA/BMMA (1): sin ordenar, el par de distancia 2 queda en el medio.
+  const l=[invDe("BCMMA","2026-08-01",1), invDe("BMMA","2026-08-02",1),
+           invDe("BCAHA","2026-08-03",1), invDe("BCAHB","2026-08-04",1)];
+  conTickers(l, ()=>{
+    const s=sugerenciasDeTicker(l);
+    igual(s.map(x=>x.distancia), [1,1,2], "las sugerencias no quedaron ordenadas por parecido");
+    igual(paresDe(s.slice(0,2)), ["BCAHA/BCAHB","BCMMA/BMMA"]);
+    igual([s[2].a,s[2].b].sort().join("/"), "BCAHA/BCMMA");
+  });
+});
+
+test("a igual parecido, primero el par que no necesita advertencia", ()=>{
+  // AL30/AL30D sale primero de los for (los tickers se recorren alfabéticos) y las dos
+  // sugerencias tienen distancia 1: si el desempate no mira ojo, el par ambiguo encabeza.
+  const l=[invDe("AL30","2026-08-01",1), invDe("AL30D","2026-08-02",1),
+           invDe("BCMMA","2026-08-03",1), invDe("BMMA","2026-08-04",1)];
+  conTickers(l, ()=>{
+    const s=sugerenciasDeTicker(l);
+    igual(s.map(x=>x.ojo), [false, true], "el par ambiguo de la D no puede encabezar la lista");
+    igual([s[0].a,s[0].b].sort().join("/"), "BCMMA/BMMA");
+  });
+});
+
+test("no propone dos bonos distintos que comparten el número", ()=>{
+  // AL30 (Bonar) y GD30 (Global) están a distancia 2 pero no son el mismo instrumento. Un
+  // broker que renombra una especie nunca le cambia la inicial —BMMA/BCMMA, YPF/YPFD la
+  // conservan—, así que arrancar distinto alcanza para descartar el par.
+  const l=[invDe("AL30","2026-08-01",50000), invDe("GD30","2026-08-02",50000)];
+  conTickers(l, ()=>{ igual(sugerenciasDeTicker(l), []); });
+});
+
+test("un par descartado no vuelve a aparecer", ()=>{
+  // BCAHA y BCMMA son dos fondos distintos del mismo banco: la distancia de edición no puede
+  // saberlo, y sin poder decir "estos NO son el mismo" la sugerencia volvería para siempre.
+  const l=[invDe("BCAHA","2026-08-01",50000), invDe("BCMMA","2026-08-20",62575)];
+  conTickers(l, ()=>{
+    igual(paresDe(sugerenciasVisiblesDeTicker(l)), ["BCAHA/BCMMA"]);
+    ignorarParTicker("BCAHA","BCMMA");
+    igual(sugerenciasVisiblesDeTicker(l), []);
+    igual(paresDe(sugerenciasDeTicker(l)), ["BCAHA/BCMMA"], "el descarte es de la vista, no del cálculo");
+    limpiarIgnoradosTicker();
+    igual(paresDe(sugerenciasVisiblesDeTicker(l)), ["BCAHA/BCMMA"], "tiene que poder revisarse de nuevo");
+  });
+});
+
+test("el descarte no depende del orden en que se nombren los dos tickers", ()=>{
+  const l=[invDe("BCAHA","2026-08-01",50000), invDe("BCMMA","2026-08-20",62575)];
+  conTickers(l, ()=>{
+    ignorarParTicker("BCMMA","BCAHA");   // al revés que como los devuelve la sugerencia
+    igual(sugerenciasVisiblesDeTicker(l), []);
+  });
+});
+
+test("unificar junta el capital en una sola posición", ()=>{
+  const l=[invDe("BCMMA","2026-08-01",100000), invDe("BMMA","2026-08-20",62575)];
+  conTickers(l, ()=>{
+    igual(capDe(l,"BCMMA").ars, 100000);
+    igual(unificarTicker("BMMA","BCMMA"), 1);
+    invalidarResultadoInv();
+    igual(capDe(l,"BCMMA").ars, 162575, "las dos posiciones eran la misma plata");
+    igual(capDe(l,"BMMA"), undefined, "el ticker viejo no puede seguir existiendo");
+    igual(tickersDeInversion(l).map(t=>t.ticker), ["BCMMA"]);
+  });
+});
+
+test("una venta cargada con el otro nombre deja de ser ganancia pura", ()=>{
+  // Es el daño concreto: la compra quedó bajo un ticker y la venta bajo el otro, así que la
+  // venta no encuentra capital detrás y el modelo la cuenta entera como ganancia.
+  const l=[invDe("BCMMA","2026-08-01",100000),
+           invDe("BMMA","2026-08-20",62575,"FCI Venta")];
+  conTickers(l, ()=>{
+    igual(gananciaInvEntre("2026-01","2026-12", l).ars, 62575, "separados, la venta es ganancia");
+    unificarTicker("BMMA","BCMMA");
+    invalidarResultadoInv();
+    igual(gananciaInvEntre("2026-01","2026-12", l).ars, 0, "unificados, la venta devuelve capital");
+    igual(capDe(l,"BCMMA").ars, 37425);
+  });
+});
+
+test("la posición inicial de los dos se suma", ()=>{
+  const l=[invDe("BCMMA","2026-08-01",1), invDe("BMMA","2026-08-02",1)];
+  conTickers(l, ()=>{
+    posicionInicial.BCMMA={ars:1000, usd:0};
+    posicionInicial.BMMA={ars:500, usd:20};
+    unificarTicker("BMMA","BCMMA");
+    igual(posicionInicial.BCMMA, {ars:1500, usd:20}, "es capital de la MISMA posición");
+    igual(posicionInicial.BMMA, undefined);
+  });
+});
+
+test("la valuación se muda al ticker que queda", ()=>{
+  cierto(typeof valuaciones!=="undefined", "hace falta el módulo de valuaciones");
+  // Lista nueva en cada caso: unificarTicker() renombra los movimientos EN EL LUGAR, así que
+  // reusar la misma no unificaría nada la segunda vez y el test no probaría nada.
+  conTickers([invDe("BCMMA","2026-08-01",1), invDe("BMMA","2026-08-02",1)], ()=>{
+    valuaciones.BMMA={ars:62575, usd:0, fecha:"2026-09-18"};
+    unificarTicker("BMMA","BCMMA");
+    igual(valuaciones.BCMMA.ars, 62575, "el valor de mercado tiene que seguir al ticker que queda");
+    igual(valuaciones.BMMA, undefined);
+  });
+});
+
+test("la valuación no pisa la que el destino ya tenía", ()=>{
+  cierto(typeof valuaciones!=="undefined", "hace falta el módulo de valuaciones");
+  conTickers([invDe("BCMMA","2026-08-01",1), invDe("BMMA","2026-08-02",1)], ()=>{
+    valuaciones.BCMMA={ars:165646, usd:0, fecha:"2026-09-19"};
+    valuaciones.BMMA={ars:62575, usd:0, fecha:"2026-09-18"};
+    unificarTicker("BMMA","BCMMA");
+    igual(valuaciones.BCMMA.ars, 165646, "las dos miden lo mismo: quedarse con la del origen mentiría");
+    igual(valuaciones.BMMA, undefined, "la vieja no puede quedar colgada");
+  });
+});
+
+test("unificar se puede deshacer", ()=>{
+  const l=[invDe("BCMMA","2026-08-01",100000), invDe("BMMA","2026-08-20",62575)];
+  conTickers(l, ()=>{
+    unificarTicker("BMMA","BCMMA");
+    igual(tickersUnificados(l), [{origen:"BMMA", movs:1}]);
+    igual(separarTicker("BMMA"), 1);
+    invalidarResultadoInv();
+    igual(tickersDeInversion(l).map(t=>t.ticker), ["BCMMA","BMMA"]);
+    igual(capDe(l,"BMMA").ars, 62575);
+    igual(tickersUnificados(l), [], "deshecho, no queda rastro que ofrecer");
+  });
+});
+
+test("no toca nada que no sea una inversión de ese ticker", ()=>{
+  const gasto={id:++_idInv, tipo:"Gasto", importe:5000, cat:"Supermercado",
+               fecha:"2026-08-10", ticker:"BMMA", moneda:"ARS"};
+  const l=[invDe("BMMA","2026-08-20",62575), gasto];
+  conTickers(l, ()=>{
+    igual(unificarTicker("BMMA","BCMMA"), 1, "solo el movimiento de inversión");
+    igual(gasto.ticker, "BMMA", "un gasto con ese texto no es una posición");
+  });
+});
+
+test("unificar contra sí mismo o contra la nada no hace nada", ()=>{
+  const l=[invDe("BMMA","2026-08-20",62575)];
+  conTickers(l, ()=>{
+    igual(unificarTicker("BMMA","BMMA"), 0);
+    igual(unificarTicker("", "BCMMA"), 0);
+    igual(unificarTicker("NOEXISTE","BCMMA"), 0);
+    igual(l[0].ticker, "BMMA");
+  });
 });
 
 grupo("Aislamiento de los tests");
