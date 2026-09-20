@@ -455,6 +455,12 @@ function totalesDePlata(lista, gananciaInv){
   const ingresos = lista.filter(esIngreso).reduce((s,m)=>s+(m.importe||0),0);
   const depositos= lista.filter(esDepositoAhorro).reduce((s,m)=>s+(m.importe||0),0);
   const retiros  = lista.filter(esRetiroAhorro).reduce((s,m)=>s+(m.importe||0),0);
+  // Los retiros que además son CONSUMO. Solo estos se le devuelven a lo disponible, porque
+  // solo estos están restando dentro de `gastos`. Un traspaso pagado con el fondo —plata que
+  // pasó del fondo a una inversión— también es esRetiroAhorro, pero no es consumo y no entra
+  // en `gastos`: devolverlo inventaba plata que nunca salió de la billetera.
+  const retirosGastados = lista.filter(m=>esRetiroAhorro(m) && esConsumo(m))
+                               .reduce((s,m)=>s+(m.importe||0),0);
   // Todo lo que tiene tipo "Gasto" menos lo que seguís teniendo: lo que fue a parar al fondo y
   // los traspasos entre tus propios bolsillos.
   const gastos   = lista.filter(m=>esConsumo(m)).reduce((s,m)=>s+(m.importe||0),0);
@@ -477,7 +483,23 @@ function totalesDePlata(lista, gananciaInv){
     // Una ganancia suma a ingresos; una pérdida resta, y por eso se parte en dos.
     ingresosTotal: Math.round((ingresos + Math.max(ganancia,0))*100)/100,
     gastosTotal:   Math.round((gastos   + Math.max(-ganancia,0))*100)/100,
-    balance: Math.round((ingresos - gastos - invertido)*100)/100
+    balance: Math.round((ingresos - gastos - invertido)*100)/100,
+    // ── DISPONIBLE: lo que te queda en la mano ──
+    // El balance de arriba mide PATRIMONIO: guardar en el fondo no lo baja, porque la plata
+    // sigue siendo tuya. Es la respuesta a "¿crecí este mes?".
+    //
+    // Disponible responde otra cosa: "¿cuánta plata tengo ahora para usar?". Ahí el fondo NO
+    // cuenta: lo que guardaste salió de la billetera. Por eso los depósitos restan, y por la
+    // misma razón una compra que pagaste CON el fondo no resta —esa plata no salió de la
+    // billetera, salió del fondo, que ya había restado cuando la guardaste—. Sumarle los
+    // retiros es lo que evita contarla dos veces.
+    //
+    //   Disponible = Ingresos − Gastos + Consumo pagado del fondo − Guardado − Invertido
+    //
+    // Los dos números son ciertos y responden preguntas distintas, así que se llaman distinto
+    // y nunca aparecen los dos con el mismo nombre en la misma pantalla.
+    retirosGastados,
+    disponible: Math.round((ingresos - gastos + retirosGastados - depositos - invertido)*100)/100
   };
 }
 

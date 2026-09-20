@@ -621,7 +621,6 @@ function renderMovs(){
   const totales=totalesDePlata(mesMovs, ganInv);
   const gas=totales.gastos;
   const aho=totales.depositos;
-  const retirado=totales.retiros;
   // Inversiones del mes: impactan el balance desde la perspectiva de cash flow
   // - Suscripción/Compra → sale cash (resta del balance, igual que un gasto)
   // - Rescate/Venta → entra cash (suma al balance, igual que un ingreso)
@@ -866,7 +865,9 @@ function renderMovs(){
     // ojo: antes el que faltaba —lo invertido— estaba repartido en las barras por ticker de
     // abajo y no había forma de llegar al número. Sacar plata del propio fondo no es un
     // ingreso: la compra que pagaste con ella ya figura como gasto.
-    const balCaja=totales.balance;
+    // Lo que te queda en la mano: el fondo de ahorro y lo invertido ya no están acá.
+    // La definición vive en totalesDePlata() (estado-categorias.js), una sola vez.
+    const disponible=totales.disponible;
 
     // Lo que pusiste a trabajar este mes en el fondo de ahorro (las inversiones ya tienen su chip).
     const guardado=aho;
@@ -884,50 +885,73 @@ function renderMovs(){
     // positivo — y el chip mostraba "+$296.189" en un mes en que el balance BAJABA por esos
     // mismos $296.189. Un número positivo que resta no se puede leer. Ahora invertir se ve en
     // negativo, como cualquier plata que se va, y rescatar en positivo.
+    // ── LOS CHIPS SON LA CUENTA, EN ORDEN ──
+    // Se leen de izquierda a derecha y dan el último:
+    //
+    //     Ingresos − Gastos − Guardado ± Invertido = Disponible
+    //
+    // Cada uno va con el signo de su EFECTO sobre lo disponible, no con el signo interno del
+    // modelo. Son opuestos en el caso de invertir: `totales.invertido` es lo que pusiste menos
+    // lo que rescataste, así que poner plata da positivo — y el chip llegó a mostrar "+$296.189"
+    // en un mes en que el disponible BAJABA por esos mismos $296.189. Un número positivo que
+    // resta no se puede leer.
+    //
+    // Los que dan cero no se muestran: un mes sin inversiones no tiene por qué mostrar un chip
+    // de inversiones en cero.
+    const efectoInv=-totales.invertido;
+    // El chip del fondo muestra su efecto NETO sobre la billetera, no solo lo que metiste.
+    // Si además pagaste algo con el fondo, esa plata no salió de la billetera y hay que
+    // devolverla. Sin esto la fila no cerraba a la vista: con $400.000 guardados y $250.000
+    // pagados del fondo, los chips daban $529.343 y el total decía $779.343, y los $250.000
+    // que explicaban la diferencia estaban en una línea aparte. Cuatro números que no suman
+    // son peores que cuatro números.
+    const efectoAho=-(guardado - totales.retirosGastados);
     let chipsHtml=`
       <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtTotal(0)}</div></div>
       <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>`;
-    const efectoInv=-totales.invertido;   // lo que las inversiones le suman o le restan al balance
+    if(Math.round(efectoAho)!==0){
+      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Guardado</div><div class="chip-val" style="color:var(--save)" id="chip-mov-aho">${fmtTotal(0)}</div></div>`;
+    }
     if(Math.round(efectoInv)!==0){
       const cInv=efectoInv<0 ? "var(--invest)" : "var(--success)";
       chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${cInv}">◈ Invertido</div><div class="chip-val" style="color:${cInv}" id="chip-mov-inv">${fmtTotal(0)}</div></div>`;
     }
-    chipsHtml+=`<div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balCaja>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
-    if(Math.round(guardado)!==0){
-      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Guardado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(guardado)}</div></div>`;
-    }
+    chipsHtml+=`<div class="chip"><div class="chip-label">Disponible</div><div class="chip-val ${disponible>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
     if(ingresosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Ingresos USD</div><div class="chip-val positive">USD ${ingresosUSDTotal.toFixed(2)}</div></div>`;
     }
     if(gastosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Gastos USD</div><div class="chip-val negative">USD ${gastosUSDTotal.toFixed(2)}</div></div>`;
     }
-    // Los tickers ya no van como chips: un chip por ticker llenaba la fila de netos del mes
-    // —que son flujo, no posición— y no había dónde leer cuánto seguía invertido. Todo eso
-    // ahora vive en el cuadro de Inversiones, abajo.
     document.getElementById("mov-summary").innerHTML=chipsHtml;
     animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
-    animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);
+    animarNumero(document.getElementById("chip-mov-bal"), disponible, 700, fmtTotal);
+    if(document.querySelector("#chip-mov-aho")){
+      animarNumero(document.getElementById("chip-mov-aho"), efectoAho, 700, fmtTotalMas);
+    }
     if(document.querySelector("#chip-mov-inv")){
       animarNumero(document.getElementById("chip-mov-inv"), efectoInv, 700, fmtTotalMas);
     }
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
     // Línea informativa: extras del mes (sin arrastre)
+    // Esta línea dice SOLO lo que no está en los chips. Lo ahorrado salió de acá cuando pasó
+    // a ser un chip: repetirlo en los dos lugares es lo que hace que la pantalla se sienta
+    // llena de números que no se sabe cómo se relacionan.
     const partes=[];
-    // Las inversiones no van más acá: tienen su cuadro propio, con la posición y el resultado
-    // juntos. Esta línea queda para el fondo de ahorro y lo compartido.
-    if(aho>0){
-      partes.push(`🏦 Ahorrado: <strong style="color:var(--save)">${fmtS(aho)}</strong>`);
+    // Esto sí hace falta: sin decirlo, gastar del fondo parece un error de la app. Pagaste
+    // $300.000 y el disponible no se movió, porque esa plata ya había salido de la billetera
+    // cuando la guardaste.
+    // El número que se muestra es el que DE VERDAD afecta lo disponible: el consumo pagado con
+    // el fondo. Un traspaso también sale del fondo, pero no es consumo y no entra en la cuenta.
+    if(totales.retirosGastados>0){
+      partes.push(`💸 Pagado con ahorros: <strong style="color:var(--save)">${fmtS(totales.retirosGastados)}</strong> · no baja lo disponible`);
     }
     // Los pesos que se fueron a dólares. No son gasto —la plata la seguís teniendo— pero se
     // dicen, porque si no una compra de dólares grande desaparece de la pantalla.
     if(totales.cambios>0){
       partes.push(`💱 A dólares: <strong style="color:var(--accent)">${fmtS(totales.cambios)}</strong>`);
-    }
-    if(retirado>0){
-      partes.push(`💸 De ahorros: <strong style="color:var(--save)">${fmtS(retirado)}</strong>`);
     }
     // Total a recuperar (gastos compartidos)
     const recup=mesMovs.filter(m=>esConsumo(m)&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
