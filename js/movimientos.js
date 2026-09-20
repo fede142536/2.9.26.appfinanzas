@@ -878,12 +878,18 @@ function renderMovs(){
 
     // Los cuatro chips son exactamente las partes del balance: Ingresos − Gastos − Invertido.
     // El de Invertido aparece solo si hubo movimiento, para no ensuciar un mes sin inversiones.
+    //
+    // Va con el SIGNO DEL EFECTO sobre el balance, no con el de `totales.invertido`. Son
+    // opuestos: `invertido` es lo que pusiste menos lo que rescataste, así que poner plata da
+    // positivo — y el chip mostraba "+$296.189" en un mes en que el balance BAJABA por esos
+    // mismos $296.189. Un número positivo que resta no se puede leer. Ahora invertir se ve en
+    // negativo, como cualquier plata que se va, y rescatar en positivo.
     let chipsHtml=`
       <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtTotal(0)}</div></div>
       <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>`;
-    if(Math.round(totales.invertido)!==0){
-      // Positivo = pusiste plata (baja el balance). Negativo = rescataste más de lo que pusiste.
-      const cInv=totales.invertido>0 ? "var(--invest)" : "var(--success)";
+    const efectoInv=-totales.invertido;   // lo que las inversiones le suman o le restan al balance
+    if(Math.round(efectoInv)!==0){
+      const cInv=efectoInv<0 ? "var(--invest)" : "var(--success)";
       chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${cInv}">◈ Invertido</div><div class="chip-val" style="color:${cInv}" id="chip-mov-inv">${fmtTotal(0)}</div></div>`;
     }
     chipsHtml+=`<div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balCaja>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
@@ -904,7 +910,7 @@ function renderMovs(){
     animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);
     if(document.querySelector("#chip-mov-inv")){
-      animarNumero(document.getElementById("chip-mov-inv"), totales.invertido, 700, fmtTotal);
+      animarNumero(document.getElementById("chip-mov-inv"), efectoInv, 700, fmtTotalMas);
     }
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
