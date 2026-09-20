@@ -357,6 +357,10 @@ function sumInvNeto(arr){
 function sumInvNetoUSD(arr){
   return arr.reduce((s,m)=>s+(m.importeUSD||0)*invSigno(m),0);
 }
+// Suma de impacto en cash flow (entra/sale del bolsillo)
+function sumInvCash(arr){
+  return arr.reduce((s,m)=>s+(m.importe||0)*invSignoCash(m),0);
+}
 
 function renderInv(){
   const ymSel=mesInv;
@@ -368,41 +372,83 @@ function renderInv(){
     return String(m.fecha||"").slice(0,7)===ymSel;
   }).sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
 
+  // Totales del mes (NETO desde perspectiva del CASH: rescates suman, compras restan)
+  // Esto refleja el efecto real en el bolsillo del usuario
+  const totalARS=sumInvCash(invsMes);
+  const totalUSD=invsMes.reduce((s,m)=>s+(m.importeUSD||0)*invSignoCash(m),0);
   const cantMes=invsMes.length;
-  // El resultado sale de resultado-inversiones.js, que mira TODA la historia: por una lista de
-  // un mes suelto no se puede saber si una venta fue ganancia o capital volviendo.
-  const ganInv=gananciaInvDelMes(ymSel);
-  const puestoARS=invsMes.filter(m=>!isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  // Rescates/cupones = INGRESO (entra plata). Compras/suscripciones = GASTO (sale plata)
+  const ingresos=invsMes.filter(m=>isInvSalida(m));   // las "salidas del portfolio" son ingresos al bolsillo
+  const gastosInv=invsMes.filter(m=>!isInvSalida(m)); // las "entradas al portfolio" son gastos del bolsillo
+  const totalIngresos=ingresos.reduce((s,m)=>s+(m.importe||0),0);
+  const totalGastos=gastosInv.reduce((s,m)=>s+(m.importe||0),0);
+  const tiposMes=new Set(invsMes.map(m=>m.cat));
 
   // ── CHIPS ──
-  // Antes decían "Balance ARS −$110.918", el neto de CAJA del mes, justo arriba de un cuadro que
-  // encabezaba con otra cifra sobre los mismos movimientos. Y trataban una compra como plata
-  // perdida, que es lo que el modelo dejó de hacer hace rato.
-  const colorRes=Math.round(ganInv.ars)===0 ? "" : (ganInv.ars>0 ? "positive" : "negative");
-  let chips=`<div class="chip"><div class="chip-label">Resultado</div><div class="chip-val ${colorRes}">${fmtTotalMas(ganInv.ars)}</div></div>`;
-  if(Math.abs(ganInv.usd||0)>=0.01){
-    chips+=`<div class="chip"><div class="chip-label">Resultado USD</div><div class="chip-val ${ganInv.usd>=0?"positive":"negative"}">${ganInv.usd>=0?"+":""}USD ${ganInv.usd.toFixed(2)}</div></div>`;
-  }
-  chips+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(puestoARS)}</div></div>`;
-  chips+=`<div class="chip"><div class="chip-label">Movimientos</div><div class="chip-val">${cantMes}</div></div>`;
-  document.getElementById("inv-summary").innerHTML=chips;
+  const colorNeto=totalARS>=0?"positive":"negative";
+  document.getElementById("inv-summary").innerHTML=`
+    <div class="chip"><div class="chip-label">Balance ARS</div><div class="chip-val ${colorNeto}">${fmtTotal(totalARS)}</div></div>
+    <div class="chip"><div class="chip-label">Balance USD</div><div class="chip-val ${colorNeto}">${totalUSD!==0?"USD "+totalUSD.toFixed(2):"—"}</div></div>
+    <div class="chip"><div class="chip-label">Movimientos</div><div class="chip-val">${cantMes}</div></div>`;
 
-  // ── EL MES (el mismo cuadro que en Movimientos, más el desglose por categoría) ──
+  // ── BALANCE DEL MES (desglose por categoría y por ticker) ──
   const balanceEl=document.getElementById("inv-balance");
   if(!cantMes){
     balanceEl.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:14px 0">Sin movimientos en ${mesLbl(ymSel)}</p>`;
   } else {
-    balanceEl.innerHTML=cuadroMesInversionesHTML(invsMes, mesLbl(ymSel), ganInv, {porCategoria:true});
+    const lblNeto=totalARS>=0?"Ingreso neto":"Gasto neto";
+    let html=`<div class="seccion-label mb-6">${lblNeto} en ${mesLbl(ymSel)}</div>
+      <div style="font-size:24px;font-weight:600;color:var(--${totalARS>=0?'success':'danger'});margin-bottom:6px">${fmtTotal(totalARS)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+        ${cantMes} ${cantMes===1?"movimiento":"movimientos"} · ${tiposMes.size} ${tiposMes.size===1?"tipo":"tipos"}
+        ${totalIngresos>0?` · 📥 Ingresos: <strong style="color:var(--success)">${fmtS(totalIngresos)}</strong>`:""}
+        ${totalGastos>0?` · 📤 Gastos: <strong style="color:var(--danger)">${fmtS(totalGastos)}</strong>`:""}
+      </div>`;
+
+    // Desglose por categoría (perspectiva cash)
+    const porCat={};
+    invsMes.forEach(m=>{
+      porCat[m.cat]=(porCat[m.cat]||0)+(m.importe||0)*invSignoCash(m);
+    });
+    const catEntries=Object.entries(porCat).filter(([_,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+    if(catEntries.length){
+      html+=`<div class="seccion-label mb-6">Por categoría (balance)</div>`;
+      const maxV=Math.max(...catEntries.map(([_,v])=>Math.abs(v)));
+      html+=catEntries.map(([cat,val])=>{
+        const c=val>=0?"var(--success)":"var(--danger)";
+        return `<div class="bar-row" style="margin-bottom:6px">
+          <div class="bar-label">◈ ${escapeHtml(cat)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(val)/maxV*100)}%;background:${c}"></div></div>
+          <div class="bar-val" style="color:${c}">${fmtS(val)}</div>
+        </div>`;
+      }).join("");
+    }
+
+    // Desglose por ticker (NETO)
+    const porTicker={};
+    invsMes.forEach(m=>{
+      const t=m.ticker||"Sin ticker";
+      porTicker[t]=(porTicker[t]||0)+(m.importe||0)*invSignoCash(m);
+    });
+    const tickerEntries=Object.entries(porTicker).filter(([_,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+    if(tickerEntries.length>1){
+      html+=`<div class="seccion-label mt-14 mb-6">Por ticker (balance)</div>`;
+      const maxV=Math.max(...tickerEntries.map(([_,v])=>Math.abs(v)));
+      html+=tickerEntries.map(([ticker,val])=>{
+        const c=val>=0?"var(--success)":"var(--danger)";
+        return `<div class="bar-row" style="margin-bottom:6px">
+          <div class="bar-label">${escapeHtml(ticker)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(val)/maxV*100)}%;background:${c}"></div></div>
+          <div class="bar-val" style="color:${c}">${fmtS(val)}</div>
+        </div>`;
+      }).join("");
+    }
+    balanceEl.innerHTML=html;
     animarNumerosDe(balanceEl);
   }
 
   // ── LISTA DE MOVIMIENTOS DEL MES (con editar/eliminar) ──
-  // Acá decía "GASTO" en rojo sobre una suscripción, justo debajo de un cuadro que a eso mismo
-  // lo llamaba "invertido". Una compra va en color de inversión, no en rojo de gasto.
-  // Sin badge de "INVERTIDO"/"RECUPERO" como en Movimientos: ahí sirve para distinguir una
-  // inversión del supermercado, pero en esta lista TODAS son inversiones, así que no distingue
-  // nada y se comía el ancho del nombre. Compra o rescate ya lo dicen el subtítulo, el ícono
-  // y el signo.
+  // Perspectiva CASH: rescate = ingreso (verde, +), suscripción = gasto (rojo, -)
   const movsEl=document.getElementById("inv-movs");
   if(!cantMes){
     movsEl.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>Sin movimientos este mes</div>`;
@@ -414,11 +460,14 @@ function renderInv(){
       if(m.importeUSD>0) amt=`${sign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`;
       else amt=`${sign}${fmtS(m.importe||0)}`;
       const sub=`${escapeHtml(m.subcat||m.cat)} · ${(m.fecha||"").split("-").reverse().join("/")}`;
-      const amtColor=esIngreso?"var(--success)":"var(--invest)";
+      const badge=esIngreso
+        ?`<span class="badge badge-success">📥 INGRESO</span>`
+        :`<span class="badge badge-danger">📤 GASTO</span>`;
+      const amtColor=esIngreso?"var(--success)":"var(--danger)";
       return `<div class="tx-item">
-        <div class="tx-icon inversion">${esIngreso?"📥":"📤"}</div>
+        <div class="tx-icon ${esIngreso?'ingreso':'gasto'}">${esIngreso?"📥":"📤"}</div>
         <div class="tx-info">
-          <div class="tx-cat">${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span></div>
+          <div class="tx-cat">${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${badge}</div>
           <div class="tx-sub">${sub}${m.nota?" · "+escapeHtml(m.nota.slice(0,18)):""}</div>
         </div>
         <div class="tx-amount" style="color:${amtColor}">${amt}</div>
@@ -430,31 +479,122 @@ function renderInv(){
     }).join("");
   }
 
+  // ── CARTERA ACUMULADA (todas las inversiones, agrupadas por ticker) ──
+  // Perspectiva CASH: lo que neto te dio o te costó cada posición
+  const carteraEl=document.getElementById("inv-cartera");
+  const allInv=movs.filter(m=>m.tipo==="Inversion");
+  if(!allInv.length){
+    carteraEl.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:8px 0">Sin inversiones cargadas todavía</p>`;
+  } else {
+    const cartera={};
+    allInv.forEach(m=>{
+      const t=m.ticker||"Sin ticker";
+      const sg=invSignoCash(m);
+      if(!cartera[t]) cartera[t]={ticker:t, ars:0, usd:0, cat:m.cat, count:0};
+      cartera[t].ars+=(m.importe||0)*sg;
+      cartera[t].usd+=(m.importeUSD||0)*sg;
+      cartera[t].count++;
+    });
+    const items=Object.values(cartera).sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars));
+    let html=`<div class="seccion-label mb-8">${items.length} ${items.length===1?"posición":"posiciones"} · balance acumulado</div>`;
+    html+=items.map(p=>{
+      const arsColor=p.ars>=0?"var(--success)":"var(--danger)";
+      const tickerEsc=attrJS(p.ticker);
+      return `<div role="button" tabindex="0" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showInstrumentoDetail(${tickerEsc})">
+        <div class="u-flex1 u-min0">
+          <div class="txt-md txt-strong">${escapeHtml(p.ticker)}</div>
+          <div class="txt-xs txt-muted">${escapeHtml(p.cat)} · ${p.count} ${p.count===1?"mov":"movs"}</div>
+        </div>
+        <div style="text-align:right">
+          ${p.ars!==0?`<div style="font-size:13px;font-weight:600;color:${arsColor}">${fmtS(p.ars)}</div>`:""}
+          ${p.usd!==0?`<div style="font-size:11px;color:${p.usd>=0?'var(--muted)':'var(--danger)'}">USD ${p.usd.toFixed(2)}</div>`:""}
+        </div>
+      </div>`;
+    }).join("");
+    carteraEl.innerHTML=html;
+  }
+
   // ── HISTÓRICO TOTAL ──
   renderInvHistorico();
-
-  if(typeof renderPosicionInicial==="function") renderPosicionInicial();
-  if(typeof renderMigrarCambios==="function") renderMigrarCambios();
-  if(typeof renderMEP==="function") renderMEP();
-  if(typeof renderPosicionCerrada==="function") renderPosicionCerrada();
-  if(typeof renderValuaciones==="function") renderValuaciones();
-  renderInvertidoHoy();
 }
 
-// La curva de la cartera: cuánto capital quedaba adentro al cierre de cada mes.
-// Antes esta card era "Histórico total", con sus propios chips de Balance/Ingresos/Gastos y un
-// "Top tickers (balance)": otra vez el neto de CAJA, con otras palabras, al lado de un cuadro
-// que decía otra cosa sobre los mismos movimientos. Quedó solo el gráfico, adentro del cuadro
-// que ya dice cuánto tenés puesto, y midiendo eso mismo.
+// Renderiza el card de histórico total: KPIs, gráfico mensual y top tickers
 function renderInvHistorico(){
-  const wrap=document.getElementById("inv-curva-wrap");
+  const allInv=movs.filter(m=>m.tipo==="Inversion");
+  const kpisEl=document.getElementById("inv-historico-kpis");
   const canvas=document.getElementById("chart-inv-historico");
-  if(!wrap||!canvas) return;
-  const serie=capitalInvertidoPorMes(movs);
-  if(serie.length<2){ wrap.style.display="none"; return; }   // con un mes solo no hay curva
-  wrap.style.display="block";
-  const labels=serie.map(d=>{ const [y,m]=d.ym.split("-"); return m+"/"+y.slice(2); });
-  renderChartInvHistoricoBI(labels, serie.map(d=>d.ars));
+  const topEl=document.getElementById("inv-top-tickers");
+
+  if(!allInv.length){
+    kpisEl.innerHTML=`<div class="chip u-flex1"><div class="chip-label" style="text-align:center">Sin inversiones cargadas</div></div>`;
+    if(chartInvHistoricoInstance){ chartInvHistoricoInstance.destroy(); chartInvHistoricoInstance=null; }
+    topEl.innerHTML="";
+    return;
+  }
+
+  // KPIs totales acumulados (perspectiva CASH: rescates - compras = balance del bolsillo)
+  const totalARS=sumInvCash(allInv);
+  const totalUSD=allInv.reduce((s,m)=>s+(m.importeUSD||0)*invSignoCash(m),0);
+  const totalIngresosARS=allInv.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  const totalGastosARS=allInv.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  const colorNeto=totalARS>=0?"positive":"negative";
+  kpisEl.innerHTML=`
+    <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${colorNeto}">${fmtTotal(totalARS)}</div></div>
+    <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive">${fmtTotal(totalIngresosARS)}</div></div>
+    <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative">${fmtTotal(totalGastosARS)}</div></div>`;
+
+  // Agrupado por mes (curva acumulada en perspectiva cash)
+  const porMes={};
+  allInv.forEach(m=>{
+    const ym=String(m.fecha||"").slice(0,7);
+    if(!ym||ym.length!==7) return;
+    porMes[ym]=(porMes[ym]||0)+(m.importe||0)*invSignoCash(m);
+  });
+  const mesesOrdenados=Object.keys(porMes).sort();
+  if(mesesOrdenados.length){
+    const labels=mesesOrdenados.map(ym=>{
+      const [y,m]=ym.split("-");
+      return m+"/"+y.slice(2);
+    });
+    // Acumulado mes a mes (curva del balance cash)
+    let acum=0;
+    const values=mesesOrdenados.map(ym=>{
+      acum+=porMes[ym];
+      return Math.round(acum*100)/100;
+    });
+    renderChartInvHistoricoBI(labels, values);
+  }
+
+  // Top 5 tickers por monto neto (perspectiva cash)
+  const porTicker={};
+  allInv.forEach(m=>{
+    const t=m.ticker||"Sin ticker";
+    const sg=invSignoCash(m);
+    if(!porTicker[t]) porTicker[t]={ars:0,usd:0,count:0,cat:m.cat};
+    porTicker[t].ars+=(m.importe||0)*sg;
+    porTicker[t].usd+=(m.importeUSD||0)*sg;
+    porTicker[t].count++;
+  });
+  const topItems=Object.entries(porTicker)
+    .map(([ticker,d])=>({ticker,...d}))
+    .filter(x=>Math.abs(x.ars)>0)
+    .sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars))
+    .slice(0,5);
+  if(topItems.length){
+    const maxV=Math.max(...topItems.map(t=>Math.abs(t.ars)));
+    let html=`<div class="seccion-label mb-6">Top tickers (balance)</div>`;
+    html+=topItems.map(p=>{
+      const c=p.ars>=0?"var(--success)":"var(--danger)";
+      return `<div class="bar-row" style="margin-bottom:6px">
+        <div class="bar-label">${escapeHtml(p.ticker)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(p.ars)/maxV*100)}%;background:${c}"></div></div>
+        <div class="bar-val" style="color:${c}">${fmtAbbr(p.ars)}</div>
+      </div>`;
+    }).join("");
+    topEl.innerHTML=html;
+  } else {
+    topEl.innerHTML="";
+  }
 }
 
 function borrarMovInv(id,btn){
@@ -732,69 +872,3 @@ function guardarEditTc(){
   editingTcId=null;
 }
 
-
-// ═══════════════════════════════════════════
-// INVERTIDO HOY (acumulado, toda la historia)
-// ═══════════════════════════════════════════
-// Movimientos mira un mes; esta pestaña mira la cartera entera. Acá va todo lo que venís
-// invirtiendo: cuánto sigue puesto hoy, cuánto pasó por ahí en total y qué resultado dejó.
-//
-// No es lo mismo que "Cartera (acumulado)", que está más abajo: esa muestra el neto de CAJA por
-// posición (lo que te dio o te costó), y esta el CAPITAL que sigue adentro. Con un fondo que se
-// suscribe y se rescata todo el tiempo, las dos dan números muy distintos y las dos son ciertas.
-function renderInvertidoHoy(){
-  const card=document.getElementById("card-invertido-hoy");
-  const el=document.getElementById("invertido-hoy");
-  if(!card||!el) return;
-
-  const todas=movs.filter(m=>m.tipo==="Inversion");
-  if(!todas.length){ card.style.display="none"; return; }
-  card.style.display="block";
-
-  const capital=capitalInvertido(movs);
-  const puestoARS=todas.filter(m=>!isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
-  const sacadoARS=todas.filter(m=>isInvSalida(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
-  const puestoUSD=todas.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
-  const sacadoUSD=todas.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
-  const gan=resultadoInv(movs).gananciaPorMes;
-  const total={ars:0, usd:0};
-  Object.keys(gan).forEach(ym=>{ total.ars+=gan[ym].ars; total.usd+=gan[ym].usd; });
-  total.ars=Math.round(total.ars*100)/100;
-  total.usd=Math.round(total.usd*100)/100;
-
-  let html=`<div class="seccion-label mb-6">Lo que sigue puesto</div>
-    <div style="font-size:24px;font-weight:600;color:var(--invest);margin-bottom:2px" data-animar="${capital.ars}" data-animar-fmt="fmtTotal">${fmtTotal(0)}</div>`;
-  if(Math.abs(capital.usd)>=0.01){
-    html+=`<div style="font-size:13px;font-weight:600;color:var(--invest);margin-bottom:4px">USD ${capital.usd.toFixed(2)}</div>`;
-  }
-
-  const mov=[];
-  if(puestoARS>0) mov.push(`📤 invertido en total <strong style="color:var(--invest)">${fmtS(puestoARS)}</strong>`);
-  if(sacadoARS>0) mov.push(`📥 rescatado <strong style="color:var(--success)">${fmtS(sacadoARS)}</strong>`);
-  if(puestoUSD>0) mov.push(`📤 invertido USD <strong style="color:var(--invest)">${puestoUSD.toFixed(2)}</strong>`);
-  if(sacadoUSD>0) mov.push(`📥 rescatado USD <strong style="color:var(--success)">${sacadoUSD.toFixed(2)}</strong>`);
-  html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">${mov.join(" · ")}</div>`;
-
-  const res=[];
-  if(Math.round(total.ars)!==0){
-    const c=total.ars>=0?"var(--success)":"var(--danger)";
-    res.push(`<strong style="color:${c}">${total.ars>=0?"+":""}${fmtS(total.ars)}</strong>`);
-  }
-  if(Math.abs(total.usd)>=0.01){
-    const c=total.usd>=0?"var(--success)":"var(--danger)";
-    res.push(`<strong style="color:${c}">${total.usd>=0?"+":""}USD ${total.usd.toFixed(2)}</strong>`);
-  }
-  if(res.length){
-    html+=`<div style="font-size:12px;color:var(--muted)">📊 resultado acumulado ${res.join(" · ")}</div>`;
-  }
-  html+=`<div style="height:14px"></div>`;
-
-  const barras=barrasDeTickers(capitalPorTicker(movs));
-  if(barras){
-    html+=`<div class="seccion-label mb-6">Por ticker (capital adentro)</div>`+barras;
-  } else {
-    html+=`<div class="txt-xs txt-muted">Hoy no queda capital invertido: rescataste todo lo que habías puesto.</div>`;
-  }
-  el.innerHTML=html;
-  animarNumerosDe(el);
-}

@@ -22,6 +22,7 @@
 const CAMBIO_CAT_DEFECTO = "Cambio de moneda";
 
 // ¿Este movimiento es una de las dos patas de un cambio?
+function esPataDeCambio(m){ return !!m && !!m.cambioId; }
 
 // Las dos patas de un cambio, dado el id que las liga.
 function patasDelCambio(cambioId, lista){
@@ -200,16 +201,9 @@ function completarCambioDesde(mov, montoFaltante){
 // RENDER DE LA MIGRACIÓN
 // ═══════════════════════════════════════════
 
-// La misma card se muestra en dos lugares: en Importar, junto al resto de la limpieza de datos,
-// y en Inversiones, que es donde se ve el número equivocado —una compra MEP sin completar deja
-// el bono figurando invertido para siempre— y donde el usuario realmente va a mirar.
 function renderMigrarCambios(){
-  pintarMigrarCambios("card-migrar-cambios", "migrar-cambios-lista");
-  pintarMigrarCambios("card-migrar-cambios-inv", "migrar-cambios-lista-inv");
-}
-function pintarMigrarCambios(idCard, idLista){
-  const card=document.getElementById(idCard);
-  const el=document.getElementById(idLista);
+  const card=document.getElementById("card-migrar-cambios");
+  const el=document.getElementById("migrar-cambios-lista");
   if(!card||!el) return;
   const cands=candidatosAMigrar(movs);
   const descartados=idsIgnorados().length;

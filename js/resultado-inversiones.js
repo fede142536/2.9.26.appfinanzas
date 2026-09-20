@@ -11,18 +11,7 @@
 // totales sino el orden de los meses: junio figuraba como el mejor mes del año por un rescate
 // de $1,8M, cuando julio había sido seis veces mejor.
 //
-// LA REGLA: primero recuperás capital, después ganás. Y si vendiste TODO por menos de lo que
-// habías puesto, lo que falta no es capital que siga adentro: es la pérdida.
-//
-// Esa última parte faltaba, y era grave. Vender por menos de lo comprado dejaba la diferencia
-// como "capital invertido" para siempre, así que el modelo NO PODÍA expresar una pérdida: todo
-// resultado salía positivo o cero. Con los datos reales, MCD (comprado a $54.238,57 y vendido a
-// $53.581,03) figuraba con $657,54 "todavía invertidos" en vez de $657,54 perdidos.
-//
-// La app no guarda cantidades, solo montos, así que una venta más chica que el capital es
-// ambigua: puede ser que vendiste todo a pérdida, o que vendiste una parte. Esas dos no se
-// distinguen solas. Por eso la venta que CIERRA la posición se marca (m.cierraPosicion), igual
-// que un traspaso o una posición inicial: la app propone y vos confirmás.
+// LA REGLA: primero recuperás capital, después ganás.
 // De una venta de $252.000 en un ticker donde pusiste $250.000 y no habías sacado nada:
 // $250.000 son capital que vuelve (neutro) y $2.000 son ganancia.
 // Se lleva por ticker y por moneda, y no necesita precio ni cantidad — alcanza con el ticker,
@@ -52,21 +41,11 @@ function montoInv(m, moneda){
 //   flujoPorMes     {"2026-06": {ars, usd}}   capital neto que ENTRÓ a inversiones ese mes
 //                                             (negativo = sacaste capital)
 //   eventos         lista de ganancias reconocidas, para poder auditarlas
-// `posIni` es lo que ya tenías puesto en cada ticker ANTES del primer movimiento cargado.
-// Sin eso, una venta de algo comprado antes de usar la app no encuentra capital detrás y se
-// cuenta entera como ganancia (ver posicion-inicial.js). Se pasa como parámetro y no se lee
-// del global adentro para que el cálculo siga siendo probable con una lista suelta.
-function calcularResultadoInv(lista, posIni){
+function calcularResultadoInv(lista){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion").slice().sort(ordenDeOperacion);
   const capital={};   // capital[ticker] = {ars, usd}
-  Object.keys(posIni||{}).forEach(t=>{
-    const p=posIni[t]||{};
-    const ars=Number(p.ars)||0, usd=Number(p.usd)||0;
-    if(ars>0 || usd>0) capital[t]={ars, usd};
-  });
   const ganancia={};  // ganancia[ym]    = {ars, usd}
   const flujo={};     // flujo[ym]       = {ars, usd}
-  const capPorMes={}; // capPorMes[ym]   = {ars, usd} capital al CIERRE de ese mes
   const eventos=[];
   const caja=(obj,k)=>(obj[k] || (obj[k]={ars:0, usd:0}));
 
@@ -89,24 +68,11 @@ function calcularResultadoInv(lista, posIni){
         gan[k]+=monto-devuelve;
         flu[k]-=devuelve;
         if(monto-devuelve>0) eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:monto-devuelve});
-        // Esta venta cerró la posición: lo que quedaba sin recuperar no sigue invertido, se
-        // perdió. Sin esto ninguna pérdida podía aparecer nunca.
-        if(m.cierraPosicion && cap[k]>0.005){
-          const perdida=cap[k];
-          gan[k]-=perdida;
-          flu[k]-=perdida;
-          eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:-perdida});
-          cap[k]=0;
-        }
       } else {
         cap[k]+=monto;
         flu[k]+=monto;
       }
     });
-    // Foto del capital después de cada operación: la última de cada mes queda como el cierre.
-    const foto={ars:0, usd:0};
-    Object.keys(capital).forEach(t=>{ foto.ars+=capital[t].ars; foto.usd+=capital[t].usd; });
-    capPorMes[ym]=foto;
   });
 
   const redondear=o=>{ Object.keys(o).forEach(k=>{
@@ -118,7 +84,6 @@ function calcularResultadoInv(lista, posIni){
     gananciaPorMes: redondear(ganancia),
     capitalPorTicker: redondear(capital),
     flujoPorMes: redondear(flujo),
-    capitalPorMes: redondear(capPorMes),
     eventos
   };
 }
@@ -128,23 +93,17 @@ function calcularResultadoInv(lista, posIni){
 // id alcanza porque los movimientos se agregan, se editan o se borran pasando siempre por save().
 let _resultadoInvCache=null;
 let _resultadoInvFirma="";
-function firmaDeLista(lista, posIni){
+function firmaDeLista(lista){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion");
   let suma=0;
-  inv.forEach(m=>{ suma += (m.id||0) + (m.importe||0) + (m.importeUSD||0) + (m.cierraPosicion?0.5:0); });
-  // La posición inicial entra a la firma: cambiarla cambia el resultado, y sin esto la
-  // pantalla seguía mostrando el cálculo viejo hasta el próximo alta.
-  return inv.length+"|"+suma+"|"+JSON.stringify(posIni||{});
-}
-function posicionInicialActual(){
-  return (typeof posicionInicial!=="undefined" && posicionInicial) ? posicionInicial : {};
+  inv.forEach(m=>{ suma += (m.id||0) + (m.importe||0) + (m.importeUSD||0); });
+  return inv.length+"|"+suma;
 }
 function resultadoInv(lista){
   const fuente = lista || (typeof movs!=="undefined" ? movs : []);
-  const posIni = posicionInicialActual();
-  const firma=firmaDeLista(fuente, posIni);
+  const firma=firmaDeLista(fuente);
   if(_resultadoInvCache && firma===_resultadoInvFirma) return _resultadoInvCache;
-  _resultadoInvCache=calcularResultadoInv(fuente, posIni);
+  _resultadoInvCache=calcularResultadoInv(fuente);
   _resultadoInvFirma=firma;
   return _resultadoInvCache;
 }
@@ -177,22 +136,7 @@ function flujoInvDelMes(ym, lista){
   return resultadoInv(lista).flujoPorMes[ym] || {ars:0, usd:0};
 }
 
-// La curva de la cartera: cuánto capital quedaba adentro al cierre de cada mes. Sube cuando
-// ponés y baja cuando recuperás; una ganancia NO la mueve, porque no es capital. Solo aparecen
-// los meses en que hubo alguna operación.
-function capitalInvertidoPorMes(lista){
-  const tabla=resultadoInv(lista).capitalPorMes;
-  return Object.keys(tabla).sort().map(ym=>({ym, ars:tabla[ym].ars, usd:tabla[ym].usd}));
-}
-
 // Total que seguís teniendo invertido, sumando todos los tickers.
-function capitalPorTicker(lista){
-  const tabla=resultadoInv(lista).capitalPorTicker;
-  return Object.keys(tabla)
-    .map(t=>({ticker:t, ars:tabla[t].ars, usd:tabla[t].usd}))
-    .filter(p=>Math.round(p.ars)!==0 || Math.abs(p.usd)>=0.01);
-}
-
 function capitalInvertido(lista){
   const tabla=resultadoInv(lista).capitalPorTicker;
   const out={ars:0, usd:0};
@@ -227,25 +171,6 @@ function netoPorTickerDelPeriodo(lista){
     porTicker[t].movs++;
   });
   return Object.values(porTicker).map(p=>({
-    ...p,
-    ars: Math.round(p.ars*100)/100,
-    usd: Math.round(p.usd*100)/100
-  })).sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars) || Math.abs(b.usd)-Math.abs(a.usd));
-}
-
-// Lo mismo agrupado por categoría (FCI, MEP, Acciones...). Misma convención de signo: negativo
-// significa que pusiste plata y no la sacaste, no que hayas perdido.
-function netoPorCategoriaDelPeriodo(lista){
-  const porCat={};
-  (lista||[]).filter(m=>m && m.tipo==="Inversion").forEach(m=>{
-    const c=m.cat || "Sin categoría";
-    if(!porCat[c]) porCat[c]={ticker:c, ars:0, usd:0, movs:0};
-    const signo=isInvSalida(m) ? 1 : -1;
-    porCat[c].ars += (m.moneda==="USD" ? 0 : (m.importe||0)) * signo;
-    porCat[c].usd += (m.importeUSD||0) * signo;
-    porCat[c].movs++;
-  });
-  return Object.values(porCat).map(p=>({
     ...p,
     ars: Math.round(p.ars*100)/100,
     usd: Math.round(p.usd*100)/100

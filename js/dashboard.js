@@ -103,7 +103,7 @@ function getDashData(year){
     liveByMes[ym] = {mes:ym, ingreso:0, gasto:0};
     movsDelMes.forEach(m=>{
       if(m.moneda==="USD") return; // No mezclar USD con totales ARS
-      if(esIngreso(m)){
+      if(m.tipo==="Ingreso"){
         liveByMes[ym].ingreso += (m.importe||0);
       } else if(esConsumo(m)){
         // Consumo. Lo que fue a parar al fondo no entra: sigue siendo tuyo.
@@ -111,10 +111,9 @@ function getDashData(year){
       }
       // Las inversiones no caen en ninguna de las dos: solo su resultado, que se suma abajo.
     });
-    // El balance es de CAJA, igual que en Movimientos: lo que entró menos lo que consumiste,
-    // menos lo que pusiste a invertir. La ganancia NO se suma acá — entra sola cuando rescatás,
-    // porque entonces `invertido` baja. Sumarla además la contaba dos veces.
-    liveByMes[ym].invertido = totalesDePlata(movsDelMes).invertido;
+    const g=gananciaInvDelMes(ym).ars;
+    if(g>0) liveByMes[ym].ingreso += g;
+    else if(g<0) liveByMes[ym].gasto += -g;
   });
 
   // Merge with hist: live takes priority si hay datos del año
@@ -124,8 +123,7 @@ function getDashData(year){
       mes:d.mes,
       ingreso:Math.round(d.ingreso*100)/100,
       gasto:Math.round(d.gasto*100)/100,
-      invertido:Math.round((d.invertido||0)*100)/100,
-      balance:Math.round((d.ingreso-d.gasto-(d.invertido||0))*100)/100
+      balance:Math.round((d.ingreso-d.gasto)*100)/100
     })).sort((a,b)=>a.mes.localeCompare(b.mes));
   } else {
     // Fall back a hardcoded (vacío en versión actual)
@@ -147,7 +145,7 @@ function getDashData(year){
           // fondo no: guardar plata no es un gasto, y mezclarlo acá haría que "Ahorro" apareciera
           // como una de tus mayores categorías de gasto.
           catData[m.cat] = (catData[m.cat]||0) + (m.importe||0);
-        } else if(esIngreso(m)){
+        } else if(m.tipo==="Ingreso"){
           catIngreso[m.cat] = (catIngreso[m.cat]||0) + (m.importe||0);
         }
         // Las inversiones ya no arman categorías propias de ingreso y gasto: lo que aparece es
@@ -276,7 +274,7 @@ function renderDashCuentas(){
     const c=m.cuenta||"Sin cuenta";
     if(!porCuenta[c]) porCuenta[c]={ing:0,gas:0,count:0};
     // Misma regla que el balance: guardar no es gastar, y una inversión no es ingreso ni gasto.
-    if(esIngreso(m)) porCuenta[c].ing+=(m.importe||0);
+    if(m.tipo==="Ingreso") porCuenta[c].ing+=(m.importe||0);
     else if(esConsumo(m)) porCuenta[c].gas+=(m.importe||0);
     porCuenta[c].count++;
   });
@@ -622,71 +620,31 @@ function showInstrumentoDetail(ticker){
     document.getElementById("modal-instrumento-detail").classList.add("open");
     return;
   }
-  // La ficha decía "Balance acumulado −$210.688" en rojo sobre BCMMA, que es una posición
-  // ABIERTA: ese número era el neto de caja, o sea la plata que tenés puesta, pintada como si
-  // la hubieras perdido. Ahora dice las dos cosas por separado y con su nombre.
-  const puesto=movsTicker.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.moneda==="USD"?0:(m.importe||0)),0);
-  const sacado=movsTicker.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.moneda==="USD"?0:(m.importe||0)),0);
-  const puestoU=movsTicker.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
-  const sacadoU=movsTicker.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
-  const tabla=resultadoInv(movs).capitalPorTicker[ticker] || {ars:0, usd:0};
-  const res=resultadoInv(movs).eventos.filter(e=>e.ticker===ticker)
-    .reduce((a,e)=>{ a[e.moneda==="USD"?"usd":"ars"]+=e.ganancia; return a; }, {ars:0, usd:0});
-  res.ars=Math.round(res.ars*100)/100; res.usd=Math.round(res.usd*100)/100;
-  const abierta=Math.round(tabla.ars)!==0 || Math.abs(tabla.usd)>=0.01;
+  // Totales acumulados (misma lógica de cash flow que la cartera)
+  let totalArs=0, totalUsd=0;
+  movsTicker.forEach(m=>{
+    const sg=invSignoCash(m);
+    totalArs+=(m.importe||0)*sg;
+    totalUsd+=(m.importeUSD||0)*sg;
+  });
+  const colorTotal=totalArs>=0?"var(--success)":"var(--danger)";
   let html=`<div class="inset">
-    <div class="seccion-label">${abierta?"Capital adentro":"Resultado"}</div>`;
-  if(abierta){
-    html+=`<div style="font-size:20px;font-weight:600;color:var(--invest);margin-top:3px">${fmtS(tabla.ars)}</div>
-      ${Math.abs(tabla.usd)>=0.01?`<div class="txt-md txt-muted">USD ${tabla.usd.toFixed(2)}</div>`:""}`;
-  }
-  if(!abierta || Math.round(res.ars)!==0 || Math.abs(res.usd)>=0.01){
-    const cr=res.ars>=0?"var(--success)":"var(--danger)";
-    html+=`<div style="font-size:${abierta?"14":"20"}px;font-weight:600;color:${cr};margin-top:3px">${res.ars>=0?"+":""}${fmtS(res.ars)}${abierta?" de resultado":""}</div>
-      ${Math.abs(res.usd)>=0.01?`<div class="txt-md" style="color:${res.usd>=0?"var(--success)":"var(--danger)"}">${res.usd>=0?"+":""}USD ${res.usd.toFixed(2)}</div>`:""}`;
-  }
-  // Cuánto vale hoy, si lo cargaste: el capital dice lo que pusiste, no lo que tenés.
-  const val=(typeof valuacionDe==="function" && abierta) ? valuacionDe(ticker) : null;
-  if(val){
-    const difA=Math.round((val.ars-tabla.ars)*100)/100;
-    const difU=Math.round((val.usd-tabla.usd)*100)/100;
-    const cd=difA>=0?"var(--success)":"var(--danger)";
-    html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">
-      💰 vale hoy <strong>${fmtS(val.ars)}</strong>${Math.abs(val.usd)>=0.01?" + USD "+val.usd.toFixed(2):""}
-      · no realizado <strong style="color:${cd}">${fmtTotalMas(difA)}</strong>${Math.abs(difU)>=0.01?` <strong style="color:${difU>=0?"var(--success)":"var(--danger)"}">${difU>=0?"+":""}USD ${difU.toFixed(2)}</strong>`:""}
-    </div>`;
-    const d=(typeof diasDesde==="function") ? diasDesde(val.fecha) : null;
-    if(d!=null){
-      const viejo=d>VALUACION_DIAS_VIEJA;
-      html+=`<div class="txt-xs" style="color:${viejo?"var(--warning)":"var(--muted)"};margin-top:3px">${viejo?"⚠️ ":""}Valor cargado ${d===0?"hoy":d===1?"ayer":"hace "+d+" días"}.</div>`;
-    }
-  }
-  html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">
-      📤 invertido ${fmtS(puesto)}${puestoU>0?" + USD "+puestoU.toFixed(2):""} · 📥 recuperado ${fmtS(sacado)}${sacadoU>0?" + USD "+sacadoU.toFixed(2):""}
-    </div>
+    <div class="seccion-label">Balance acumulado</div>
+    <div style="font-size:20px;font-weight:600;color:${colorTotal};margin-top:3px">${fmtSignoGrande(totalArs)}</div>
+    ${totalUsd!==0?`<div class="txt-md txt-muted">USD ${totalUsd.toFixed(2)}</div>`:""}
     <div style="font-size:12px;color:var(--muted);margin-top:3px">${movsTicker.length} ${movsTicker.length===1?"movimiento":"movimientos"}</div>
   </div>`;
-  // Si figura capital adentro pero ya vendiste, puede que la posición esté cerrada a pérdida:
-  // la app no guarda cantidades, así que sola no lo puede saber.
-  const ultVenta=(typeof ventaQueCerraria==="function") ? ventaQueCerraria(ticker) : null;
-  if(abierta && ultVenta && !ultVenta.cierraPosicion){
-    html+=`<div class="txt-xs txt-muted" style="margin-top:10px">¿Ya no tenés ${escapeHtml(ticker)}? Entonces ${fmtS(tabla.ars)} no siguen invertidos: son lo que perdiste.</div>
-      <button class="btn-sm" style="width:100%;margin-top:6px" onclick="cerrarPosicionDesdeFicha(${ultVenta.id},${attrJS(ticker)})">Ya no la tengo: es una pérdida</button>`;
-  } else if(ultVenta && ultVenta.cierraPosicion){
-    html+=`<div class="txt-xs txt-muted" style="margin-top:10px">Marcaste esta posición como cerrada, así que lo que no recuperaste cuenta como pérdida.</div>
-      <button class="btn-sm" style="width:100%;margin-top:6px" onclick="reabrirPosicionDesdeFicha(${ultVenta.id},${attrJS(ticker)})">Deshacer: la sigo teniendo</button>`;
-  }
   html+=movsTicker.map(m=>{
     const esIngreso=isInvSalida(m);
-    const color=esIngreso?"var(--success)":"var(--invest)";
+    const color=esIngreso?"var(--success)":"var(--danger)";
     const sign=esIngreso?"+":"-";
     const fecha=(m.fecha||"").split("-").reverse().join("/");
     const montoTxt = (m.importeUSD||0)>0
       ? `${sign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`
       : `${sign}${fmtS(m.importe||0)}`;
     const badge=esIngreso
-      ?`<span class="badge badge-accent">📥 RECUPERO</span>`
-      :`<span class="badge badge-accent">📤 INVERTIDO</span>`;
+      ?`<span class="badge badge-success">📥 INGRESO</span>`
+      :`<span class="badge badge-danger">📤 GASTO</span>`;
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
       <div class="u-flex1 u-min0">
         <div class="txt-md txt-strong">${escapeHtml(m.subcat||m.cat)} ${badge}</div>
@@ -757,8 +715,7 @@ function showCuentaDetail(cuentaNombre){
   // Totales (misma convención que renderDashCuentas: retiros y rescates suman, compras/depósitos restan o son neutros)
   let ing=0, gas=0;
   movsCuenta.forEach(m=>{
-    if(esPataDeCambio(m)) return;   // un cambio no mueve el patrimonio de la cuenta
-    if(esIngreso(m)) ing+=(m.importe||0);
+    if(m.tipo==="Ingreso") ing+=(m.importe||0);
     else if(m.tipo==="Gasto"){
       gas+=(m.importe||0);                                  // todo gasto resta
       if(esRetiroAhorro(m)) ing+=(m.importe||0);            // y el retiro además entra
@@ -943,7 +900,7 @@ let chartInvHistoricoInstance=null;
 // Ingresos, gastos y balance en un solo gráfico.
 //
 // Antes esto eran dos tarjetas separadas: las barras de ingresos/gastos y, abajo, una línea
-// con el balance. El balance es ingreso − gasto − lo invertido, así que está en la misma unidad
+// con el balance. Como el balance es exactamente ingreso − gasto, está en la misma unidad
 // (pesos) y sobre los mismos meses, ponerlo encima de las barras deja leer de un vistazo
 // "cuánto entró, cuánto salió y qué quedó" sin saltar entre dos gráficos ni comparar dos
 // escalas distintas. Es un solo eje Y para las tres series — nunca dos escalas superpuestas,

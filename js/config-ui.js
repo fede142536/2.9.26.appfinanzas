@@ -403,9 +403,7 @@ function exportarBackup(){
       tarjetasCustom,
       presupuestos,
       catOrder,
-      iconsCustom,
-      posicionInicial,
-      valuaciones
+      iconsCustom
     }
   };
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
@@ -473,14 +471,6 @@ function restaurarBackup(input){
       if(backup.datos.iconsCustom && typeof backup.datos.iconsCustom==="object"){
         iconsCustom=backup.datos.iconsCustom;
         setSensitiveRaw("ficons", JSON.stringify(iconsCustom));
-      }
-      if(backup.datos.posicionInicial && typeof backup.datos.posicionInicial==="object"){
-        posicionInicial=backup.datos.posicionInicial;
-        setSensitiveRaw("fposini", JSON.stringify(posicionInicial));
-      }
-      if(backup.datos.valuaciones && typeof backup.datos.valuaciones==="object"){
-        valuaciones=backup.datos.valuaciones;
-        setSensitiveRaw("fvaluaciones", JSON.stringify(valuaciones));
       }
       save();
       setSensitiveRaw("fimphist3",JSON.stringify(importHistory));

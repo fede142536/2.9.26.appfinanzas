@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════
 // CIFRADO DE DATOS SENSIBLES LIGADO AL PIN
 // ═══════════════════════════════════════════
-// Cuando el usuario activa un PIN, los datos financieros (las claves de ENC_KEYS) dejan
+// Cuando el usuario activa un PIN, los datos financieros (las 10 claves de ENC_KEYS) dejan
 // de guardarse en texto plano en localStorage: se cifran con AES-GCM usando una clave
 // derivada del PIN (PBKDF2) y se guardan como un único blob en "fencblob" (+ "fencsalt").
 // Mientras la app está bloqueada esos datos NO existen en memoria (ver checkLock/checkPin
@@ -9,7 +9,7 @@
 // mientras todo ya estaba cargado en JS. Si el usuario NUNCA activó un PIN, isEncActive()
 // da false siempre y getSensitiveRaw/setSensitiveRaw se comportan exactamente igual que
 // localStorage.getItem/setItem de toda la vida: cero cambio de comportamiento ni overhead.
-const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fposini","fvaluaciones"];
+const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons"];
 let encKey=null;   // CryptoKey en memoria, solo durante la sesión desbloqueada (nunca se persiste)
 let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: valorJSONstring, ...}
 
@@ -83,7 +83,7 @@ async function decryptBlob(key, blob){
   return JSON.parse(new TextDecoder().decode(plain));
 }
 
-// Lectura/escritura de las claves sensibles. Si el cifrado NO está activo, se comportan
+// Lectura/escritura de las 10 claves sensibles. Si el cifrado NO está activo, se comportan
 // exactamente igual que localStorage.getItem/setItem de siempre (cero cambio de comportamiento
 // para usuarios sin PIN). Si está activo, leen/escriben en encCache (memoria) y programan
 // la persistencia cifrada conjunta en "fencblob".
@@ -149,9 +149,7 @@ const NOMBRE_CLAVE_DATOS={
   fmovs3:"tus movimientos", ftcs3:"tus tarjetas", fcustom3:"tus categorías personalizadas",
   fmetas:"tus metas de ahorro", fimphist3:"tu historial de importaciones",
   fcatorder:"el orden de tus categorías", fpresup:"tus presupuestos",
-  fcuentas:"tus cuentas", ftarjetas:"tus tarjetas guardadas", ficons:"tus íconos personalizados",
-  fposini:"tus posiciones iniciales de inversión",
-  fvaluaciones:"cuánto valen hoy tus posiciones"
+  fcuentas:"tus cuentas", ftarjetas:"tus tarjetas guardadas", ficons:"tus íconos personalizados"
 };
 
 // Parsea un valor guardado por la propia app sin dejar que uno corrupto tire abajo el resto
@@ -214,8 +212,6 @@ function loadSensitiveIntoMemory(){
   cuentasCustom = leerJSONSeguro("fcuentas","[]","array");
   tarjetasCustom = leerJSONSeguro("ftarjetas","[]","array");
   iconsCustom = leerJSONSeguro("ficons","{}","object");
-  posicionInicial = leerJSONSeguro("fposini","{}","object");
-  valuaciones = leerJSONSeguro("fvaluaciones","{}","object");
   if(datosCorruptosAlArrancar.length) avisarDatosCorruptos(datosCorruptosAlArrancar);
 }
 

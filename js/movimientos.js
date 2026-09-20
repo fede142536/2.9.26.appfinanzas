@@ -79,7 +79,7 @@ function showPage(id,btn){
   if(id==="tc" && !yaAlDia) renderTarjetas();
   if(id==="inv" && !yaAlDia) renderInv();
   if(id==="ahorro" && !yaAlDia) renderAhorro();
-  if(id==="import"){ renderImportHistory(); renderMigrarCambios(); renderTraspasos(); renderUnificarTickers(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
+  if(id==="import"){ renderImportHistory(); renderMigrarCambios(); renderTraspasos(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
   if(id==="config"){renderExportStats();renderCatManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderTarjetasManager();renderEstadoBackup();renderInflacion();} // liviano
   if(["mov","dash","tc","inv","ahorro"].includes(id)) paginaVersionRenderizada[id]=datosVersion;
   // Reponer el scroll AL FINAL, no antes: los render de arriba cambian el alto de la página y
@@ -580,24 +580,6 @@ function renderTxListaLazy(show){
   txListObserver.observe(sentinel);
 }
 
-// ═══════════════════════════════════════════
-// CUADRO DE INVERSIONES DEL MES (vista "Todos")
-// ═══════════════════════════════════════════
-// El cuadro lo arma cuadroMesInversionesHTML() (render-comun.js), el mismo que usa la pestaña
-// Inversiones: mismo mes, mismos movimientos, mismas palabras en las dos pantallas.
-// Lo que venís teniendo puesto desde siempre no va acá: eso es cartera, y vive en Inversiones.
-function renderCuadroInversiones(lista, periodoLbl, ganInv){
-  const card=document.getElementById("card-mov-inversiones");
-  const el=document.getElementById("mov-inversiones");
-  if(!card||!el) return;
-
-  const invs=(lista||[]).filter(m=>m.tipo==="Inversion");
-  if(!invs.length){ card.style.display="none"; return; }
-  card.style.display="block";
-  el.innerHTML=cuadroMesInversionesHTML(invs, periodoLbl, ganInv);
-  animarNumerosDe(el);
-}
-
 function renderMovs(){
   const mesMovs = filtroFecha ? getMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getMesMov(mesActual);
   const mesTcs = filtroFecha ? getTcMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getTcMovsEnMes(mesActual);
@@ -621,6 +603,7 @@ function renderMovs(){
   const totales=totalesDePlata(mesMovs, ganInv);
   const gas=totales.gastos;
   const aho=totales.depositos;
+  const retirado=totales.retiros;
   // Inversiones del mes: impactan el balance desde la perspectiva de cash flow
   // - Suscripción/Compra → sale cash (resta del balance, igual que un gasto)
   // - Rescate/Venta → entra cash (suma al balance, igual que un ingreso)
@@ -639,9 +622,6 @@ function renderMovs(){
 
   // ── CHIPS ADAPTADOS AL FILTRO ──
   const arrastreEl=document.getElementById("mov-arrastre");
-  // El cuadro de inversiones es de la vista "Todos"; esa rama lo enciende.
-  const cardInvEl=document.getElementById("card-mov-inversiones");
-  if(cardInvEl) cardInvEl.style.display="none";
   if(filtro==="Tarjeta"){
     // Sub-filtro por nombre de tarjeta (Visa, Mastercard, etc.)
     // Listamos las tarjetas únicas que aparecen este mes
@@ -747,16 +727,11 @@ function renderMovs(){
         chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Ahorrado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(ahorradoARS)}</div></div>`;
       }
       // En verde, no en rojo: poner plata en una inversión no es perderla.
-      const cambiadoARS=todoGastos.filter(m=>esPataDeCambio(m)&&m.cambioPata==="sale"&&m.moneda!=="USD")
-        .reduce((s,m)=>s+(m.importe||0),0);
-      if(cambiadoARS>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--accent)">💱 A dólares</div><div class="chip-val" style="color:var(--accent)">${fmtTotal(cambiadoARS)}</div></div>`;
-      }
       if(suscripcionesARS>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido en el mes</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(suscripcionesARS)}</div></div>`;
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(suscripcionesARS)}</div></div>`;
       }
       if(suscripcionesUSD>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido en el mes USD</div><div class="chip-val" style="color:var(--invest)">USD ${suscripcionesUSD.toFixed(2)}</div></div>`;
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido USD</div><div class="chip-val" style="color:var(--invest)">USD ${suscripcionesUSD.toFixed(2)}</div></div>`;
       }
     }
     document.getElementById("mov-summary").innerHTML=chipsHtml;
@@ -798,10 +773,10 @@ function renderMovs(){
     // Sin filtro, en cambio, el chip responde "cuánto entró de verdad": ingresos + ganancia.
     const ingTotalARS = filtroCategoria
       ? todoIngresos.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0)
-      : todoIngresos.filter(m=>esIngreso(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0) + Math.max(ganInv.ars||0, 0);
+      : todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0) + Math.max(ganInv.ars||0, 0);
     const ingTotalUSD = filtroCategoria
       ? todoIngresos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
-      : todoIngresos.filter(m=>esIngreso(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(ganInv.usd||0, 0);
+      : todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(ganInv.usd||0, 0);
     let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Ingresos ARS";
     let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val positive">${fmtTotal(ingTotalARS)}</div></div>`;
     if(ingTotalUSD>0){
@@ -846,112 +821,71 @@ function renderMovs(){
     //           mano y su compra sale, así que se cancelan solos y el fondo baja: es lo que pasó.
     //           Un traspaso no entra por ningún lado — no lo gastaste, solo cambió de bolsillo.
     // GASTOS  : consumo (esConsumo).
-    const ingTotal=totales.ingresos;
+    const retirosGastados=mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda!=="USD")
+      .reduce((s,m)=>s+(m.importe||0),0);
+    const ingTotal=totales.ingresos+retirosGastados;
     const gasTotal=totales.gastos;
 
     // Un chip por ticker: neto = rescates − suscripciones. Negativo significa "hay plata puesta
     // ahí, todavía sin rescatar", no que hayas perdido; por eso va en color de inversión y no en
     // rojo de gasto.
-    // El BALANCE sale de totalesDePlata(), que es la única definición del modelo:
-    //     Balance = Ingresos − Gastos − Invertido
-    //
-    // Antes esta pantalla usaba otra: Ingresos − Gastos + Σ(flujo neto por ticker), y además le
-    // sumaba a Ingresos los retiros del fondo que se gastaron. Las dos cosas la hacían discrepar
-    // del Dashboard, que sí usa el modelo. Con los datos reales eran seis meses en desacuerdo y
-    // en junio 2026 los dos signos opuestos: el Dashboard decía −$578.680 y esta pantalla
-    // +$623.552, por el mismo mes.
-    //
-    // Los tres términos están en la fila de chips, así que el balance se puede verificar a
-    // ojo: antes el que faltaba —lo invertido— estaba repartido en las barras por ticker de
-    // abajo y no había forma de llegar al número. Sacar plata del propio fondo no es un
-    // ingreso: la compra que pagaste con ella ya figura como gasto.
-    // Lo que te queda en la mano: el fondo de ahorro y lo invertido ya no están acá.
-    // La definición vive en totalesDePlata() (estado-categorias.js), una sola vez.
-    const disponible=totales.disponible;
+    const netosTicker=netoPorTickerDelPeriodo(mesMovs);
+    const netoInv=netoInvTotal(mesMovs);
+    const balCaja=Math.round((ingTotal-gasTotal+netoInv.ars)*100)/100;
 
     // Lo que pusiste a trabajar este mes en el fondo de ahorro (las inversiones ya tienen su chip).
     const guardado=aho;
 
     // Misma separación en dólares.
     const gastosUSDTotal=mesMovs.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
-    const ingresosUSDTotal=mesMovs.filter(m=>esIngreso(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
+    const ingresosUSDTotal=mesMovs.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
       + mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
 
-    // Los cuatro chips son exactamente las partes del balance: Ingresos − Gastos − Invertido.
-    // El de Invertido aparece solo si hubo movimiento, para no ensuciar un mes sin inversiones.
-    //
-    // Va con el SIGNO DEL EFECTO sobre el balance, no con el de `totales.invertido`. Son
-    // opuestos: `invertido` es lo que pusiste menos lo que rescataste, así que poner plata da
-    // positivo — y el chip mostraba "+$296.189" en un mes en que el balance BAJABA por esos
-    // mismos $296.189. Un número positivo que resta no se puede leer. Ahora invertir se ve en
-    // negativo, como cualquier plata que se va, y rescatar en positivo.
-    // ── LOS CHIPS SON LA CUENTA, EN ORDEN ──
-    // Se leen de izquierda a derecha y dan el último:
-    //
-    //     Ingresos − Gastos − Guardado ± Invertido = Disponible
-    //
-    // Cada uno va con el signo de su EFECTO sobre lo disponible, no con el signo interno del
-    // modelo. Son opuestos en el caso de invertir: `totales.invertido` es lo que pusiste menos
-    // lo que rescataste, así que poner plata da positivo — y el chip llegó a mostrar "+$296.189"
-    // en un mes en que el disponible BAJABA por esos mismos $296.189. Un número positivo que
-    // resta no se puede leer.
-    //
-    // Los que dan cero no se muestran: un mes sin inversiones no tiene por qué mostrar un chip
-    // de inversiones en cero.
-    const efectoInv=-totales.invertido;
-    // El chip del fondo muestra su efecto NETO sobre la billetera, no solo lo que metiste.
-    // Si además pagaste algo con el fondo, esa plata no salió de la billetera y hay que
-    // devolverla. Sin esto la fila no cerraba a la vista: con $400.000 guardados y $250.000
-    // pagados del fondo, los chips daban $529.343 y el total decía $779.343, y los $250.000
-    // que explicaban la diferencia estaban en una línea aparte. Cuatro números que no suman
-    // son peores que cuatro números.
-    const efectoAho=-(guardado - totales.retirosGastados);
     let chipsHtml=`
       <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtTotal(0)}</div></div>
-      <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>`;
-    if(Math.round(efectoAho)!==0){
-      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Guardado</div><div class="chip-val" style="color:var(--save)" id="chip-mov-aho">${fmtTotal(0)}</div></div>`;
+      <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>
+      <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balCaja>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
+    if(Math.round(guardado)!==0){
+      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Guardado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(guardado)}</div></div>`;
     }
-    if(Math.round(efectoInv)!==0){
-      const cInv=efectoInv<0 ? "var(--invest)" : "var(--success)";
-      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${cInv}">◈ Invertido</div><div class="chip-val" style="color:${cInv}" id="chip-mov-inv">${fmtTotal(0)}</div></div>`;
-    }
-    chipsHtml+=`<div class="chip"><div class="chip-label">Disponible</div><div class="chip-val ${disponible>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
     if(ingresosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Ingresos USD</div><div class="chip-val positive">USD ${ingresosUSDTotal.toFixed(2)}</div></div>`;
     }
     if(gastosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Gastos USD</div><div class="chip-val negative">USD ${gastosUSDTotal.toFixed(2)}</div></div>`;
     }
+    // Los chips de inversión van al final, ya ordenados de mayor a menor por el módulo.
+    netosTicker.forEach(t=>{
+      const etiqueta=`◈ ${escapeHtml(t.ticker)}`;
+      if(Math.round(t.ars)!==0){
+        const color=t.ars>=0?"var(--success)":"var(--invest)";
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${color}">${etiqueta}</div><div class="chip-val" style="color:${color}">${t.ars>0?"+":""}${fmtTotal(t.ars)}</div></div>`;
+      }
+      if(Math.abs(t.usd)>=0.01){
+        const colorU=t.usd>=0?"var(--success)":"var(--invest)";
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorU}">${etiqueta} USD</div><div class="chip-val" style="color:${colorU}">${t.usd>0?"+":""}USD ${t.usd.toFixed(2)}</div></div>`;
+      }
+    });
     document.getElementById("mov-summary").innerHTML=chipsHtml;
     animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
-    animarNumero(document.getElementById("chip-mov-bal"), disponible, 700, fmtTotal);
-    if(document.querySelector("#chip-mov-aho")){
-      animarNumero(document.getElementById("chip-mov-aho"), efectoAho, 700, fmtTotalMas);
-    }
-    if(document.querySelector("#chip-mov-inv")){
-      animarNumero(document.getElementById("chip-mov-inv"), efectoInv, 700, fmtTotalMas);
-    }
+    animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
     // Línea informativa: extras del mes (sin arrastre)
-    // Esta línea dice SOLO lo que no está en los chips. Lo ahorrado salió de acá cuando pasó
-    // a ser un chip: repetirlo en los dos lugares es lo que hace que la pantalla se sienta
-    // llena de números que no se sabe cómo se relacionan.
     const partes=[];
-    // Esto sí hace falta: sin decirlo, gastar del fondo parece un error de la app. Pagaste
-    // $300.000 y el disponible no se movió, porque esa plata ya había salido de la billetera
-    // cuando la guardaste.
-    // El número que se muestra es el que DE VERDAD afecta lo disponible: el consumo pagado con
-    // el fondo. Un traspaso también sale del fondo, pero no es consumo y no entra en la cuenta.
-    if(totales.retirosGastados>0){
-      partes.push(`💸 Pagado con ahorros: <strong style="color:var(--save)">${fmtS(totales.retirosGastados)}</strong> · no baja lo disponible`);
+    // El movido bruto ya lo dicen los chips por ticker. Acá queda el resultado, que es otra cosa:
+    // el neto de un chip es el FLUJO del mes (negativo si pusiste plata y no la sacaste), y esto
+    // es lo que realmente ganaste o perdiste, llevando el capital por ticker desde el principio.
+    if(Math.round(ganInv.ars)!==0){
+      const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
+      partes.push(`◈ Resultado: <strong style="color:${cg}">${ganInv.ars>=0?"+":""}${fmtS(ganInv.ars)}</strong>`);
     }
-    // Los pesos que se fueron a dólares. No son gasto —la plata la seguís teniendo— pero se
-    // dicen, porque si no una compra de dólares grande desaparece de la pantalla.
-    if(totales.cambios>0){
-      partes.push(`💱 A dólares: <strong style="color:var(--accent)">${fmtS(totales.cambios)}</strong>`);
+    if(aho>0){
+      partes.push(`🏦 Ahorrado: <strong style="color:var(--save)">${fmtS(aho)}</strong>`);
+    }
+    if(retirado>0){
+      partes.push(`💸 De ahorros: <strong style="color:var(--save)">${fmtS(retirado)}</strong>`);
     }
     // Total a recuperar (gastos compartidos)
     const recup=mesMovs.filter(m=>esConsumo(m)&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
@@ -964,8 +898,6 @@ function renderMovs(){
     } else {
       arrastreEl.style.display="none";
     }
-    const periodoLbl = filtroFecha ? "el período" : mesLbl(mesActual);
-    renderCuadroInversiones(mesMovs, periodoLbl, ganInv);
   }
 
   // ── RESUMEN DE PRESUPUESTOS (solo cuando filtro = Gasto) ──
