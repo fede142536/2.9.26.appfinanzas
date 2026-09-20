@@ -380,11 +380,36 @@ test("la fila de chips no lleva netos por ticker", ()=>{
          "el neto del mes por ticker volvió a la fila de chips, donde se lee como posición: " + txt);
 });
 
-test("Balance = Ingresos − Gastos + la suma de los netos", async ()=>{
-  // 2.000.000 − 500.000 + (100.000 − 300.000) = 1.300.000
+// El balance es el del MODELO: Ingresos + resultado − Gastos. Antes esta pantalla usaba otra
+// fórmula —Ingresos − Gastos + Σ(flujo neto por ticker)— y discrepaba del Dashboard, que sí
+// usa el modelo. Con los datos reales eran seis meses en desacuerdo, y en junio 2026 los dos
+// con SIGNOS OPUESTOS: −$578.680 en el Dashboard y +$623.552 en Movimientos, el mismo mes.
+test("Balance = Ingresos + resultado − Gastos", async ()=>{
+  // 2.000.000 + 100.000 (la ganancia de BCAHA) − 500.000 = 1.600.000.
+  // Los 300.000 de YPF NO lo bajan: esa plata la seguís teniendo, invertida.
   const txt=await chipsDeMovsAnimados(MES_INV, "Todos", "", "2026-08");
-  cierto(txt.includes("1.300.000"), "el balance no cierra con sus propias partes: " + txt);
-  igual(netoInvTotal(MES_INV).ars, -200000);
+  cierto(txt.includes("1.600.000"), "el balance no cierra con sus propias partes: " + txt);
+  cierto(!txt.includes("1.300.000"), "volvió a restar la plata que pusiste a invertir: " + txt);
+});
+
+test("Movimientos y el Dashboard dan el mismo balance", async ()=>{
+  // Eran dos fórmulas distintas para la misma pregunta, cada una en su pantalla.
+  const t=totalesDePlata(getMesMovDe(MES_INV,"2026-08"), gananciaInvDelMes("2026-08", MES_INV));
+  const txt=await chipsDeMovsAnimados(MES_INV, "Todos", "", "2026-08");
+  cierto(txt.includes(fmtTotal(t.balance).replace(/^\$/,"")),
+         `el chip no muestra el balance del modelo (${fmtTotal(t.balance)}): ` + txt);
+});
+
+test("sacar plata del fondo para gastarla no es un ingreso", async ()=>{
+  // La pantalla le sumaba a Ingresos los retiros que se gastaron, para que se cancelaran con
+  // su propio gasto. Pero consumir plata del fondo SÍ te deja más pobre: el gasto tiene que
+  // pesar, y el retiro no es plata nueva.
+  const l=[{id:1, tipo:"Ingreso", cat:"Sueldo", importe:1000000, fecha:"2026-08-04", moneda:"ARS"},
+           {id:2, tipo:"Gasto", cat:"Vacaciones", importe:300000, fecha:"2026-08-10",
+            moneda:"ARS", usaAhorro:true}];
+  const txt=await chipsDeMovsAnimados(l, "Todos", "", "2026-08");
+  cierto(txt.includes("700.000"), "el balance tiene que bajar por lo que consumiste: " + txt);
+  cierto(!txt.includes("1.300.000"), "el retiro volvió a contarse como ingreso: " + txt);
 });
 
 test("un mes sin inversiones no agrega chips de más", async ()=>{
@@ -2742,6 +2767,11 @@ grupo("Chips al filtrar por categoría");
 // El bug: la ganancia de inversión del mes (que es del mes entero, no de una categoría) se le
 // sumaba a cualquier categoría filtrada. Con datos reales, agosto 2026: un único movimiento de
 // Salario de $1.607.621,32 mostraba $1.655.232 — los $47.610 de más eran la ganancia del FCI.
+// getMesMov() mira el global `movs`; para comparar contra una lista suelta hace falta esto.
+function getMesMovDe(lista, ym){
+  return lista.filter(m=>String(m.fecha||"").slice(0,7)===ym);
+}
+
 function chipsDeMovs(lista, filtroTab, categoria, ym, devolverHTML){
   const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list","mov-mes-label"];
   const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
