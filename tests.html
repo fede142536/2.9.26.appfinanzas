@@ -83,6 +83,7 @@
 <script src="js/posicion-cerrada.js"></script>
 <script src="js/valuaciones.js"></script>
 <script src="js/mep.js"></script>
+<script src="js/importar-balanz.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
@@ -5072,6 +5073,142 @@ test("el dashboard no suma ingresos por afuera del modelo", async ()=>{
   const js=await (await fetch("js/dashboard.js")).text();
   const sumas=js.split("\n").filter(l=>/tipo==="Ingreso"/.test(l) && /\+=/.test(l));
   igual(sumas, [], "quedó una suma de ingresos que no pasa por esIngreso():\n" + sumas.join("\n"));
+});
+
+// ═══════════════════════════════════════════
+// IMPORTAR EL RESUMEN DE BALANZ
+// ═══════════════════════════════════════════
+grupo("Importar resumen de Balanz");
+
+// El PDF esconde tres trampas: la fuente está desplazada 29 lugares (los dígitos caen en
+// caracteres de control, por eso el PDF parece no tener números), las columnas se separan por
+// el kerning del array TJ y no por espacios, y después de la cartera TODO el mes se repite en
+// la sección "Monedas". Estos tests van sobre las funciones puras: el PDF real no se puede
+// meter en la suite, pero las filas que produce sí.
+const SEP="\u0001";
+function fila(){ return [...arguments].join(SEP); }
+
+test("los números vienen en formato argentino", ()=>{
+  igual(numeroBalanz("53.581,03"), 53581.03);
+  igual(numeroBalanz("-40.930,59"), -40930.59);
+  igual(numeroBalanz("0,00"), 0);
+  igual(numeroBalanz(""), 0, "una celda vacía no puede dar NaN");
+  igual(numeroBalanz(undefined), 0);
+});
+
+test("las fechas pasan a ISO", ()=>{
+  igual(fechaBalanz("5/8/2026"), "2026-08-05", "un día de un dígito se rellena");
+  igual(fechaBalanz("27/8/2026"), "2026-08-27");
+  igual(fechaBalanz("sin fecha"), "");
+});
+
+test("el ticker sale del encabezado de la sección", ()=>{
+  igual(tickerDeEncabezado("CEDEARSPDRS" + SEP + "P500-SPY/8549"), "SPY");
+  igual(tickerDeEncabezado("YPFS.A.ESCRIT.\"D\"1VOTO-YPFD/710"), "YPFD");
+  igual(categoriaDeEncabezado("CEDEARMCDONALDSS-MCD/8030"), "CEDEARs");
+  igual(categoriaDeEncabezado("BALANZMONEYMARKETA-BMMA"), "FCI");
+  igual(categoriaDeEncabezado("YPFS.A.ESCRIT.\"D\"1VOTO-YPFD/710"), "Acciones");
+});
+
+test("un boleto se lee con el NETO, no con el bruto", ()=>{
+  // El neto ya trae descontadas comisiones, derechos e IVA: es la plata que salió de verdad.
+  // En los datos reales la app tenía el bruto de XLK ($12.863,82) contra el neto ($12.794,29).
+  const ops=operacionesDeBalanz([
+    "CEDEARTHETECHNOLOGYSELECTSECTORSPDRFUND-XLK/8671",
+    fila("Boleto/8770834/VENTA/0/XLK/$","-2,00","0,00","6440,0000000000","12.880,00",
+         "64,40","13,52","7,79","1,35","12.794,29","10/8/2026","10/8/2026")
+  ]);
+  igual(ops.length, 1);
+  const m=movimientoDeBalanz(ops[0]);
+  igual(m.importe, 12794.29, "tomó el bruto en vez del neto");
+  igual(m.ticker, "XLK");
+  igual(m.subcat, "CEDEARs Venta");
+  igual(m.fecha, "2026-08-10");
+});
+
+test("una compra se guarda en positivo aunque el neto venga negativo", ()=>{
+  const ops=operacionesDeBalanz([
+    "CEDEARSPDRS" + SEP + "P500-SPY/8549",
+    fila("Boleto/8553517/COMPRA/0/SPY/$","2,00","50,00","20.330,0000000000","40.660,00",
+         "203,30","42,69","24,60","4,27","-40.930,59","5/8/2026","5/8/2026")
+  ]);
+  const m=movimientoDeBalanz(ops[0]);
+  igual(m.importe, 40930.59, "el signo lo pone el tipo de operación, no el número");
+  igual(m.subcat, "CEDEARs Compra");
+});
+
+test("un FCI no trae el importe: sale de cuotapartes por precio", ()=>{
+  const ops=operacionesDeBalanz([
+    "BALANZMONEYMARKETA-BMMA",
+    fila("LiquidacióndeSuscripción/1719190/BALANZMONEYMARKETA","21.296,80","21.296,80",
+         "12,2748320000","0,00","11/8/2026","11/8/2026")
+  ]);
+  const m=movimientoDeBalanz(ops[0]);
+  igual(m.importe, 261414.64, "21.296,80 cuotapartes × 12,274832");
+  igual(m.subcat, "FCI Suscripción");
+  igual(m.cat, "FCI");
+});
+
+test("una fila partida en dos renglones se vuelve a juntar", ()=>{
+  // El PDF corta la fila donde se le termina el ancho: el neto y las fechas caen abajo.
+  const ops=operacionesDeBalanz([
+    "CEDEARMCDONALDSSCORPORATIONESCRIT.-MCD/8030",
+    fila("Boleto/8770832/VENTA/0/MCD/$","-3,00","0,00","17.980,0000000000","53.940,00",
+         "269,70","56,64","32,63","5,66","53.581,"),
+    fila("03","10/8/2026","10/8/2026")
+  ]);
+  igual(ops.length, 1, "quedó partida en dos o se perdió");
+  igual(movimientoDeBalanz(ops[0]).importe, 53581.03);
+});
+
+test("la sección Monedas no se importa", ()=>{
+  // Ahí el resumen repite CADA boleto desde la vista del efectivo. Parsearla duplicaba todo, y
+  // como esos encabezados no traen ticker, las filas se colgaban del último instrumento visto:
+  // salían rescates de FCI a nombre de YPFD por 68 mil millones de pesos.
+  const ops=operacionesDeBalanz([
+    "YPFS.A.ESCRIT.\"D\"1VOTO-YPFD/710",
+    fila("Boleto/8467455/COMPRA/0/YPFD/$","4,00","4,00","7825,0000000000","31.300,00",
+         "156,50","32,87","18,94","3,29","-31.508,31","4/8/2026","4/8/2026"),
+    "Monedas",
+    fila("Boleto/8467455/COMPRA/0/YPFD/$","4,00","-0,01","7825,0000000000","-31.300,00",
+         "156,50","32,87","18,94","3,29","-31.508,31","4/8/2026","4/8/2026")
+  ]);
+  igual(ops.length, 1, "se importó también la copia de la sección Monedas");
+});
+
+test("no se vuelve a importar lo que ya está cargado", ()=>{
+  const leidos=[
+    {fecha:"2026-08-10", tipo:"Inversion", ticker:"MCD", importe:53581.03},
+    {fecha:"2026-08-05", tipo:"Inversion", ticker:"SPY", importe:40930.59}
+  ];
+  const yaEnLaApp=[{id:1, tipo:"Inversion", ticker:"MCD", fecha:"2026-08-10", importe:53581.03}];
+  const nuevos=nuevosDeBalanz(leidos, yaEnLaApp);
+  igual(nuevos.length, 1);
+  igual(nuevos[0].ticker, "SPY");
+});
+
+test("subir el mismo resumen dos veces no duplica", ()=>{
+  const leidos=[
+    {fecha:"2026-08-05", tipo:"Inversion", ticker:"SPY", importe:40930.59},
+    {fecha:"2026-08-05", tipo:"Inversion", ticker:"SPY", importe:40930.59}
+  ];
+  igual(nuevosDeBalanz(leidos, []).length, 1, "el mismo archivo trae la fila repetida");
+});
+
+test("dos operaciones del mismo día y ticker por montos distintos son dos", ()=>{
+  // El caso real de BMMA el 24/8: tres rescates el mismo día.
+  const leidos=[
+    {fecha:"2026-08-24", tipo:"Inversion", ticker:"BMMA", importe:19999.99},
+    {fecha:"2026-08-24", tipo:"Inversion", ticker:"BMMA", importe:50000.05},
+    {fecha:"2026-08-24", tipo:"Inversion", ticker:"BMMA", importe:30382.08}
+  ];
+  igual(nuevosDeBalanz(leidos, []).length, 3);
+});
+
+test("la fuente desplazada se decodifica", ()=>{
+  // "Boleto" se guarda como "%ROHWR": cada glifo corrido 29 lugares.
+  igual(decodificaBalanz("%ROHWR"), "Boleto");
+  igual(decodificaBalanz("63<"), "SPY");
 });
 
 grupo("Aislamiento de los tests");

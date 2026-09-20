@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v132">
+<meta name="enola-version" content="enola-v133">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -815,6 +815,17 @@
     <div id="xlsx-status" style="margin-top:10px;font-size:13px;color:var(--muted);text-align:center;min-height:18px"></div>
   </div>
   <div class="card">
+    <div class="card-title">🏦 Importar resumen de Balanz</div>
+    <p class="txt-sm txt-muted mb-10">El PDF del <strong>Resumen mensual Comitente</strong>. Lee las compras, ventas, suscripciones y rescates del mes y agrega solo lo que falta — nunca duplica ni pisa nada.</p>
+    <label style="display:block;border:2px dashed var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;cursor:pointer">
+      <input type="file" id="balanz-file" accept=".pdf" style="display:none" onchange="handleBalanz(this)">
+      <div style="font-size:22px">🏦</div>
+      <div style="font-size:13px;font-weight:500;margin-top:4px">Seleccionar el resumen .pdf</div>
+    </label>
+    <div id="balanz-status" style="margin-top:10px;font-size:13px;color:var(--muted);text-align:center;min-height:18px"></div>
+    <div id="balanz-preview" style="margin-top:10px"></div>
+  </div>
+  <div class="card">
     <div class="card-title">📥 Restaurar backup JSON</div>
     <p class="txt-sm txt-muted mb-10">Cargá un backup descargado desde Config. Reemplaza TODOS los datos actuales por los del backup.</p>
     <label style="display:block;border:2px dashed var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;cursor:pointer">
@@ -989,6 +1000,7 @@
 <script src="js/posicion-cerrada.js"></script>
 <script src="js/valuaciones.js"></script>
 <script src="js/mep.js"></script>
+<script src="js/importar-balanz.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
