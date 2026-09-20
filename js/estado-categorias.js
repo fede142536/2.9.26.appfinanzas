@@ -271,6 +271,9 @@ let presupuestos = {};
 // Lo que ya tenías invertido en cada ticker antes del primer movimiento cargado, por moneda:
 // {"AL30D": {ars:0, usd:78.96}}. Ver posicion-inicial.js.
 let posicionInicial = {};
+// Cuánto vale hoy cada posición abierta, cargado a mano: {"SPY": {ars, usd, fecha}}.
+// Ver valuaciones.js. La app no busca precios en ningún lado.
+let valuaciones = {};
 
 // Devuelve los nombres de categoría de `catsObj` en el orden guardado por el usuario.
 // Si no hay orden guardado para ese tipo, devuelve el orden natural del objeto.

@@ -81,6 +81,7 @@
 <script src="js/traspasos.js"></script>
 <script src="js/posicion-inicial.js"></script>
 <script src="js/posicion-cerrada.js"></script>
+<script src="js/valuaciones.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
@@ -4527,6 +4528,141 @@ test("si volviste a comprar, la ficha no ofrece cerrar la posición", ()=>{
 test("una posición abierta que nunca vendiste no ofrece cerrarse", ()=>{
   const html=fichaDe("X", [compra("2026-04-01","X",100000)]);
   cierto(!html.includes("cerrarPosicionDesdeFicha"), "no hay ninguna venta que marcar: " + html);
+});
+
+// ═══════════════════════════════════════════
+// CUÁNTO VALE HOY (RESULTADO NO REALIZADO)
+// ═══════════════════════════════════════════
+grupo("Valor de mercado");
+
+// El resultado era solo el REALIZADO: lo que ganaste o perdiste en lo que ya cerraste. De una
+// posición abierta la app sabe cuánto pusiste y nada más. Si tenés $158.486 en SPY y hoy vale
+// $140.000, esos $18.486 perdidos no aparecían en ninguna pantalla.
+function conValuaciones(mapa, lista, fn){
+  const prevV=valuaciones, prevM=movs;
+  valuaciones=mapa||{};
+  if(lista) movs=lista;
+  invalidarResultadoInv();
+  try{ return fn(); }
+  finally{ valuaciones=prevV; movs=prevM; invalidarResultadoInv(); }
+}
+// Dos abiertas (SPY 158.486, X 100.000) y una cerrada con ganancia (Y: +5.000).
+const CARTERA_VAL=[
+  compra("2026-07-02","SPY",158486),
+  compra("2026-04-01","X",100000),
+  compra("2026-04-01","Y",50000), venta("2026-05-01","Y",55000)
+];
+
+test("solo se valúan las posiciones abiertas", ()=>{
+  conValuaciones({}, CARTERA_VAL, ()=>{
+    igual(posicionesAbiertas(CARTERA_VAL).map(p=>p.ticker).sort(), ["SPY","X"],
+          "Y está cerrada: no hay nada que valuar");
+  });
+});
+
+test("el no realizado es lo que vale hoy menos lo que pusiste", ()=>{
+  conValuaciones({SPY:{ars:140000, usd:0, fecha:"2026-09-20"}}, CARTERA_VAL, ()=>{
+    const f=noRealizadoPorTicker(CARTERA_VAL).find(x=>x.ticker==="SPY");
+    igual(f.dif.ars, -18486, "158.486 puestos y 140.000 hoy");
+    igual(noRealizadoTotal(CARTERA_VAL).ars, -18486);
+  });
+});
+
+test("una posición sin valuar no cuenta como que no ganó ni perdió", ()=>{
+  // Sumarla como si valiera lo que pusiste inventaría un cero que no sabés si es cierto.
+  conValuaciones({SPY:{ars:200000, usd:0, fecha:"2026-09-20"}}, CARTERA_VAL, ()=>{
+    const t=noRealizadoTotal(CARTERA_VAL);
+    igual(t.ars, 41514, "solo SPY: 200.000 − 158.486");
+    igual(t.valuadas, 1);
+    igual(t.sinValuar, 1, "X quedó sin valuar y hay que poder decirlo");
+  });
+});
+
+test("realizado y no realizado van separados, y también su suma", ()=>{
+  conValuaciones({SPY:{ars:140000, usd:0, fecha:"2026-09-20"}}, CARTERA_VAL, ()=>{
+    const r=resultadoCompleto(CARTERA_VAL);
+    igual(r.realizado.ars, 5000, "la venta de Y");
+    igual(r.noRealizado.ars, -18486, "la caída de SPY");
+    igual(r.total.ars, -13486);
+  });
+});
+
+test("el no realizado no se mete en el resultado del mes", ()=>{
+  // Si se mezclara, el resultado de un mes cerrado cambiaría con la cotización de mañana.
+  conValuaciones({SPY:{ars:1, usd:0, fecha:"2026-09-20"}}, CARTERA_VAL, ()=>{
+    igual(gananciaInvDelMes("2026-05", CARTERA_VAL).ars, 5000, "mayo ya pasó: no lo mueve una cotización de hoy");
+    igual(gananciaInvEntre("2026-01","2026-12", CARTERA_VAL).ars, 5000);
+  });
+});
+
+test("los dólares llevan su propia cuenta", ()=>{
+  const l=[compra("2026-04-01","AL30",0,{importeUSD:100, moneda:"USD"})];
+  conValuaciones({AL30:{ars:0, usd:80, fecha:"2026-09-20"}}, l, ()=>{
+    const t=noRealizadoTotal(l);
+    igual(t.usd, -20);
+    igual(t.ars, 0, "una caída en dólares no puede restar pesos");
+  });
+});
+
+test("cargar un valor de cero es distinto de no cargarlo", ()=>{
+  conValuaciones({X:{ars:0, usd:0, fecha:"2026-09-20"}}, CARTERA_VAL, ()=>{
+    const t=noRealizadoTotal(CARTERA_VAL);
+    igual(t.ars, -100000, "vale cero: perdiste todo lo que pusiste en X");
+    igual(t.valuadas, 1);
+  });
+});
+
+test("avisa cuál es el valor más viejo", ()=>{
+  const viejo=new Date(Date.now()-45*86400000).toISOString().slice(0,10);
+  conValuaciones({SPY:{ars:1, usd:0, fecha:currentYMD()}, X:{ars:1, usd:0, fecha:viejo}}, CARTERA_VAL, ()=>{
+    const t=noRealizadoTotal(CARTERA_VAL);
+    cierto(t.diasMasViejo>=44 && t.diasMasViejo<=46, "días mal contados: " + t.diasMasViejo);
+  });
+});
+
+test("fijarValuacion redondea y fecha sola", ()=>{
+  conValuaciones({}, null, ()=>{
+    fijarValuacion("Z", 1234.567, 0);
+    igual(valuaciones["Z"].ars, 1234.57);
+    igual(valuaciones["Z"].fecha, currentYMD(), "la fecha sale del día, no del usuario");
+    cierto(!fijarValuacion("Z", -5, 0), "un valor negativo no se acepta");
+  });
+});
+
+test("un ticker raro no puede romper el id del input", ()=>{
+  igual(valIdSeguro('SPY" onerror=x'), "SPY__onerror_x");
+});
+
+// ── La card ──
+
+function cardValuaciones(mapa, lista){
+  const ids=["card-valuaciones","valuaciones-cuerpo"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  return conValuaciones(mapa, lista, ()=>{
+    renderValuaciones();
+    const r={card:creados[0].style.display, html:creados[1].innerHTML, txt:creados[1].innerText||""};
+    creados.forEach(e=>e.remove());
+    return r;
+  });
+}
+
+test("sin valores cargados, la card explica qué falta en vez de mostrar un cero", ()=>{
+  const r=cardValuaciones({}, CARTERA_VAL);
+  igual(r.card, "block");
+  cierto(r.html.includes("Todavía no cargaste"), "no explica qué falta: " + r.html);
+  cierto(!r.html.includes("No realizado"), "muestra un no realizado que no puede saber");
+});
+
+test("con valores cargados, la card muestra el no realizado", ()=>{
+  const r=cardValuaciones({SPY:{ars:140000, usd:0, fecha:currentYMD()}}, CARTERA_VAL);
+  cierto(r.html.includes("No realizado"), "falta el no realizado: " + r.html);
+  cierto(r.html.includes('data-animar="-18486"'), "el número grande no es la diferencia: " + r.html);
+  cierto(r.txt.includes("sin valuar"), "no avisa que X quedó sin valuar: " + r.txt);
+});
+
+test("sin ninguna posición abierta la card no se muestra", ()=>{
+  const r=cardValuaciones({}, [compra("2026-04-01","Y",50000), venta("2026-05-01","Y",55000)]);
+  igual(r.card, "none");
 });
 
 grupo("Aislamiento de los tests");

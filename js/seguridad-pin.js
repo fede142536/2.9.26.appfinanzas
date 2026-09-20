@@ -9,7 +9,7 @@
 // mientras todo ya estaba cargado en JS. Si el usuario NUNCA activó un PIN, isEncActive()
 // da false siempre y getSensitiveRaw/setSensitiveRaw se comportan exactamente igual que
 // localStorage.getItem/setItem de toda la vida: cero cambio de comportamiento ni overhead.
-const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fposini"];
+const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fposini","fvaluaciones"];
 let encKey=null;   // CryptoKey en memoria, solo durante la sesión desbloqueada (nunca se persiste)
 let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: valorJSONstring, ...}
 
@@ -150,7 +150,8 @@ const NOMBRE_CLAVE_DATOS={
   fmetas:"tus metas de ahorro", fimphist3:"tu historial de importaciones",
   fcatorder:"el orden de tus categorías", fpresup:"tus presupuestos",
   fcuentas:"tus cuentas", ftarjetas:"tus tarjetas guardadas", ficons:"tus íconos personalizados",
-  fposini:"tus posiciones iniciales de inversión"
+  fposini:"tus posiciones iniciales de inversión",
+  fvaluaciones:"cuánto valen hoy tus posiciones"
 };
 
 // Parsea un valor guardado por la propia app sin dejar que uno corrupto tire abajo el resto
@@ -214,6 +215,7 @@ function loadSensitiveIntoMemory(){
   tarjetasCustom = leerJSONSeguro("ftarjetas","[]","array");
   iconsCustom = leerJSONSeguro("ficons","{}","object");
   posicionInicial = leerJSONSeguro("fposini","{}","object");
+  valuaciones = leerJSONSeguro("fvaluaciones","{}","object");
   if(datosCorruptosAlArrancar.length) avisarDatosCorruptos(datosCorruptosAlArrancar);
 }
 
