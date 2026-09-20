@@ -256,13 +256,48 @@ async function movimientosDeBalanz(bytes){
 function claveDeMov(m){
   return `${String(m.fecha).slice(0,10)}|${m.ticker||""}|${Math.round((m.importe||0)*100)}`;
 }
+// Balanz numera cada operación (el boleto, o la liquidación del FCI) y ese número es único.
+// Alcanza para reconocer la MISMA operación leída dos veces —el resumen mensual y el resumen
+// de cuenta se pisan— sin confundirla con dos operaciones distintas que casualmente coinciden.
+function refDeMov(m){
+  return m && m.refBalanz ? `${m.refBalanz}|${m.ticker||""}` : "";
+}
+// Qué falta cargar. Hay dos formas de "ya está" y no son la misma:
+//
+//   · Por número de operación: es la misma operación, leída de otro PDF. Certeza total.
+//   · Por fecha + ticker + importe: es lo único que se puede comparar contra un movimiento
+//     cargado a mano, que no tiene número. Pero NO es una identidad: dos rescates de $20.000
+//     el mismo día son dos operaciones reales. Por eso se cuentan, no se marcan: si la app
+//     tiene uno y el PDF trae dos, falta agregar uno.
+//
+// Contarlos importa de verdad recién ahora, importando meses viejos de una vez: un resumen
+// tiene varios rescates iguales el mismo día, y marcarlos perdía todos menos el primero.
 function nuevosDeBalanz(candidatos, lista){
-  const yaEstan=new Set((lista||[]).filter(m=>m&&m.tipo==="Inversion").map(claveDeMov));
-  const out=[]; const vistos=new Set();
-  candidatos.forEach(m=>{
+  const cuantosHay={};
+  const refsCargadas=new Set();
+  (lista||[]).filter(m=>m&&m.tipo==="Inversion").forEach(m=>{
     const k=claveDeMov(m);
-    if(yaEstan.has(k) || vistos.has(k)) return;
-    vistos.add(k); out.push(m);
+    cuantosHay[k]=(cuantosHay[k]||0)+1;
+    const r=refDeMov(m);
+    if(r) refsCargadas.add(r);
+  });
+
+  const out=[], refsVistas=new Set(), sinRefVistas=new Set();
+  (candidatos||[]).forEach(m=>{
+    const k=claveDeMov(m);
+    const r=refDeMov(m);
+    if(r){
+      if(refsCargadas.has(r) || refsVistas.has(r)) return;   // la misma operación, otra vez
+      refsVistas.add(r);
+    }else{
+      // Sin número no hay forma de distinguir dos operaciones idénticas de una leída dos
+      // veces, así que se colapsan: agregar de más es peor que quedarse corto, porque
+      // inventa plata que no se movió. El parser siempre numera, así que esto es el borde.
+      if(sinRefVistas.has(k)) return;
+      sinRefVistas.add(k);
+    }
+    if(cuantosHay[k]>0){ cuantosHay[k]--; return; }          // ya había una así sin numerar
+    out.push(m);
   });
   return out;
 }
@@ -274,34 +309,52 @@ function nuevosDeBalanz(candidatos, lista){
 // usuario confirma. Un PDF mal leído no puede ensuciar los datos en silencio.
 let balanzPendientes=[];
 
+// Varios PDF de una vez: recuperar el histórico son doce resúmenes, y de a uno es un trámite.
+// Un archivo que no se puede leer no cancela a los demás — se cuenta y se avisa al final.
 async function handleBalanz(input){
-  const archivo=input && input.files && input.files[0];
-  if(!archivo) return;
+  const archivos=input && input.files ? [...input.files] : [];
+  if(!archivos.length) return;
   const est=document.getElementById("balanz-status");
-  if(est) est.textContent="Leyendo el resumen…";
+  const encontrados=[]; const fallados=[];
   try{
-    const bytes=new Uint8Array(await archivo.arrayBuffer());
-    const encontrados=await movimientosDeBalanz(bytes);
+    for(let i=0;i<archivos.length;i++){
+      if(est) est.textContent=archivos.length>1
+        ? `Leyendo ${i+1} de ${archivos.length}…`
+        : "Leyendo el resumen…";
+      try{
+        const bytes=new Uint8Array(await archivos[i].arrayBuffer());
+        const delArchivo=await movimientosDeBalanz(bytes);
+        if(delArchivo.length) encontrados.push(...delArchivo);
+        else fallados.push(archivos[i].name);
+      }catch(err){
+        console.error("Balanz:", archivos[i].name, err);
+        fallados.push(archivos[i].name);
+      }
+    }
+    // Se ordenan por fecha porque llegan en el orden en que el usuario eligió los archivos,
+    // y la lista de la vista previa tiene que leerse como una historia.
+    encontrados.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
     balanzPendientes=nuevosDeBalanz(encontrados, movs);
-    renderPreviewBalanz(encontrados.length, archivo.name);
-  }catch(err){
-    console.error("Balanz:", err);
-    if(est) est.textContent="No se pudo leer el archivo. ¿Es el Resumen mensual en PDF?";
+    renderPreviewBalanz(encontrados.length, archivos.length===1 ? archivos[0].name : `${archivos.length} archivos`, fallados);
   }finally{
     input.value="";
   }
 }
 
-function renderPreviewBalanz(totalLeidos, nombre){
+function renderPreviewBalanz(totalLeidos, nombre, fallados){
   const est=document.getElementById("balanz-status");
   const prev=document.getElementById("balanz-preview");
   if(!est||!prev) return;
+  const malos=fallados||[];
+  const avisoMalos = malos.length
+    ? ` No pude leer ${malos.length===1 ? escapeHtml(malos[0]) : malos.length+" archivos"}.`
+    : "";
   if(!totalLeidos){
-    est.textContent="No encontré operaciones en ese PDF. Tiene que ser el “Resumen mensual Comitente”.";
+    est.textContent=`No encontré operaciones. Tiene que ser el “Resumen mensual Comitente” en PDF.${avisoMalos?" "+malos.join(", "):""}`;
     prev.innerHTML=""; return;
   }
   const repetidos=totalLeidos-balanzPendientes.length;
-  est.textContent=`${totalLeidos} ${totalLeidos===1?"operación leída":"operaciones leídas"} de ${nombre}.`;
+  est.textContent=`${totalLeidos} ${totalLeidos===1?"operación leída":"operaciones leídas"} de ${nombre}.${avisoMalos}`;
   if(!balanzPendientes.length){
     prev.innerHTML=`<div class="inset"><div class="txt-md">Ya estaban todas cargadas.</div>
       <div class="txt-xs txt-muted" style="margin-top:4px">No hay nada nuevo que agregar.</div></div>`;
@@ -318,9 +371,18 @@ function renderPreviewBalanz(totalLeidos, nombre){
   const avisoTickers = nuevosTickers.length
     ? `<div class="txt-xs" style="color:var(--warning);margin-top:6px">⚠️ ${nuevosTickers.map(escapeHtml).join(", ")} ${nuevosTickers.length===1?"no estaba":"no estaban"} en la app. Si es el mismo activo con otro nombre, va a quedar como una posición aparte.</div>`
     : "";
+  // Importando el histórico entero la lista de operaciones no se puede leer de un vistazo, y
+  // lo que hay que poder verificar es otra cosa: que estén los meses que esperabas.
+  const porMes={};
+  balanzPendientes.forEach(m=>{ const k=String(m.fecha).slice(0,7); porMes[k]=(porMes[k]||0)+1; });
+  const meses=Object.keys(porMes).sort();
+  const detalleMeses = meses.length>1
+    ? `<div class="txt-xs txt-muted" style="margin-top:6px">${meses.map(k=>`${escapeHtml(mesLbl(k))}: ${porMes[k]}`).join(" · ")}</div>`
+    : "";
   prev.innerHTML=`<div class="inset mb-10">
-      <div class="txt-md txt-strong">${balanzPendientes.length} ${balanzPendientes.length===1?"operación nueva":"operaciones nuevas"}</div>
+      <div class="txt-md txt-strong">${balanzPendientes.length} ${balanzPendientes.length===1?"operación nueva":"operaciones nuevas"}${meses.length>1?` en ${meses.length} meses`:""}</div>
       <div class="txt-xs txt-muted" style="margin-top:4px">${resumen}${repetidos?` · ${repetidos} ya ${repetidos===1?"estaba":"estaban"} cargada${repetidos===1?"":"s"}`:""}</div>
+      ${detalleMeses}
       ${avisoTickers}
     </div>`
     + balanzPendientes.slice(0,12).map(m=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
