@@ -435,6 +435,7 @@ function renderInv(){
 
   if(typeof renderPosicionInicial==="function") renderPosicionInicial();
   if(typeof renderPosicionCerrada==="function") renderPosicionCerrada();
+  if(typeof renderValuaciones==="function") renderValuaciones();
   renderInvertidoHoy();
 }
 

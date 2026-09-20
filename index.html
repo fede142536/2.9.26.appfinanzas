@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v125">
+<meta name="enola-version" content="enola-v126">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -241,6 +241,20 @@
     <div class="modal-title" id="instrumento-detail-title">Detalle</div>
     <div id="instrumento-detail-content" style="overflow-y:auto;max-height:65vh"></div>
     <button class="btn-sm" style="margin-top:14px" onclick="closeInstrumentoDetail()">Cerrar</button>
+  </div>
+</div>
+
+<!-- MODAL: CUÁNTO VALE HOY CADA POSICIÓN -->
+<div class="modal-overlay" id="modal-valuaciones" onclick="if(event.target===this)cerrarModalValuaciones()">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💰 Cuánto vale hoy</div>
+    <p class="txt-xs txt-muted mb-10">Mirá el valor de cada posición en tu broker y cargalo acá. Vaciando los dos campos se borra el valor de esa posición.</p>
+    <div id="valuaciones-form" style="overflow-y:auto;max-height:60vh"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn-sm" style="flex:1" onclick="cerrarModalValuaciones()">Cancelar</button>
+      <button class="btn-primary" style="flex:1" onclick="guardarValuaciones()">Guardar</button>
+    </div>
   </div>
 </div>
 
@@ -627,6 +641,11 @@
       <div style="position:relative;height:180px"><canvas id="chart-inv-historico"></canvas></div>
     </div>
   </div>
+  <div class="card" id="card-valuaciones" style="display:none">
+    <div class="card-title">💰 Cuánto vale hoy</div>
+    <p class="txt-sm txt-muted mb-10">De una posición abierta la app sabe cuánto pusiste, no cuánto vale: no busca precios en ningún lado. Cargalo vos y aparece el resultado no realizado.</p>
+    <div id="valuaciones-cuerpo"></div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->
@@ -944,6 +963,7 @@
 <script src="js/traspasos.js"></script>
 <script src="js/posicion-inicial.js"></script>
 <script src="js/posicion-cerrada.js"></script>
+<script src="js/valuaciones.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
