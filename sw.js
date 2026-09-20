@@ -9,7 +9,7 @@
 // ESTE archivo cambia. Si tocás un .js y no subís este número, los celulares que ya
 // tienen la app instalada siguen sirviendo para siempre la versión vieja desde su caché
 // (la estrategia para los assets es "cache-first") y tu cambio NO LLEGA NUNCA.
-const CACHE_VERSION = "enola-v133";
+const CACHE_VERSION = "enola-v134";
 const ASSETS = [
   "./",
   "./index.html",
@@ -33,6 +33,7 @@ const ASSETS = [
   "./js/valuaciones.js",
   "./js/mep.js",
   "./js/importar-balanz.js",
+  "./js/unificar-tickers.js",
   "./js/dashboard.js",
   "./js/inflacion.js",
   "./js/ahorros.js",

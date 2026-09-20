@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v133">
+<meta name="enola-version" content="enola-v134">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -825,6 +825,11 @@
     <div id="balanz-status" style="margin-top:10px;font-size:13px;color:var(--muted);text-align:center;min-height:18px"></div>
     <div id="balanz-preview" style="margin-top:10px"></div>
   </div>
+  <div class="card" id="card-unificar" style="display:none">
+    <div class="card-title">🔗 Unificar tickers</div>
+    <p class="txt-sm txt-muted mb-10">Balanz le dice <strong>BMMA</strong> al mismo fondo que vos cargaste como <strong>BCMMA</strong>. Si conviven, quedan dos posiciones de la misma plata y ninguna de las dos dice la verdad. Unificar deja un solo nombre.</p>
+    <div id="unificar-lista"></div>
+  </div>
   <div class="card">
     <div class="card-title">📥 Restaurar backup JSON</div>
     <p class="txt-sm txt-muted mb-10">Cargá un backup descargado desde Config. Reemplaza TODOS los datos actuales por los del backup.</p>
@@ -1001,6 +1006,7 @@
 <script src="js/valuaciones.js"></script>
 <script src="js/mep.js"></script>
 <script src="js/importar-balanz.js"></script>
+<script src="js/unificar-tickers.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
