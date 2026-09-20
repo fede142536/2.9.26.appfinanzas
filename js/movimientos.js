@@ -847,16 +847,26 @@ function renderMovs(){
     //           mano y su compra sale, así que se cancelan solos y el fondo baja: es lo que pasó.
     //           Un traspaso no entra por ningún lado — no lo gastaste, solo cambió de bolsillo.
     // GASTOS  : consumo (esConsumo).
-    const retirosGastados=mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda!=="USD")
-      .reduce((s,m)=>s+(m.importe||0),0);
-    const ingTotal=totales.ingresos+retirosGastados;
+    const ingTotal=totales.ingresos;
     const gasTotal=totales.gastos;
 
     // Un chip por ticker: neto = rescates − suscripciones. Negativo significa "hay plata puesta
     // ahí, todavía sin rescatar", no que hayas perdido; por eso va en color de inversión y no en
     // rojo de gasto.
-    const netoInv=netoInvTotal(mesMovs);
-    const balCaja=Math.round((ingTotal-gasTotal+netoInv.ars)*100)/100;
+    // El BALANCE sale de totalesDePlata(), que es la única definición del modelo:
+    //     Balance = Ingresos + resultado de inversiones − Gastos
+    //
+    // Antes esta pantalla usaba otra: Ingresos − Gastos + Σ(flujo neto por ticker), y además le
+    // sumaba a Ingresos los retiros del fondo que se gastaron. Las dos cosas la hacían discrepar
+    // del Dashboard, que sí usa el modelo. Con los datos reales eran seis meses en desacuerdo y
+    // en junio 2026 los dos signos opuestos: el Dashboard decía −$578.680 y esta pantalla
+    // +$623.552, por el mismo mes.
+    //
+    // La del modelo es la correcta por lo mismo que vale para el ahorro, el traspaso y el cambio
+    // de moneda: poner plata en una inversión no es gastarla, la seguís teniendo. Lo único que
+    // mueve tu patrimonio es el RESULTADO, que está en el cuadro de abajo. Y sacar plata de tu
+    // propio fondo no es un ingreso: la compra que pagaste con ella ya figura como gasto.
+    const balCaja=totales.balance;
 
     // Lo que pusiste a trabajar este mes en el fondo de ahorro (las inversiones ya tienen su chip).
     const guardado=aho;
