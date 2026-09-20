@@ -438,8 +438,13 @@ function esIngreso(m){
 // Gastos   = lo que consumiste. Guardar plata NO es consumirla, así que los depósitos al fondo
 //            y el capital que ponés en inversiones quedan afuera. Gastar plata del fondo SÍ es
 //            consumo, y por eso los retiros se quedan adentro.
-// Balance  = cuánto creció tu patrimonio este mes, esté donde esté esa plata (en la cuenta, en
-//            el fondo o invertida).
+// Balance  = cuánta plata te quedó A MANO este mes: lo que entró, menos lo que consumiste,
+//            menos lo que pusiste a invertir. La plata que mandaste al mercado sigue siendo
+//            tuya, pero no la tenés disponible, y por eso baja el balance del mes.
+//            Cuando la rescatás vuelve a subir, con la ganancia adentro — así el resultado de
+//            una inversión entra al balance recién cuando se hace plata de verdad.
+//            El RESULTADO reconocido se muestra aparte, en el cuadro de inversiones: es otra
+//            pregunta (cuánto ganaste), no esta (cuánto te quedó).
 //
 // De las inversiones solo cuenta el RESULTADO, y lo calcula resultado-inversiones.js, que
 // necesita toda la historia (para saber si una venta es ganancia hay que saber cuánto capital
@@ -462,14 +467,17 @@ function totalesDePlata(lista, gananciaInv){
   // misma plata yendo y viniendo, y contarlos enteros infla los dos totales en cada vuelta.
   const invEntra = inversiones.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
   const invSale  = inversiones.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  // Lo que NETO se fue a inversiones: lo que pusiste menos lo que rescataste. Negativo quiere
+  // decir que sacaste más de lo que pusiste, y entonces el balance sube.
+  const invertido = Math.round((invSale - invEntra)*100)/100;
   const ganancia = (gananciaInv && gananciaInv.ars) || 0;
   return {
-    ingresos, gastos, depositos, retiros, traspasos, cambios, invEntra, invSale,
+    ingresos, gastos, depositos, retiros, traspasos, cambios, invEntra, invSale, invertido,
     gananciaInv: ganancia,
     // Una ganancia suma a ingresos; una pérdida resta, y por eso se parte en dos.
     ingresosTotal: Math.round((ingresos + Math.max(ganancia,0))*100)/100,
     gastosTotal:   Math.round((gastos   + Math.max(-ganancia,0))*100)/100,
-    balance: Math.round((ingresos + ganancia - gastos)*100)/100
+    balance: Math.round((ingresos - gastos - invertido)*100)/100
   };
 }
 
