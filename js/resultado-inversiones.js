@@ -11,7 +11,18 @@
 // totales sino el orden de los meses: junio figuraba como el mejor mes del año por un rescate
 // de $1,8M, cuando julio había sido seis veces mejor.
 //
-// LA REGLA: primero recuperás capital, después ganás.
+// LA REGLA: primero recuperás capital, después ganás. Y si vendiste TODO por menos de lo que
+// habías puesto, lo que falta no es capital que siga adentro: es la pérdida.
+//
+// Esa última parte faltaba, y era grave. Vender por menos de lo comprado dejaba la diferencia
+// como "capital invertido" para siempre, así que el modelo NO PODÍA expresar una pérdida: todo
+// resultado salía positivo o cero. Con los datos reales, MCD (comprado a $54.238,57 y vendido a
+// $53.581,03) figuraba con $657,54 "todavía invertidos" en vez de $657,54 perdidos.
+//
+// La app no guarda cantidades, solo montos, así que una venta más chica que el capital es
+// ambigua: puede ser que vendiste todo a pérdida, o que vendiste una parte. Esas dos no se
+// distinguen solas. Por eso la venta que CIERRA la posición se marca (m.cierraPosicion), igual
+// que un traspaso o una posición inicial: la app propone y vos confirmás.
 // De una venta de $252.000 en un ticker donde pusiste $250.000 y no habías sacado nada:
 // $250.000 son capital que vuelve (neutro) y $2.000 son ganancia.
 // Se lleva por ticker y por moneda, y no necesita precio ni cantidad — alcanza con el ticker,
@@ -78,6 +89,15 @@ function calcularResultadoInv(lista, posIni){
         gan[k]+=monto-devuelve;
         flu[k]-=devuelve;
         if(monto-devuelve>0) eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:monto-devuelve});
+        // Esta venta cerró la posición: lo que quedaba sin recuperar no sigue invertido, se
+        // perdió. Sin esto ninguna pérdida podía aparecer nunca.
+        if(m.cierraPosicion && cap[k]>0.005){
+          const perdida=cap[k];
+          gan[k]-=perdida;
+          flu[k]-=perdida;
+          eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:-perdida});
+          cap[k]=0;
+        }
       } else {
         cap[k]+=monto;
         flu[k]+=monto;
@@ -111,7 +131,7 @@ let _resultadoInvFirma="";
 function firmaDeLista(lista, posIni){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion");
   let suma=0;
-  inv.forEach(m=>{ suma += (m.id||0) + (m.importe||0) + (m.importeUSD||0); });
+  inv.forEach(m=>{ suma += (m.id||0) + (m.importe||0) + (m.importeUSD||0) + (m.cierraPosicion?0.5:0); });
   // La posición inicial entra a la firma: cambiarla cambia el resultado, y sin esto la
   // pantalla seguía mostrando el cálculo viejo hasta el próximo alta.
   return inv.length+"|"+suma+"|"+JSON.stringify(posIni||{});

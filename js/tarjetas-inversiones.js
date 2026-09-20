@@ -434,6 +434,7 @@ function renderInv(){
   renderInvHistorico();
 
   if(typeof renderPosicionInicial==="function") renderPosicionInicial();
+  if(typeof renderPosicionCerrada==="function") renderPosicionCerrada();
   renderInvertidoHoy();
 }
 
