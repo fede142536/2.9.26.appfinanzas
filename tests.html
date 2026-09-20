@@ -392,6 +392,23 @@ test("Balance = Ingresos − Gastos − Invertido, y los chips lo muestran", asy
   cierto(txt.includes("200.000"), "el chip no muestra lo invertido neto: " + txt);
 });
 
+// El chip lleva el signo del EFECTO sobre el balance, no el de `totales.invertido`: son
+// opuestos. Mostraba "+$296.189" en un mes en que el balance BAJABA por esos mismos $296.189
+// (abril 2026 en los datos reales), y un número positivo que resta no se puede leer.
+test("poner plata a invertir se ve en negativo", async ()=>{
+  const l=[MES_INV[0], MES_INV[1], MES_INV[4]];   // sueldo, super y la compra de YPF (300.000)
+  const txt=await chipsDeMovsAnimados(l, "Todos", "", "2026-08");
+  cierto(/[-−]\$300\.000/.test(txt), "invertir tiene que verse como plata que se va: " + txt);
+  cierto(!/\+\$300\.000/.test(txt), "el chip muestra en positivo algo que baja el balance: " + txt);
+  cierto(txt.includes("1.200.000"), "2.000.000 − 500.000 − 300.000: " + txt);
+});
+
+test("rescatar se ve en positivo", async ()=>{
+  const l=[MES_INV[0], MES_INV[1], MES_INV[3]];   // sueldo, super y el rescate de 1.000.000
+  const txt=await chipsDeMovsAnimados(l, "Todos", "", "2026-08");
+  cierto(/\+\$1\.000\.000/.test(txt), "rescatar tiene que verse como plata que vuelve: " + txt);
+});
+
 test("un mes sin inversiones no agrega el chip de Invertido", async ()=>{
   const txt=await chipsDeMovsAnimados(MES_INV.slice(0,2), "Todos", "", "2026-08");
   cierto(!/Invertido/i.test(txt), "el chip aparece en un mes sin inversiones: " + txt);
