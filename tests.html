@@ -5206,6 +5206,68 @@ test("dos operaciones del mismo día y ticker por montos distintos son dos", ()=
   igual(nuevosDeBalanz(leidos, []).length, 3);
 });
 
+// ── Importar varios meses de una vez ──
+// Recuperar el histórico son doce resúmenes, y ahí aparecen choques que con un solo mes no se
+// veían: dos rescates iguales el mismo día, y la misma operación leída de dos PDF que se pisan
+// (el resumen mensual y el resumen de cuenta cubren fechas en común).
+function opBalanz(ref, ticker, fecha, importe){
+  return {fecha, tipo:"Inversion", ticker, importe, subcat:"FCI Rescate capital", refBalanz:ref};
+}
+
+test("dos rescates iguales el mismo día son dos operaciones, no una", ()=>{
+  // Es plata de verdad: colapsarlos deja $20.000 sin registrar y el capital sobrevaluado.
+  const leidos=[opBalanz("991","BMMA","2026-05-14",20000), opBalanz("992","BMMA","2026-05-14",20000)];
+  const nuevos=nuevosDeBalanz(leidos, []);
+  igual(nuevos.length, 2, "Balanz los numera distinto: son dos liquidaciones");
+  igual(nuevos.map(m=>m.refBalanz), ["991","992"]);
+});
+
+test("la misma operación leída de dos PDF entra una sola vez", ()=>{
+  // El resumen mensual de agosto y el resumen de cuenta traen las dos el mismo rescate.
+  const leidos=[opBalanz("991","BMMA","2026-05-14",20000), opBalanz("991","BMMA","2026-05-14",20000)];
+  igual(nuevosDeBalanz(leidos, []).length, 1, "mismo número de liquidación: es la misma");
+});
+
+test("una operación ya importada no vuelve, aunque la hayas editado", ()=>{
+  // Editarle el monto o la fecha a una operación importada la vuelve irreconocible por
+  // fecha+ticker+importe. El número de liquidación sigue siendo el mismo, y es lo que evita
+  // que volver a subir el PDF la duplique.
+  const yaEnLaApp=[{id:1, tipo:"Inversion", ticker:"BMMA", fecha:"2026-05-15", importe:19500, refBalanz:"991"}];
+  igual(nuevosDeBalanz([opBalanz("991","BMMA","2026-05-14",20000)], yaEnLaApp).length, 0);
+  igual(nuevosDeBalanz([opBalanz("992","BMMA","2026-05-14",20000)], yaEnLaApp).length, 1,
+    "otra liquidación sí es una operación nueva");
+});
+
+test("si la app tiene uno cargado a mano y el PDF trae dos, falta agregar uno", ()=>{
+  // Un movimiento cargado a mano no tiene número, así que lo único comparable es fecha +
+  // ticker + importe. Eso NO es una identidad: hay que contar, no marcar.
+  const yaEnLaApp=[{id:1, tipo:"Inversion", ticker:"BMMA", fecha:"2026-05-14", importe:20000}];
+  const leidos=[opBalanz("991","BMMA","2026-05-14",20000), opBalanz("992","BMMA","2026-05-14",20000)];
+  const nuevos=nuevosDeBalanz(leidos, yaEnLaApp);
+  igual(nuevos.length, 1, "uno ya estaba cargado a mano; el otro falta");
+  igual(nuevos[0].refBalanz, "992");
+});
+
+test("los movimientos que no son inversiones no tapan una operación", ()=>{
+  const yaEnLaApp=[{id:1, tipo:"Gasto", cat:"Supermercado", fecha:"2026-05-14", importe:20000, ticker:"BMMA"}];
+  igual(nuevosDeBalanz([opBalanz("991","BMMA","2026-05-14",20000)], yaEnLaApp).length, 1);
+});
+
+test("un rescate suma al resultado como devolución de capital, no como ingreso", ()=>{
+  // Es el punto de importar los meses viejos: sin los rescates, la plata que ya sacaste del
+  // fondo sigue figurando invertida para siempre.
+  const l=[{id:1, tipo:"Inversion", cat:"FCI", subcat:"FCI Suscripción", ticker:"BMMA",
+            fecha:"2026-05-01", importe:165646, importeUSD:0},
+           {id:2, tipo:"Inversion", cat:"FCI", subcat:"FCI Rescate capital", ticker:"BMMA",
+            fecha:"2026-05-14", importe:62575, importeUSD:0}];
+  conTickers(l, ()=>{
+    cierto(isInvSalida(l[1]), "un rescate tiene que contar como salida del portfolio");
+    igual(capDe(l,"BMMA").ars, 103071, "el rescate descuenta capital");
+    igual(gananciaInvEntre("2026-01","2026-12", l).ars, 0, "devolver capital no es ganancia");
+    igual(totalesDePlata(l).ingresos, 0, "sacar plata del fondo no es un ingreso");
+  });
+});
+
 test("la fuente desplazada se decodifica", ()=>{
   // "Boleto" se guarda como "%ROHWR": cada glifo corrido 29 lugares.
   igual(decodificaBalanz("%ROHWR"), "Boleto");
