@@ -125,6 +125,14 @@ function resultadoCompleto(lista){
 // ═══════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════
+// "pusiste $0,00 + USD 54,21" en una posición que solo tiene dólares: el cero sobra.
+function montoDoble(ars, usd){
+  const partes=[];
+  if(Math.round(ars)!==0 || Math.abs(usd)<0.01) partes.push(fmtS(ars));
+  if(Math.abs(usd)>=0.01) partes.push("USD "+usd.toFixed(2));
+  return partes.join(" + ");
+}
+
 function renderValuaciones(){
   const card=document.getElementById("card-valuaciones");
   const el=document.getElementById("valuaciones-cuerpo");
@@ -172,14 +180,14 @@ function renderValuaciones(){
     const c=!f.valor ? "var(--muted)" : (dif>=0?"var(--success)":"var(--danger)");
     const derecha=f.valor
       ? `<div style="font-size:13px;font-weight:600;color:${c}">${fmtTotalMas(dif)}</div>
-         <div class="txt-xs txt-muted">vale ${fmtS(f.valor.ars)}${Math.abs(f.valor.usd)>=0.01?" + USD "+f.valor.usd.toFixed(2):""}</div>`
+         <div class="txt-xs txt-muted">vale ${montoDoble(f.valor.ars, f.valor.usd)}</div>`
       : `<div class="txt-xs txt-muted">sin valuar</div>`;
     const antiguedad=(f.dias!=null && f.dias>VALUACION_DIAS_VIEJA)
       ? ` · <span style="color:var(--warning)">hace ${f.dias} días</span>` : "";
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
       <div class="u-flex1 u-min0">
         <div class="txt-md txt-strong">${escapeHtml(f.ticker)}</div>
-        <div class="txt-xs txt-muted">pusiste ${fmtS(f.capital.ars)}${Math.abs(f.capital.usd)>=0.01?" + USD "+f.capital.usd.toFixed(2):""}${antiguedad}</div>
+        <div class="txt-xs txt-muted">pusiste ${montoDoble(f.capital.ars, f.capital.usd)}${antiguedad}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">${derecha}</div>
     </div>`;
@@ -206,7 +214,7 @@ function abrirModalValuaciones(){
       const usd=Math.abs(f.capital.usd)>=0.01;
       return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
         <div class="txt-md txt-strong">${escapeHtml(f.ticker)}</div>
-        <div class="txt-xs txt-muted" style="margin-bottom:6px">Pusiste ${fmtS(f.capital.ars)}${usd?" + USD "+f.capital.usd.toFixed(2):""}</div>
+        <div class="txt-xs txt-muted" style="margin-bottom:6px">Pusiste ${montoDoble(f.capital.ars, f.capital.usd)}</div>
         <div class="amount-wrap">
           <span class="amount-prefix">$</span>
           <input type="number" inputmode="decimal" step="0.01" min="0" class="form-input" style="padding-left:28px"

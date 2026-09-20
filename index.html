@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v126">
+<meta name="enola-version" content="enola-v127">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -628,6 +628,16 @@
   </div>
   <div class="card"><div class="card-title">Inversiones del mes</div><div id="inv-balance"></div></div>
   <div class="card"><div class="card-title">Movimientos del mes</div><div id="inv-movs"></div></div>
+  <div class="card" id="card-migrar-cambios-inv" style="display:none">
+    <div class="card-title">💱 Compras de dólares sin completar</div>
+    <p class="txt-sm txt-muted mb-10">A estos les falta la otra mitad de la operación. Mientras tanto, una compra MEP cargada como inversión deja el bono figurando invertido para siempre.</p>
+    <div id="migrar-cambios-lista-inv"></div>
+  </div>
+  <div class="card" id="card-mep" style="display:none">
+    <div class="card-title">💱 MEP cargado como dos inversiones</div>
+    <p class="txt-sm txt-muted mb-10">Un MEP es un cambio de moneda, no dos inversiones: pasaste pesos a dólares. Contado como inversión, el bono en pesos queda invertido para siempre y la venta en dólares cuenta entera como ganancia.</p>
+    <div id="mep-lista"></div>
+  </div>
   <div class="card" id="card-posicion-cerrada" style="display:none">
     <div class="card-title">◈ Posiciones que parecen cerradas</div>
     <p class="txt-sm txt-muted mb-10">Vendiste casi todo y el resto quedó figurando como invertido. Si ya no tenés la posición, eso no está invertido: es lo que perdiste.</p>
@@ -964,6 +974,7 @@
 <script src="js/posicion-inicial.js"></script>
 <script src="js/posicion-cerrada.js"></script>
 <script src="js/valuaciones.js"></script>
+<script src="js/mep.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>

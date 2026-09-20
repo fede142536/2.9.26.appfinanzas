@@ -82,6 +82,7 @@
 <script src="js/posicion-inicial.js"></script>
 <script src="js/posicion-cerrada.js"></script>
 <script src="js/valuaciones.js"></script>
+<script src="js/mep.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
@@ -4663,6 +4664,179 @@ test("con valores cargados, la card muestra el no realizado", ()=>{
 test("sin ninguna posición abierta la card no se muestra", ()=>{
   const r=cardValuaciones({}, [compra("2026-04-01","Y",50000), venta("2026-05-01","Y",55000)]);
   igual(r.card, "none");
+});
+
+// ═══════════════════════════════════════════
+// MEP: LAS DOS PATAS SON UNA SOLA OPERACIÓN
+// ═══════════════════════════════════════════
+grupo("MEP cargado como dos inversiones");
+
+// Un MEP se carga como dos movimientos de inversión: la compra del bono en pesos (AL30) y su
+// venta en dólares (AL30D). No son dos inversiones, es UN cambio de moneda, y contadas por
+// separado mienten en direcciones opuestas: los pesos quedan como capital puesto en un ticker
+// que nunca se vende, y los dólares como una venta sin compra detrás, o sea ganancia pura.
+// Con los datos reales eran $60.902,20 de capital que no existía.
+function mepPesos(fecha, monto, id){
+  return {id:id||(++_idInv), tipo:"Inversion", cat:"MEP", subcat:"MEP Compra",
+          ticker:"AL30", fecha, importe:monto, importeUSD:0};
+}
+function mepDolares(fecha, usd, id){
+  return {id:id||(++_idInv), tipo:"Inversion", cat:"Bonos USD", subcat:"Bonos USD Venta",
+          ticker:"AL30D", fecha, importe:0, importeUSD:usd};
+}
+function conMEP(lista, fn){
+  const prevM=movs, prevP=posicionInicial;
+  movs=lista; posicionInicial={};
+  invalidarResultadoInv();
+  limpiarIgnoradosMEP();
+  try{ return fn(); }
+  finally{ movs=prevM; posicionInicial=prevP; limpiarIgnoradosMEP(); invalidarResultadoInv(); }
+}
+// El caso real de septiembre 2026, con sus fechas y montos.
+function mepReal(){
+  return [mepPesos("2026-09-02",21434.67), mepPesos("2026-09-03",39467.53),
+          mepDolares("2026-09-03",13.88),  mepDolares("2026-09-04",25.55)];
+}
+
+test("sin unir, los pesos del MEP figuran invertidos para siempre", ()=>{
+  const l=mepReal();
+  conMEP(l, ()=>{
+    igual(capitalInvertido(l).ars, 60902.2, "el bono en pesos nunca se vende: queda puesto");
+    igual(gananciaInvEntre("2026-01","2026-12", l).usd, 39.43, "y los dólares son ganancia pura");
+  });
+});
+
+test("empareja cada compra en pesos con la venta en dólares que la sigue", ()=>{
+  const l=mepReal();
+  conMEP(l, ()=>{
+    const c=candidatosAMEP(l);
+    igual(c.length, 2);
+    igual(c.map(x=>x.ars).sort((a,b)=>a-b), [21434.67, 39467.53]);
+    igual(c.map(x=>x.usd).sort((a,b)=>a-b), [13.88, 25.55]);
+  });
+});
+
+test("muestra el tipo de cambio de cada par, que es lo que delata un emparejado malo", ()=>{
+  const l=mepReal();
+  conMEP(l, ()=>{
+    const tc=candidatosAMEP(l).map(c=>c.tipoCambio).sort((a,b)=>a-b);
+    igual(tc, [1544.28, 1544.72], "dos pares del mismo día tienen que dar casi el mismo tc");
+  });
+});
+
+test("unirlas saca los pesos del capital invertido", ()=>{
+  const l=mepReal();
+  conMEP(l, ()=>{
+    candidatosAMEP(l).forEach(c=>unirMEP(c.idArs, c.idUsd));
+    invalidarResultadoInv();
+    igual(capitalInvertido(l).ars, 0, "los pesos se fueron a dólares: no siguen invertidos");
+    igual(gananciaInvEntre("2026-01","2026-12", l).usd, 0, "y los dólares dejan de ser ganancia");
+    igual(candidatosAMEP(l).length, 0);
+  });
+});
+
+test("unidas quedan como las dos mitades de un cambio, sin borrar nada", ()=>{
+  const l=mepReal();
+  conMEP(l, ()=>{
+    const c=candidatosAMEP(l)[0];
+    unirMEP(c.idArs, c.idUsd);
+    const sale=l.find(m=>m.id===c.idArs), entra=l.find(m=>m.id===c.idUsd);
+    igual(l.length, 4, "no se borró ningún movimiento");
+    igual(sale.tipo, "Gasto"); igual(sale.cambioPata, "sale"); igual(sale.moneda, "ARS");
+    igual(entra.tipo, "Ingreso"); igual(entra.cambioPata, "entra"); igual(entra.moneda, "USD");
+    igual(entra.importeOrig, c.usd, "los dólares pasan a la forma de un ingreso en USD");
+    igual(sale.cambioId, entra.cambioId, "las dos mitades comparten el id del cambio");
+    cierto(!sale.ticker && !entra.ticker, "ya no son inversiones: no llevan ticker");
+  });
+});
+
+test("separarlas las devuelve a como estaban", ()=>{
+  const l=mepReal();
+  conMEP(l, ()=>{
+    const c=candidatosAMEP(l)[0];
+    unirMEP(c.idArs, c.idUsd);
+    separarMEP(c.idArs);
+    const a=l.find(m=>m.id===c.idArs), u=l.find(m=>m.id===c.idUsd);
+    igual(a.tipo, "Inversion"); igual(a.ticker, "AL30"); igual(a.importe, c.ars);
+    igual(u.tipo, "Inversion"); igual(u.ticker, "AL30D"); igual(u.importeUSD, c.usd);
+    cierto(!a.cambioId && !u.cambioId, "quedaron marcas del cambio");
+    invalidarResultadoInv();
+    // Vuelven las dos patas en pesos, no solo la que se separó: la otra nunca se unió.
+    igual(capitalInvertido(l).ars, 60902.2, "y los pesos vuelven a figurar invertidos");
+  });
+});
+
+test("una venta en dólares suelta no se propone como MEP", ()=>{
+  // Sin una compra en pesos cerca, eso es otra cosa: una posición anterior a la app.
+  const l=[mepDolares("2026-05-08",551.21)];
+  conMEP(l, ()=>igual(candidatosAMEP(l).length, 0));
+});
+
+test("no empareja con una venta anterior a la compra ni con una muy lejana", ()=>{
+  const antes=[mepDolares("2026-08-01",13.88), mepPesos("2026-09-02",21434.67)];
+  conMEP(antes, ()=>igual(candidatosAMEP(antes).length, 0, "los dólares no pueden llegar antes"));
+  const lejos=[mepPesos("2026-09-02",21434.67), mepDolares("2026-11-01",13.88)];
+  conMEP(lejos, ()=>igual(candidatosAMEP(lejos).length, 0, "dos meses después no es el parking de un MEP"));
+});
+
+test("cada venta en dólares se usa una sola vez", ()=>{
+  const l=[mepPesos("2026-09-02",21434.67), mepPesos("2026-09-02",39467.53),
+           mepDolares("2026-09-03",13.88)];
+  conMEP(l, ()=>{
+    const c=candidatosAMEP(l);
+    igual(c.length, 1, "una sola venta no puede cerrar dos compras");
+  });
+});
+
+test("unir descuenta la posición inicial que se había cargado para tapar esa venta", ()=>{
+  // La posición inicial de AL30D se cargó para que esa venta dejara de ser ganancia pura. Si
+  // queda entera después de unir, esos dólares pasan a figurar como capital que no existe.
+  const l=mepReal();
+  const prevP=posicionInicial;
+  posicionInicial={AL30D:{ars:0, usd:78.96}};
+  movs=l;
+  invalidarResultadoInv();
+  try{
+    const c=candidatosAMEP(l).find(x=>x.usd===13.88);
+    unirMEP(c.idArs, c.idUsd);
+    igual(posicionInicial["AL30D"].usd, 65.08, "78,96 − 13,88");
+  } finally { posicionInicial=prevP; movs=[]; invalidarResultadoInv(); }
+});
+
+test("descartar un par lo saca, y se puede volver a revisar", ()=>{
+  const l=mepReal();
+  conMEP(l, ()=>{
+    const c=candidatosAMEP(l)[0];
+    ignorarMEP(c.clave);
+    igual(candidatosAMEP(l).length, 1);
+    limpiarIgnoradosMEP();
+    igual(candidatosAMEP(l).length, 2);
+  });
+});
+
+// ── El valor de hoy en la ficha del instrumento ──
+
+test("la ficha muestra cuánto vale hoy y el no realizado", ()=>{
+  const l=[compra("2026-07-02","SPY",158486)];
+  const r=conValuaciones({SPY:{ars:140000, usd:0, fecha:currentYMD()}}, l, ()=>fichaDe("SPY", l));
+  cierto(r.includes("vale hoy"), "no dice cuánto vale: " + r);
+  cierto(r.includes("140.000"), "falta el valor cargado: " + r);
+  cierto(r.includes("no realizado"), "falta el no realizado: " + r);
+  cierto(r.includes("-$18.486"), "el no realizado no es valor − capital: " + r);
+});
+
+test("sin valor cargado la ficha no inventa un no realizado", ()=>{
+  const l=[compra("2026-07-02","SPY",158486)];
+  const r=conValuaciones({}, l, ()=>fichaDe("SPY", l));
+  cierto(!r.includes("no realizado"), "muestra un no realizado que no puede saber: " + r);
+});
+
+test("la ficha avisa si el valor quedó viejo", ()=>{
+  const l=[compra("2026-07-02","SPY",158486)];
+  const viejo=new Date(Date.now()-45*86400000).toISOString().slice(0,10);
+  const r=conValuaciones({SPY:{ars:140000, usd:0, fecha:viejo}}, l, ()=>fichaDe("SPY", l));
+  cierto(r.includes("hace 45 días"), "no dice de cuándo es el valor: " + r);
+  cierto(r.includes("--warning"), "no avisa que quedó viejo: " + r);
 });
 
 grupo("Aislamiento de los tests");
