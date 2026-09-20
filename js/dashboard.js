@@ -643,6 +643,22 @@ function showInstrumentoDetail(ticker){
     html+=`<div style="font-size:${abierta?"14":"20"}px;font-weight:600;color:${cr};margin-top:3px">${res.ars>=0?"+":""}${fmtS(res.ars)}${abierta?" de resultado":""}</div>
       ${Math.abs(res.usd)>=0.01?`<div class="txt-md" style="color:${res.usd>=0?"var(--success)":"var(--danger)"}">${res.usd>=0?"+":""}USD ${res.usd.toFixed(2)}</div>`:""}`;
   }
+  // Cuánto vale hoy, si lo cargaste: el capital dice lo que pusiste, no lo que tenés.
+  const val=(typeof valuacionDe==="function" && abierta) ? valuacionDe(ticker) : null;
+  if(val){
+    const difA=Math.round((val.ars-tabla.ars)*100)/100;
+    const difU=Math.round((val.usd-tabla.usd)*100)/100;
+    const cd=difA>=0?"var(--success)":"var(--danger)";
+    html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">
+      💰 vale hoy <strong>${fmtS(val.ars)}</strong>${Math.abs(val.usd)>=0.01?" + USD "+val.usd.toFixed(2):""}
+      · no realizado <strong style="color:${cd}">${fmtTotalMas(difA)}</strong>${Math.abs(difU)>=0.01?` <strong style="color:${difU>=0?"var(--success)":"var(--danger)"}">${difU>=0?"+":""}USD ${difU.toFixed(2)}</strong>`:""}
+    </div>`;
+    const d=(typeof diasDesde==="function") ? diasDesde(val.fecha) : null;
+    if(d!=null){
+      const viejo=d>VALUACION_DIAS_VIEJA;
+      html+=`<div class="txt-xs" style="color:${viejo?"var(--warning)":"var(--muted)"};margin-top:3px">${viejo?"⚠️ ":""}Valor cargado ${d===0?"hoy":d===1?"ayer":"hace "+d+" días"}.</div>`;
+    }
+  }
   html+=`<div style="font-size:12px;color:var(--muted);margin-top:6px">
       📤 invertido ${fmtS(puesto)}${puestoU>0?" + USD "+puestoU.toFixed(2):""} · 📥 recuperado ${fmtS(sacado)}${sacadoU>0?" + USD "+sacadoU.toFixed(2):""}
     </div>

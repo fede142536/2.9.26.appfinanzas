@@ -201,9 +201,16 @@ function completarCambioDesde(mov, montoFaltante){
 // RENDER DE LA MIGRACIÓN
 // ═══════════════════════════════════════════
 
+// La misma card se muestra en dos lugares: en Importar, junto al resto de la limpieza de datos,
+// y en Inversiones, que es donde se ve el número equivocado —una compra MEP sin completar deja
+// el bono figurando invertido para siempre— y donde el usuario realmente va a mirar.
 function renderMigrarCambios(){
-  const card=document.getElementById("card-migrar-cambios");
-  const el=document.getElementById("migrar-cambios-lista");
+  pintarMigrarCambios("card-migrar-cambios", "migrar-cambios-lista");
+  pintarMigrarCambios("card-migrar-cambios-inv", "migrar-cambios-lista-inv");
+}
+function pintarMigrarCambios(idCard, idLista){
+  const card=document.getElementById(idCard);
+  const el=document.getElementById(idLista);
   if(!card||!el) return;
   const cands=candidatosAMigrar(movs);
   const descartados=idsIgnorados().length;
