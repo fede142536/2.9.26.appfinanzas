@@ -5268,6 +5268,137 @@ test("un rescate suma al resultado como devolución de capital, no como ingreso"
   });
 });
 
+// ── Las columnas de un boleto ──
+// Tres bugs del mismo origen, encontrados con el resumen real de mayo, que tiene bonos.
+
+test("el neto se lee por su lugar frente a las fechas, no por un índice fijo", ()=>{
+  // Un boleto de CEDEARs trae una columna de aranceles que un bono no tiene. Leyendo cols[9]
+  // el importe de AL30 salía de la columna de la FECHA: "19/5/2026" daba $1.952.026.
+  const bono=operacionesDeBalanz([
+    "BONOSAL30-AL30/1234",
+    fila("Boleto/5509308/COMPRA/0/AL30/$","86,00","86,00","906,4000000000","77.950,40",
+         "389,75","0,00","1,95","-78.342,10","19/5/2026","19/5/2026")
+  ]);
+  igual(bono.length, 1);
+  const m=movimientoDeBalanz(bono[0]);
+  igual(m.importe, 78342.10, "leyó la fecha en vez del neto");
+  igual(m.fecha, "2026-05-19");
+
+  // El mismo cálculo tiene que seguir dando bien con una columna más.
+  const cedear=operacionesDeBalanz([
+    "CEDEARSPDRS" + SEP + "P500-SPY/8549",
+    fila("Boleto/5116380/COMPRA/0/SPY/$","1,00","14,00","55.025,0000000000","55.025,00",
+         "275,13","57,78","33,29","5,78","-55.391,20","8/5/2026","8/5/2026")
+  ]);
+  igual(movimientoDeBalanz(cedear[0]).importe, 55391.20);
+});
+
+test("netoDeBoleto saltea las dos fechas del final", ()=>{
+  igual(netoDeBoleto(["cab","1,00","-917,08","22/5/2026","26/5/2026"]), "-917,08");
+  igual(netoDeBoleto(["cab","1,00","-917,08"]), "-917,08", "sin fechas, el último es el neto");
+  igual(netoDeBoleto(["cab"]), "", "una fila sin columnas no puede inventar un monto");
+});
+
+test("la pata en dólares del boleto se guarda en dólares", ()=>{
+  // "Boleto/…/AL30/usd" es la venta del bono en dólares de un MEP. Guardarla en pesos la
+  // contaba como $54 en vez de USD 54.
+  const ops=operacionesDeBalanz([
+    "BONOSAL30-AL30/1234",
+    fila("Boleto/5551445/VENTA/0/AL30/usd","-86,00","0,00","0,6335000000","54,48",
+         "0,27","0,00","1,90","54,21","20/5/2026","20/5/2026")
+  ]);
+  const m=movimientoDeBalanz(ops[0]);
+  igual(m.importeUSD, 54.21);
+  igual(m.importe, 0, "en dólares no puede quedar nada cargado en pesos");
+  igual(m.moneda, "USD");
+});
+
+test("el boleto en pesos no se marca como dólares", ()=>{
+  const ops=operacionesDeBalanz([
+    "BONOSAL30-AL30/1234",
+    fila("Boleto/5509308/COMPRA/0/AL30/$","86,00","86,00","906,4000000000","77.950,40",
+         "389,75","0,00","1,95","-78.342,10","19/5/2026","19/5/2026")
+  ]);
+  const m=movimientoDeBalanz(ops[0]);
+  igual(m.importeUSD, 0);
+  igual(m.moneda, undefined);
+  igual(m.importe, 78342.10);
+});
+
+// ── Corregir una importación vieja ──
+test("la vista previa muestra los dólares como dólares", ()=>{
+  // Una operación en USD tiene importe 0, así que formatearla en pesos la mostraba como
+  // "$0,00" justo en la pantalla donde hay que controlarla antes de aceptarla.
+  igual(montoLeidoBalanz({importe:0, importeUSD:54.21, moneda:"USD"}), "USD 54.21");
+  igual(montoLeidoBalanz({importe:0, importeUSD:0.64}), "USD 0.64", "sin moneda, el monto manda");
+  cierto(/78\.342,10/.test(montoLeidoBalanz({importe:78342.10, importeUSD:0})), "los pesos siguen en pesos");
+  cierto(/0,00/.test(montoLeidoBalanz({importe:0, importeUSD:0})), "cero en todo es cero en pesos");
+});
+
+test("una operación ya cargada con otro monto se ofrece corregir, no duplicar", ()=>{
+  // El número de operación coincide, así que nuevosDeBalanz la saltea. Sin este paso, el
+  // monto equivocado de una importación vieja no se podría arreglar nunca.
+  const yaEnLaApp=[{id:1, tipo:"Inversion", ticker:"AL30", fecha:"2026-05-19",
+                    importe:1952026, importeUSD:0, refBalanz:"5509308"}];
+  const leido=[{fecha:"2026-05-19", tipo:"Inversion", ticker:"AL30", importe:78342.10,
+                importeUSD:0, refBalanz:"5509308"}];
+  igual(nuevosDeBalanz(leido, yaEnLaApp).length, 0, "no se agrega de nuevo");
+  const corr=correccionesDeBalanz(leido, yaEnLaApp);
+  igual(corr.length, 1);
+  igual(corr[0].mov.id, 1);
+  igual(corr[0].nuevo.importe, 78342.10);
+});
+
+test("corregir cambia el monto y la moneda, y nada más", ()=>{
+  const mov={id:1, tipo:"Inversion", ticker:"BCMMA", tickerOrig:"AL30", cat:"Bonos",
+             subcat:"Bonos Venta", fecha:"2026-05-20", importe:2052026, importeUSD:0,
+             refBalanz:"5551445", nota:"la escribí yo"};
+  const leido=[{fecha:"2026-05-20", tipo:"Inversion", ticker:"AL30", cat:"Bonos",
+                subcat:"Bonos Venta", importe:0, importeUSD:54.21, moneda:"USD",
+                refBalanz:"5551445", nota:""}];
+  igual(aplicarCorreccionesBalanz(correccionesDeBalanz(leido, [mov])), 1);
+  igual(mov.importe, 0);
+  igual(mov.importeUSD, 54.21);
+  igual(mov.moneda, "USD");
+  igual(mov.ticker, "BCMMA", "unificar el ticker es una decisión tuya: corregir no la pisa");
+  igual(mov.tickerOrig, "AL30", "y tiene que poder seguir deshaciéndose");
+  igual(mov.nota, "la escribí yo");
+});
+
+test("volver a subir el PDF después de unificar tickers no duplica nada", ()=>{
+  // Unificar renombra el movimiento (BMMA pasa a llamarse BCMMA) y guarda el nombre viejo.
+  // Si la identidad mirara el nombre nuevo, el PDF —que sigue diciendo BMMA— no reconocería
+  // nada y volvería a agregar el historial entero.
+  const yaEnLaApp=[{id:1, tipo:"Inversion", ticker:"BCMMA", tickerOrig:"BMMA",
+                    fecha:"2026-05-14", importe:20000, importeUSD:0, refBalanz:"991"}];
+  const leido=[{fecha:"2026-05-14", tipo:"Inversion", ticker:"BMMA", importe:20000,
+                importeUSD:0, refBalanz:"991"}];
+  igual(nuevosDeBalanz(leido, yaEnLaApp).length, 0);
+  igual(correccionesDeBalanz(leido, yaEnLaApp), []);
+});
+
+test("sin número de operación, unificar tampoco rompe el reconocimiento", ()=>{
+  const yaEnLaApp=[{id:1, tipo:"Inversion", ticker:"BCMMA", tickerOrig:"BMMA",
+                    fecha:"2026-05-14", importe:20000, importeUSD:0}];
+  const leido=[{fecha:"2026-05-14", tipo:"Inversion", ticker:"BMMA", importe:20000, importeUSD:0}];
+  igual(nuevosDeBalanz(leido, yaEnLaApp).length, 0, "es el mismo movimiento con otro nombre");
+});
+
+test("lo que ya está bien no aparece para corregir", ()=>{
+  const yaEnLaApp=[{id:1, tipo:"Inversion", ticker:"AL30", fecha:"2026-05-19",
+                    importe:78342.10, importeUSD:0, refBalanz:"5509308"}];
+  const leido=[{fecha:"2026-05-19", tipo:"Inversion", ticker:"AL30", importe:78342.10,
+                importeUSD:0, refBalanz:"5509308"}];
+  igual(correccionesDeBalanz(leido, yaEnLaApp), []);
+});
+
+test("una operación que todavía no está cargada no es una corrección", ()=>{
+  const leido=[{fecha:"2026-05-19", tipo:"Inversion", ticker:"AL30", importe:78342.10,
+                importeUSD:0, refBalanz:"5509308"}];
+  igual(correccionesDeBalanz(leido, []), [], "esa se agrega, no se corrige");
+  igual(nuevosDeBalanz(leido, []).length, 1);
+});
+
 test("la fuente desplazada se decodifica", ()=>{
   // "Boleto" se guarda como "%ROHWR": cada glifo corrido 29 lugares.
   igual(decodificaBalanz("%ROHWR"), "Boleto");

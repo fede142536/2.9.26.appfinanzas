@@ -17,7 +17,13 @@
 //     "17.980,00" quedan pegados en un solo número imposible de partir.
 
 const BALANZ_SEP="\u0001";        // marca de columna que se mete donde el kerning salta
-const BALANZ_KERN=-400;           // a partir de acá, el salto es un cambio de columna
+// Medido sobre los resúmenes reales de mayo y agosto: los 184 saltos que caen DENTRO de una
+// palabra son ajustes ópticos de la fuente y ninguno llega a 1; los saltos entre columnas
+// arrancan en 200. No hay nada en el medio, así que el corte va en la banda vacía, lejos de
+// los dos lados. Con -400 se perdían columnas reales: en mayo, el monto y la comisión de un
+// boleto venían separados por 389,72 y quedaban pegados ("55.025,00275,13"), lo que corría
+// todas las columnas y hacía que el importe se leyera de la columna de la fecha.
+const BALANZ_KERN=-50;
 const BALANZ_ACENTOS={0xB5:"ó",0xB1:"í",0xB3:"ñ",0xB7:"ú",0xB2:"á",0xB4:"é",0xBC:"ü"};
 
 // ── 1. Sacar los streams del PDF y descomprimirlos ──
@@ -201,23 +207,41 @@ function operacionesDeBalanz(lineas){
 // Boleto: el importe es el NETO, que ya trae comisiones y derechos descontados. Es el número
 // que salió o entró de verdad, y es el que la app necesita.
 // FCI: el resumen no da el importe en pesos, da cuotapartes y precio. El importe es su producto.
+// El neto es la última columna con número antes de las fechas, no una posición fija: un
+// boleto de CEDEARs trae una columna de aranceles que un bono no tiene, así que cols[9] era
+// el neto en agosto (todo CEDEARs) y la FECHA en mayo (donde hay bonos). De ahí salían los
+// "$2.052.026" de AL30, que no eran plata: eran el 20/5/2026 sin las barras.
+const RE_FECHA_COL=/^\d{1,2}\/\d{1,2}\/\d{4}$/;
+function netoDeBoleto(cols){
+  let fin=cols.length;
+  while(fin>1 && RE_FECHA_COL.test(cols[fin-1])) fin--;   // saltear concertación y liquidación
+  return fin>1 ? cols[fin-1] : "";
+}
+
 function movimientoDeBalanz(op){
   const cols=op.cols, cab=cols[0]||"";
   const fechas=cols.filter(c=>/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(c));
   const fecha=fechaBalanz(fechas[0]);
   if(!fecha) return null;
 
-  const boleto=/^Boleto\/(\d+)\/(COMPRA|VENTA)\/\d+\/([A-Z0-9]+)\//.exec(cab.replace(/\s+/g,""));
+  const boleto=/^Boleto\/(\d+)\/(COMPRA|VENTA)\/\d+\/([A-Z0-9]+)\/(\S*)/.exec(cab.replace(/\s+/g,""));
   if(boleto){
     const venta=boleto[2]==="VENTA";
     const ticker=boleto[3];
-    const neto=Math.abs(numeroBalanz(cols[9]!==undefined ? cols[9] : cols[cols.length-3]));
+    const neto=Math.abs(numeroBalanz(netoDeBoleto(cols)));
     if(!neto) return null;
+    // La moneda viene al final del encabezado del boleto: "…/AL30/$" o "…/AL30/usd". Es la
+    // pata en dólares del MEP, y guardarla en pesos la contaba como si fueran $54 en vez de
+    // USD 54.
+    const enUSD=/^u\$?s?d?$/i.test(boleto[4]||"");
+    const monto=Math.round(neto*100)/100;
     return {
       fecha, tipo:"Inversion", ticker,
       cat: op.seccion.cat==="FCI" ? "Acciones" : op.seccion.cat,
       subcat: `${op.seccion.cat==="FCI" ? "Acciones" : op.seccion.cat} ${venta?"Venta":"Compra"}`,
-      importe: Math.round(neto*100)/100, importeUSD:0,
+      importe: enUSD ? 0 : monto,
+      importeUSD: enUSD ? monto : 0,
+      moneda: enUSD ? "USD" : undefined,
       cuenta:"Balanz", nota:"", refBalanz:boleto[1]
     };
   }
@@ -253,14 +277,20 @@ async function movimientosDeBalanz(bytes){
 // ═══════════════════════════════════════════
 // El mismo resumen se puede subir dos veces, y muchas operaciones ya están cargadas a mano.
 // Se descarta lo que ya está: mismo día, mismo ticker y mismo importe al centavo.
+// El ticker con el que Balanz nombra la operación. Unificar tickers renombra el movimiento y
+// guarda el nombre viejo en tickerOrig; si la identidad mirara el nombre nuevo, volver a subir
+// el mismo PDF después de unificar no reconocería nada y duplicaría el historial entero.
+function tickerDeOrigen(m){
+  return (m && (m.tickerOrig || m.ticker)) || "";
+}
 function claveDeMov(m){
-  return `${String(m.fecha).slice(0,10)}|${m.ticker||""}|${Math.round((m.importe||0)*100)}`;
+  return `${String(m.fecha).slice(0,10)}|${tickerDeOrigen(m)}|${Math.round((m.importe||0)*100)}`;
 }
 // Balanz numera cada operación (el boleto, o la liquidación del FCI) y ese número es único.
 // Alcanza para reconocer la MISMA operación leída dos veces —el resumen mensual y el resumen
 // de cuenta se pisan— sin confundirla con dos operaciones distintas que casualmente coinciden.
 function refDeMov(m){
-  return m && m.refBalanz ? `${m.refBalanz}|${m.ticker||""}` : "";
+  return m && m.refBalanz ? `${m.refBalanz}|${tickerDeOrigen(m)}` : "";
 }
 // Qué falta cargar. Hay dos formas de "ya está" y no son la misma:
 //
@@ -302,12 +332,45 @@ function nuevosDeBalanz(candidatos, lista){
   return out;
 }
 
+// Qué está cargado con otro monto. Sin esto no hay forma de arreglar una importación vieja:
+// el número de operación coincide, así que la operación se saltea como "ya está" y el monto
+// equivocado queda para siempre. Se comparan solo los montos y la moneda —no el ticker, que
+// puede haberse unificado a mano, ni la categoría— y siempre se muestra el antes y el después.
+function correccionesDeBalanz(candidatos, lista){
+  const porRef={};
+  (lista||[]).filter(m=>m&&m.tipo==="Inversion"&&m.refBalanz).forEach(m=>{ porRef[refDeMov(m)]=m; });
+  const out=[];
+  const vistas=new Set();
+  (candidatos||[]).forEach(c=>{
+    const r=refDeMov(c);
+    if(!r || vistas.has(r)) return;
+    const viejo=porRef[r];
+    if(!viejo) return;
+    const mismoArs = Math.round((viejo.importe||0)*100)===Math.round((c.importe||0)*100);
+    const mismoUsd = Math.round((viejo.importeUSD||0)*100)===Math.round((c.importeUSD||0)*100);
+    if(mismoArs && mismoUsd) return;
+    vistas.add(r);
+    out.push({mov:viejo, nuevo:c});
+  });
+  return out;
+}
+function aplicarCorreccionesBalanz(correcciones){
+  (correcciones||[]).forEach(({mov, nuevo})=>{
+    mov.importe=nuevo.importe;
+    mov.importeUSD=nuevo.importeUSD;
+    if(nuevo.moneda) mov.moneda=nuevo.moneda; else delete mov.moneda;
+  });
+  if(correcciones && correcciones.length) save();
+  return (correcciones||[]).length;
+}
+
 // ═══════════════════════════════════════════
 // 7. LA PANTALLA
 // ═══════════════════════════════════════════
 // Nunca se importa de una: primero se muestra qué se encontró y qué se va a agregar, y el
 // usuario confirma. Un PDF mal leído no puede ensuciar los datos en silencio.
 let balanzPendientes=[];
+let balanzCorrecciones=[];
 
 // Varios PDF de una vez: recuperar el histórico son doce resúmenes, y de a uno es un trámite.
 // Un archivo que no se puede leer no cancela a los demás — se cuenta y se avisa al final.
@@ -335,6 +398,7 @@ async function handleBalanz(input){
     // y la lista de la vista previa tiene que leerse como una historia.
     encontrados.sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
     balanzPendientes=nuevosDeBalanz(encontrados, movs);
+    balanzCorrecciones=correccionesDeBalanz(encontrados, movs);
     renderPreviewBalanz(encontrados.length, archivos.length===1 ? archivos[0].name : `${archivos.length} archivos`, fallados);
   }finally{
     input.value="";
@@ -356,7 +420,8 @@ function renderPreviewBalanz(totalLeidos, nombre, fallados){
   const repetidos=totalLeidos-balanzPendientes.length;
   est.textContent=`${totalLeidos} ${totalLeidos===1?"operación leída":"operaciones leídas"} de ${nombre}.${avisoMalos}`;
   if(!balanzPendientes.length){
-    prev.innerHTML=`<div class="inset"><div class="txt-md">Ya estaban todas cargadas.</div>
+    prev.innerHTML=(balanzCorrecciones.length ? bloqueCorreccionesBalanz() : "")
+      + `<div class="inset"><div class="txt-md">Ya estaban todas cargadas.</div>
       <div class="txt-xs txt-muted" style="margin-top:4px">No hay nada nuevo que agregar.</div></div>`;
     return;
   }
@@ -379,7 +444,8 @@ function renderPreviewBalanz(totalLeidos, nombre, fallados){
   const detalleMeses = meses.length>1
     ? `<div class="txt-xs txt-muted" style="margin-top:6px">${meses.map(k=>`${escapeHtml(mesLbl(k))}: ${porMes[k]}`).join(" · ")}</div>`
     : "";
-  prev.innerHTML=`<div class="inset mb-10">
+  prev.innerHTML=(balanzCorrecciones.length ? bloqueCorreccionesBalanz() : "")
+    + `<div class="inset mb-10">
       <div class="txt-md txt-strong">${balanzPendientes.length} ${balanzPendientes.length===1?"operación nueva":"operaciones nuevas"}${meses.length>1?` en ${meses.length} meses`:""}</div>
       <div class="txt-xs txt-muted" style="margin-top:4px">${resumen}${repetidos?` · ${repetidos} ya ${repetidos===1?"estaba":"estaban"} cargada${repetidos===1?"":"s"}`:""}</div>
       ${detalleMeses}
@@ -390,10 +456,59 @@ function renderPreviewBalanz(totalLeidos, nombre, fallados){
           <div class="txt-md">${escapeHtml(m.ticker)} <span class="txt-xs txt-muted">${escapeHtml(m.subcat)}</span></div>
           <div class="txt-xs txt-muted">${escapeHtml(m.fecha)}</div>
         </div>
-        <div class="txt-md txt-strong" style="white-space:nowrap">${fmtS(m.importe)}</div>
+        <div class="txt-md txt-strong" style="white-space:nowrap">${montoLeidoBalanz(m)}</div>
       </div>`).join("")
     + (balanzPendientes.length>12 ? `<div class="txt-xs txt-muted" style="margin-top:6px">…y ${balanzPendientes.length-12} más.</div>` : "")
     + `<button class="btn-primary" style="width:100%;margin-top:12px" onclick="confirmarImportBalanz()">Agregar ${balanzPendientes.length} ${balanzPendientes.length===1?"operación":"operaciones"}</button>`;
+}
+
+// Corregir NO es importar: se muestra aparte, con el monto viejo al lado del nuevo, y se
+// confirma por separado. Pisar montos ya guardados sin que se vean es justo lo que no puede
+// pasar en silencio.
+// Una operación en dólares tiene importe 0 y el monto en importeUSD: mostrarla con fmtS()
+// la dejaba como "$0,00" en la vista previa, justo donde hay que poder controlarla.
+function montoLeidoBalanz(m){
+  return (m && (m.moneda==="USD" || (!m.importe && m.importeUSD)))
+    ? "USD "+(m.importeUSD||0).toFixed(2)
+    : fmtS((m&&m.importe)||0);
+}
+
+function bloqueCorreccionesBalanz(){
+  const filas=balanzCorrecciones.slice(0,8).map(({mov, nuevo})=>{
+    const antes=montoLeidoBalanz(mov), despues=montoLeidoBalanz(nuevo);
+    return `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div class="u-flex1 u-min0">
+        <div class="txt-md">${escapeHtml(mov.ticker||"")} <span class="txt-xs txt-muted">${escapeHtml(mov.subcat||"")}</span></div>
+        <div class="txt-xs txt-muted">${escapeHtml(String(mov.fecha||"").slice(0,10))}</div>
+      </div>
+      <div class="txt-xs" style="white-space:nowrap;text-align:right">
+        <span class="txt-muted" style="text-decoration:line-through">${antes}</span><br>
+        <span class="txt-md txt-strong">${despues}</span>
+      </div>
+    </div>`;
+  }).join("");
+  const n=balanzCorrecciones.length;
+  return `<div class="inset mb-10">
+      <div class="txt-md txt-strong" style="color:var(--warning)">${n} ${n===1?"operación ya cargada tiene":"operaciones ya cargadas tienen"} otro monto</div>
+      <div class="txt-xs txt-muted" style="margin-top:4px">Mismo número de operación de Balanz, distinto importe. Si las importaste con una versión vieja de la app, esto las deja como figuran en el resumen.</div>
+    </div>`
+    + filas
+    + (n>8 ? `<div class="txt-xs txt-muted" style="margin-top:6px">…y ${n-8} más.</div>` : "")
+    + `<button class="btn-sm" style="width:100%;margin:10px 0 14px" onclick="confirmarCorreccionBalanz()">Corregir ${n} ${n===1?"monto":"montos"}</button>`;
+}
+
+function confirmarCorreccionBalanz(){
+  const n=aplicarCorreccionesBalanz(balanzCorrecciones);
+  if(!n) return;
+  balanzCorrecciones=[];
+  showToast(`${n} ${n===1?"monto corregido":"montos corregidos"} ✓`);
+  const est=document.getElementById("balanz-status");
+  if(est) est.textContent=`Listo: ${n} ${n===1?"monto corregido":"montos corregidos"}.`;
+  const prev=document.getElementById("balanz-preview");
+  if(prev) prev.innerHTML="";
+  if(typeof renderMovs==="function") renderMovs();
+  if(typeof renderInv==="function") renderInv();
+  if(typeof renderDash==="function") renderDash();
 }
 
 function confirmarImportBalanz(){
