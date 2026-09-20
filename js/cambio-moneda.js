@@ -22,7 +22,6 @@
 const CAMBIO_CAT_DEFECTO = "Cambio de moneda";
 
 // ¿Este movimiento es una de las dos patas de un cambio?
-function esPataDeCambio(m){ return !!m && !!m.cambioId; }
 
 // Las dos patas de un cambio, dado el id que las liga.
 function patasDelCambio(cambioId, lista){

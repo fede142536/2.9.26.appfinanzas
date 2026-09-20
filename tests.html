@@ -1881,15 +1881,22 @@ test("una venta de dólares es la operación espejo", ()=>{
   igual(entra.moneda, "ARS"); igual(entra.tipo, "Ingreso"); igual(entra.importe, 40000);
 });
 
-// Esto es lo que arregla el problema de fondo: los pesos salen del balance en pesos Y los
-// dólares entran al flujo USD. Antes, cargándolo de cualquiera de las dos formas, faltaba
-// una mitad y la plata terminaba contada dos veces.
-test("los pesos salen del balance y los dólares entran, en la misma operación", ()=>{
+// Comprar dólares no es gastar: la plata la seguís teniendo, en otra moneda. Antes los pesos
+// contaban como GASTO —el balance se leía como un balance EN PESOS— y era el único caso así:
+// guardar en el fondo, traspasar entre bolsillos y poner plata en una inversión ya salían de
+// Gastos y se mostraban en un chip aparte. Con los datos reales eran once meses con pesos
+// contados como gastados, diciembre 2025 solo $305.947.
+//
+// Lo que NO cambió: en las vistas por moneda cada pata sigue siendo real para su moneda. Los
+// dólares que entran por un cambio son dólares que entraron, y la card de USD los cuenta.
+test("un cambio de moneda no es gasto ni ingreso, pero los dólares sí entran", ()=>{
   const patas=crearCambio({fecha:"2026-09-03", montoARS:39467.53, montoUSD:27,
                            sentido:"compra", idBase:1000});
   const t=totalesDePlata(patas);
-  igual(t.gastos, 39467.53, "los pesos tienen que salir de la mano");
-  igual(t.balance, -39467.53, "y el balance en pesos baja por ese monto");
+  igual(t.gastos, 0, "los pesos no se gastaron: están en dólares");
+  igual(t.ingresos, 0, "y los dólares que entran no son un ingreso nuevo");
+  igual(t.balance, 0, "el patrimonio no se movió");
+  igual(t.cambios, 39467.53, "pero se muestran: es plata que se movió");
   igual(t.depositos, 0, "un cambio no es un depósito al fondo de ahorro");
   const usd=conTarjetas([], ()=>resumenUSDdelAnio(patas, 2026));
   igual(usd.ing, 27, "y los dólares tienen que ENTRAR — esto es lo que antes no existía");
@@ -4837,6 +4844,85 @@ test("la ficha avisa si el valor quedó viejo", ()=>{
   const r=conValuaciones({SPY:{ars:140000, usd:0, fecha:viejo}}, l, ()=>fichaDe("SPY", l));
   cierto(r.includes("hace 45 días"), "no dice de cuándo es el valor: " + r);
   cierto(r.includes("--warning"), "no avisa que quedó viejo: " + r);
+});
+
+// ═══════════════════════════════════════════
+// UN CAMBIO DE MONEDA NO ES GASTO
+// ═══════════════════════════════════════════
+grupo("Cambio de moneda en el balance");
+
+// Comprar dólares es plata cambiando de bolsillo, igual que un traspaso o un depósito al fondo.
+// Era el único de los tres que seguía contando como gasto.
+const CAMBIO_MES=[
+  {id:1, tipo:"Ingreso", cat:"Sueldo", importe:2000000, fecha:"2026-08-04", moneda:"ARS"},
+  {id:2, tipo:"Gasto", cat:"Supermercado", importe:500000, fecha:"2026-08-06", moneda:"ARS"},
+  {id:3, tipo:"Gasto", cat:"Dólares", importe:300000, fecha:"2026-08-10", moneda:"ARS",
+   cambioId:3, cambioPata:"sale"},
+  {id:4, tipo:"Ingreso", cat:"Dólares", importe:0, importeOrig:200, fecha:"2026-08-10",
+   moneda:"USD", cambioId:3, cambioPata:"entra"}
+];
+
+test("los pesos que se van a dólares no son un gasto", ()=>{
+  const t=totalesDePlata(CAMBIO_MES);
+  igual(t.gastos, 500000, "solo el supermercado");
+  igual(t.cambios, 300000, "los pesos del cambio van aparte");
+});
+
+test("los dólares que entran por un cambio no son un ingreso nuevo", ()=>{
+  igual(totalesDePlata(CAMBIO_MES).ingresos, 2000000, "solo el sueldo");
+});
+
+// El caso al revés, que es el que mueve pesos de verdad: vender dólares trae pesos a la mano.
+// Tampoco es un ingreso — es la misma plata, ahora en pesos.
+const VENTA_USD=[
+  {id:1, tipo:"Ingreso", cat:"Sueldo", importe:2000000, fecha:"2026-08-04", moneda:"ARS"},
+  {id:5, tipo:"Gasto", cat:"Dólares", importe:200, importeOrig:200, fecha:"2026-08-12",
+   moneda:"USD", cambioId:5, cambioPata:"sale"},
+  {id:6, tipo:"Ingreso", cat:"Dólares", importe:310000, fecha:"2026-08-12",
+   moneda:"ARS", cambioId:5, cambioPata:"entra"}
+];
+
+test("vender dólares no infla los ingresos en pesos", ()=>{
+  const t=totalesDePlata(VENTA_USD);
+  igual(t.ingresos, 2000000, "los 310.000 que entraron son tuyos desde antes, en dólares");
+  igual(t.balance, 2000000, "y el patrimonio no crece por cambiar de moneda");
+});
+
+test("el patrimonio no se mueve por cambiar de moneda", ()=>{
+  igual(totalesDePlata(CAMBIO_MES).balance, 1500000, "2.000.000 − 500.000, el cambio es neutro");
+});
+
+test("esConsumo y esIngreso son los que lo saben", ()=>{
+  // La regla vive en un solo lugar: si se arregla solo en los chips, el dashboard sigue mal.
+  const sale=CAMBIO_MES[2], entra=CAMBIO_MES[3];
+  cierto(!esConsumo(sale), "la pata en pesos no es consumo");
+  cierto(!esIngreso(entra), "la pata en dólares no es ingreso");
+  cierto(esGasto(sale), "pero sigue siendo tipo Gasto: se ve en la lista");
+});
+
+test("los chips de Movimientos no cuentan el cambio como gasto", async ()=>{
+  const txt=await chipsDeMovsAnimados(CAMBIO_MES, "Todos", "", "2026-08");
+  cierto(txt.includes("1.500.000"), "el balance tiene que ser 2.000.000 − 500.000: " + txt);
+  cierto(!txt.includes("800.000"), "el cambio volvió a contarse como gasto: " + txt);
+});
+
+test("pero la plata del cambio se sigue viendo", ()=>{
+  const dom=document.createElement("div");
+  document.body.appendChild(dom);
+  try{
+    dom.innerHTML=chipsDeMovsHTML(CAMBIO_MES, "Gasto", "", "2026-08");
+    cierto(dom.innerText.includes("300.000"), "desapareció de la pantalla: " + dom.innerText);
+    cierto(/A d[óo]lares/i.test(dom.innerText), "no dice qué son esos 300.000: " + dom.innerText);
+  } finally { dom.remove(); }
+});
+
+test("el dashboard no suma ingresos por afuera del modelo", async ()=>{
+  // El mes a mes, el desglose por categoría y el balance por cuenta sumaban ingresos con
+  // m.tipo==="Ingreso" a mano. Arreglarlo solo en Movimientos dejaba las dos pantallas
+  // discrepando: la misma compra de dólares, gasto en una y no en la otra.
+  const js=await (await fetch("js/dashboard.js")).text();
+  const sumas=js.split("\n").filter(l=>/tipo==="Ingreso"/.test(l) && /\+=/.test(l));
+  igual(sumas, [], "quedó una suma de ingresos que no pasa por esIngreso():\n" + sumas.join("\n"));
 });
 
 grupo("Aislamiento de los tests");
