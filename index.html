@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v136">
+<meta name="enola-version" content="enola-v137">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -816,7 +816,7 @@
   </div>
   <div class="card">
     <div class="card-title">🏦 Importar resumen de Balanz</div>
-    <p class="txt-sm txt-muted mb-10">El PDF del <strong>Resumen mensual Comitente</strong>. Lee las compras, ventas, suscripciones y rescates del mes y agrega solo lo que falta — nunca duplica ni pisa nada.</p>
+    <p class="txt-sm txt-muted mb-10">El PDF del <strong>Resumen mensual Comitente</strong>. Lee las compras, ventas, suscripciones y rescates del mes. Lo que ya está cargado no se vuelve a agregar, y lo que se parece a algo que cargaste a mano te lo muestra para que decidas vos.</p>
     <label style="display:block;border:2px dashed var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;cursor:pointer">
       <input type="file" id="balanz-file" accept=".pdf" multiple style="display:none" onchange="handleBalanz(this)">
       <div style="font-size:22px">🏦</div>
