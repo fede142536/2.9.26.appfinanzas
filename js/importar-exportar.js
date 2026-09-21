@@ -143,35 +143,48 @@ async function detectarMovsAtipicos(){
 // tarjetas-inversiones.js). Solo ofrece borrar las EXACTAS: mismo ticker, fecha, categoría,
 // subcategoría e importe. Las que solo se PARECEN se muestran aparte, como aviso, para que el
 // usuario las revise a mano — no se borran solas porque pueden ser dos operaciones reales.
-async function detectarDuplicadosInversion(){
-  const grupos=duplicadosExactosInversion(movs);
-  const similares=similaresInversion(movs);
-  const lineaInv=m=>{
-    const fecha=(m.fecha||"").split("-").reverse().join("/").slice(0,10);
+// Cubre los tres tipos que viven en `movs` (Gasto, Ingreso, Inversion — Tarjeta es otra
+// lista y tiene su propio editor). Un doble toque en "Guardar" crea el mismo duplicado
+// exacto sea cual sea el tipo, así que hacía falta lo mismo mirar todo, no solo Inversiones.
+function lineaMov(m){
+  const fecha=(m.fecha||"").split("-").reverse().join("/").slice(0,10);
+  if(m.tipo==="Inversion"){
     const monto=(m.importeUSD||0)>0 ? `USD ${m.importeUSD.toFixed(2)}` : fmtS(m.importe||0);
     return `${m.ticker||"?"} · ${m.subcat||m.cat||""} · ${monto} · ${fecha}`;
-  };
+  }
+  const monto=m.moneda==="USD" ? `USD ${(m.importeOrig||0).toFixed(2)}` : fmtS(m.importe||0);
+  const desc=`${m.cat||""}${m.subcat?" / "+m.subcat:""}`;
+  return `${desc} · ${monto} · ${fecha}${m.nota?" · "+m.nota.slice(0,20):""}`;
+}
+
+async function detectarDuplicados(){
+  const grupos=[...duplicadosExactosInversion(movs), ...duplicadosExactosGastoIngreso(movs)];
+  // Los "parecidos" (no exactos) solo tienen sentido para Inversiones: ahí el ticker acota
+  // tanto el universo que un parecido vale la pena mirarlo. En Gasto/Ingreso, dos compras de
+  // monto similar en la misma categoría son moneda corriente (dos changos de supermercado,
+  // por ejemplo) y avisar de esos pares sería puro ruido — por eso no hay equivalente acá.
+  const similares=similaresInversion(movs);
   if(!grupos.length){
     const avisoSim = similares.length
-      ? `\n\nOjo: encontré ${similares.length} ${similares.length===1?"par parecido":"pares parecidos"} (mismo ticker, fecha cercana, monto casi igual) que no cuento como duplicados porque pueden ser dos operaciones reales. Convendría que los revises vos:\n\n`
-        + similares.slice(0,8).map(([a,b])=>`• ${lineaInv(a)}\n  ${lineaInv(b)}`).join("\n")
+      ? `\n\nOjo: encontré ${similares.length} ${similares.length===1?"par parecido":"pares parecidos"} en Inversiones (mismo ticker, fecha cercana, monto casi igual) que no cuento como duplicados porque pueden ser dos operaciones reales. Convendría que los revises vos:\n\n`
+        + similares.slice(0,8).map(([a,b])=>`• ${lineaMov(a)}\n  ${lineaMov(b)}`).join("\n")
         + (similares.length>8?`\n\n...y ${similares.length-8} pares más`:"")
       : "";
-    await mostrarAlerta(`No encontré duplicados exactos en Inversiones.${avisoSim}`);
+    await mostrarAlerta(`No encontré duplicados exactos.${avisoSim}`);
     return;
   }
   const aBorrar=grupos.flatMap(g=>g.slice(1));   // se queda el más viejo de cada grupo
-  const lista = aBorrar.slice(0,15).map((m,i)=>`${i+1}. ${lineaInv(m)}`).join("\n");
+  const lista = aBorrar.slice(0,15).map((m,i)=>`${i+1}. ${lineaMov(m)}`).join("\n");
   const masTexto = aBorrar.length>15?`\n\n...y ${aBorrar.length-15} más`:"";
   const avisoSim = similares.length
-    ? `\n\nAdemás hay ${similares.length} ${similares.length===1?"par parecido":"pares parecidos"} que no cuento acá porque no son exactamente iguales — convendría revisarlos vos.`
+    ? `\n\nAdemás hay ${similares.length} ${similares.length===1?"par parecido":"pares parecidos"} en Inversiones que no cuento acá porque no son exactamente iguales — convendría revisarlos vos.`
     : "";
   const confirma = await mostrarConfirm(
-    `Encontré ${grupos.length} ${grupos.length===1?"operación repetida":"operaciones repetidas"} (mismo ticker, fecha, categoría y monto exacto). Se conserva la más vieja de cada una y se ${aBorrar.length===1?"borra esta copia":"borran estas "+aBorrar.length+" copias"}:\n\n${lista}${masTexto}${avisoSim}\n\n¿Querés borrar${aBorrar.length===1?" la copia":" las copias"}?`,
-    {titulo:"Duplicados en Inversiones", textoOk:"Borrar copias", peligroso:true}
+    `Encontré ${grupos.length} ${grupos.length===1?"operación repetida":"operaciones repetidas"} (mismos datos, calcada). Se conserva la más vieja de cada una y se ${aBorrar.length===1?"borra esta copia":"borran estas "+aBorrar.length+" copias"}:\n\n${lista}${masTexto}${avisoSim}\n\n¿Querés borrar${aBorrar.length===1?" la copia":" las copias"}?`,
+    {titulo:"Duplicados en Movimientos", textoOk:"Borrar copias", peligroso:true}
   );
   if(!confirma) return;
-  if(!await mostrarConfirm(`⚠️ Vas a eliminar ${aBorrar.length} movimientos de inversión. Esta acción no se puede deshacer. ¿Confirmás?`, {textoOk:"Sí, borrar", peligroso:true})) return;
+  if(!await mostrarConfirm(`⚠️ Vas a eliminar ${aBorrar.length} movimientos. Esta acción no se puede deshacer. ¿Confirmás?`, {textoOk:"Sí, borrar", peligroso:true})) return;
   const ids=new Set(aBorrar.map(m=>m.id));
   movs=movs.filter(m=>!ids.has(m.id));
   save();

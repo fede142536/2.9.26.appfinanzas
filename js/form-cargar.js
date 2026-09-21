@@ -488,7 +488,27 @@ function importeParaceAbsurdo(importe, tipoMov, moneda){
   return importe > mediana*30 && importe > mediana+1000;
 }
 
+// Sin este freno, dos toques rápidos sobre "Guardar" —común en un botón que tarda un
+// instante en responder, o simplemente por costumbre— crean dos movimientos IDÉNTICOS. Es
+// probablemente el origen real de los duplicados que aparecen en Inversiones: no hace falta
+// ni un PDF, alcanza con un doble toque. `guardando` es la guarda de fondo (funciona aunque
+// algo dispare guardar() sin pasar por el botón); deshabilitar #btn-guardar es además la
+// señal visual de que ya se está procesando.
+let guardando=false;
 async function guardar(){
+  if(guardando) return;
+  guardando=true;
+  const btn=document.getElementById("btn-guardar");
+  if(btn) btn.disabled=true;
+  try{
+    await guardarSinFreno();
+  } finally {
+    guardando=false;
+    if(btn) btn.disabled=false;
+  }
+}
+
+async function guardarSinFreno(){
   if(tipo==="Cambio"){ await guardarCambio(); return; }
   if(tipo==="Tarjeta"){
     const desc=document.getElementById("tc-desc").value.trim();

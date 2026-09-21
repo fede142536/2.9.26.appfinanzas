@@ -397,6 +397,39 @@ function similaresInversion(lista){
   }
   return out;
 }
+
+// ═══════════════════════════════════════════
+// DUPLICADOS EXACTOS: GASTOS E INGRESOS
+// ═══════════════════════════════════════════
+// Mismo criterio que arriba, aplicado al resto de los movimientos: un doble toque en
+// "Guardar" —el freno de guardar() en form-cargar.js no existía hasta que se detectaron estos
+// duplicados en Inversiones— crea el mismo duplicado exacto sea cual sea el tipo. La clave es
+// exactamente lo que arma guardar() a partir del formulario (tipo, fecha, categoría,
+// subcategoría, cuenta, moneda, importe en las dos monedas y la nota): dos toques sobre el
+// mismo clic leen el mismo formulario y arman la clave idéntica.
+//
+// A propósito NO hay una versión "similares" para Gasto/Ingreso como la de Inversiones: dos
+// compras de un monto parecido en la misma categoría y en días cercanos son moneda corriente
+// en la vida real (dos changos de supermercado, por ejemplo), y avisar de esos pares sería
+// puro ruido. Con Inversiones alcanzaba con el ticker para que la sugerencia significara algo;
+// acá no hay un dato equivalente que reduzca tanto el universo.
+function claveGastoIngresoExacta(m){
+  return ["mov", m.tipo, String(m.fecha||"").slice(0,10), m.cat||"", m.subcat||"",
+          m.cuenta||"", m.moneda||"", Math.round((m.importe||0)*100),
+          Math.round((m.importeOrig||0)*100), (m.nota||"").trim()].join("|");
+}
+
+function duplicadosExactosGastoIngreso(lista){
+  const porClave={};
+  (lista||[]).filter(m=>m && (m.tipo==="Gasto"||m.tipo==="Ingreso")).forEach(m=>{
+    const k=claveGastoIngresoExacta(m);
+    (porClave[k]=porClave[k]||[]).push(m);
+  });
+  return Object.values(porClave)
+    .filter(g=>g.length>1)
+    .map(g=>g.slice().sort((a,b)=>(a.id||0)-(b.id||0)));
+}
+
 // Signo desde la perspectiva del PORTFOLIO (qué tan invertido estás).
 // Suscripción=+1 (más portfolio), rescate=-1 (menos portfolio).
 function invSigno(m){
