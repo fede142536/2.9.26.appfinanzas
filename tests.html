@@ -4576,11 +4576,78 @@ test("connectedCallback conecta el badge de pago/impago con toggleFrecPagado", a
   // (ver "la fila entera lleva el balde..." más arriba), así que se verifica en el código
   // fuente, mismo criterio que esa prueba.
   const js=await (await fetch("js/movimientos.js")).text();
-  const i=js.indexOf("connectedCallback(){");
-  cierto(i>=0, "no se encontró connectedCallback");
-  const cuerpo=js.slice(i, js.indexOf("_attachSwipe()", i));
-  cierto(cuerpo.includes('querySelector(".js-toggle-pago")'), "no busca el badge de pago/impago: "+cuerpo);
-  cierto(cuerpo.includes("toggleFrecPagado(m.id"), "no llama a toggleFrecPagado con el id del movimiento: "+cuerpo);
+  const iCB=js.indexOf("connectedCallback(){");
+  cierto(iCB>=0, "no se encontró connectedCallback");
+  const cuerpoCB=js.slice(iCB, js.indexOf("_attachSwipe()", iCB));
+  cierto(cuerpoCB.includes("_conectarBadgePago()"), "connectedCallback dejó de conectar el badge de pago/impago: "+cuerpoCB);
+  const iBadge=js.indexOf("_conectarBadgePago(){");
+  cierto(iBadge>=0, "no se encontró _conectarBadgePago");
+  const cuerpoBadge=js.slice(iBadge, iBadge+300);
+  cierto(cuerpoBadge.includes('querySelector(".js-toggle-pago")'), "no busca el badge de pago/impago: "+cuerpoBadge);
+  cierto(cuerpoBadge.includes("toggleFrecPagado(this._m.id"), "no llama a toggleFrecPagado con el id del movimiento: "+cuerpoBadge);
+});
+
+// Bug reportado: en un mes viejo con muchos movimientos (lista cargada por lotes, ver "LAZY
+// LOADING"), tocar el badge de pago/impago llamaba a renderMovs(), que reconstruye la lista
+// desde el primer lote y deja al usuario "colgado" arriba de un centinela nuevo que no vuelve
+// a activarse — sin poder seguir cargando el resto del mes. toggleFrecPagado ya no debe llamar
+// a renderMovs(): tiene que actualizar la fila puntual en el DOM.
+test("toggleFrecPagado no vuelve a renderizar toda la lista (rompía el scroll por lotes)", async ()=>{
+  const js=await (await fetch("js/movimientos.js")).text();
+  const i=js.indexOf("function toggleFrecPagado(");
+  cierto(i>=0, "no se encontró toggleFrecPagado");
+  // Hasta el cierre de LA FUNCIÓN, no hasta la próxima "function": el comentario de
+  // actualizarFilaFrecPagado (que sigue después) menciona "renderMovs()" al explicar el bug,
+  // y ese texto quedaría adentro del recorte si se cortara ahí, dando un falso positivo.
+  const cuerpo=js.slice(i, js.indexOf("\n}", i)+2);
+  cierto(!cuerpo.includes("renderMovs()"), "toggleFrecPagado no puede llamar a renderMovs(): rompe el scroll cargado por lotes: "+cuerpo);
+  cierto(cuerpo.includes("actualizarFilaFrecPagado("), "tiene que actualizar la fila en el lugar: "+cuerpo);
+});
+
+test("actualizarFilaFrecPagado repinta solo la fila del gasto frecuente que se tocó", ()=>{
+  // document.createElement("tx-item") arma la instancia real de la clase al toque (a diferencia
+  // de insertar el HTML por innerHTML, que en este harness no es confiable para disparar el
+  // upgrade — ver "la fila entera lleva el balde..." más arriba); y conectarla con appendChild
+  // SÍ dispara connectedCallback de forma síncrona y confiable, así que acá no hace falta
+  // esquivarlo con código fuente.
+  // fila3 es el caso que de verdad ejercita el filtro por mes: MISMO id que fila1 (701, el
+  // mismo gasto frecuente base) pero en OTRO mes — se ve así, por ejemplo, filtrando por un
+  // rango de fechas que abarca varios meses. Sin el chequeo del mes, actualizar el mes de
+  // septiembre pisaría también agosto, que sigue impago.
+  const key1="701|mov|2026-09-05", key2="702|mov|2026-09-10", key3="701|mov|2026-08-05";
+  txItemDataCache.set(key1, {id:701, tipo:"Gasto", cat:"Alquiler", frecuente:true, pagado:false, importe:100000, fecha:"2026-09-05"});
+  txItemDataCache.set(key2, {id:702, tipo:"Gasto", cat:"Gimnasio", frecuente:true, pagado:false, importe:20000, fecha:"2026-09-10"});
+  txItemDataCache.set(key3, {id:701, tipo:"Gasto", cat:"Alquiler", frecuente:true, pagado:false, importe:100000, fecha:"2026-08-05"});
+  const fila1=document.createElement("tx-item"); fila1.dataset.key=key1;
+  const fila2=document.createElement("tx-item"); fila2.dataset.key=key2;
+  const fila3=document.createElement("tx-item"); fila3.dataset.key=key3;
+  document.body.appendChild(fila1);
+  document.body.appendChild(fila2);
+  document.body.appendChild(fila3);
+  try{
+    cierto(fila1._m, "connectedCallback no corrió al conectar la fila: no se puede probar nada más");
+    actualizarFilaFrecPagado(701, "2026-09", true);
+    cierto(fila1.querySelector(".tx-item-content").innerHTML.includes("✓ Pagado"),
+      "la fila tocada tiene que pasar a Pagado: "+fila1.innerHTML);
+    cierto(fila2.querySelector(".tx-item-content").innerHTML.includes("Marcar pagado"),
+      "la otra fila (mismo mes, otro id) no tiene que cambiar: "+fila2.innerHTML);
+    cierto(fila3.querySelector(".tx-item-content").innerHTML.includes("Marcar pagado"),
+      "el mismo gasto en OTRO mes no tiene que cambiar: "+fila3.innerHTML);
+    igual(fila1._m.pagado, true, "el dato interno de la fila tocada tiene que quedar sincronizado");
+    // El innerHTML nuevo trae un <span> de badge nuevo, sin el listener de la vez anterior: si
+    // actualizarFilaFrecPagado no lo reconecta, un segundo toque real del usuario no hace nada.
+    const prevMovs=movs;
+    movs=[{id:701, tipo:"Gasto", frecuente:true, cat:"Alquiler", importe:100000, fecha:"2026-09-05",
+           pagos:{"2026-09":true}}]; // refleja el "ya pagado" que dejó el toque anterior
+    try{
+      fila1.querySelector(".js-toggle-pago").click();
+      cierto(fila1.querySelector(".tx-item-content").innerHTML.includes("Marcar pagado"),
+        "el segundo toque (sobre el badge repintado) tiene que volver a marcarlo impago: "+fila1.innerHTML);
+    } finally { movs=prevMovs; }
+  } finally {
+    fila1.remove(); fila2.remove(); fila3.remove();
+    txItemDataCache.delete(key1); txItemDataCache.delete(key2); txItemDataCache.delete(key3);
+  }
 });
 
 grupo("Aislamiento de los tests");
