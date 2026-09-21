@@ -395,14 +395,18 @@ function construirCuerpoTxItem(m){
       else if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
       else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
       // El badge de un gasto frecuente ahora también es el botón para marcarlo pago/impago
-      // mes a mes (pedido del usuario): verde y tocable si ya se pagó, rojo si no. El color
-      // reemplaza al warning neutro de antes porque la app ya usa success/danger para eso en
-      // todos lados (el chk-custom de "Es un ahorro", los montos +/- de la fila, etc.).
+      // mes a mes (pedido del usuario, solo como ayuda memoria: no cambia ningún cálculo).
+      // El texto en estado impago no dice "Impago" solo, dice "Marcar pagado": la primera
+      // versión (un badge rojo que solo INFORMABA el estado) generaba el mismo problema que
+      // el filtro de fecha del mes-label — el toque para cambiarlo ya funcionaba, pero nada
+      // invitaba a usarlo, así que el usuario lo veía en rojo después de pagar y no sabía que
+      // podía tocarlo. Una vez pagado sí alcanza con informar ("✓ Pagado"), porque ahí no hace
+      // falta invitar a ninguna acción.
       else if(m.frecuente){
         const ym=String(m.fecha||"").slice(0,7);
         badge = m.pagado
-          ? ` <span class="badge badge-success js-toggle-pago" role="button" tabindex="0" aria-label="Pagado. Tocá para marcarlo impago" data-ym="${ym}">🔁 Pagado</span>`
-          : ` <span class="badge badge-danger js-toggle-pago" role="button" tabindex="0" aria-label="Impago. Tocá para marcarlo pagado" data-ym="${ym}">🔁 Impago</span>`;
+          ? ` <span class="badge badge-success js-toggle-pago" role="button" tabindex="0" aria-label="Pagado. Tocá para deshacerlo" data-ym="${ym}">✓ Pagado</span>`
+          : ` <span class="badge badge-danger js-toggle-pago" role="button" tabindex="0" aria-label="Impago. Tocá para marcarlo pagado" data-ym="${ym}">🔁 Marcar pagado</span>`;
       }
       cat=`${escapeHtml(m.cat)}${badge}`;
       if(m.recuperable>0) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;

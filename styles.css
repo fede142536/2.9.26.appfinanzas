@@ -300,8 +300,9 @@ canvas{width:100%!important;max-width:100%}
 .badge-warning{background:var(--warning-light);color:var(--warning)}
 /* Único badge que además es un botón (el pago/impago de un gasto frecuente, ver
    construirCuerpoTxItem en movimientos.js): necesita su propio feedback de toque, que .badge
-   no tiene porque el resto son solo informativos. */
-.js-toggle-pago{cursor:pointer}
+   no tiene porque el resto son solo informativos. Un poco más grande que el resto de los
+   badges (9px/1px 6px) porque a este SÍ hay que poder tocarlo rápido y sin errar. */
+.js-toggle-pago{cursor:pointer;font-size:11px;padding:3px 9px;font-weight:600}
 .js-toggle-pago:active{transform:scale(.92)}
 
 /* Rótulo de sección en mayúsculas, dentro de una card ("DETALLE", "RANKING POR CATEGORÍA"). */
