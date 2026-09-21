@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v124">
+<meta name="enola-version" content="enola-v125">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -928,7 +928,7 @@
 <!-- FAB de acceso rápido a Cargar. DEBE quedar ANTES del bloque de código de abajo: el
      arranque llama showPage(), que lee este elemento — si estuviera después, todavía no
      existiría y showPage() se cortaría con un TypeError dejando la pantalla a medio pintar. -->
-<button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento">+</button>
+<button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento"></button>
 
 <script src="js/estado-categorias.js"></script>
 <script src="js/resultado-inversiones.js"></script>
