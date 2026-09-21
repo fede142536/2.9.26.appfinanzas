@@ -161,7 +161,11 @@ function aplicarFiltroFecha(){
   }
   filtroFecha={desde,hasta,label};
   closeFiltroFechaModal();
-  document.getElementById("mes-label").textContent=`📅 ${label}`;
+  // innerHTML (no textContent) para poder mostrar la "✕" como affordance visible de que
+  // se puede tocar para volver al mes actual — antes esto ya funcionaba con un tap (el
+  // onclick de #mes-label en index.html), pero sin ningún indicio visual el usuario no lo
+  // descubría solo y volvía a abrir el modal para reconfigurar el mes manualmente.
+  document.getElementById("mes-label").innerHTML=`📅 ${label} <span class="mes-label-x">✕</span>`;
   document.getElementById("btn-mes-prev").style.visibility="hidden";
   document.getElementById("btn-mes-next").style.visibility="hidden";
   renderMovs();
