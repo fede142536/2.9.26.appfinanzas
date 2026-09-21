@@ -3998,6 +3998,100 @@ test("JS solo toca display: el resto del estilo lo pone la clase", async ()=>{
 });
 
 
+grupo("Movimientos: fila diferenciada por tipo");
+
+// Antes cada movimiento era el mismo rectángulo blanco de borde gris: con 20-30 en el mes la
+// lista era una pared de tarjetas casi idénticas y había que leer cada una para saber de qué
+// tipo era. claseTipoDeMov() da el mismo balde de color que ya pintaba el círculo del ícono y
+// el monto (gasto/ingreso/inversion/tarjeta/save), ahora también en el borde izquierdo de la
+// fila entera — se extrajo a una función propia para que las tres partes no puedan desalinearse.
+test("claseTipoDeMov clasifica los cinco tipos", ()=>{
+  igual(claseTipoDeMov({tipo:"Gasto"}), "gasto");
+  igual(claseTipoDeMov({tipo:"Ingreso"}), "ingreso");
+  igual(claseTipoDeMov({tipo:"Inversion", cat:"CEDEARs", subcat:"CEDEARs Compra"}), "gasto",
+    "comprar es plata que sale del bolsillo");
+  igual(claseTipoDeMov({tipo:"Inversion", cat:"CEDEARs", subcat:"CEDEARs Venta"}), "ingreso",
+    "vender es plata que entra al bolsillo");
+  igual(claseTipoDeMov({tipo:"Gasto", esAhorro:true}), "save", "guardar en el fondo");
+  igual(claseTipoDeMov({tipo:"Gasto", usaAhorro:true}), "save", "pagar con el fondo");
+  igual(claseTipoDeMov({tipo:"Gasto", _isTc:true}), "tarjeta");
+});
+
+test("el ícono y el monto de la fila usan el mismo balde que claseTipoDeMov", ()=>{
+  // Antes eran dos if/else calcados a mano: coincidían de hecho, pero nada impedía que un
+  // cambio futuro tocara uno y no el otro. Ahora los dos llaman a la misma función.
+  const casos=[
+    {tipo:"Gasto", cat:"Supermercado", importe:1000, fecha:"2026-09-05"},
+    {tipo:"Ingreso", cat:"Sueldo", importe:1000, fecha:"2026-09-05"},
+    {tipo:"Inversion", cat:"CEDEARs", subcat:"CEDEARs Compra", ticker:"MCD", importe:1000, importeUSD:0, fecha:"2026-09-05"},
+    {tipo:"Inversion", cat:"CEDEARs", subcat:"CEDEARs Venta", ticker:"MCD", importe:1000, importeUSD:0, fecha:"2026-09-05"},
+    {tipo:"Gasto", cat:"Ahorro", importe:1000, esAhorro:true, fecha:"2026-09-05"},
+    {tipo:"Gasto", cat:"Vacaciones", importe:1000, usaAhorro:true, fecha:"2026-09-05"}
+  ];
+  casos.forEach(m=>{
+    const balde=claseTipoDeMov(m);
+    const html=construirCuerpoTxItem(m);
+    cierto(html.includes(`tx-icon ${balde}`), `${m.cat}: el ícono no usa el balde ${balde}: `+html.slice(0,120));
+    cierto(html.includes(`tx-amount ${balde}`), `${m.cat}: el monto no usa el balde ${balde}: `+html.slice(0,120));
+  });
+});
+
+test("la fila entera lleva el balde en su clase, no solo el ícono", async ()=>{
+  // <tx-item> arma su fila en connectedCallback, que el runner no puede disparar de forma
+  // confiable: se verifica en el código fuente, igual que otras pruebas sobre el Web
+  // Component (ver "no quedó ni el contenedor ni el render..." en el grupo de Tarjetas).
+  const js=await (await fetch("js/movimientos.js")).text();
+  cierto(js.includes('tx-item tx-item-content tx-tipo-${claseTipoDeMov(m)}'),
+    "la fila dejó de llevar su propio balde de color en la clase");
+});
+
+test("los cinco baldes tienen su color en el borde de la fila, sin inventar ninguno nuevo", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const mapa={gasto:"--danger", ingreso:"--success", inversion:"--invest", tarjeta:"--warning", save:"--save"};
+  Object.entries(mapa).forEach(([balde, variable])=>{
+    const i=css.indexOf(`.tx-tipo-${balde}{`);
+    cierto(i>=0, `falta .tx-tipo-${balde}`);
+    const regla=css.slice(i, css.indexOf("}", i)+1);
+    cierto(regla.includes(`border-left-color:var(${variable})`),
+      `.tx-tipo-${balde} tiene que usar la misma variable que .tx-icon.${balde}/.tx-amount.${balde}: `+regla);
+  });
+});
+
+test(".tx-item ya nace con el borde izquierdo, para que ponerle color no mueva nada", async ()=>{
+  // ".tx-item{" también matchea adentro de ".chip,.tx-item{transition:...}", así que se busca
+  // la regla completa (la que define background/border), no la primera ocurrencia del texto.
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf(".tx-item{background");
+  cierto(i>=0, "no se encontró la regla principal de .tx-item");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(/border-left:\s*3px solid/.test(regla), "sin un ancho de base, agregar el color correría el contenido: "+regla);
+});
+
+grupo("Separador de fecha con más presencia");
+
+// Antes era texto gris del mismo peso que un subtítulo (.tx-sub), y quedaba pegado arriba de
+// la pantalla en cada scroll sin leerse como un encabezado. Se le da la misma tipografía que
+// .card-title (mayúsculas, tracking, mismo tamaño y peso) y el mismo borde inferior que ya usa
+// .header para separar lo fijo de lo que se mueve debajo — nada inventado, todo reutilizado.
+test("el separador tiene la tipografía de un rótulo de sección, como .card-title", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf(".tx-date-sep{");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(/text-transform:\s*uppercase/.test(regla), "sin mayúsculas se sigue leyendo como un subtítulo más: "+regla);
+  cierto(/letter-spacing/.test(regla), "le falta el tracking de los rótulos de sección: "+regla);
+  cierto(/font-weight:\s*600/.test(regla), "el peso tiene que matchear .card-title (600): "+regla);
+});
+
+test("el separador conserva su comportamiento sticky y translúcido", async ()=>{
+  // El repaso visual pedía más presencia, no romper el mecanismo que ya andaba bien.
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf(".tx-date-sep{");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(/position:\s*sticky/.test(regla), "dejó de quedarse pegado arriba al scrollear");
+  cierto(/backdrop-filter:\s*blur/.test(regla), "perdió el efecto vidrio");
+  cierto(/border-bottom/.test(regla), "le falta el borde que lo separa de la fila de abajo, como en .header");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
