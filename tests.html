@@ -4279,6 +4279,39 @@ test("un duplicado exacto no aparece también como parecido", ()=>{
   igual(similaresInversion(l), [], "ya está en duplicados exactos, no tiene que repetirse acá");
 });
 
+grupo("Foto propia en el botón de cargar");
+
+// Pedido del usuario: reemplazar el "+" del botón flotante por una foto de su perro. El botón
+// sigue siendo el mismo elemento con el mismo onclick — solo cambia lo que se ve. Sin
+// alt/lazy-loading porque no es una <img> de contenido: es el fondo de un botón, y quien usa
+// lector de pantalla ya lo tiene descrito por aria-label.
+test("el botón de cargar quedó sin el signo +", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const i=html.indexOf('id="fab-cargar"');
+  cierto(i>=0, "no se encontró el botón de cargar");
+  const etiqueta=html.slice(i, html.indexOf("</button>", i)+"</button>".length);
+  cierto(!etiqueta.includes(">+<"), "todavía muestra el símbolo + en vez de la foto: "+etiqueta);
+  cierto(etiqueta.includes('aria-label="Cargar nuevo movimiento"'),
+    "sin el + visible, el aria-label es lo único que describe el botón para lectores de pantalla");
+});
+
+test("el fondo del botón es la foto, no el color de acento de siempre", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf("#fab-cargar{");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(regla.includes("fab-perro.jpg"), "no está usando la foto: " + regla);
+  cierto(!/background:\s*var\(--accent\)/.test(regla), "quedó el fondo de color de siempre");
+  cierto(/border-radius:\s*50%/.test(regla), "el botón tiene que seguir siendo redondo");
+});
+
+test("la foto queda cacheada para que ande sin conexión, como el resto de los íconos", async ()=>{
+  const sw=await (await fetch("sw.js")).text();
+  const i=sw.indexOf("const ASSETS");
+  const bloque=sw.slice(i, sw.indexOf("];", i));
+  cierto(bloque.includes("fab-perro.jpg"),
+    "si no está en ASSETS, el ícono desaparece la primera vez que se abre la app sin señal");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
