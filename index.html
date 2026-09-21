@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v122">
+<meta name="enola-version" content="enola-v123">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -626,7 +626,11 @@
   <div class="summary-row" id="dash-kpis"></div>
   <div style="height:4px"></div>
 
-  <div class="card">
+  <!-- Card entera con id propio: cuando no hay nada que destacar se oculta completa (título
+       incluido), igual que #dash-usd-card más abajo. Antes se quedaba visible con un renglón
+       "Nada para destacar" del mismo tamaño que las demás cards — la única que podía estar
+       vacía y ocupar el mismo lugar que una con contenido real. -->
+  <div class="card" id="dash-alertas-card" style="display:none">
     <div class="card-title">Para tener en cuenta</div>
     <div id="dash-alertas"></div>
   </div>

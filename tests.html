@@ -4092,6 +4092,106 @@ test("el separador conserva su comportamiento sticky y translúcido", async ()=>
   cierto(/border-bottom/.test(regla), "le falta el borde que lo separa de la fila de abajo, como en .header");
 });
 
+grupo("Dashboard: menos vacío");
+
+// Antes "Para tener en cuenta" quedaba visible con un renglón "Nada para destacar" del mismo
+// tamaño que las demás cards: la única que podía estar vacía y ocupar el mismo lugar que una
+// con contenido real. Ahora, sin alertas, la card entera se oculta (título incluido), igual
+// que ya hacía #dash-usd-card cuando no hay dólares en el año.
+function conAlertasEnDOM(fn){
+  const card=document.createElement("div"); card.id="dash-alertas-card";
+  const el=document.createElement("div"); el.id="dash-alertas";
+  card.appendChild(el); document.body.appendChild(card);
+  try{ return fn(card, el); } finally { card.remove(); }
+}
+
+test("sin nada que destacar, la card se oculta entera", ()=>{
+  conAlertasEnDOM((card, el)=>{
+    // Sin PIN ni movs con problemas, currentYMD() de hoy no debería disparar ninguna alerta
+    // sobre una lista vacía.
+    const prevMovs=movs, prevTcs=tcs;
+    movs=[]; tcs=[];
+    try{ renderAlertas(); }
+    finally{ movs=prevMovs; tcs=prevTcs; }
+    igual(card.style.display, "none", "la card tiene que desaparecer, no mostrar un renglón vacío");
+    igual(el.innerHTML, "", "y no dejar nada colgado adentro");
+  });
+});
+
+test("con algo para destacar, la card vuelve a mostrarse", ()=>{
+  conAlertasEnDOM((card, el)=>{
+    // Un movimiento con el importe roto es de los que arma alertasDelMomento() como
+    // "registro incompleto" (ver registrosIncompletos): siempre dispara, sin depender de la
+    // fecha de hoy ni del historial, así que sirve para probar el caso "sí hay algo".
+    const prevMovs=movs, prevTcs=tcs;
+    movs=[{id:1, tipo:"Gasto", cat:"Comida", importe:undefined, fecha:"2026-09-05", moneda:"ARS"}]; tcs=[];
+    try{ renderAlertas(); }
+    finally{ movs=prevMovs; tcs=prevTcs; }
+    igual(card.style.display, "block", "con alertas de verdad la card tiene que verse");
+    cierto(el.innerHTML.length>0, "y tiene que tener contenido adentro");
+  });
+});
+
+grupo("Dashboard: el recuadro del gráfico no se queda en la instrucción");
+
+// Antes el recuadro de arriba del gráfico ("mes · ingresos · gastos · balance") arrancaba
+// siempre con "Tocá un mes para ver el detalle", y se quedaba así hasta que alguien tocaba
+// una barra — que en la práctica era la única pieza en blanco de toda la pantalla, porque casi
+// nadie toca. Ahora se llena solo con el último mes del año elegido apenas se dibuja el
+// gráfico, con la MISMA función que usa el clic, para que no puedan mostrar cosas distintas.
+function conGraficoEnDOM(yearData, fn){
+  const canvas=document.createElement("canvas"); canvas.id="chart-mensual";
+  const detalle=document.createElement("div"); detalle.id="dash-detail";
+  detalle.innerHTML="Tocá un mes para ver el detalle"; // el estado con el que arranca de verdad
+  document.body.appendChild(canvas); document.body.appendChild(detalle);
+  const ChartPrevio=window.Chart;
+  window.Chart=function(ctx, config){ this.destroy=function(){}; };
+  try{ renderChartMensualBI(yearData); return fn(detalle); }
+  finally{
+    window.Chart=ChartPrevio; canvas.remove(); detalle.remove();
+    if(typeof chartMensualInstance!=="undefined") chartMensualInstance=null;
+  }
+}
+
+test("apenas se dibuja el gráfico, el recuadro ya tiene un mes real", ()=>{
+  conGraficoEnDOM(DATOS_GRAFICO, detalle=>{
+    cierto(!detalle.innerHTML.includes("Tocá un mes"), "se quedó en la instrucción sin que nadie tocara nada");
+    cierto(detalle.innerHTML.includes("Balance"), "no aparece el balance");
+  });
+});
+
+test("el mes por defecto es el ÚLTIMO del año elegido, no el primero", ()=>{
+  // DATOS_GRAFICO = [enero +40.000, febrero -15.000]. Si mostrara el primero por error, nadie
+  // lo notaría a simple vista porque los dos tienen contenido — hay que pedirle el número.
+  conGraficoEnDOM(DATOS_GRAFICO, detalle=>{
+    cierto(/02/.test(detalle.innerHTML) || /febrero/i.test(detalle.innerHTML),
+      "muestra enero en vez del último mes cargado: "+detalle.innerHTML);
+    cierto(/-\$?15\.000|−\$?15\.000/.test(detalle.innerHTML) || detalle.innerHTML.includes("15.000"),
+      "el balance mostrado no es el de febrero: "+detalle.innerHTML);
+  });
+});
+
+test("detalleMesHTML es la misma función que llena el recuadro al tocar una barra", ()=>{
+  // Si el default y el clic volvieran a tener cada uno su propio template, un cambio futuro
+  // en uno de los dos formatos los desalinearía sin que ningún test lo note.
+  const porDefault=detalleMesHTML(DATOS_GRAFICO[1]);
+  const cfg=configDelGrafico(DATOS_GRAFICO);
+  const detalle=document.createElement("div"); detalle.id="dash-detail";
+  document.body.appendChild(detalle);
+  try{
+    cfg.options.onClick(null, [{index:1}]);
+    igual(detalle.innerHTML, porDefault, "el clic y el valor por defecto no pueden mostrar formatos distintos");
+  } finally { detalle.remove(); }
+});
+
+test("con el año vacío, no se pisa la instrucción con nada roto", ()=>{
+  conGraficoEnDOM([], detalle=>{
+    // Sin meses no hay de dónde sacar "el último", así que tiene que quedar el aviso de
+    // siempre en vez de romperse o vaciarse.
+    cierto(detalle.innerHTML.includes("Tocá un mes"), "un año sin datos no puede inventar un mes");
+  });
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
