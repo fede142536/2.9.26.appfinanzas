@@ -298,6 +298,21 @@ function subcatVisible(subcat){
   return SUBCAT_SIN_VALOR.includes(s) ? "" : escapeHtml(s);
 }
 
+// La MISMA clasificación en cinco baldes (gasto/ingreso/inversion/tarjeta/save) que ya
+// pintaba el círculo del ícono y el monto, ahora también en el borde izquierdo de la fila
+// (ver connectedCallback de <tx-item>): antes cada fila era el mismo rectángulo blanco con
+// el mismo borde gris, y con 20-30 movimientos en el mes la lista se volvía una pared de
+// tarjetas casi idénticas — había que leer cada una para saber qué era. Se extrae a una
+// función propia (antes era un if/else calcado dos veces, uno para el ícono y otro para el
+// monto) para que el color de las tres partes de la fila no pueda desalinearse.
+function claseTipoDeMov(m){
+  const isInv=m.tipo==="Inversion";
+  if(m._isTc) return "tarjeta";
+  if(m.esAhorro===true || m.usaAhorro===true) return "save";
+  if(isInv) return isInvSalida(m) ? "ingreso" : "gasto";
+  return m.tipo.toLowerCase();
+}
+
 // Arma el HTML INTERNO de una fila (ícono, categoría, monto, botones) — la usa tanto el
 // componente <tx-item> como, si hiciera falta, cualquier otro lugar que necesite el mismo look.
 // Es EXACTAMENTE la misma lógica que antes vivía inline dentro de renderTxItemHTML.
@@ -311,12 +326,7 @@ function construirCuerpoTxItem(m){
     // - Suscripción/Compra = gasto del bolsillo (rojo, -)
     const invEsIngreso=isInv && isInvSalida(m);
     const invEsGasto=isInv && !isInvSalida(m);
-    let amtClass;
-    if(isAhorro||isRetiro) amtClass="save";
-    else if(invEsIngreso) amtClass="ingreso";
-    else if(invEsGasto) amtClass="gasto";
-    else if(isTc) amtClass="tarjeta";
-    else amtClass=m.tipo.toLowerCase();
+    const amtClass=claseTipoDeMov(m);
     let amt;
     if(isInv){
       const invSign=invEsIngreso?"+":"-";
@@ -377,14 +387,16 @@ function construirCuerpoTxItem(m){
         sub=subtituloFila([subcatVisible(m.subcat)]);
       }
     }
-    // Ícono e iconClass siguen la misma lógica de color
-    let icon, iconClass;
-    if(isTc){icon="💳";iconClass="tarjeta";}
-    else if(isAhorro){icon="🏦";iconClass="save";}
-    else if(isRetiro){icon="💸";iconClass="save";}
-    else if(invEsIngreso){icon="📥";iconClass="ingreso";}
-    else if(invEsGasto){icon="📤";iconClass="gasto";}
-    else {icon=getIcon(m.cat);iconClass=m.tipo.toLowerCase();}
+    // El ícono en sí (el emoji) sigue necesitando sus propios casos; el COLOR (iconClass) es
+    // el mismo balde de claseTipoDeMov(), para que nunca se desalinee con el borde de la fila.
+    let icon;
+    if(isTc) icon="💳";
+    else if(isAhorro) icon="🏦";
+    else if(isRetiro) icon="💸";
+    else if(invEsIngreso) icon="📥";
+    else if(invEsGasto) icon="📤";
+    else icon=getIcon(m.cat);
+    const iconClass=claseTipoDeMov(m);
     return `<div class="tx-icon ${iconClass}">${icon}</div>
       <div class="tx-info">
         <div class="tx-cat">${cat}</div>
@@ -424,7 +436,7 @@ class TxItem extends HTMLElement{
     this.innerHTML=`
       <div class="tx-swipe-bg tx-swipe-bg-left">✎ Editar</div>
       <div class="tx-swipe-bg tx-swipe-bg-right">🗑 Eliminar</div>
-      <div class="tx-item tx-item-content">${construirCuerpoTxItem(m)}</div>`;
+      <div class="tx-item tx-item-content tx-tipo-${claseTipoDeMov(m)}">${construirCuerpoTxItem(m)}</div>`;
     // Botones grandes de las zonas reveladas por swipe (además de los chiquitos de siempre,
     // que quedan intactos dentro de tx-item-content)
     const bgLeft=this.querySelector(".tx-swipe-bg-left");
