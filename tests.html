@@ -4498,6 +4498,79 @@ test("la ✕ tiene su propio estilo, no es una letra suelta sin fondo", async ()
   cierto(/border-radius:\s*50%/.test(regla), "tiene que verse como una bolita, no como texto suelto: "+regla);
 });
 
+grupo("Gastos frecuentes: marcar pago/impago");
+
+// Pedido del usuario: poder marcar, mes a mes, si un gasto frecuente (alquiler, suscripciones)
+// ya se pagó o no. El estado se guarda en g.pagos = {ym: true/false}, separado del importe y de
+// los aumentos (getGastoFrecMontoEnMes/g.cambios): pagar o no pagar no cambia cuánto vale la
+// cuota, y cambiar de mes no pisa el historial de los meses anteriores.
+test("getMesMov calcula 'pagado' a partir de g.pagos, mes por mes", ()=>{
+  const g={id:501, tipo:"Gasto", frecuente:true, cat:"Alquiler", importe:100000,
+           moneda:"ARS", fecha:"2026-06-10", mesInicio:"2026-06", pagos:{"2026-08":true}};
+  const prevMovs=movs;
+  movs=[g];
+  try{
+    const ago=getMesMov("2026-08").find(m=>m.id===501);
+    const sep=getMesMov("2026-09").find(m=>m.id===501);
+    cierto(ago && ago.pagado===true, "agosto está en g.pagos: tiene que salir pagado: "+JSON.stringify(ago&&ago.pagado));
+    cierto(sep && sep.pagado===false, "septiembre no tiene pago cargado: tiene que salir impago: "+JSON.stringify(sep&&sep.pagado));
+  } finally { movs=prevMovs; }
+});
+
+test("construirCuerpoTxItem muestra el badge tocable de pago/impago en un gasto frecuente", ()=>{
+  const pagado=construirCuerpoTxItem({tipo:"Gasto", cat:"Alquiler", frecuente:true, pagado:true, importe:100000, fecha:"2026-09-05"});
+  cierto(pagado.includes("js-toggle-pago") && pagado.includes("badge-success") && pagado.includes("Pagado"),
+    "pago: tiene que salir el badge verde tocable: "+pagado);
+  cierto(pagado.includes('data-ym="2026-09"'), "el data-ym tiene que salir del mes de la fecha: "+pagado);
+
+  const impago=construirCuerpoTxItem({tipo:"Gasto", cat:"Alquiler", frecuente:true, pagado:false, importe:100000, fecha:"2026-09-05"});
+  cierto(impago.includes("js-toggle-pago") && impago.includes("badge-danger") && impago.includes("Impago"),
+    "impago: tiene que salir el badge rojo tocable: "+impago);
+});
+
+test("un gasto que no es frecuente no lleva el badge de pago/impago", ()=>{
+  const html=construirCuerpoTxItem({tipo:"Gasto", cat:"Supermercado", importe:1000, fecha:"2026-09-05"});
+  cierto(!html.includes("js-toggle-pago"), "sin frecuente:true no debería aparecer el toggle: "+html);
+});
+
+test("toggleFrecPagado marca y desmarca el mes que se está viendo, sin tocar otros meses", ()=>{
+  const g={id:502, tipo:"Gasto", frecuente:true, cat:"Gimnasio", importe:20000,
+           moneda:"ARS", fecha:"2026-01-05", mesInicio:"2026-01"};
+  const prev={movs, filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
+  movs=[g]; filtro="Todos"; filtroCategoria=""; mesActual="2026-09"; filtroFecha=null;
+  try{
+    toggleFrecPagado(502, "2026-09");
+    igual(g.pagos["2026-09"], true, "el primer toque tiene que marcarlo pago");
+    toggleFrecPagado(502, "2026-09");
+    igual(g.pagos["2026-09"], false, "el segundo toque tiene que desmarcarlo");
+    igual(g.pagos["2026-08"], undefined, "no tiene que tocar otros meses: "+JSON.stringify(g.pagos));
+  } finally {
+    movs=prev.movs; filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff;
+  }
+});
+
+test("toggleFrecPagado ignora ids que no son de un gasto frecuente", ()=>{
+  const normal={id:503, tipo:"Gasto", cat:"Supermercado", importe:1000, fecha:"2026-09-05"};
+  const prevMovs=movs;
+  movs=[normal];
+  try{
+    toggleFrecPagado(503, "2026-09");
+    igual(normal.pagos, undefined, "un gasto sin frecuente:true no tiene que ganar pagos: "+JSON.stringify(normal.pagos));
+  } finally { movs=prevMovs; }
+});
+
+test("connectedCallback conecta el badge de pago/impago con toggleFrecPagado", async ()=>{
+  // El upgrade real de <tx-item> al insertarlo por innerHTML no es confiable en este harness
+  // (ver "la fila entera lleva el balde..." más arriba), así que se verifica en el código
+  // fuente, mismo criterio que esa prueba.
+  const js=await (await fetch("js/movimientos.js")).text();
+  const i=js.indexOf("connectedCallback(){");
+  cierto(i>=0, "no se encontró connectedCallback");
+  const cuerpo=js.slice(i, js.indexOf("_attachSwipe()", i));
+  cierto(cuerpo.includes('querySelector(".js-toggle-pago")'), "no busca el badge de pago/impago: "+cuerpo);
+  cierto(cuerpo.includes("toggleFrecPagado(m.id"), "no llama a toggleFrecPagado con el id del movimiento: "+cuerpo);
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
