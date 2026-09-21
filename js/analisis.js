@@ -464,12 +464,18 @@ const COLOR_ALERTA={
 
 function renderAlertas(){
   const el=document.getElementById("dash-alertas");
+  const card=document.getElementById("dash-alertas-card");
   if(!el) return;
   const alertas=alertasDelMomento(movs, tcs, currentYMD());
+  // Sin nada que destacar, la card entera se oculta —título incluido, como #dash-usd-card—
+  // en vez de quedar del mismo tamaño que las demás con un renglón "no hay nada". No hay
+  // ningún dato que perder ocultándola: se vuelve a calcular sola en cada render.
   if(!alertas.length){
-    el.innerHTML=`<p class="txt-sm txt-muted" style="text-align:center;padding:6px 0">Nada para destacar: tu mes viene parecido a los anteriores.</p>`;
+    if(card) card.style.display="none";
+    el.innerHTML="";
     return;
   }
+  if(card) card.style.display="block";
   el.innerHTML=alertas.map(a=>{
     const c=COLOR_ALERTA[a.nivel]||COLOR_ALERTA.info;
     return `<div style="background:${c.bg};border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">

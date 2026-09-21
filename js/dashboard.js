@@ -908,9 +908,29 @@ let chartInvHistoricoInstance=null;
 //
 // La leyenda ahora se muestra siempre: con tres series, distinguirlas sólo por color deja
 // afuera a quien no distingue verde de rojo.
+// El recuadro de arriba del gráfico (mes · ingresos · gastos · balance): la misma función la
+// llena al tocar una barra y también apenas se dibuja el gráfico, con el último mes del año
+// elegido — así siempre hay un número real ahí en vez de una instrucción ("Tocá un mes...")
+// que se queda para siempre si nadie toca nada.
+function detalleMesHTML(d){
+  const balColor=d.balance>=0?"var(--success)":"var(--danger)";
+  return `<div style="display:flex;justify-content:space-around;align-items:center;text-align:center;flex-wrap:wrap;gap:6px">
+      <div><div class="seccion-label txt-micro">${mesLbl(d.mes)}</div></div>
+      <div><div class="txt-micro txt-muted">Ingresos</div><div style="font-size:13px;font-weight:600;color:var(--success)">${fmtS(d.ingreso)}</div></div>
+      <div><div class="txt-micro txt-muted">Gastos</div><div style="font-size:13px;font-weight:600;color:var(--danger)">${fmtS(d.gasto)}</div></div>
+      <div><div class="txt-micro txt-muted">Balance</div><div style="font-size:13px;font-weight:600;color:${balColor}">${fmtS(d.balance)}</div></div>
+    </div>`;
+}
+
 function renderChartMensualBI(yearData){
   const canvas=document.getElementById("chart-mensual");
   if(!canvas || typeof Chart==="undefined") return;
+  // El mes más reciente del año elegido: el último de la lista, porque getDashData() ya corta
+  // en el mes actual y no agrega meses futuros vacíos. Sin esto, el recuadro se quedaba en
+  // "Tocá un mes para ver el detalle" hasta que alguien tocaba una barra, que en la práctica
+  // casi nadie hacía: era la única pieza en blanco de toda la pantalla.
+  const detEl=document.getElementById("dash-detail");
+  if(detEl && yearData.length) detEl.innerHTML=detalleMesHTML(yearData[yearData.length-1]);
   if(chartMensualInstance){ chartMensualInstance.destroy(); chartMensualInstance=null; }
   const labels=yearData.map(d=>d.mes.slice(5));
   const muted=themeColor('--muted'), border=themeColor('--border');
@@ -949,14 +969,7 @@ function renderChartMensualBI(yearData){
         if(!elements.length) return;
         const d=yearData[elements[0].index];
         if(!d) return;
-        const balColor=d.balance>=0?"var(--success)":"var(--danger)";
-        document.getElementById("dash-detail").innerHTML=`
-          <div style="display:flex;justify-content:space-around;align-items:center;text-align:center;flex-wrap:wrap;gap:6px">
-            <div><div class="seccion-label txt-micro">${mesLbl(d.mes)}</div></div>
-            <div><div class="txt-micro txt-muted">Ingresos</div><div style="font-size:13px;font-weight:600;color:var(--success)">${fmtS(d.ingreso)}</div></div>
-            <div><div class="txt-micro txt-muted">Gastos</div><div style="font-size:13px;font-weight:600;color:var(--danger)">${fmtS(d.gasto)}</div></div>
-            <div><div class="txt-micro txt-muted">Balance</div><div style="font-size:13px;font-weight:600;color:${balColor}">${fmtS(d.balance)}</div></div>
-          </div>`;
+        document.getElementById("dash-detail").innerHTML=detalleMesHTML(d);
       }
     }
   });
