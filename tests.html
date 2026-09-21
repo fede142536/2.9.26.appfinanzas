@@ -4192,6 +4192,93 @@ test("con el año vacío, no se pisa la instrucción con nada roto", ()=>{
   });
 });
 
+grupo("Duplicados en Inversiones");
+
+// Con ticker, fecha, categoría, subcategoría e importe iguales a la vez, la chance de que
+// sean dos operaciones reales y distintas es prácticamente cero. Es el patrón que deja subir
+// el mismo archivo dos veces, o cargar a mano algo que ya estaba importado.
+function invMov(id, ticker, fecha, importe, extra){
+  return Object.assign({id, tipo:"Inversion", cat:"CEDEARs", subcat:"CEDEARs Compra",
+                        ticker, fecha, importe, importeUSD:0}, extra||{});
+}
+
+test("dos movimientos idénticos forman un grupo de duplicados", ()=>{
+  const l=[invMov(1,"MCD","2026-09-08",54238), invMov(2,"MCD","2026-09-08",54238)];
+  const grupos=duplicadosExactosInversion(l);
+  igual(grupos.length, 1);
+  igual(grupos[0].map(m=>m.id), [1,2], "el grupo tiene que venir ordenado por id, el más viejo primero");
+});
+
+test("distinto ticker, fecha, categoría, subcategoría o importe: no es duplicado", ()=>{
+  const base=invMov(1,"MCD","2026-09-08",54238);
+  const variantes=[
+    invMov(2,"SPY","2026-09-08",54238),                      // otro ticker
+    invMov(3,"MCD","2026-09-09",54238),                      // otra fecha
+    invMov(4,"MCD","2026-09-08",54238,{cat:"Acciones"}),      // otra categoría
+    invMov(5,"MCD","2026-09-08",54238,{subcat:"CEDEARs Venta"}), // otra subcategoría
+    invMov(6,"MCD","2026-09-08",60000)                        // otro importe
+  ];
+  variantes.forEach(v=>{
+    igual(duplicadosExactosInversion([base, v]), [], "se marcó como duplicado: "+JSON.stringify(v));
+  });
+});
+
+test("una operación en dólares se compara por importeUSD, no por importe", ()=>{
+  const a=invMov(1,"AL30","2026-05-20",0,{importeUSD:54.21});
+  const b=invMov(2,"AL30","2026-05-20",0,{importeUSD:54.21});
+  const c=invMov(3,"AL30","2026-05-20",0,{importeUSD:0.64});
+  igual(duplicadosExactosInversion([a,b]).length, 1);
+  igual(duplicadosExactosInversion([a,c]), [], "USD 54,21 y USD 0,64 no son la misma plata");
+});
+
+test("tres copias son un solo grupo, no tres pares sueltos", ()=>{
+  const l=[invMov(1,"MCD","2026-09-08",54238), invMov(2,"MCD","2026-09-08",54238),
+           invMov(3,"MCD","2026-09-08",54238)];
+  const grupos=duplicadosExactosInversion(l);
+  igual(grupos.length, 1);
+  igual(grupos[0].length, 3);
+});
+
+test("movimientos que no son de inversión no entran en la cuenta", ()=>{
+  const l=[invMov(1,"MCD","2026-09-08",54238),
+           {id:2, tipo:"Gasto", cat:"CEDEARs", subcat:"CEDEARs Compra", ticker:"MCD",
+            fecha:"2026-09-08", importe:54238, importeUSD:0}];
+  igual(duplicadosExactosInversion(l), [], "un Gasto no puede contarse junto a una Inversion");
+});
+
+test("parecidos (fecha cercana, monto casi igual) se listan aparte, no como duplicados", ()=>{
+  // El neto y el bruto de un broker pueden diferir un poco, y la fecha de concertación no
+  // siempre es la de liquidación — pero no hay certeza de que sea la MISMA operación.
+  const l=[invMov(1,"XLK","2026-08-10",12863.82), invMov(2,"XLK","2026-08-10",12794.29)];
+  igual(duplicadosExactosInversion(l), [], "no coinciden exacto: no se ofrecen para borrar solos");
+  const sim=similaresInversion(l);
+  igual(sim.length, 1, "pero sí se avisan como parecidos");
+  igual(sim[0].map(m=>m.id).sort(), [1,2]);
+});
+
+test("un ticker distinto no se marca como parecido aunque coincida todo lo demás", ()=>{
+  const l=[invMov(1,"SPY","2026-08-05",40930.59), invMov(2,"XLK","2026-08-05",40930.59)];
+  igual(similaresInversion(l), [], "distinto ticker no es un parecido, es otra cosa");
+});
+
+test("más de 3 días de diferencia ya no es parecido", ()=>{
+  const l=[invMov(1,"SPY","2026-08-05",40930.59), invMov(2,"SPY","2026-08-20",40930.59)];
+  igual(similaresInversion(l), []);
+});
+
+test("más de 2% de diferencia en el monto ya no es parecido", ()=>{
+  const l=[invMov(1,"SPY","2026-08-05",40930.59), invMov(2,"SPY","2026-08-05",50000)];
+  igual(similaresInversion(l), []);
+});
+
+test("un duplicado exacto no aparece también como parecido", ()=>{
+  // Si el mismo par contara en las dos listas, el aviso de "no borré estos, revisalos" del
+  // detector confundiría mostrando de nuevo algo que ya se ofreció borrar.
+  const l=[invMov(1,"MCD","2026-09-08",54238), invMov(2,"MCD","2026-09-08",54238)];
+  igual(duplicadosExactosInversion(l).length, 1);
+  igual(similaresInversion(l), [], "ya está en duplicados exactos, no tiene que repetirse acá");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

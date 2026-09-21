@@ -339,6 +339,64 @@ function isInvSalida(m){
   const txt=(m.subcat||"").toLowerCase()+" "+(m.cat||"").toLowerCase();
   return /rescate|venta|amortizaci|cup[oó]n|dividendo|rendimiento|tomada/.test(txt);
 }
+
+// ═══════════════════════════════════════════
+// DUPLICADOS EN INVERSIONES
+// ═══════════════════════════════════════════
+// Se ofrecen para borrar solo los EXACTOS: mismo ticker, misma fecha, misma categoría y
+// subcategoría, y el mismo importe (en pesos y en dólares, redondeado al centavo). Con esas
+// cinco cosas iguales a la vez, la chance de que sean dos operaciones reales y distintas es
+// prácticamente cero — nadie compra el mismo ticker, el mismo día, por el mismo monto exacto,
+// dos veces. Es el patrón que deja cargar a mano algo que en realidad ya estaba importado, o
+// importar el mismo archivo dos veces con un importador que no lo reconoce.
+function claveInvExacta(m){
+  return [m.ticker||"", String(m.fecha||"").slice(0,10), m.cat||"", m.subcat||"",
+          Math.round((m.importe||0)*100), Math.round((m.importeUSD||0)*100)].join("|");
+}
+
+// Grupos de 2 o más movimientos de inversión que comparten esa clave. Cada grupo va ordenado
+// por id (más viejo primero), para que "cuál se queda" sea siempre el mismo sin importar en
+// qué orden estén guardados en `movs`.
+function duplicadosExactosInversion(lista){
+  const porClave={};
+  (lista||[]).filter(m=>m && m.tipo==="Inversion").forEach(m=>{
+    const k=claveInvExacta(m);
+    (porClave[k]=porClave[k]||[]).push(m);
+  });
+  return Object.values(porClave)
+    .filter(g=>g.length>1)
+    .map(g=>g.slice().sort((a,b)=>(a.id||0)-(b.id||0)));
+}
+
+// Pares que se PARECEN pero no son iguales: mismo ticker, fecha a pocos días y monto a menos
+// de 2% de diferencia. A propósito NO se ofrecen para borrar solos —el bruto y el neto de un
+// broker pueden diferir un poco, y dos operaciones reales pueden coincidir de casualidad—,
+// pero vale la pena que el usuario los mire con sus propios ojos.
+const INV_SIM_DIAS=3, INV_SIM_PCT=0.02;
+function montoDeInversion(m){
+  return (m.importeUSD||0)>0 ? m.importeUSD : (m.importe||0);
+}
+function similaresInversion(lista){
+  const invs=(lista||[]).filter(m=>m && m.tipo==="Inversion");
+  const yaExactos=new Set();
+  duplicadosExactosInversion(lista).forEach(g=>g.forEach(m=>yaExactos.add(m.id)));
+  const out=[];
+  for(let i=0;i<invs.length;i++){
+    for(let j=i+1;j<invs.length;j++){
+      const a=invs[i], b=invs[j];
+      if(yaExactos.has(a.id) && yaExactos.has(b.id)) continue;   // ya van en el otro grupo
+      if((a.ticker||"")!==(b.ticker||"")) continue;
+      const dias=Math.abs(Date.parse(String(a.fecha||"").slice(0,10)) - Date.parse(String(b.fecha||"").slice(0,10)))/86400000;
+      if(!(dias>=0 && dias<=INV_SIM_DIAS)) continue;
+      const montoA=montoDeInversion(a), montoB=montoDeInversion(b);
+      if(!montoA || !montoB) continue;
+      const rel=Math.abs(montoA-montoB)/Math.max(Math.abs(montoA), Math.abs(montoB));
+      if(rel>INV_SIM_PCT) continue;
+      out.push([a,b]);
+    }
+  }
+  return out;
+}
 // Signo desde la perspectiva del PORTFOLIO (qué tan invertido estás).
 // Suscripción=+1 (más portfolio), rescate=-1 (menos portfolio).
 function invSigno(m){
