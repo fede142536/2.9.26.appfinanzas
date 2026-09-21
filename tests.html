@@ -4459,6 +4459,45 @@ test("lineaMov describe tanto una inversión como un gasto", ()=>{
     "a un gasto hay que poder reconocerlo por su categoría y su nota: "+gasto);
 });
 
+grupo("Volver al mes actual desde un filtro de fecha");
+
+// El usuario reportó que al filtrar por fecha no volvía sola al mes actual. La lógica de
+// estado ya era correcta (mesActual nunca se toca al filtrar, así que limpiarFiltroFecha lo
+// recupera intacto) y ya existía un tap sobre #mes-label para volver (ver index.html), pero
+// sin ningún indicio visual de que fuera tocable el usuario nunca lo encontraba y terminaba
+// reabriendo el modal para reconfigurar el mes a mano. La solución no es inventar un gesto
+// nuevo (doble toque) sino hacer visible el que ya funcionaba: una "✕" al lado de la fecha.
+// aplicarFiltroFecha() dispara showToast/cierra un modal real que tests.html no monta tal
+// cual, y el getElementById parcheado de esta página devuelve un <div> descartable distinto
+// en cada llamada (no sirve para leer de vuelta lo que se escribió) — se verifica en el
+// código fuente, mismo criterio que otras pruebas sobre piezas que dependen del DOM real.
+test("aplicarFiltroFecha muestra una ✕ visible junto a la fecha filtrada", async ()=>{
+  const js=await (await fetch("js/movimientos.js")).text();
+  const i=js.indexOf("function aplicarFiltroFecha(");
+  cierto(i>=0, "no se encontró aplicarFiltroFecha");
+  const cuerpo=js.slice(i, js.indexOf("function limpiarFiltroFecha(", i));
+  cierto(cuerpo.includes('mes-label").innerHTML'),
+    "tiene que usar innerHTML (no textContent) para poder mostrar la ✕: "+cuerpo);
+  cierto(cuerpo.includes("mes-label-x"), "no se encontró la clase de la ✕ visible: "+cuerpo);
+});
+
+test("limpiarFiltroFecha sigue devolviendo el mes actual sin la ✕", async ()=>{
+  const js=await (await fetch("js/movimientos.js")).text();
+  const i=js.indexOf("function limpiarFiltroFecha(");
+  cierto(i>=0, "no se encontró limpiarFiltroFecha");
+  const cuerpo=js.slice(i, i+400);
+  cierto(cuerpo.includes('mes-label").textContent=mesLbl(mesActual)'),
+    "al limpiar el filtro tiene que volver a mostrar el mes actual sin la ✕: "+cuerpo);
+});
+
+test("la ✕ tiene su propio estilo, no es una letra suelta sin fondo", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf(".mes-label-x{");
+  cierto(i>=0, "falta la regla .mes-label-x");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(/border-radius:\s*50%/.test(regla), "tiene que verse como una bolita, no como texto suelto: "+regla);
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
