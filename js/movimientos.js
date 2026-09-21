@@ -260,6 +260,18 @@ function gastoFrecActivoEnMes(g, ym){
   return true;
 }
 
+// Marca/desmarca como pagado el mes ym de un gasto frecuente. Se guarda en g.pagos (un mapa
+// mes -> pagado) separado del importe y de los aumentos: no pisa el historial de otros meses
+// ni cambia cuánto vale la cuota, solo si esta ya se pagó.
+function toggleFrecPagado(id, ym){
+  const g=movs.find(x=>x.id===id && x.frecuente);
+  if(!g) return;
+  if(!g.pagos) g.pagos={};
+  g.pagos[ym]=!g.pagos[ym];
+  save();
+  renderMovs();
+}
+
 function getMesMov(ym){
   const resultado=[];
   movs.forEach(m=>{
@@ -275,7 +287,10 @@ function getMesMov(ym){
         importe: isUSD ? 0 : monto,
         importeOrig: isUSD ? monto : null,
         // La fecha virtual es el día 1 del mes o el mesInicio si es ese mismo mes
-        fecha: ym===String(m.fecha||"").slice(0,7) ? m.fecha : (ym+"-01")
+        fecha: ym===String(m.fecha||"").slice(0,7) ? m.fecha : (ym+"-01"),
+        // El pago es por mes (m.pagos es {ym: true}), no por movimiento: el mismo gasto
+        // frecuente puede estar pago en septiembre e impago en octubre.
+        pagado: !!(m.pagos && m.pagos[ym])
       });
       return;
     }
@@ -379,7 +394,16 @@ function construirCuerpoTxItem(m){
       else if(esTraspaso(m)) badge=` <span class="badge badge-accent">↔️ TRASPASO</span>`;
       else if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
       else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
-      else if(m.frecuente) badge=` <span class="badge badge-warning">🔁 FRECUENTE</span>`;
+      // El badge de un gasto frecuente ahora también es el botón para marcarlo pago/impago
+      // mes a mes (pedido del usuario): verde y tocable si ya se pagó, rojo si no. El color
+      // reemplaza al warning neutro de antes porque la app ya usa success/danger para eso en
+      // todos lados (el chk-custom de "Es un ahorro", los montos +/- de la fila, etc.).
+      else if(m.frecuente){
+        const ym=String(m.fecha||"").slice(0,7);
+        badge = m.pagado
+          ? ` <span class="badge badge-success js-toggle-pago" role="button" tabindex="0" aria-label="Pagado. Tocá para marcarlo impago" data-ym="${ym}">🔁 Pagado</span>`
+          : ` <span class="badge badge-danger js-toggle-pago" role="button" tabindex="0" aria-label="Impago. Tocá para marcarlo pagado" data-ym="${ym}">🔁 Impago</span>`;
+      }
       cat=`${escapeHtml(m.cat)}${badge}`;
       if(m.recuperable>0) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
       // En un cambio, el tipo de cambio es EL dato de la operación y en la fila no se veía
@@ -453,6 +477,17 @@ class TxItem extends HTMLElement{
       if(isTc) confirmarBorrarTc(m.id);
       else borrarMov(m.id, e.currentTarget); // mismo botón: respeta el doble-toque de confirmación
     });
+    // Badge de pago/impago de un gasto frecuente (ver construirCuerpoTxItem): no es un
+    // onclick="" embebido en el HTML (esta fila ya se sacó de ese patrón, ver el badge de
+    // arriba), sino un addEventListener igual que bgLeft/bgRight. stopPropagation evita que el
+    // toque también dispare el cierre del swipe si la fila estuviera revelada.
+    const pagoBtn=this.querySelector(".js-toggle-pago");
+    if(pagoBtn){
+      pagoBtn.addEventListener("click", e=>{
+        e.stopPropagation();
+        toggleFrecPagado(m.id, pagoBtn.dataset.ym);
+      });
+    }
     this._attachSwipe();
   }
   _cerrar(){
