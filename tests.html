@@ -4524,8 +4524,20 @@ test("construirCuerpoTxItem muestra el badge tocable de pago/impago en un gasto 
   cierto(pagado.includes('data-ym="2026-09"'), "el data-ym tiene que salir del mes de la fecha: "+pagado);
 
   const impago=construirCuerpoTxItem({tipo:"Gasto", cat:"Alquiler", frecuente:true, pagado:false, importe:100000, fecha:"2026-09-05"});
-  cierto(impago.includes("js-toggle-pago") && impago.includes("badge-danger") && impago.includes("Impago"),
+  cierto(impago.includes("js-toggle-pago") && impago.includes("badge-danger"),
     "impago: tiene que salir el badge rojo tocable: "+impago);
+});
+
+// El usuario reportó que después de pagar de verdad seguía viendo "Impago": el toque para
+// cambiarlo ya funcionaba (ver arriba), pero un badge que solo INFORMA el estado no invita a
+// tocarlo. En impago el texto pasa a ser la ACCIÓN ("Marcar pagado"), no el estado; en pago no
+// hace falta invitar a nada, así que ahí sí alcanza con informar.
+test("en impago el badge invita a la acción, no solo informa el estado", ()=>{
+  const impago=construirCuerpoTxItem({tipo:"Gasto", cat:"Alquiler", frecuente:true, pagado:false, importe:100000, fecha:"2026-09-05"});
+  cierto(impago.includes("Marcar pagado"), "el impago tiene que decir qué hacer, no solo el estado: "+impago);
+
+  const pagado=construirCuerpoTxItem({tipo:"Gasto", cat:"Alquiler", frecuente:true, pagado:true, importe:100000, fecha:"2026-09-05"});
+  cierto(pagado.includes("Pagado") && !pagado.includes("Marcar"), "el pago no necesita invitar a ninguna acción: "+pagado);
 });
 
 test("un gasto que no es frecuente no lleva el badge de pago/impago", ()=>{
