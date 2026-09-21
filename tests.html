@@ -3887,6 +3887,117 @@ test("setFechaQuick actualiza la fecha en el formulario de edición", ()=>{
 // ═══════════════════════════════════════════
 // AISLAMIENTO
 // ═══════════════════════════════════════════
+// ═══════════════════════════════════════════
+// ESTÉTICA: MENÚ, CASILLAS Y LÍNEA INFORMATIVA
+// ═══════════════════════════════════════════
+grupo("Menú lateral con íconos consistentes");
+
+// Antes eran símbolos geométricos finos (≡ ▣ ◈ ◎ ⬆ ⚙) mezclados con un solo emoji real
+// (🏦 Ahorros): el menú era el único lugar de la app con otro idioma visual. El resto —
+// categorías, chips, títulos de card— es emoji de punta a punta (ver ICON_CHOICES en
+// estado-categorias.js). Tarjetas e Inversiones reutilizan 💳 y 📈, que ya son sus íconos en
+// otras pantallas (Cuentas, Inflación, la vista Acumulado de Ahorros).
+function menuLateral(html){
+  const ini=html.indexOf('<div id="side-menu">');
+  const fin=html.indexOf("<!-- FAB de acceso rápido", ini);
+  cierto(ini>=0 && fin>ini, "no se encontró el bloque completo del menú lateral");
+  return html.slice(ini, fin);
+}
+
+test("los siete ítems del menú usan emoji, no símbolos geométricos", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const menu=menuLateral(html);
+  const iconos=[...menu.matchAll(/<span class="nav-icon">([^<]*)<\/span>/g)].map(m=>m[1]);
+  igual(iconos.length, 7, "el menú tiene que seguir teniendo sus siete ítems");
+  // Ningún símbolo suelto geométrico de los que había antes: todo emoji.
+  const geometricos=iconos.filter(ic=>["≡","▣","◎","⬆","⚙"].includes(ic));
+  igual(geometricos, [], "quedó algún ícono geométrico sin convertir: " + JSON.stringify(iconos));
+});
+
+test("Tarjetas e Inversiones reutilizan sus propios íconos, no inventan otros", async ()=>{
+  const menu=menuLateral(await (await fetch("index.html")).text());
+  const filaTc=menu.slice(menu.indexOf("showPage('tc'"), menu.indexOf("</button>", menu.indexOf("showPage('tc'")));
+  const filaInv=menu.slice(menu.indexOf("showPage('inv'"), menu.indexOf("</button>", menu.indexOf("showPage('inv'")));
+  cierto(filaTc.includes("💳"), "Tarjetas ya usa 💳 en Cuentas y Nombres de tarjetas (config-ui/cuentas-tarjetas-categorias)");
+  cierto(filaInv.includes("📈"), "Inversiones ya usa 📈 en Inflación y en la vista Acumulado de Ahorros");
+});
+
+test("Ahorros conserva su ícono de siempre", async ()=>{
+  const menu=menuLateral(await (await fetch("index.html")).text());
+  const filaAho=menu.slice(menu.indexOf("showPage('ahorro'"), menu.indexOf("</button>", menu.indexOf("showPage('ahorro'")));
+  cierto(filaAho.includes("🏦"), "🏦 ya era el correcto: no hacía falta tocarlo");
+});
+
+grupo("Casillas propias en vez de las del sistema");
+
+// Las tres casillas del alta ("Es un ahorro", "Sale de mis ahorros", "Es un traspaso") y las
+// dos de "Gasto frecuente" vivían dentro de un label ya rediseñado —pill de color, ícono,
+// texto— pero el cuadradito lo dibujaba el sistema operativo. accent-color solo lo recolorea:
+// no le cambia la forma. Con appearance:none se dibuja de nuevo, con la esquina redondeada y
+// el tilde propios de la app.
+function checkboxesDeAlta(html){
+  return [...html.matchAll(/<input type="checkbox" id="([\w-]+)"([^>]*)>/g)];
+}
+
+test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const cajas=checkboxesDeAlta(html);
+  igual(cajas.length, 5, "esperaba las 5 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente x2): " +
+    cajas.map(c=>c[1]).join(", "));
+  cajas.forEach(([, id, resto])=>{
+    cierto(resto.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${resto}`);
+    cierto(!resto.includes("accent-color"), `${id} quedó con el recoloreo nativo en vez de la clase: ${resto}`);
+    cierto(/--chk:\s*var\(--(save|accent|warning)\)/.test(resto), `${id} no define su color por --chk: ${resto}`);
+  });
+});
+
+test("chk-custom se dibuja entera de nuevo, no solo se recolorea", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf(".chk-custom{");
+  cierto(i>=0, "falta la clase .chk-custom");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(/appearance:\s*none/.test(regla), "sin appearance:none sigue siendo el cuadrado del sistema: " + regla);
+  cierto(css.includes(".chk-custom:checked{"), "falta el estado marcado");
+  cierto(css.includes(".chk-custom:checked::after{"), "falta el tilde dibujado a mano");
+  // Toque con feedback, como el resto de los controles de la app (.chip:active, .mes-caja:active).
+  cierto(css.includes(".chk-custom:active{"), "le falta la respuesta al toque que tiene el resto de los controles");
+});
+
+grupo("Línea informativa de Movimientos con superficie propia");
+
+// #mov-arrastre es compartida por las cuatro solapas (Todos/Gastos/Ingresos/Tarjetas: "Pagado
+// con ahorros", "3 cuotas · 2 frecuentes", "Sin movimientos de tarjeta"...) y antes era texto
+// centrado sin fondo ni borde: la única pieza de la pantalla de Movimientos sin una superficie
+// propia, entre una fila de chips y una card que sí la tienen.
+test("mov-arrastre tiene su propia superficie, no estilos sueltos", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const i=html.indexOf('id="mov-arrastre"');
+  cierto(i>=0, "no se encontró #mov-arrastre");
+  const etiqueta=html.slice(html.lastIndexOf("<div", i), html.indexOf(">", i)+1);
+  cierto(etiqueta.includes('class="info-line"'), "no usa la clase nueva: " + etiqueta);
+  cierto(!/style="[^"]*background/.test(etiqueta), "quedó un fondo puesto a mano en vez de en la clase: " + etiqueta);
+  cierto(etiqueta.includes('style="display:none"'), "tiene que seguir arrancando oculta");
+});
+
+test("la clase .info-line le da fondo y radio, y respeta los márgenes de las cards", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const i=css.indexOf(".info-line{");
+  cierto(i>=0, "falta la clase .info-line");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(/background:\s*var\(--bg\)/.test(regla), "sin fondo sigue siendo texto flotando: " + regla);
+  cierto(/border-radius:\s*var\(--radius-sm\)/.test(regla), "le falta el radio de esquina del resto de la app: " + regla);
+  cierto(/margin:\s*10px 16px/.test(regla), "tiene que alinearse con el margen de .card (10px 16px): " + regla);
+});
+
+test("JS solo toca display: el resto del estilo lo pone la clase", async ()=>{
+  // Si algún cambio futuro vuelve a escribir arrastreEl.style.cssText o le mete estilos
+  // sueltos por otro lado, la línea vuelve a quedar sin fondo aunque el HTML esté bien.
+  const js=await (await fetch("js/movimientos.js")).text();
+  cierto(!/arrastreEl\.style\.cssText/.test(js), "arrastreEl no puede pisar todo el estilo inline");
+  cierto(/arrastreEl\.style\.display\s*=/.test(js), "arrastreEl tiene que seguir prendiéndose/apagándose");
+});
+
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

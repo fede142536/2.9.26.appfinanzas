@@ -63,6 +63,23 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;background:transparent;color:var(--text);appearance:none;-webkit-appearance:none;outline:none;transition:border-color .15s,box-shadow .15s}
 .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);background:transparent;box-shadow:0 0 0 3px var(--accent-light)}
 .form-textarea{resize:none;height:64px}
+/* CHECKBOX CUSTOM
+   Las casillas "Es un ahorro", "Sale de mis ahorros", "Es un traspaso" y "Gasto frecuente"
+   vivían dentro de un label ya completamente a medida —pill de color, texto con ícono— pero el
+   cuadradito en sí quedaba como lo dibuja el sistema operativo: la única pieza no rediseñada
+   en un formulario donde hasta el selector de fecha y el toggle de tipo son custom. accent-color
+   solo recolorea ese cuadrado nativo; para que tenga la esquina redondeada y el tilde propios
+   de la app hace falta sacarlo del todo con appearance:none y dibujarlo de nuevo.
+   El color varía por casilla (ahorro/traspaso en verde o azul, frecuente en naranja) sin
+   necesidad de una clase por color: se pasa por la variable --chk en el style="" de cada input,
+   igual que --tema-color en la pantalla de Cargar. */
+.chk-custom{appearance:none;-webkit-appearance:none;width:20px;height:20px;flex-shrink:0;
+  border:1.5px solid var(--chk,var(--accent));border-radius:6px;background:transparent;
+  cursor:pointer;position:relative;transition:background-color .15s ease,border-color .15s ease,transform .12s ease}
+.chk-custom:checked{background:var(--chk,var(--accent));border-color:var(--chk,var(--accent))}
+.chk-custom:checked::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;
+  border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.chk-custom:active{transform:scale(.88)}
 /* TYPE TOGGLE */
 .type-toggle{display:flex;background:var(--border);border-radius:14px;padding:4px;gap:3px;border:none}
 .type-btn{flex:1;padding:9px 2px;border:none;border-radius:10px;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;background:none;color:var(--muted);position:relative;overflow:hidden}
@@ -125,6 +142,12 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    Si entran 3 en una fila, ocupan todo el ancho parejo; si hay más (4, 5, 6...), arma
    automáticamente una segunda fila — sin necesidad de arrastrar para ver el resto. */
 .summary-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;padding:10px 16px 0}
+/* Línea informativa entre los chips y la lista (#mov-arrastre): "Pagado con ahorros", "3
+   cuotas · 2 frecuentes", "Sin movimientos de tarjeta"... Antes era texto suelto centrado, sin
+   fondo ni borde, la única pieza de la pantalla sin una superficie propia — hasta un chip de
+   filtro tiene la suya. Mismos márgenes que .card para que quede alineada con lo de arriba y
+   abajo; fondo hundido como .inset porque es información secundaria, no una acción. */
+.info-line{margin:10px 16px 0;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--muted);text-align:center;line-height:1.4}
 .chip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 7px;text-align:center}
 .chip-label{font-size:9.5px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
 .chip-val{font-size:14px;font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.3px}
