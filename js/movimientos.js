@@ -269,7 +269,25 @@ function toggleFrecPagado(id, ym){
   if(!g.pagos) g.pagos={};
   g.pagos[ym]=!g.pagos[ym];
   save();
-  renderMovs();
+  actualizarFilaFrecPagado(id, ym, g.pagos[ym]);
+}
+
+// Repinta EN EL LUGAR la fila ya montada de un gasto frecuente, en vez de llamar a
+// renderMovs(). Un mes viejo con muchos movimientos se muestra por lotes (ver "LAZY LOADING"
+// más abajo); un renderMovs() completo tira abajo los lotes que ya se cargaron con el scroll
+// y arma un centinela nuevo arriba de donde estaba parado el usuario, que no vuelve a activarse
+// si ya lo scrolleó de largo — quedaba "colgado" sin poder seguir cargando (bug reportado).
+// El gasto frecuente aparece como mucho una vez por mes en la lista visible, así que alcanza
+// con buscar la fila que matchea id+mes entre las montadas.
+function actualizarFilaFrecPagado(id, ym, pagado){
+  document.querySelectorAll("tx-item").forEach(el=>{
+    const m=el._m;
+    if(!m || m.id!==id || String(m.fecha||"").slice(0,7)!==ym) return;
+    m.pagado=pagado;
+    const content=el.querySelector(".tx-item-content");
+    if(content) content.innerHTML=construirCuerpoTxItem(m);
+    el._conectarBadgePago();
+  });
 }
 
 function getMesMov(ym){
@@ -485,14 +503,19 @@ class TxItem extends HTMLElement{
     // onclick="" embebido en el HTML (esta fila ya se sacó de ese patrón, ver el badge de
     // arriba), sino un addEventListener igual que bgLeft/bgRight. stopPropagation evita que el
     // toque también dispare el cierre del swipe si la fila estuviera revelada.
+    this._conectarBadgePago();
+    this._attachSwipe();
+  }
+  // Separado de connectedCallback para poder reconectarlo después de un repintado puntual
+  // (ver actualizarFilaFrecPagado): el innerHTML nuevo trae un <span> nuevo, sin listener.
+  _conectarBadgePago(){
     const pagoBtn=this.querySelector(".js-toggle-pago");
     if(pagoBtn){
       pagoBtn.addEventListener("click", e=>{
         e.stopPropagation();
-        toggleFrecPagado(m.id, pagoBtn.dataset.ym);
+        toggleFrecPagado(this._m.id, pagoBtn.dataset.ym);
       });
     }
-    this._attachSwipe();
   }
   _cerrar(){
     const content=this.querySelector(".tx-item-content");
