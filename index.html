@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v125">
+<meta name="enola-version" content="enola-v126">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -789,7 +789,7 @@
     <button class="btn-sm" style="width:100%;color:var(--danger);margin-bottom:8px" onclick="borrarMovsImportados()">🗑 Borrar movimientos importados</button>
     <button class="btn-sm" style="width:100%;color:var(--danger);margin-bottom:8px" onclick="borrarMovsPorRango()">📅 Borrar movimientos por rango de fechas</button>
     <button class="btn-sm" style="width:100%;color:var(--warning);margin-bottom:8px" onclick="detectarMovsAtipicos()">🔍 Buscar gastos atípicos (montos altos)</button>
-    <button class="btn-sm" style="width:100%;color:var(--warning);margin-bottom:8px" onclick="detectarDuplicadosInversion()">🔁 Buscar duplicados en Inversiones</button>
+    <button class="btn-sm" style="width:100%;color:var(--warning);margin-bottom:8px" onclick="detectarDuplicados()">🔁 Buscar duplicados en movimientos</button>
     <button class="btn-sm" style="width:100%;color:var(--danger);background:var(--danger-light);font-weight:600" onclick="borrarTodosMovimientos()">💥 Borrar TODOS los movimientos</button>
   </div>
 </div>

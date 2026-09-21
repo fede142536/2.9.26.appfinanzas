@@ -4312,6 +4312,153 @@ test("la foto queda cacheada para que ande sin conexión, como el resto de los �
     "si no está en ASSETS, el ícono desaparece la primera vez que se abre la app sin señal");
 });
 
+grupo("Freno de doble toque al guardar");
+
+// Dos toques rápidos sobre "Guardar" —común en un botón que tarda un instante en responder,
+// o simplemente por costumbre— alcanzaban para crear dos movimientos IDÉNTICOS: es
+// probablemente el origen real de los duplicados que aparecen en Inversiones, sin que haga
+// falta ni un PDF. Se prueba reemplazando guardarSinFreno() por un espía que cuenta cuántas
+// veces lo llama guardar() de verdad, en vez de armar el formulario completo con sus veinte
+// campos — lo que cambió es el freno, no lo que se guarda.
+function conGuardarSinFrenoFalso(){
+  const original=guardarSinFreno;
+  const llamadas=[];
+  let resolver;
+  guardarSinFreno=function(){
+    llamadas.push(1);
+    return new Promise(r=>{ resolver=r; });
+  };
+  return {
+    llamadas,
+    liberar:()=>resolver && resolver(),
+    restaurar:()=>{ guardarSinFreno=original; }
+  };
+}
+
+test("un segundo toque mientras se está guardando no dispara otro guardado", async ()=>{
+  const {llamadas, liberar, restaurar}=conGuardarSinFrenoFalso();
+  const btn=document.createElement("button"); btn.id="btn-guardar";
+  document.body.appendChild(btn);
+  try{
+    const p1=guardar();   // primer toque: arranca, pero el mock no resuelve todavía
+    igual(llamadas.length, 1, "el primer toque tiene que guardar");
+    cierto(btn.disabled, "el botón tiene que verse deshabilitado mientras se guarda");
+    const p2=guardar();   // segundo toque, con el primero todavía en curso
+    igual(llamadas.length, 1, "el segundo toque no puede volver a ejecutar el guardado");
+    liberar();
+    await p1; await p2;
+    cierto(!btn.disabled, "al terminar, el botón tiene que volver a habilitarse");
+  } finally { btn.remove(); restaurar(); }
+});
+
+test("terminado un guardado, el siguiente toque sí guarda el suyo", async ()=>{
+  const {llamadas, liberar, restaurar}=conGuardarSinFrenoFalso();
+  const btn=document.createElement("button"); btn.id="btn-guardar";
+  document.body.appendChild(btn);
+  try{
+    // liberar() recién tiene algo que resolver DESPUÉS de llamar a guardar(): es guardar()
+    // el que crea la promesa pendiente, al invocar (el mock de) guardarSinFreno() por dentro.
+    const p1=guardar(); liberar(); await p1;
+    const p2=guardar(); liberar(); await p2;
+    igual(llamadas.length, 2, "sin nada en curso, cada toque tiene que guardar el suyo");
+  } finally { btn.remove(); restaurar(); }
+});
+
+test("el freno no depende de que el botón exista en el DOM", async ()=>{
+  // El harness de tests devuelve un <div> descartable para ids que no existen: el guard en sí
+  // (la variable `guardando`) no puede depender de #btn-guardar para funcionar.
+  const {llamadas, liberar, restaurar}=conGuardarSinFrenoFalso();
+  try{
+    const p=guardar(); liberar(); await p;
+    igual(llamadas.length, 1, "sin el botón en el DOM, guardar() no puede fallar en silencio");
+  } finally { restaurar(); }
+});
+
+grupo("Duplicados en Gastos e Ingresos");
+
+// Mismo criterio que en Inversiones, aplicado a Gasto/Ingreso: la clave es exactamente lo que
+// arma guardar() a partir del formulario, así que dos toques sobre el mismo clic la producen
+// idéntica.
+function gastoMov(id, cat, importe, extra){
+  return Object.assign({id, tipo:"Gasto", cat, subcat:"Otros", cuenta:"Efectivo",
+                        moneda:"ARS", fecha:"2026-09-08", importe, importeOrig:0, nota:""}, extra||{});
+}
+
+test("dos gastos idénticos (mismo doble toque) forman un grupo de duplicados", ()=>{
+  const l=[gastoMov(1,"Supermercado",45000), gastoMov(2,"Supermercado",45000)];
+  const grupos=duplicadosExactosGastoIngreso(l);
+  igual(grupos.length, 1);
+  igual(grupos[0].map(m=>m.id), [1,2], "el más viejo primero");
+});
+
+test("distinta fecha, cuenta, moneda, importe o nota: no es duplicado", ()=>{
+  const base=gastoMov(1,"Supermercado",45000,{nota:"changuito"});
+  const variantes=[
+    gastoMov(2,"Supermercado",45000,{fecha:"2026-09-09", nota:"changuito"}),
+    gastoMov(3,"Supermercado",45000,{cuenta:"Banco", nota:"changuito"}),
+    gastoMov(4,"Supermercado",45000,{moneda:"USD", nota:"changuito"}),
+    gastoMov(5,"Supermercado",50000,{nota:"changuito"}),
+    gastoMov(6,"Supermercado",45000,{nota:"otra compra"})
+  ];
+  variantes.forEach(v=>{
+    igual(duplicadosExactosGastoIngreso([base,v]), [], "se marcó como duplicado: "+JSON.stringify(v));
+  });
+});
+
+test("un Gasto y un Ingreso con los mismos números no son duplicados entre sí", ()=>{
+  const gasto=gastoMov(1,"Varios",10000);
+  const ingreso={...gastoMov(2,"Varios",10000), tipo:"Ingreso"};
+  igual(duplicadosExactosGastoIngreso([gasto,ingreso]), [],
+    "un gasto y un ingreso son operaciones opuestas aunque coincida el número");
+});
+
+test("una Inversion no se mete en la cuenta de Gasto/Ingreso", ()=>{
+  // El riesgo real no es confundir una Inversion con un Gasto —el tipo ya está en la clave—
+  // sino que DOS Inversiones de tickers distintos, con la misma categoría/subcategoría/importe,
+  // se cuenten como duplicadas entre sí: la clave de Gasto/Ingreso no mira el ticker, así que
+  // comprar SPY y comprar XLK por el mismo monto el mismo día se vería igual sin este filtro.
+  const spy={id:1, tipo:"Inversion", cat:"CEDEARs", subcat:"CEDEARs Compra", ticker:"SPY",
+             fecha:"2026-09-08", importe:50000, importeUSD:0};
+  const xlk={id:2, tipo:"Inversion", cat:"CEDEARs", subcat:"CEDEARs Compra", ticker:"XLK",
+             fecha:"2026-09-08", importe:50000, importeUSD:0};
+  igual(duplicadosExactosGastoIngreso([spy,xlk]), [],
+    "dos inversiones de tickers distintos no pueden agruparse por una clave que no mira el ticker");
+});
+
+test("una operación en USD se compara por importeOrig, no por importe en pesos", ()=>{
+  const a=gastoMov(1,"Viajes",0,{moneda:"USD", importeOrig:54.21});
+  const b=gastoMov(2,"Viajes",0,{moneda:"USD", importeOrig:54.21});
+  const c=gastoMov(3,"Viajes",0,{moneda:"USD", importeOrig:0.64});
+  igual(duplicadosExactosGastoIngreso([a,b]).length, 1);
+  igual(duplicadosExactosGastoIngreso([a,c]), [], "USD 54,21 y USD 0,64 no son la misma plata");
+});
+
+grupo("Buscar duplicados: Inversiones y Gasto/Ingreso juntos");
+
+// La herramienta se extendió a pedido del usuario para no mirar solo Inversiones: un doble
+// toque en "Guardar" produce el mismo duplicado exacto sea cual sea el tipo de movimiento.
+test("detectarDuplicados mira Inversiones y Gasto/Ingreso juntos, no una lista sola", async ()=>{
+  // detectarDuplicados() dispara mostrarConfirm/mostrarAlerta, que sin el modal real de
+  // index.html se quedarían esperando un clic que nunca llega. Se verifica en el código
+  // fuente, mismo criterio que otras pruebas sobre piezas que dependen de esos diálogos.
+  const js=await (await fetch("js/importar-exportar.js")).text();
+  const i=js.indexOf("async function detectarDuplicados(");
+  cierto(i>=0, "no se encontró detectarDuplicados");
+  const cuerpo=js.slice(i, i+300);
+  cierto(cuerpo.includes("duplicadosExactosInversion(movs)"), "dejó de mirar Inversiones");
+  cierto(cuerpo.includes("duplicadosExactosGastoIngreso(movs)"), "dejó de mirar Gasto/Ingreso");
+});
+
+test("lineaMov describe tanto una inversión como un gasto", ()=>{
+  const inv=lineaMov({tipo:"Inversion", ticker:"MCD", subcat:"CEDEARs Compra",
+                       importe:54238, importeUSD:0, fecha:"2026-09-08"});
+  cierto(inv.includes("MCD"), "a una inversión hay que poder reconocerla por el ticker: "+inv);
+  const gasto=lineaMov({tipo:"Gasto", cat:"Supermercado", subcat:"Otros",
+                         importe:45000, fecha:"2026-09-08", moneda:"ARS", nota:"changuito"});
+  cierto(gasto.includes("Supermercado") && gasto.includes("changuito"),
+    "a un gasto hay que poder reconocerlo por su categoría y su nota: "+gasto);
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
