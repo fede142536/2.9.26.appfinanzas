@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v132">
+<meta name="enola-version" content="enola-v133">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -553,6 +553,12 @@
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
           <input type="checkbox" id="cambio-ahorro" class="chk-custom" style="--chk:var(--save)">
           <span style="color:var(--save);font-weight:500">🏦 Guardarlos en el fondo de ahorro (no dejarlos como cash)</span>
+        </label>
+      </div>
+      <div class="form-group" id="cambio-usaahorro-group" style="display:none">
+        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
+          <input type="checkbox" id="cambio-usaahorro" class="chk-custom" style="--chk:var(--save)">
+          <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (resta del fondo)</span>
         </label>
       </div>
       <div id="cambio-tc" class="inset mb-10" style="display:none"></div>

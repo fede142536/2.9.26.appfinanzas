@@ -2257,6 +2257,61 @@ test("borrar un cambio de moneda también borra el depósito al fondo que gener�
   } finally { movs=prevMovs; window.mostrarConfirm=prevConfirm; }
 });
 
+// ── VENDER DÓLARES QUE SALEN DEL FONDO DE AHORRO ──
+// Pedido del usuario: la misma idea que "guardarlos en el fondo" al comprar, pero al vender —
+// "Sale de mis ahorros" (la casilla que ya existía para un Gasto común, ver
+// "Casillas propias en vez de las del sistema"), ahora también en Cambio → Vendo dólares.
+// A diferencia de comprar, acá NO hace falta un movimiento aparte: la pata que sale YA es un
+// Gasto, así que alcanza con la misma bandera usaAhorro en ese mismo movimiento.
+
+test("vender dólares con 'Sale de mis ahorros' los marca como retiro del fondo, no como cash", ()=>{
+  const patas=crearCambio({fecha:"2026-09-22", montoARS:100000, montoUSD:70,
+                           sentido:"venta", idBase:9100, usaAhorro:true});
+  const r=conTarjetas([], ()=>resumenUSDdelAnio(patas, 2026));
+  igual(r.ret, 70, "los USD que salieron tienen que contar como retiro del fondo");
+  igual(r.gasTotal, 70, "sigue siendo un gasto en USD: salió de tu patrimonio en dólares");
+  igual(r.gasComun, 0, "no puede contar TAMBIÉN como gasto común: se contaría dos veces");
+});
+
+test("vender dólares sin tildar la casilla sigue siendo un gasto común, como antes", ()=>{
+  const patas=crearCambio({fecha:"2026-09-22", montoARS:100000, montoUSD:70, sentido:"venta", idBase:9100});
+  const r=conTarjetas([], ()=>resumenUSDdelAnio(patas, 2026));
+  igual(r.ret, 0, "sin la casilla tildada no es un retiro del fondo");
+  igual(r.gasComun, 70, "tiene que seguir contando como gasto común");
+});
+
+test("usaAhorro solo tiene efecto vendiendo: comprando no toca la pata en pesos", ()=>{
+  const [sale]=crearCambio({fecha:"2026-09-22", montoARS:100000, montoUSD:70,
+                            sentido:"compra", idBase:9200, usaAhorro:true});
+  igual(sale.usaAhorro, false, "usaAhorro en una compra no puede tocar la pata en pesos");
+});
+
+test("leerCambio expone usaAhorro solo vendiendo, nunca comprando", ()=>{
+  const ventaConAhorro=crearCambio({fecha:"2026-09-22", montoARS:100000, montoUSD:70, sentido:"venta", idBase:9300, usaAhorro:true});
+  igual(leerCambio(ventaConAhorro).usaAhorro, true);
+  const ventaSinAhorro=crearCambio({fecha:"2026-09-22", montoARS:100000, montoUSD:70, sentido:"venta", idBase:9300});
+  igual(leerCambio(ventaSinAhorro).usaAhorro, false);
+  const compra=crearCambio({fecha:"2026-09-22", montoARS:100000, montoUSD:70, sentido:"compra", idBase:9300, usaAhorro:true});
+  igual(leerCambio(compra).usaAhorro, false, "comprando no tiene sentido: siempre false, pase lo que pase");
+});
+
+test("guardarCambio solo arma usaAhorro vendiendo con la casilla tildada", async ()=>{
+  const js=await (await fetch("js/form-cargar.js")).text();
+  const i=js.indexOf("async function guardarCambio(");
+  cierto(i>=0, "no se encontró guardarCambio");
+  const cuerpo=js.slice(i, js.indexOf("\n}", i)+2);
+  cierto(cuerpo.includes('sentidoCambio==="venta"'), "no distingue vendiendo de comprando: "+cuerpo);
+  cierto(cuerpo.includes("usaAhorroChk.checked"), "no mira la casilla: "+cuerpo);
+});
+
+test("guardarEditCambio actualiza usaAhorro en la pata que sale, vendiendo", async ()=>{
+  const js=await (await fetch("js/editar-movimiento.js")).text();
+  const i=js.indexOf("function guardarEditCambio(");
+  cierto(i>=0, "no se encontró guardarEditCambio");
+  const cuerpo=js.slice(i, js.indexOf("\n}", i)+2);
+  cierto(/paraSale\.usaAhorro\s*=/.test(cuerpo), "no actualiza usaAhorro en la pata que sale: "+cuerpo);
+});
+
 // ═══════════════════════════════════════════
 // ORDEN DE LA LISTA DE MOVIMIENTOS
 // ═══════════════════════════════════════════
@@ -4060,7 +4115,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 6, "esperaba las 6 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente x2, cambio-ahorro): " +
+  igual(cajas.length, 7, "esperaba las 7 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente x2, cambio-ahorro, cambio-usaahorro): " +
     cajas.map(c=>c[1]).join(", "));
   cajas.forEach(([, id, resto])=>{
     cierto(resto.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${resto}`);
