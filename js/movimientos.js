@@ -1062,7 +1062,10 @@ async function borrarMov(id, btn){
       : "las dos patas";
     if(!await mostrarConfirm(`Este movimiento es la mitad de un cambio de moneda.\n\n${detalle}\n\nSe eliminan las dos mitades juntas: borrar una sola dejaría el balance descuadrado.`,
       {titulo:"Eliminar el cambio", textoOk:"Eliminar las dos", peligroso:true})) return;
-    movs=movs.filter(x=>x.cambioId!==m.cambioId);
+    // Si esta compra se había guardado al fondo (ver crearDepositoAhorroUSD), ese depósito no
+    // comparte cambioId con las dos patas — sin este filtro extra quedaría huérfano, sumando
+    // para siempre a un Fondo USD de un cambio que ya no existe.
+    movs=movs.filter(x=>x.cambioId!==m.cambioId && x.origenCambioId!==m.cambioId);
     save();
     showToast("Cambio de moneda eliminado");
     renderMovs();

@@ -2190,6 +2190,73 @@ test('"Cambio de moneda" tiene su propio ícono', ()=>{
   igual(getIcon("MEP"), "💱", "las categorías propias para lo mismo también");
 });
 
+// ── GUARDAR LOS DÓLARES COMPRADOS EN EL FONDO DE AHORRO ──
+// Pedido del usuario: comprar dólares por MEP para guardarlos, no para gastarlos, y poder
+// corregir el monto al día siguiente (cuando liquida) sin perder la marca de "esto es ahorro".
+
+test("crearDepositoAhorroUSD arma un Gasto en USD con esAhorro, ligado por origenCambioId", ()=>{
+  const d=crearDepositoAhorroUSD({fecha:"2026-09-22", montoUSD:70, cuenta:"Banco",
+                                   nota:"MEP", origenCambioId:9000, idBase:9002});
+  igual(d.tipo, "Gasto");
+  igual(d.moneda, "USD");
+  igual(d.importe, 0, "en USD el monto vive en importeOrig, no en importe");
+  igual(d.importeOrig, 70);
+  igual(d.esAhorro, true);
+  igual(d.origenCambioId, 9000, "tiene que quedar ligado al cambio que lo generó");
+});
+
+test("sin monto o sin fecha, no hay depósito que crear", ()=>{
+  igual(crearDepositoAhorroUSD({fecha:"2026-09-22", montoUSD:0, origenCambioId:1}), null);
+  igual(crearDepositoAhorroUSD({fecha:"", montoUSD:70, origenCambioId:1}), null);
+});
+
+test("depositoDeCambio encuentra el depósito por origenCambioId, no por cambioId", ()=>{
+  const patas=crearCambio({fecha:"2026-09-22", montoARS:100000, montoUSD:70, sentido:"compra", idBase:9000});
+  const deposito=crearDepositoAhorroUSD({fecha:"2026-09-22", montoUSD:70, origenCambioId:patas[0].id, idBase:9002});
+  const lista=[...patas, deposito];
+  igual(depositoDeCambio(patas[0].id, lista), deposito);
+  igual(depositoDeCambio(999999, lista), null, "un cambio sin depósito no tiene que devolver nada");
+});
+
+test("guardarCambio arma el depósito solo si es una compra y la casilla está tildada", async ()=>{
+  // guardarCambio() depende del formulario real (selects, inputs con id fijo) que este harness
+  // no monta; se verifica en el código fuente, mismo criterio que otras piezas de UI que no se
+  // pueden ejercitar de forma segura acá (ver "detectarDuplicados mira Inversiones y..." en el
+  // grupo de Importar/Exportar).
+  const js=await (await fetch("js/form-cargar.js")).text();
+  const i=js.indexOf("async function guardarCambio(");
+  cierto(i>=0, "no se encontró guardarCambio");
+  const cuerpo=js.slice(i, js.indexOf("\n}", i)+2);
+  cierto(cuerpo.includes('sentidoCambio==="compra"'), "el depósito no puede armarse vendiendo dólares: "+cuerpo);
+  cierto(cuerpo.includes("ahorroChk.checked"), "tiene que mirar la casilla: "+cuerpo);
+  cierto(cuerpo.includes("crearDepositoAhorroUSD("), "no arma el depósito: "+cuerpo);
+});
+
+test("guardarEditCambio crea, actualiza o borra el depósito según la casilla", async ()=>{
+  const js=await (await fetch("js/editar-movimiento.js")).text();
+  const i=js.indexOf("function guardarEditCambio(");
+  cierto(i>=0, "no se encontró guardarEditCambio");
+  const cuerpo=js.slice(i, js.indexOf("\n}", i)+2);
+  cierto(cuerpo.includes("depositoDeCambio("), "no busca si ya existía un depósito: "+cuerpo);
+  cierto(cuerpo.includes("crearDepositoAhorroUSD("), "no puede crear el depósito si se tildó recién: "+cuerpo);
+  cierto(/movs=movs\.filter\(m=>m!==existente\)/.test(cuerpo), "no borra el depósito si se destildó: "+cuerpo);
+});
+
+test("borrar un cambio de moneda también borra el depósito al fondo que generó", async ()=>{
+  // Sin este filtro extra, el depósito (que no comparte cambioId con las dos patas a
+  // propósito) quedaba huérfano sumando para siempre a un Fondo USD de un cambio ya borrado.
+  const patas=crearCambio({fecha:"2026-09-22", montoARS:100000, montoUSD:70, sentido:"compra", idBase:9000});
+  const deposito=crearDepositoAhorroUSD({fecha:"2026-09-22", montoUSD:70, cuenta:"Banco",
+                                          origenCambioId:patas[0].id, idBase:9002});
+  const prevMovs=movs, prevConfirm=window.mostrarConfirm;
+  movs=[...patas, deposito];
+  window.mostrarConfirm=()=>Promise.resolve(true);
+  try{
+    await borrarMov(patas[0].id, null);
+    igual(movs.length, 0, "las dos patas Y el depósito tienen que desaparecer juntos: "+JSON.stringify(movs));
+  } finally { movs=prevMovs; window.mostrarConfirm=prevConfirm; }
+});
+
 // ═══════════════════════════════════════════
 // ORDEN DE LA LISTA DE MOVIMIENTOS
 // ═══════════════════════════════════════════
@@ -3993,7 +4060,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 5, "esperaba las 5 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente x2): " +
+  igual(cajas.length, 6, "esperaba las 6 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente x2, cambio-ahorro): " +
     cajas.map(c=>c[1]).join(", "));
   cajas.forEach(([, id, resto])=>{
     cierto(resto.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${resto}`);
