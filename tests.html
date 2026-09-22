@@ -1528,6 +1528,42 @@ test("lo que pasás a ahorros no cuenta como gasto recurrente", ()=>{
   igual(detectarRecurrentes([ahorro("2026-07-01"),ahorro("2026-08-01"),ahorro("2026-09-01")],"2026-09"), []);
 });
 
+// Bug reportado por el usuario: una suscripción pagada en USD (donde `importe` guarda 0 A
+// PROPÓSITO, ver "un movimiento en USD no se marca por tener importe 0" en Registros
+// incompletos) mostraba un "monto típico" sin sentido en pesos, tipo "$1,29". Pasaba porque
+// se agrupaba por nota SIN separar por moneda: la mediana mezclaba el monto real en USD con
+// los ceros de `importe`.
+const gUSD=(nota,cat,fecha,importeUSD)=>({id:Math.random(), tipo:"Gasto", nota, cat,
+  moneda:"USD", importe:0, importeOrig:importeUSD, fecha});
+
+test("un gasto recurrente en USD usa importeOrig, no el importe (0) en pesos", ()=>{
+  const lista=[gUSD("Spotify","Salidas","2026-06-05",1.29),
+               gUSD("Spotify","Salidas","2026-07-05",1.29),
+               gUSD("Spotify","Salidas","2026-08-05",1.29)];
+  const r=detectarRecurrentes(lista,"2026-09");
+  igual(r.length, 1);
+  igual(r[0].moneda, "USD");
+  igual(r[0].montoTipico, 1.29, "el monto típico tiene que salir de importeOrig, no de importe");
+});
+
+test("la misma nota en ARS y en USD son gastos recurrentes DISTINTOS, no se mezclan", ()=>{
+  // Si compartieran grupo, la mediana combinaría pesos con dólares y el resultado no sería
+  // ni un monto en pesos ni en dólares real — exactamente el bug reportado.
+  const lista=[
+    g("Spotify","Salidas",null,"2026-06-05",12000),
+    g("Spotify","Salidas",null,"2026-07-05",12000),
+    g("Spotify","Salidas",null,"2026-08-05",12000),
+    gUSD("Spotify","Salidas","2026-06-05",1.29),
+    gUSD("Spotify","Salidas","2026-07-05",1.29),
+    gUSD("Spotify","Salidas","2026-08-05",1.29)
+  ];
+  const r=detectarRecurrentes(lista,"2026-09");
+  igual(r.length, 2, "ARS y USD tienen que salir como dos gastos recurrentes separados");
+  const enARS=r.find(x=>x.moneda==="ARS"), enUSD=r.find(x=>x.moneda==="USD");
+  igual(enARS.montoTipico, 12000);
+  igual(enUSD.montoTipico, 1.29);
+});
+
 // ═══════════════════════════════════════════
 // ANÁLISIS: GASTOS FUERA DE LO NORMAL
 // ═══════════════════════════════════════════
@@ -1694,6 +1730,21 @@ grupo("Análisis: alertas");
 
 test("sin datos suficientes no inventa alertas", ()=>{
   igual(conTarjetas([], ()=>alertasDelMomento([], [], "2026-09-15")), []);
+});
+
+test("un gasto habitual faltante en USD se muestra en USD, no en pesos", ()=>{
+  // Antes de la corrección, el detalle de esta alerta usaba fmtAbbr (formato en $) para
+  // CUALQUIER gasto habitual, sin mirar la moneda: un valor como "USD 1.29" salía como el
+  // sinsentido "$1,29". Se arma a mano en vez de con la lista completa de alertas porque
+  // faltaEsteMes necesita 3 meses YA pasados y todavía sin el mes actual.
+  const gUSD=(nota,fecha,importeUSD)=>({id:Math.random(), tipo:"Gasto", nota, cat:"Salidas",
+    moneda:"USD", importe:0, importeOrig:importeUSD, fecha});
+  const lista=[gUSD("Spotify","2026-06-05",1.29), gUSD("Spotify","2026-07-05",1.29), gUSD("Spotify","2026-08-05",1.29)];
+  const a=conTarjetas([], ()=>alertasDelMomento(lista, [], "2026-09-15"));
+  const alerta=a.find(x=>/gasto habitual/.test(x.titulo));
+  cierto(alerta, "falta la alerta de gasto habitual: "+JSON.stringify(a.map(x=>x.titulo)));
+  cierto(alerta.detalle.includes("USD 1.29"), "tiene que mostrar el monto en USD: "+alerta.detalle);
+  cierto(!/\$1,29\b/.test(alerta.detalle), "no puede mostrar el monto en USD como si fueran pesos: "+alerta.detalle);
 });
 
 test("avisa del desvío del mes y de las cuotas que caen", ()=>{
