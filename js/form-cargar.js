@@ -392,6 +392,13 @@ function setSentidoCambio(s){
   // Las etiquetas se dan vuelta: en una compra los pesos salen y en una venta entran.
   document.getElementById("cambio-ars-label").textContent = compra ? "Pesos que pagué" : "Pesos que recibí";
   document.getElementById("cambio-usd-label").textContent = compra ? "Dólares que recibí" : "Dólares que entregué";
+  // "Guardarlos en el fondo" solo tiene sentido comprando: vendiendo, lo que entra es pesos,
+  // no hay dólares que guardar.
+  const ahorroGroup=document.getElementById("cambio-ahorro-group");
+  if(ahorroGroup){
+    ahorroGroup.style.display = compra ? "block" : "none";
+    if(!compra){ const chk=document.getElementById("cambio-ahorro"); if(chk) chk.checked=false; }
+  }
   calcTipoCambio();
 }
 
@@ -414,19 +421,26 @@ async function guardarCambio(){
   const fecha=document.getElementById("cambio-fecha").value;
   if(ars<=0 || usd<=0){ showToast("Completá los dos montos: pesos y dólares"); return; }
   if(!fecha){ showToast("Poné la fecha del cambio"); return; }
-  const patas=crearCambio({
-    fecha, montoARS:ars, montoUSD:usd, sentido:sentidoCambio,
-    cuenta:document.getElementById("cambio-cuenta").value,
-    nota:document.getElementById("cambio-nota").value.trim()
-  });
+  const cuenta=document.getElementById("cambio-cuenta").value;
+  const nota=document.getElementById("cambio-nota").value.trim();
+  const patas=crearCambio({fecha, montoARS:ars, montoUSD:usd, sentido:sentidoCambio, cuenta, nota});
   if(!patas){ showToast("No pude armar el cambio, revisá los datos"); return; }
   movs.push(...patas);
+  // "Guardarlos en el fondo": un movimiento más (ver crearDepositoAhorroUSD), no una
+  // propiedad de la pata "entra" — así el resto de la contabilidad de Fondo/Cash USD en
+  // ahorros.js sigue exactamente igual que para cualquier otro depósito.
+  const ahorroChk=document.getElementById("cambio-ahorro");
+  if(sentidoCambio==="compra" && ahorroChk && ahorroChk.checked){
+    const deposito=crearDepositoAhorroUSD({fecha, montoUSD:usd, cuenta, nota, origenCambioId:patas[0].id, idBase:patas[1].id+1});
+    if(deposito) movs.push(deposito);
+  }
   save();
   const tc=tipoDeCambio(ars,usd);
   showToast(`${sentidoCambio==="compra"?"Compra":"Venta"} guardada · ${fmtS(tc)} por dólar ✓`);
   document.getElementById("cambio-ars").value="";
   document.getElementById("cambio-usd").value="";
   document.getElementById("cambio-nota").value="";
+  if(ahorroChk) ahorroChk.checked=false;
   calcTipoCambio();
   renderMovs();
 }

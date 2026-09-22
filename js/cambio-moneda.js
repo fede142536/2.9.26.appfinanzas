@@ -73,6 +73,33 @@ function crearCambio({fecha, montoARS, montoUSD, sentido, cuenta, cuentaDestino,
   ];
 }
 
+// ═══════════════════════════════════════════
+// GUARDAR LOS DÓLARES COMPRADOS EN EL FONDO DE AHORRO
+// ═══════════════════════════════════════════
+// Comprar dólares para guardarlos (no para gastarlos) es un caso frecuente (MEP), y sin esto
+// quedaban como cash USD suelto: había que ir aparte a cargar un depósito al fondo a mano.
+//
+// En vez de inventarle un significado nuevo a la pata "entra" (que sigue siendo un Ingreso:
+// los dólares entraron a tu cash), se arma un movimiento MÁS —un Gasto en USD con esAhorro,
+// el mismo mecanismo que ya usa cualquier otro depósito al fondo USD (ver ahorros.js)— que
+// los saca del cash y los manda al fondo. No comparte `cambioId` con las dos patas (eso
+// rompería leerCambio/guardarEditCambio, que asumen exactamente 2); se liga por
+// `origenCambioId` para poder encontrarlo, actualizarlo o borrarlo si el cambio se edita o
+// se elimina después (ver guardarEditCambio y borrarMov).
+function crearDepositoAhorroUSD({fecha, montoUSD, cuenta, nota, origenCambioId, idBase}){
+  const usd=Math.round((Number(montoUSD)||0)*100)/100;
+  if(usd<=0 || !fecha) return null;
+  return {id:idBase||Date.now(), tipo:"Gasto", cat:CAMBIO_CAT_DEFECTO, subcat:"Ahorro en USD",
+          fecha, nota:nota||"", moneda:"USD", importe:0, importeOrig:usd,
+          cuenta:cuenta||"", esAhorro:true, usaAhorro:false, recuperable:0,
+          origenCambioId};
+}
+
+// El depósito al fondo USD de un cambio (si se generó al comprarlo).
+function depositoDeCambio(cambioId, lista){
+  return (lista||[]).find(m=>m.origenCambioId===cambioId) || null;
+}
+
 // Dadas las dos patas, reconstruye la operación para poder mostrarla o editarla.
 function leerCambio(patas){
   if(!patas || patas.length!==2) return null;

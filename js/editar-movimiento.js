@@ -32,6 +32,10 @@ function openEditCambioModal(cambioId){
   if(!info){ showToast("No encontré las dos mitades de este cambio"); return; }
   editingCambioId=cambioId;
   const compra=info.sentido==="compra";
+  // Si esta compra ya se guardó al fondo (ver crearDepositoAhorroUSD), la casilla arranca
+  // tildada: así se puede corregir el monto al día siguiente (cuando liquida el MEP) sin
+  // perder la marca de "esto es ahorro, no cash".
+  const yaGuardado = compra && !!depositoDeCambio(cambioId, movs);
   document.getElementById("edit-form-content").innerHTML=`
     <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--accent-light);color:var(--accent);margin-bottom:10px">💱 ${compra?"COMPRA DE DÓLARES":"VENTA DE DÓLARES"}</div>
     <p class="txt-sm txt-muted mb-10">Se guardan las dos mitades juntas, así el tipo de cambio siempre cierra.</p>
@@ -39,6 +43,12 @@ function openEditCambioModal(cambioId){
       <input type="number" id="edit-cambio-ars" class="form-input" value="${info.montoARS}" inputmode="decimal" step="any" oninput="previsualizarEditCambio()"></div>
     <div class="form-group"><label class="form-label" for="edit-cambio-usd">${compra?"Dólares que recibiste":"Dólares que entregaste"}</label>
       <input type="number" id="edit-cambio-usd" class="form-input" value="${info.montoUSD}" inputmode="decimal" step="any" oninput="previsualizarEditCambio()"></div>
+    ${compra?`<div class="form-group">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
+        <input type="checkbox" id="edit-cambio-ahorro" class="chk-custom" style="--chk:var(--save)" ${yaGuardado?"checked":""}>
+        <span style="color:var(--save);font-weight:500">🏦 Guardarlos en el fondo de ahorro (no dejarlos como cash)</span>
+      </label>
+    </div>`:""}
     <div id="edit-cambio-tc" class="inset mb-10"></div>
     <div class="form-group"><label class="form-label" for="edit-cambio-fecha">Fecha</label>
       <input type="date" id="edit-cambio-fecha" class="form-input" value="${escapeHtml(info.fecha||"")}"></div>
@@ -77,6 +87,22 @@ function guardarEditCambio(){
     if(esPataARS){ m.importe=Math.round(ars*100)/100; m.importeOrig=null; }
     else { m.importe=0; m.importeOrig=Math.round(usd*100)/100; }
   });
+  // El depósito al fondo USD (si lo hay) sigue la edición: se actualiza si ya existía, se crea
+  // si se tildó la casilla recién ahora, y se borra si se destildó.
+  if(compra){
+    const ahorroChk=document.getElementById("edit-cambio-ahorro");
+    const existente=depositoDeCambio(editingCambioId, movs);
+    if(ahorroChk && ahorroChk.checked){
+      if(existente){ existente.fecha=fecha; existente.nota=nota; existente.importeOrig=Math.round(usd*100)/100; }
+      else {
+        const cuentaDestino=(patas.find(m=>m.cambioPata==="entra")||{}).cuenta;
+        const nuevo=crearDepositoAhorroUSD({fecha, montoUSD:usd, cuenta:cuentaDestino, nota, origenCambioId:editingCambioId, idBase:Date.now()});
+        if(nuevo) movs.push(nuevo);
+      }
+    } else if(existente){
+      movs=movs.filter(m=>m!==existente);
+    }
+  }
   save();
   closeEditModal();
   showToast(`Cambio actualizado · ${fmtS(tipoDeCambio(ars,usd))} por dólar ✓`);
