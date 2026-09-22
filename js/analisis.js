@@ -149,9 +149,16 @@ function detectarRecurrentes(lista, hoyYM){
     if(clave.length<SUG_MIN_LARGO) return;
     const ym=String(m.fecha||"").slice(0,7);
     if(ym.length!==7) return;
-    if(!grupos[clave]) grupos[clave]={clave, desc:m.nota, cat:m.cat, subcat:m.subcat||null, meses:new Set(), montos:[]};
-    grupos[clave].meses.add(ym);
-    grupos[clave].montos.push(m.importe||0);
+    // Un movimiento en USD guarda 0 en `importe` a propósito (el monto real vive en
+    // `importeOrig`, ver registrosIncompletos): agrupar por nota SIN separar por moneda
+    // metía esos ceros en la misma mediana que los meses pagados en ARS y daba un "monto
+    // típico" que no era ni un monto en pesos ni en dólares real (bug reportado con una
+    // suscripción pagada en USD, que mostraba un monto irrisorio en $).
+    const moneda=m.moneda==="USD" ? "USD" : "ARS";
+    const claveGrupo=clave+"|"+moneda;
+    if(!grupos[claveGrupo]) grupos[claveGrupo]={clave:claveGrupo, desc:m.nota, cat:m.cat, subcat:m.subcat||null, moneda, meses:new Set(), montos:[]};
+    grupos[claveGrupo].meses.add(ym);
+    grupos[claveGrupo].montos.push(moneda==="USD" ? (m.importeOrig||0) : (m.importe||0));
   });
 
   const out=[];
@@ -164,7 +171,7 @@ function detectarRecurrentes(lista, hoyYM){
     if(meses.length/span < REC_COBERTURA_MIN) return;
     const ultimoYM=meses[meses.length-1];
     out.push({
-      clave:g.clave, desc:g.desc, cat:g.cat, subcat:g.subcat,
+      clave:g.clave, desc:g.desc, cat:g.cat, subcat:g.subcat, moneda:g.moneda,
       meses, n:meses.length, span,
       montoTipico: mediana(g.montos),
       ultimoYM,
@@ -421,7 +428,7 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
     out.push({
       nivel:"warn", icono:"🔁",
       titulo:`${n} ${n===1?"gasto habitual":"gastos habituales"} que este mes todavía no ${n===1?"aparece":"aparecen"}`,
-      detalle: faltantes.map(r=>`${r.desc} (~${fmtAbbr(r.montoTipico)})`).join(" · ")
+      detalle: faltantes.map(r=>`${r.desc} (~${r.moneda==="USD"?fmtMoneda(r.montoTipico,"USD"):fmtAbbr(r.montoTipico)})`).join(" · ")
     });
   }
 
