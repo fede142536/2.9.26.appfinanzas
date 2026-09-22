@@ -48,7 +48,12 @@ function openEditCambioModal(cambioId){
         <input type="checkbox" id="edit-cambio-ahorro" class="chk-custom" style="--chk:var(--save)" ${yaGuardado?"checked":""}>
         <span style="color:var(--save);font-weight:500">🏦 Guardarlos en el fondo de ahorro (no dejarlos como cash)</span>
       </label>
-    </div>`:""}
+    </div>`:`<div class="form-group">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
+        <input type="checkbox" id="edit-cambio-usaahorro" class="chk-custom" style="--chk:var(--save)" ${info.usaAhorro?"checked":""}>
+        <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (resta del fondo)</span>
+      </label>
+    </div>`}
     <div id="edit-cambio-tc" class="inset mb-10"></div>
     <div class="form-group"><label class="form-label" for="edit-cambio-fecha">Fecha</label>
       <input type="date" id="edit-cambio-fecha" class="form-input" value="${escapeHtml(info.fecha||"")}"></div>
@@ -102,6 +107,12 @@ function guardarEditCambio(){
     } else if(existente){
       movs=movs.filter(m=>m!==existente);
     }
+  } else {
+    // "Sale de mis ahorros" vive en la pata que sale (ver crearCambio): no hay nada que crear
+    // ni borrar aparte, solo actualizar la bandera con lo que diga la casilla.
+    const usaAhorroChk=document.getElementById("edit-cambio-usaahorro");
+    const paraSale=patas.find(m=>m.cambioPata==="sale");
+    if(paraSale) paraSale.usaAhorro = !!(usaAhorroChk && usaAhorroChk.checked);
   }
   save();
   closeEditModal();

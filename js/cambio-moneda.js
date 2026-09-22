@@ -41,7 +41,13 @@ function tipoDeCambio(montoARS, montoUSD){
 //
 // `sentido`: "compra" = pagás pesos y recibís dólares · "venta" = entregás dólares y recibís
 // pesos. `cambioId` liga las dos patas; se usa el id de la primera.
-function crearCambio({fecha, montoARS, montoUSD, sentido, cuenta, cuentaDestino, cat, subcat, nota, idBase}){
+//
+// `usaAhorro` (solo tiene efecto vendiendo): los dólares que salen vienen del fondo USD, no de
+// tu cash — mismo mecanismo que "Sale de mis ahorros" en un Gasto común (ver estado-categorias.js
+// y ahorros.js). A diferencia de "guardarlos en el fondo" al comprar (que necesita un movimiento
+// APARTE porque la pata que entra ahí es un Ingreso, no un Gasto — ver crearDepositoAhorroUSD),
+// acá la pata que sale YA es un Gasto: alcanza con la misma bandera, en el mismo movimiento.
+function crearCambio({fecha, montoARS, montoUSD, sentido, cuenta, cuentaDestino, cat, subcat, nota, idBase, usaAhorro}){
   const ars=Math.round((Number(montoARS)||0)*100)/100;
   const usd=Math.round((Number(montoUSD)||0)*100)/100;
   if(ars<=0 || usd<=0 || !fecha) return null;
@@ -67,7 +73,7 @@ function crearCambio({fecha, montoARS, montoUSD, sentido, cuenta, cuentaDestino,
   }
   return [
     {...comun, id:id1, tipo:"Gasto", moneda:"USD", importe:0, importeOrig:usd,
-     cuenta:cuenta||"", cambioPata:"sale"},
+     cuenta:cuenta||"", cambioPata:"sale", usaAhorro:!!usaAhorro},
     {...comun, id:id2, tipo:"Ingreso", moneda:"ARS", importe:ars, importeOrig:null,
      cuenta:cuentaDestino||cuenta||"", cambioPata:"entra"}
   ];
@@ -112,7 +118,9 @@ function leerCambio(patas){
   return {cambioId:sale.cambioId, sentido, montoARS, montoUSD, fecha:sale.fecha,
           cat:sale.cat, subcat:sale.subcat, nota:sale.nota,
           cuenta:sale.cuenta, cuentaDestino:entra.cuenta,
-          tc:tipoDeCambio(montoARS, montoUSD)};
+          tc:tipoDeCambio(montoARS, montoUSD),
+          // Solo tiene sentido vendiendo: los dólares que salieron venían del fondo, no del cash.
+          usaAhorro: sentido==="venta" && !!sale.usaAhorro};
 }
 
 // ═══════════════════════════════════════════

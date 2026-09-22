@@ -393,11 +393,17 @@ function setSentidoCambio(s){
   document.getElementById("cambio-ars-label").textContent = compra ? "Pesos que pagué" : "Pesos que recibí";
   document.getElementById("cambio-usd-label").textContent = compra ? "Dólares que recibí" : "Dólares que entregué";
   // "Guardarlos en el fondo" solo tiene sentido comprando: vendiendo, lo que entra es pesos,
-  // no hay dólares que guardar.
+  // no hay dólares que guardar. "Sale de mis ahorros" es lo espejado: solo vendiendo hay
+  // dólares que puedan venir del fondo en vez de tu cash.
   const ahorroGroup=document.getElementById("cambio-ahorro-group");
   if(ahorroGroup){
     ahorroGroup.style.display = compra ? "block" : "none";
     if(!compra){ const chk=document.getElementById("cambio-ahorro"); if(chk) chk.checked=false; }
+  }
+  const usaAhorroGroup=document.getElementById("cambio-usaahorro-group");
+  if(usaAhorroGroup){
+    usaAhorroGroup.style.display = compra ? "none" : "block";
+    if(compra){ const chk=document.getElementById("cambio-usaahorro"); if(chk) chk.checked=false; }
   }
   calcTipoCambio();
 }
@@ -423,7 +429,12 @@ async function guardarCambio(){
   if(!fecha){ showToast("Poné la fecha del cambio"); return; }
   const cuenta=document.getElementById("cambio-cuenta").value;
   const nota=document.getElementById("cambio-nota").value.trim();
-  const patas=crearCambio({fecha, montoARS:ars, montoUSD:usd, sentido:sentidoCambio, cuenta, nota});
+  // "Sale de mis ahorros" (vendiendo) va directo en la pata que sale: a diferencia de
+  // "guardarlos en el fondo" (comprando), acá esa pata YA es un Gasto, así que no hace falta
+  // ningún movimiento aparte (ver el comentario de crearCambio).
+  const usaAhorroChk=document.getElementById("cambio-usaahorro");
+  const patas=crearCambio({fecha, montoARS:ars, montoUSD:usd, sentido:sentidoCambio, cuenta, nota,
+                            usaAhorro: sentidoCambio==="venta" && !!(usaAhorroChk && usaAhorroChk.checked)});
   if(!patas){ showToast("No pude armar el cambio, revisá los datos"); return; }
   movs.push(...patas);
   // "Guardarlos en el fondo": un movimiento más (ver crearDepositoAhorroUSD), no una
@@ -441,6 +452,7 @@ async function guardarCambio(){
   document.getElementById("cambio-usd").value="";
   document.getElementById("cambio-nota").value="";
   if(ahorroChk) ahorroChk.checked=false;
+  if(usaAhorroChk) usaAhorroChk.checked=false;
   calcTipoCambio();
   renderMovs();
 }
