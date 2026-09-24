@@ -535,6 +535,22 @@ function detalleResultadoInversiones(cat){
   document.getElementById("modal-cat-detail").classList.add("open");
 }
 
+// Total, agrupado por mes y promedio mensual de una lista YA FILTRADA de movimientos de una
+// categoría. Mismo criterio que promedioMensualHTML() del gráfico principal: el promedio solo
+// cuenta los meses en los que la categoría tuvo AL MENOS un movimiento — un mes en el que no
+// gastaste nada en "Auto" no es un mes de $0 en Auto, es un mes en el que no tocaste esa
+// categoría, y contarlo diluiría el promedio sin decir nada real.
+function promedioDeCategoria(movsCat){
+  const porMes={};
+  (movsCat||[]).forEach(m=>{
+    const ym=String(m.fecha||"").slice(0,7);
+    porMes[ym]=(porMes[ym]||0)+(m.importe||0);
+  });
+  const meses=Object.keys(porMes).sort();
+  const total=Object.values(porMes).reduce((s,v)=>s+v,0);
+  return {porMes, meses, total, promedio: meses.length ? total/meses.length : 0};
+}
+
 function showCatDetail(cat, tipo){
   tipo=tipo||"Gasto";
   if(cat==="Resultado inversiones" || cat==="Pérdida en inversiones"){
@@ -556,21 +572,15 @@ function showCatDetail(cat, tipo){
     });
   }
   movsCat=movsCat.sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
-  const total=movsCat.reduce((s,m)=>s+(m.importe||0),0);
   const iconCat=getIcon(cat);
+  const {porMes, meses, total, promedio}=promedioDeCategoria(movsCat);
   document.getElementById("cat-detail-title").textContent=`${iconCat} ${cat} · ${dashYear}`;
   let html=`<div class="inset">
     <div class="seccion-label">Total ${dashYear} · ${esIngreso?"Ingresos":"Gastos"}</div>
     <div style="font-size:22px;font-weight:600;color:${color};margin-top:3px">${fmtS(total||(esIngreso?0:(HIST_CAT_YEAR[String(dashYear)]||{})[cat]||0))}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">${movsCat.length} ${movsCat.length===1?"movimiento":"movimientos"}${total===0&&!esIngreso?" (datos del histórico)":""}</div>
+    ${meses.length?`<div style="font-size:12px;color:var(--muted);margin-top:6px">Promedio mensual (${meses.length} ${meses.length===1?"mes":"meses"}): <strong style="color:${color}">${fmtS(promedio)}</strong></div>`:""}
   </div>`;
-  // Agrupado por mes
-  const porMes={};
-  movsCat.forEach(m=>{
-    const ym=String(m.fecha||"").slice(0,7);
-    porMes[ym]=(porMes[ym]||0)+(m.importe||0);
-  });
-  const meses=Object.keys(porMes).sort();
   if(meses.length){
     const maxM=Math.max(...Object.values(porMes));
     html+=`<div class="seccion-label mb-6">Por mes</div>`;

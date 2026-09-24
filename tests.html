@@ -510,6 +510,71 @@ test("showCatDetail delega en la pantalla dedicada", async ()=>{
 });
 
 // ═══════════════════════════════════════════
+// PROMEDIO POR CATEGORÍA (Dashboard → tocar una categoría)
+// ═══════════════════════════════════════════
+// Pedido del usuario: el mismo promedio mensual del gráfico principal, pero al tocar una
+// categoría de gasto o de ingreso puntual.
+grupo("Detalle de categoría: promedio mensual");
+
+test("promedioDeCategoria promedia solo los meses en los que la categoría tuvo movimientos", ()=>{
+  const movsCat=[
+    {id:1, cat:"Auto", importe:30000, fecha:"2026-06-05"},
+    {id:2, cat:"Auto", importe:30000, fecha:"2026-06-20"}, // mismo mes: se suman antes de promediar
+    {id:3, cat:"Auto", importe:60000, fecha:"2026-08-10"}
+    // julio no tiene ningún movimiento de Auto: no cuenta como "gastaste $0 en Auto en julio"
+  ];
+  const r=promedioDeCategoria(movsCat);
+  igual(r.meses.length, 2, "dos meses con movimientos (junio y agosto), no tres");
+  igual(r.total, 120000);
+  igual(r.promedio, 60000, "promedio = 120.000 / 2 meses, no / 3");
+});
+
+test("sin movimientos, no hay promedio ni división por cero", ()=>{
+  const r=promedioDeCategoria([]);
+  igual(r.meses.length, 0);
+  igual(r.promedio, 0);
+});
+
+function abrirDetalleCat(lista, cat, tipo, anio){
+  const ids=["cat-detail-title","cat-detail-content","modal-cat-detail"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const movsAntes=movs, anioAntes=dashYear;
+  movs=lista; dashYear=anio||"2026";
+  try{
+    showCatDetail(cat, tipo);
+    return {titulo:creados[0].textContent, html:creados[1].innerHTML, texto:creados[1].innerText||creados[1].textContent};
+  } finally {
+    creados.forEach(e=>e.remove());
+    movs=movsAntes; dashYear=anioAntes;
+  }
+}
+
+test("el detalle de una categoría de GASTO muestra el promedio mensual", ()=>{
+  const lista=[
+    {id:1, tipo:"Gasto", cat:"Supermercado", importe:100000, fecha:"2026-06-05"},
+    {id:2, tipo:"Gasto", cat:"Supermercado", importe:140000, fecha:"2026-07-05"}
+  ];
+  const r=abrirDetalleCat(lista, "Supermercado", "Gasto", "2026");
+  cierto(r.texto.includes("Promedio mensual"), "no aparece el promedio: "+r.texto);
+  cierto(r.texto.includes("120.000"), "el promedio (100.000+140.000)/2 no aparece: "+r.texto);
+});
+
+test("el detalle de una categoría de INGRESO también muestra el promedio mensual", ()=>{
+  const lista=[
+    {id:1, tipo:"Ingreso", cat:"Freelance", importe:200000, fecha:"2026-06-05"},
+    {id:2, tipo:"Ingreso", cat:"Freelance", importe:300000, fecha:"2026-07-05"}
+  ];
+  const r=abrirDetalleCat(lista, "Freelance", "Ingreso", "2026");
+  cierto(r.texto.includes("Promedio mensual"), "no aparece el promedio en un ingreso: "+r.texto);
+  cierto(r.texto.includes("250.000"), "el promedio (200.000+300.000)/2 no aparece: "+r.texto);
+});
+
+test("sin movimientos en esa categoría, no se inventa un promedio", ()=>{
+  const r=abrirDetalleCat([], "Categoría vacía", "Gasto", "2026");
+  cierto(!r.texto.includes("Promedio mensual"), "no puede haber promedio sin ningún movimiento: "+r.texto);
+});
+
+// ═══════════════════════════════════════════
 // ANIMACIONES
 // ═══════════════════════════════════════════
 grupo("Animaciones");
