@@ -4365,6 +4365,49 @@ test("con el año vacío, no se pisa la instrucción con nada roto", ()=>{
   });
 });
 
+grupo("Dashboard: promedio mensual de ingresos y gastos");
+
+// Pedido del usuario: en el gráfico de "Ingresos, gastos y balance" quiere ver un promedio,
+// no solo el total del año — un total dice poco si no sabés a cuántos meses corresponde.
+test("promedioMensualHTML calcula el promedio de ingresos y gastos, no del balance", ()=>{
+  // DATOS_GRAFICO = enero (ingreso 100.000, gasto 60.000) y febrero (ingreso 80.000, gasto 95.000).
+  // Promedio ingreso = 90.000 · promedio gasto = 77.500.
+  const html=promedioMensualHTML(DATOS_GRAFICO);
+  cierto(html.includes("90.000"), "no aparece el promedio de ingresos: "+html);
+  cierto(html.includes("77.500"), "no aparece el promedio de gastos: "+html);
+});
+
+test("un mes sin movimientos no cuenta para el promedio (lo hundiría)", ()=>{
+  // Mismo criterio que comparativaMes() en analisis.js: un mes en $0 no es un mes "flojo", es
+  // un mes que no se cargó (por ejemplo, todavía no pasó). Si contara, dos meses reales de
+  // $100.000 más un tercero vacío darían un promedio de $66.667 en vez de $100.000.
+  const conUnMesVacio=[
+    {mes:"2026-01", ingreso:100000, gasto:0, balance:100000},
+    {mes:"2026-02", ingreso:100000, gasto:0, balance:100000},
+    {mes:"2026-03", ingreso:0, gasto:0, balance:0}
+  ];
+  const html=promedioMensualHTML(conUnMesVacio);
+  cierto(html.includes("100.000"), "el mes vacío hundió el promedio: "+html);
+  cierto(html.includes("(2 meses)"), "tiene que contar 2 meses, no 3: "+html);
+});
+
+test("sin ningún mes con datos, no muestra un promedio inventado", ()=>{
+  igual(promedioMensualHTML([]), "");
+  igual(promedioMensualHTML([{mes:"2026-01", ingreso:0, gasto:0, balance:0}]), "");
+});
+
+test("renderDashYear calcula y muestra el promedio mensual", async ()=>{
+  // renderDashYear() depende de un montón de piezas del Dashboard real (año, categorías,
+  // presupuestos) que este harness no arma; se verifica en el código fuente, mismo criterio
+  // que otras piezas de UI que no se pueden ejercitar de forma segura acá.
+  const js=await (await fetch("js/dashboard.js")).text();
+  const i=js.indexOf("function renderDashYear(");
+  cierto(i>=0, "no se encontró renderDashYear");
+  const cuerpo=js.slice(i, js.indexOf("renderChartMensualBI(yearData)", i));
+  cierto(cuerpo.includes('getElementById("dash-promedio")'), "no busca el elemento del promedio: "+cuerpo);
+  cierto(cuerpo.includes("promedioMensualHTML(yearData)"), "no calcula el promedio: "+cuerpo);
+});
+
 grupo("Duplicados en Inversiones");
 
 // Con ticker, fecha, categoría, subcategoría e importe iguales a la vez, la chance de que

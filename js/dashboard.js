@@ -181,6 +181,8 @@ function renderDashYear(){
 
   // Reset detalles al cambiar de año
   document.getElementById("dash-detail").innerHTML="Tocá un mes para ver el detalle";
+  const promEl=document.getElementById("dash-promedio");
+  if(promEl) promEl.innerHTML=promedioMensualHTML(yearData);
 
   renderChartMensualBI(yearData);
 
@@ -912,6 +914,20 @@ let chartInvHistoricoInstance=null;
 // llena al tocar una barra y también apenas se dibuja el gráfico, con el último mes del año
 // elegido — así siempre hay un número real ahí en vez de una instrucción ("Tocá un mes...")
 // que se queda para siempre si nadie toca nada.
+// Promedio mensual de ingresos y gastos del año elegido: pone en contexto los totales de
+// arriba (los chips de Ingresos/Gastos/Balance) — "$1,7M de gasto en el año" dice poco si no
+// sabés a cuántos meses corresponde. Solo promedia meses CON datos, mismo criterio que
+// comparativaMes() en analisis.js: "un mes sin movimientos no es un mes de $0, es un mes que
+// no cargaste, y meterlo en el promedio lo hunde".
+function promedioMensualHTML(yearData){
+  const conDatos=(yearData||[]).filter(d=>d.ingreso>0 || d.gasto>0);
+  if(!conDatos.length) return "";
+  const n=conDatos.length;
+  const promIng=conDatos.reduce((s,d)=>s+d.ingreso,0)/n;
+  const promGas=conDatos.reduce((s,d)=>s+d.gasto,0)/n;
+  return `Promedio mensual (${n} ${n===1?"mes":"meses"}): <span style="color:var(--success);font-weight:600">${fmtTotal(promIng)}</span> ingresos · <span style="color:var(--danger);font-weight:600">${fmtTotal(promGas)}</span> gastos`;
+}
+
 function detalleMesHTML(d){
   const balColor=d.balance>=0?"var(--success)":"var(--danger)";
   return `<div style="display:flex;justify-content:space-around;align-items:center;text-align:center;flex-wrap:wrap;gap:6px">
