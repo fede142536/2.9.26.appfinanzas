@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v133">
+<meta name="enola-version" content="enola-v134">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -652,6 +652,7 @@
        de contra una escala aparte. -->
   <div class="card">
     <div class="card-title">Ingresos, gastos y balance</div>
+    <div id="dash-promedio" class="txt-xs txt-muted" style="text-align:center;margin-bottom:8px"></div>
     <div id="dash-detail" style="background:var(--bg);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--muted);text-align:center">Tocá un mes para ver el detalle</div>
     <div style="position:relative;height:230px"><canvas id="chart-mensual"></canvas></div>
   </div>
