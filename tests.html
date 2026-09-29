@@ -357,14 +357,47 @@ test("los tickers vienen ordenados de mayor a menor", ()=>{
   igual(n.map(t=>t.ticker), ["YPF","BCAHA"], "300.000 en juego pesa más que 100.000");
 });
 
-test("Ingresos y Gastos quedan limpios de inversiones", async ()=>{
+// El bug reportado por el usuario: "Todos" nunca sumaba la ganancia reconocida de inversión a
+// Ingresos, pero la pestaña Ingreso sí — mismo mes, dos "Ingresos" distintos por exactamente el
+// monto de la ganancia. BCAHA compra 900.000 y rescata 1.000.000 el mismo mes → ganancia
+// reconocida $100.000 (YPF solo compra: no es ganancia ni pérdida, sigue siendo tu plata).
+test("Ingresos y Gastos quedan limpios del FLUJO bruto de inversión, pero suman el resultado reconocido", async ()=>{
   const txt=await chipsDeMovsAnimados(MES_INV, "Todos", "", "2026-08");
-  cierto(txt.includes("2.000.000"), "Ingresos tiene que ser solo el sueldo: " + txt);
+  cierto(txt.includes("2.100.000"), "Ingresos tiene que sumar la ganancia reconocida (2.000.000+100.000): " + txt);
   cierto(txt.includes("500.000"), "Gastos tiene que ser solo el supermercado: " + txt);
   cierto(!txt.includes("2.900.000") && !txt.includes("3.000.000"),
-         "se colaron los rescates en Ingresos: " + txt);
+         "se coló el FLUJO bruto de los rescates en Ingresos (eso va aparte, en los chips de inversión): " + txt);
   cierto(!txt.includes("1.400.000") && !txt.includes("1.700.000"),
-         "se colaron las compras en Gastos: " + txt);
+         "se coló el FLUJO bruto de las compras en Gastos (eso va aparte, en los chips de inversión): " + txt);
+});
+
+test("el Ingresos de 'Todos' coincide con el de la pestaña Ingreso, mismo mes y misma plata", async ()=>{
+  const txtTodos=await chipsDeMovsAnimados(MES_INV, "Todos", "", "2026-08");
+  const txtIngreso=chipsDeMovs(MES_INV, "Ingreso", "", "2026-08");
+  cierto(txtTodos.includes("2.100.000"), "Todos: "+txtTodos);
+  cierto(txtIngreso.includes("2.100.000"), "Ingreso: "+txtIngreso);
+});
+
+test("◈ Invertido suma el total puesto en el mercado este mes, todos los activos juntos", ()=>{
+  // 900.000 (BCAHA) + 300.000 (YPF) = 1.200.000 — no hay que sumar los chips por ticker a mano.
+  const txt=chipsDeMovs(MES_INV, "Todos", "", "2026-08");
+  cierto(txt.includes("1.200.000"), "no aparece el total invertido: "+txt);
+});
+
+test("◈ Neto inversión suma el flujo de todos los tickers, sin reemplazar los chips por ticker", ()=>{
+  // 100.000 (BCAHA) − 300.000 (YPF) = −200.000, mismo número que netoInvTotal().
+  const dom=document.createElement("div");
+  document.body.appendChild(dom);
+  try{
+    dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
+    const chips=[...dom.querySelectorAll(".chip")].map(c=>c.innerHTML);
+    const neto=chips.find(c=>c.includes("Neto inversión"));
+    cierto(!!neto, "falta el chip de neto de inversión: "+chips.join(" | "));
+    cierto(/200\.000/.test(neto.replace(/<[^>]*>/g,"")), "el neto no muestra 200.000: "+neto);
+    cierto(neto.includes("--invest"), "neto negativo: sigue siendo tu plata puesta, no un gasto perdido: "+neto);
+    cierto(chips.some(c=>c.includes("BCAHA")) && chips.some(c=>c.includes("YPF")),
+      "los chips por ticker no pueden desaparecer, este es un resumen ADEMÁS de esos: "+chips.join(" | "));
+  } finally { dom.remove(); }
 });
 
 test("hay un chip por cada ticker operado en el mes", ()=>{
@@ -386,17 +419,44 @@ test("el neto positivo lleva signo + y el negativo no es rojo de gasto", ()=>{
   } finally { dom.remove(); }
 });
 
-test("Balance = Ingresos − Gastos + la suma de los netos", async ()=>{
-  // 2.000.000 − 500.000 + (100.000 − 300.000) = 1.300.000
+test("Balance = Ingresos − Gastos, con el resultado de inversión adentro de los dos (no el flujo de caja)", async ()=>{
+  // 2.100.000 (Ingresos, ya con la ganancia adentro) − 500.000 (Gastos) = 1.600.000.
+  // OJO: es DISTINTO de "Ingresos − Gastos + el neto de los tickers" (2.000.000−500.000+
+  // (100.000−300.000) = 1.300.000): ese neto es el FLUJO de caja del mes, no la ganancia
+  // reconocida. Mezclar esas dos cuentas en el Balance era parte del bug reportado.
   const txt=await chipsDeMovsAnimados(MES_INV, "Todos", "", "2026-08");
-  cierto(txt.includes("1.300.000"), "el balance no cierra con sus propias partes: " + txt);
-  igual(netoInvTotal(MES_INV).ars, -200000);
+  cierto(txt.includes("1.600.000"), "el balance no cierra con Ingresos−Gastos: " + txt);
+  cierto(!txt.includes("1.300.000"), "volvió a sumarle el flujo de caja de las inversiones al balance: " + txt);
+  igual(netoInvTotal(MES_INV).ars, -200000, "el flujo de caja en sí no cambió, solo dejó de sumarse al balance");
 });
 
 test("un mes sin inversiones no agrega chips de más", async ()=>{
   const txt=await chipsDeMovsAnimados(MES_INV.slice(0,2), "Todos", "", "2026-08");
   cierto(!txt.includes("◈"), "aparecieron chips de inversión sin inversiones: " + txt);
   cierto(txt.includes("1.500.000"), "y el balance sigue siendo ingresos − gastos: " + txt);
+});
+
+// El motor de resultado de inversiones (calcularResultadoInv, resultado-inversiones.js) nunca
+// devuelve hoy una ganancia negativa: el capital que no vuelve queda como "todavía invertido",
+// nunca como pérdida (por diseño — ver el comentario de esa función). Para probar que el CÓDIGO
+// se banca una pérdida si el motor algún día la reconoce, se mockea gananciaInvDelMes() en vez
+// de perseguir una combinación de movimientos reales que hoy no puede existir.
+test("una pérdida de inversión suma a Gastos (Todos y Gasto), nunca resta de Ingresos", async ()=>{
+  const original=gananciaInvDelMes;
+  gananciaInvDelMes=()=>({ars:-80000, usd:0});
+  const lista=[
+    {id:1, tipo:"Ingreso", cat:"Sueldo", importe:1000000, fecha:"2026-08-04", moneda:"ARS"},
+    {id:2, tipo:"Gasto",   cat:"Supermercado", importe:200000, fecha:"2026-08-06", moneda:"ARS"}
+  ];
+  try{
+    const txtTodos=await chipsDeMovsAnimados(lista, "Todos", "", "2026-08");
+    cierto(txtTodos.includes("1.000.000"), "una pérdida no puede tocar Ingresos: "+txtTodos);
+    cierto(txtTodos.includes("280.000"), "Gastos tiene que sumar la pérdida (200.000+80.000): "+txtTodos);
+
+    const txtGasto=chipsDeMovs(lista, "Gasto", "", "2026-08");
+    cierto(txtGasto.includes("280.000"), "la pestaña Gasto también tiene que sumar la pérdida: "+txtGasto);
+    cierto(txtGasto.includes("Resultado inv"), "falta el chip que explica por qué Gastos subió: "+txtGasto);
+  } finally { gananciaInvDelMes=original; }
 });
 
 test("los tickers en dólares no se mezclan con los pesos", ()=>{
