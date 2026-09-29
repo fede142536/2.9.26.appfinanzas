@@ -786,12 +786,18 @@ function renderMovs(){
     // Con una categoría elegida el chip suma LO QUE SE VE en la lista, igual que en Ingresos.
     // Si no, al filtrar por una categoría de ahorro o de inversión el chip marcaba $0 con la
     // lista llena de movimientos, porque esos montos no son consumo.
+    // Sin sub-filtro, además, se suma la PÉRDIDA reconocida de inversión del mes (si la hubo):
+    // misma regla que ya usa la pestaña Ingresos con la ganancia (ver el chip "📊 Resultado
+    // inv." de acá abajo), para que una pérdida se vea reflejada en algún lado y no solo en el
+    // texto de "Todos" — antes de esto, una pérdida no aparecía en Ingresos NI en Gastos.
+    const gananciaARS=filtroCategoria?0:(ganInv.ars||0);
+    const gananciaUSD=filtroCategoria?0:(ganInv.usd||0);
     const gastosTotalARS = filtroCategoria
       ? todoGastos.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0)
-      : todoGastos.filter(m=>esConsumo(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+      : todoGastos.filter(m=>esConsumo(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0) + Math.max(-gananciaARS,0);
     const gastosTotalUSD = filtroCategoria
       ? todoGastos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
-      : todoGastos.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+      : todoGastos.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(-gananciaUSD,0);
 
     let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Gastos ARS";
     let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val negative">${fmtTotal(gastosTotalARS)}</div></div>`;
@@ -801,6 +807,10 @@ function renderMovs(){
     chipsHtml+=`<div class="chip"><div class="chip-label">Cantidad</div><div class="chip-val">${todoGastos.length}</div></div>`;
     // Chips informativos cuando no hay sub-filtro de categoría (desglose de qué compone el total)
     if(!filtroCategoria){
+      if(Math.round(gananciaARS)!==0){
+        const colorRes=gananciaARS>=0?"var(--success)":"var(--danger)";
+        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorRes}">📊 Resultado inv.</div><div class="chip-val" style="color:${colorRes}">${gananciaARS>=0?"+":""}${fmtTotal(gananciaARS)}</div></div>`;
+      }
       if(ahorradoARS>0){
         chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Ahorrado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(ahorradoARS)}</div></div>`;
       }
@@ -886,38 +896,55 @@ function renderMovs(){
   } else {
     // Vista "Todos": ingresos / gastos / balance del mes, más un chip por cada ticker operado.
     //
-    // Ingresos y Gastos quedan LIMPIOS de inversiones. Los montos que movés al mercado son de
-    // otra escala que tu sueldo y el supermercado: mezclados ahí tapan la única lectura que se
-    // mira todos los días, que es cuánto entró y cuánto se fue.
+    // Ingresos y Gastos quedan LIMPIOS del FLUJO BRUTO de inversión (comprar/vender). Los montos
+    // que movés al mercado son de otra escala que tu sueldo y el supermercado: mezclados ahí
+    // tapan la única lectura que se mira todos los días, que es cuánto entró y cuánto se fue por
+    // consumo. Ese flujo bruto se ve aparte, en el chip "◈ Invertido" y en un chip por ticker.
     //
-    // Las inversiones van aparte, un chip por ticker con su neto del mes. Y el Balance las vuelve
-    // a sumar, porque el bolsillo sí las siente:
+    // Lo que SÍ entra a Ingresos/Gastos es el RESULTADO reconocido de esas inversiones (ganancia
+    // o pérdida, no el capital que se mueve): antes esta pestaña no lo sumaba en ningún lado —
+    // solo aparecía como texto informativo más abajo ("◈ Resultado: +$X") — mientras que la
+    // pestaña Ingresos SÍ lo sumaba a su Ingresos. Mismo mes, mismo dato, dos Ingresos distintos
+    // (bug reportado por el usuario). Ahora usan la misma regla en las dos pestañas: una
+    // ganancia suma a Ingresos, una pérdida suma a Gastos — igual que ya hace totalesDePlata()
+    // con ingresosTotal/gastosTotal (estado-categorias.js).
     //
-    //     Balance = Ingresos − Gastos + Σ (neto de cada ticker)
+    //     Balance = Ingresos − Gastos   (con el resultado de inversión ya adentro de los dos)
     //
-    // INGRESOS: ingresos puros + los retiros del fondo que se consumieron. El retiro entra a la
-    //           mano y su compra sale, así que se cancelan solos y el fondo baja: es lo que pasó.
-    //           Un traspaso no entra por ningún lado — no lo gastaste, solo cambió de bolsillo.
-    // GASTOS  : consumo (esConsumo).
+    // INGRESOS: ingresos puros + los retiros del fondo que se consumieron + la ganancia (si la
+    //           hubo). El retiro entra a la mano y su compra sale, así que se cancelan solos y
+    //           el fondo baja: es lo que pasó. Un traspaso no entra por ningún lado — no lo
+    //           gastaste, solo cambió de bolsillo.
+    // GASTOS  : consumo (esConsumo) + la pérdida (si la hubo).
     const retirosGastados=mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda!=="USD")
       .reduce((s,m)=>s+(m.importe||0),0);
-    const ingTotal=totales.ingresos+retirosGastados;
-    const gasTotal=totales.gastos;
+    const gananciaARS=ganInv.ars||0;
+    const gananciaUSD=ganInv.usd||0;
+    const ingTotal=Math.round((totales.ingresos+retirosGastados+Math.max(gananciaARS,0))*100)/100;
+    const gasTotal=Math.round((totales.gastos+Math.max(-gananciaARS,0))*100)/100;
 
     // Un chip por ticker: neto = rescates − suscripciones. Negativo significa "hay plata puesta
     // ahí, todavía sin rescatar", no que hayas perdido; por eso va en color de inversión y no en
-    // rojo de gasto.
+    // rojo de gasto. netoInv es la suma de todos los tickers juntos: el FLUJO de caja del mes
+    // (cuánto se puso menos cuánto se sacó), que es una cuenta DISTINTA de la ganancia de arriba
+    // — comprar algo que todavía no vendiste mueve caja pero no es ni ganancia ni pérdida.
     const netosTicker=netoPorTickerDelPeriodo(mesMovs);
     const netoInv=netoInvTotal(mesMovs);
-    const balCaja=Math.round((ingTotal-gasTotal+netoInv.ars)*100)/100;
+    const balCaja=Math.round((ingTotal-gasTotal)*100)/100;
+
+    // Cuánto se puso a trabajar en el mercado este mes, todos los activos juntos (el chip por
+    // ticker ya lo desglosa uno por uno; este suma todo para no tener que sumarlos a mano).
+    const invertidoARS=totales.invSale;
+    const invertidoUSD=mesMovs.filter(m=>m.tipo==="Inversion"&&!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
 
     // Lo que pusiste a trabajar este mes en el fondo de ahorro (las inversiones ya tienen su chip).
     const guardado=aho;
 
-    // Misma separación en dólares.
-    const gastosUSDTotal=mesMovs.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
-    const ingresosUSDTotal=mesMovs.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
-      + mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0);
+    // Misma separación en dólares, con el mismo resultado de inversión adentro.
+    const gastosUSDTotal=Math.round((mesMovs.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)+Math.max(-gananciaUSD,0))*100)/100;
+    const ingresosUSDTotal=Math.round((mesMovs.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
+      + mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
+      + Math.max(gananciaUSD,0))*100)/100;
 
     let chipsHtml=`
       <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtTotal(0)}</div></div>
@@ -926,11 +953,25 @@ function renderMovs(){
     if(Math.round(guardado)!==0){
       chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Guardado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(guardado)}</div></div>`;
     }
+    if(invertidoARS>0){
+      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(invertidoARS)}</div></div>`;
+    }
+    if(Math.round(netoInv.ars)!==0){
+      const colorNeto=netoInv.ars>=0?"var(--success)":"var(--invest)";
+      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorNeto}">◈ Neto inversión</div><div class="chip-val" style="color:${colorNeto}">${netoInv.ars>0?"+":""}${fmtTotal(netoInv.ars)}</div></div>`;
+    }
     if(ingresosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Ingresos USD</div><div class="chip-val positive">USD ${ingresosUSDTotal.toFixed(2)}</div></div>`;
     }
     if(gastosUSDTotal>0){
       chipsHtml+=`<div class="chip"><div class="chip-label">Gastos USD</div><div class="chip-val negative">USD ${gastosUSDTotal.toFixed(2)}</div></div>`;
+    }
+    if(invertidoUSD>=0.01){
+      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido USD</div><div class="chip-val" style="color:var(--invest)">USD ${invertidoUSD.toFixed(2)}</div></div>`;
+    }
+    if(Math.abs(netoInv.usd)>=0.01){
+      const colorNetoU=netoInv.usd>=0?"var(--success)":"var(--invest)";
+      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorNetoU}">◈ Neto inversión USD</div><div class="chip-val" style="color:${colorNetoU}">${netoInv.usd>0?"+":""}USD ${netoInv.usd.toFixed(2)}</div></div>`;
     }
     // Los chips de inversión van al final, ya ordenados de mayor a menor por el módulo.
     netosTicker.forEach(t=>{
