@@ -16,6 +16,12 @@ function init(){
   if(mesInicioFrecEl) mesInicioFrecEl.value=ym;
   document.getElementById("exp-desde").value=ym;
   document.getElementById("exp-hasta").value=ym;
+  const tcCuotasEl=document.getElementById("tc-cuotas");
+  if(tcCuotasEl) tcCuotasEl.value="6";
+  buildCuotasChips();
+  ["inp-fecha","inv-fecha","tc-fecha","cambio-fecha"].forEach(refrescarFechaUI);
+  syncCurrencyPill("inp-moneda");
+  syncCurrencyPill("tc-moneda");
   migrarCategoriasHuerfanas();
   // Sin esto, los toggles de "Es ahorro"/"Sale de mis ahorros"/"Gasto frecuente" quedaban
   // ocultos (display:none del HTML) hasta que el usuario tocaba manualmente una pestaña de
@@ -94,7 +100,53 @@ function buildInvCats(){
   const valActual=sel.value;
   sel.innerHTML=ordenarCats("Inversion", cats).map(c=>`<option>${escapeHtml(c)}</option>`).join("");
   if(valActual && cats[valActual]) sel.value=valActual;
+  buildInvCatChips();
   updateInvSubcats();
+}
+// Chips de categoría de Inversión (reemplazan visualmente el <select id="inv-cat">, que queda
+// oculto pero sigue siendo lo que lee guardarSinFreno()). Tocar un chip corre lo mismo que
+// elegir una opción del select: setea su .value y dispara updateInvSubcats().
+function buildInvCatChips(){
+  const cont=document.getElementById("inv-cat-chips");
+  const sel=document.getElementById("inv-cat");
+  // sel.options (no solo !sel): en tests.html, getElementById devuelve un <div> descartable
+  // para cualquier id que no exista en su DOM reducido, así que sel siempre es "truthy".
+  if(!cont || !sel || !sel.options) return;
+  const actual=sel.value;
+  cont.innerHTML=[...sel.options].map(o=>{
+    const on=o.value===actual;
+    return `<button type="button" class="inv-cat-chip${on?" active":""}" data-cat="${escapeHtml(o.value)}" onclick="pickInvCat(this)">${getIcon(o.value,"📦")} ${escapeHtml(o.value)}</button>`;
+  }).join("");
+}
+function pickInvCat(btn){
+  const sel=document.getElementById("inv-cat");
+  sel.value=btn.dataset.cat;
+  document.querySelectorAll("#inv-cat-chips .inv-cat-chip").forEach(b=>b.classList.toggle("active", b===btn));
+  updateInvSubcats();
+}
+// "Recientes": últimos 5 tickers distintos usados en movimientos de Inversión, más nuevo primero
+// (movs está ordenado así porque se guardan con unshift). Tocar uno completa el campo.
+function buildTickerRecientes(){
+  const cont=document.getElementById("inv-ticker-recientes");
+  if(!cont) return;
+  const vistos=new Set();
+  const recientes=[];
+  for(const m of movs){
+    if(m.tipo==="Inversion" && m.ticker){
+      const t=String(m.ticker).toUpperCase();
+      if(!vistos.has(t)){ vistos.add(t); recientes.push(t); }
+      if(recientes.length>=5) break;
+    }
+  }
+  if(!recientes.length){ cont.innerHTML=""; return; }
+  const actual=(document.getElementById("inv-ticker").value||"").toUpperCase();
+  cont.innerHTML=`<span class="ticker-hint">Recientes</span>`+recientes.map(t=>
+    `<button type="button" class="ticker-chip${t===actual?" active":""}" onclick="pickTicker('${t.replace(/'/g,"\\'")}')">${escapeHtml(t)}</button>`
+  ).join("");
+}
+function pickTicker(t){
+  document.getElementById("inv-ticker").value=t;
+  buildTickerRecientes();
 }
 // ═══════════════════════════════════════════
 // PREDICCIÓN DE CUENTA (frecuencia/moda estadística sobre el historial)
@@ -356,10 +408,8 @@ function setTipo(t){
   document.getElementById("campos-inv").style.display=t==="Inversion"?"block":"none";
   document.getElementById("campos-tc").style.display=t==="Tarjeta"?"block":"none";
   document.getElementById("campos-cambio").style.display=t==="Cambio"?"block":"none";
-  // El toggle de ahorro solo aparece en Gasto
-  document.getElementById("ahorro-toggle-group").style.display=(t==="Gasto")?"block":"none";
-  document.getElementById("frecuente-toggle-group").style.display=(t==="Gasto")?"block":"none";
-  document.getElementById("recuperable-group").style.display=(t==="Gasto")?"block":"none";
+  // La card de opciones (ahorro/traspaso/frecuente/recuperable) solo aparece en Gasto
+  document.getElementById("opciones-gasto").style.display=(t==="Gasto")?"":"none";
   if(t!=="Gasto"){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
@@ -367,14 +417,18 @@ function setTipo(t){
     const frecEl=document.getElementById("inp-frecuente");
     if(frecEl) frecEl.checked=false;
     document.getElementById("inp-recup").value="";
+    const recupSw=document.getElementById("inp-recup-switch");
+    if(recupSw) recupSw.checked=false;
+    const recupWrap=document.getElementById("recup-monto-wrap");
+    if(recupWrap) recupWrap.style.display="none";
   }
   const labels={Gasto:"Guardar gasto",Ingreso:"Guardar ingreso",Inversion:"Guardar inversión",Tarjeta:"Guardar tarjeta",Cambio:"Guardar cambio"};
   const cls={Gasto:"btn-gasto",Ingreso:"btn-ingreso",Inversion:"btn-inversion",Tarjeta:"btn-tarjeta",Cambio:"btn-cambio"};
   const btn=document.getElementById("btn-guardar");
   btn.className="btn-primary "+cls[t];btn.textContent=labels[t];
   if(t==="Gasto"||t==="Ingreso")buildCats();
-  if(t==="Tarjeta"){ buildTcCats(); buildTarjetaSelect("tc-tarjeta"); }
-  if(t==="Inversion") buildInvCats();
+  if(t==="Tarjeta"){ buildTcCats(); buildTarjetaSelect("tc-tarjeta"); buildCuotasChips(); }
+  if(t==="Inversion"){ buildInvCats(); buildTickerRecientes(); }
   if(t==="Cambio"){ buildCuentaSelect("cambio-cuenta"); setSentidoCambio(sentidoCambio); }
 }
 
@@ -387,8 +441,8 @@ let sentidoCambio="compra";
 function setSentidoCambio(s){
   sentidoCambio = s==="venta" ? "venta" : "compra";
   const compra = sentidoCambio==="compra";
-  document.getElementById("btn-cambio-compra").className = "type-btn"+(compra?" active-cambio":"");
-  document.getElementById("btn-cambio-venta").className  = "type-btn"+(compra?"":" active-cambio");
+  document.getElementById("btn-cambio-compra").className = "sentido-btn"+(compra?" active":"");
+  document.getElementById("btn-cambio-venta").className  = "sentido-btn"+(compra?"":" active");
   // Las etiquetas se dan vuelta: en una compra los pesos salen y en una venta entran.
   document.getElementById("cambio-ars-label").textContent = compra ? "Pesos que pagué" : "Pesos que recibí";
   document.getElementById("cambio-usd-label").textContent = compra ? "Dólares que recibí" : "Dólares que entregué";
@@ -397,28 +451,33 @@ function setSentidoCambio(s){
   // dólares que puedan venir del fondo en vez de tu cash.
   const ahorroGroup=document.getElementById("cambio-ahorro-group");
   if(ahorroGroup){
-    ahorroGroup.style.display = compra ? "block" : "none";
+    ahorroGroup.style.display = compra ? "" : "none";
     if(!compra){ const chk=document.getElementById("cambio-ahorro"); if(chk) chk.checked=false; }
   }
   const usaAhorroGroup=document.getElementById("cambio-usaahorro-group");
   if(usaAhorroGroup){
-    usaAhorroGroup.style.display = compra ? "none" : "block";
+    usaAhorroGroup.style.display = compra ? "none" : "";
     if(compra){ const chk=document.getElementById("cambio-usaahorro"); if(chk) chk.checked=false; }
   }
   calcTipoCambio();
 }
 
 // Muestra a cuánto te salió el dólar, en vivo. Es el dato que después no te acordás.
+// La franja (#cambio-tc) queda siempre visible en la card de monto; lo único que cambia es
+// el valor, entre el resultado y un placeholder pidiendo los dos montos.
 function calcTipoCambio(){
-  const el=document.getElementById("cambio-tc");
-  if(!el) return;
+  const val=document.getElementById("cambio-tc-val");
+  if(!val) return;
   const ars=parseFloat(limpiarImporte(document.getElementById("cambio-ars").value))||0;
   const usd=parseFloat(document.getElementById("cambio-usd").value)||0;
   const tc=tipoDeCambio(ars,usd);
-  if(!tc){ el.style.display="none"; return; }
-  el.style.display="block";
-  el.innerHTML=`<div class="seccion-label">Tipo de cambio</div>
-    <div style="font-size:18px;font-weight:600;color:var(--accent);margin-top:2px">${fmtS(tc)} por dólar</div>`;
+  if(!tc){
+    val.textContent="Poné los dos montos";
+    val.classList.add("muted");
+  } else {
+    val.textContent=fmtS(tc)+" por dólar";
+    val.classList.remove("muted");
+  }
 }
 
 async function guardarCambio(){
@@ -458,10 +517,9 @@ async function guardarCambio(){
 }
 function toggleFrecuente(){
   const isFrec=document.getElementById("tc-frecuente").checked;
-  document.getElementById("tc-cuotas-row").style.display=isFrec?"none":"grid";
+  document.getElementById("tc-cuotas-row").style.display=isFrec?"none":"flex";
   document.getElementById("tc-frec-row").style.display=isFrec?"grid":"none";
-  const isUSD=document.getElementById("tc-moneda").value==="USD";
-  document.getElementById("tc-total-label").textContent=(isFrec?"Monto mensual":"Monto total")+(isUSD?" (USD)":" ($)");
+  document.getElementById("tc-total-label").textContent=isFrec?"Monto mensual":"Monto total";
   // Sincronizar el mes de inicio si se vuelve a cuotas
   if(!isFrec){
     const v=document.getElementById("tc-mes-inicio-frec").value;
@@ -476,31 +534,87 @@ function toggleFrecuente(){
 function toggleTcMoneda(){
   const isUSD=document.getElementById("tc-moneda").value==="USD";
   document.getElementById("tc-amount-prefix").textContent=isUSD?"USD":"$";
-  const isFrec=document.getElementById("tc-frecuente").checked;
-  document.getElementById("tc-total-label").textContent=(isFrec?"Monto mensual":"Monto total")+(isUSD?" (USD)":" ($)");
   calcCuota();
 }
+// La franja de cuota/monto mensual (#tc-preview) queda siempre visible dentro de la card de
+// monto; antes se ocultaba hasta tener un importe cargado, ahora simplemente muestra $0.
 function calcCuota(){
   const total=parseFloat(limpiarImporte(document.getElementById("tc-total").value))||0;
   const isFrec=document.getElementById("tc-frecuente").checked;
   const isUSD=document.getElementById("tc-moneda").value==="USD";
-  const prev=document.getElementById("tc-preview");
-  const lbl=document.getElementById("tc-cuota-label")||document.querySelector("#tc-preview span:first-child");
+  const lbl=document.getElementById("tc-cuota-label");
   const fmtCur=(v)=>isUSD?`USD ${v.toFixed(2)}`:fmt(v);
+  const cero=isUSD?"USD 0":"$0";
   if(isFrec){
-    if(total>0){
-      prev.style.display="block";
-      if(lbl) lbl.textContent="Monto mensual";
-      document.getElementById("tc-cuota-val").textContent=fmtCur(total);
-    } else prev.style.display="none";
+    if(lbl) lbl.textContent="Monto mensual";
+    document.getElementById("tc-cuota-val").textContent=total>0?fmtCur(total):cero;
   } else {
     const c=parseInt(document.getElementById("tc-cuotas").value)||1;
-    if(total>0&&c>0){
-      prev.style.display="block";
-      if(lbl) lbl.textContent="Valor por cuota";
-      document.getElementById("tc-cuota-val").textContent=fmtCur(total/c);
-    } else prev.style.display="none";
+    if(lbl) lbl.textContent="Valor por cuota";
+    document.getElementById("tc-cuota-val").textContent=(total>0&&c>0)?fmtCur(total/c):cero;
   }
+  refreshSimIfOpen();
+}
+// Chips de cuotas totales (reemplazan el <input type="number"> de siempre, que sigue oculto
+// y es lo que lee guardarSinFreno()).
+function buildCuotasChips(){
+  const cont=document.getElementById("tc-cuotas-chips");
+  const input=document.getElementById("tc-cuotas");
+  if(!cont || !input) return;
+  const actual=parseInt(input.value,10)||6;
+  cont.innerHTML=[1,3,6,9,12,18].map(q=>
+    `<button type="button" class="cuota-chip${q===actual?" active":""}" data-q="${q}" onclick="pickCuotas(${q})">${q}</button>`
+  ).join("");
+}
+function pickCuotas(q){
+  document.getElementById("tc-cuotas").value=q;
+  document.querySelectorAll("#tc-cuotas-chips .cuota-chip").forEach(b=>b.classList.toggle("active", Number(b.dataset.q)===q));
+  calcCuota();
+}
+// ── SIMULADOR INLINE ("¿Me lo banco?") ──
+// Reemplaza al modal: un panel que se abre/cierra dentro de la misma card, tomando monto,
+// cuotas y mes directo del formulario (antes había que volver a tipearlos en el modal).
+function toggleSimuladorInline(){
+  const body=document.getElementById("tc-sim-body");
+  const chev=document.getElementById("tc-sim-chevron");
+  if(!body) return;
+  const abrir = body.style.display==="none" || !body.style.display;
+  body.style.display = abrir ? "flex" : "none";
+  if(chev) chev.textContent = abrir ? "▴" : "▾";
+  if(abrir) correrSimulacionInline();
+}
+function refreshSimIfOpen(){
+  const body=document.getElementById("tc-sim-body");
+  if(body && body.style.display==="flex") correrSimulacionInline();
+}
+function correrSimulacionInline(){
+  const el=document.getElementById("tc-sim-rows");
+  if(!el) return;
+  const monto=parseFloat(limpiarImporte(document.getElementById("tc-total").value))||0;
+  const cuotas=parseInt(document.getElementById("tc-cuotas").value,10)||0;
+  const mes=document.getElementById("tc-mes-inicio").value;
+  const r=(monto>0&&cuotas>0&&mes) ? simularCuotas(monto, cuotas, mes, movs, currentYM()) : null;
+  if(!r){
+    el.innerHTML=`<p class="txt-xs txt-muted" style="text-align:center;padding:6px 0">Poné un monto y las cuotas para simular.</p>`;
+    return;
+  }
+  const maxTotal=Math.max(...r.filas.map(f=>f.total),1);
+  el.innerHTML=r.filas.map(f=>`
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="width:30px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase">${escapeHtml(mesLbl(f.ym).slice(0,3))}</span>
+      <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;display:flex">
+        <span style="height:100%;width:${Math.round(f.yaComprometido/maxTotal*100)}%;background:var(--border)"></span>
+        <span style="height:100%;width:${Math.round(f.nueva/maxTotal*100)}%;background:var(--warning)"></span>
+      </div>
+      <span style="width:84px;text-align:right;font-size:12px;font-weight:600">${fmtS(f.total)}</span>
+    </div>`).join("");
+}
+// "Monto recuperable" es un switch: al prenderse muestra el campo de importe debajo.
+function toggleRecuperable(){
+  const on=document.getElementById("inp-recup-switch").checked;
+  const wrap=document.getElementById("recup-monto-wrap");
+  if(wrap) wrap.style.display=on?"flex":"none";
+  if(!on) document.getElementById("inp-recup").value="";
 }
 // Compara un monto nuevo contra el historial del usuario (mismo tipo, misma moneda) para detectar
 // posibles errores de tipeo (ej: un cero de más). Solo actúa si hay suficiente historial para comparar
@@ -654,16 +768,22 @@ function resetForm(t){
     document.getElementById("inp-importe").value="";
     document.getElementById("inp-nota").value="";
     document.getElementById("inp-moneda").value="ARS";
+    syncCurrencyPill("inp-moneda");
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
     document.getElementById("inp-traspaso").checked=false;
     document.getElementById("inp-recup").value="";
+    const recupSw=document.getElementById("inp-recup-switch");
+    if(recupSw) recupSw.checked=false;
+    const recupWrap=document.getElementById("recup-monto-wrap");
+    if(recupWrap) recupWrap.style.display="none";
     const sugEl=document.getElementById("sugerencia-cat");
     if(sugEl){sugEl.style.display="none";sugEl._sugerencia=null;}
     document.getElementById("inp-importe-prefix").textContent="$";
     const lblReset=document.getElementById("inp-importe-label");
     if(lblReset) lblReset.textContent="Importe (ARS)";
     document.getElementById("inp-fecha").value=iso;
+    refrescarFechaUI("inp-fecha");
     // Volver categoría/subcategoría al primer valor
     const catSel=document.getElementById("inp-cat");
     if(catSel.options.length) catSel.selectedIndex=0;
@@ -673,20 +793,28 @@ function resetForm(t){
   } else if(t==="Inversion"){
     ["inv-ars","inv-usd","inv-ticker","inv-nota"].forEach(id=>document.getElementById(id).value="");
     document.getElementById("inv-fecha").value=iso;
+    refrescarFechaUI("inv-fecha");
+    buildTickerRecientes();
     enfocarCampoDeArriba("inv-ticker");
   } else if(t==="Tarjeta"){
-    ["tc-desc","tc-total","tc-cuotas","tc-nota","tc-mes-fin"].forEach(id=>document.getElementById(id).value="");
+    ["tc-desc","tc-total","tc-nota","tc-mes-fin"].forEach(id=>document.getElementById(id).value="");
+    document.getElementById("tc-cuotas").value="6";
+    buildCuotasChips();
     document.getElementById("tc-frecuente").checked=false;
     document.getElementById("tc-moneda").value="ARS";
+    syncCurrencyPill("tc-moneda");
     document.getElementById("tc-amount-prefix").textContent="$";
-    document.getElementById("tc-preview").style.display="none";
     document.getElementById("tc-fecha").value=iso;
+    refrescarFechaUI("tc-fecha");
     document.getElementById("tc-mes-inicio").value=ym;
     document.getElementById("tc-mes-inicio-frec").value=ym;
     // Volver a vista de cuotas (no frecuente)
-    document.getElementById("tc-cuotas-row").style.display="grid";
+    document.getElementById("tc-cuotas-row").style.display="flex";
     document.getElementById("tc-frec-row").style.display="none";
-    document.getElementById("tc-total-label").textContent="Monto total ($)";
+    document.getElementById("tc-total-label").textContent="Monto total";
+    document.getElementById("tc-sim-body").style.display="none";
+    document.getElementById("tc-sim-chevron").textContent="▾";
+    calcCuota();
     enfocarCampoDeArriba("tc-desc");
   }
 }

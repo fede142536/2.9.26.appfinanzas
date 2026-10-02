@@ -66,23 +66,20 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;background:transparent;color:var(--text);appearance:none;-webkit-appearance:none;outline:none;transition:border-color .15s,box-shadow .15s}
 .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);background:transparent;box-shadow:0 0 0 3px var(--accent-light)}
 .form-textarea{resize:none;height:64px}
-/* CHECKBOX CUSTOM
-   Las casillas "Es un ahorro", "Sale de mis ahorros", "Es un traspaso" y "Gasto frecuente"
-   vivían dentro de un label ya completamente a medida —pill de color, texto con ícono— pero el
-   cuadradito en sí quedaba como lo dibuja el sistema operativo: la única pieza no rediseñada
-   en un formulario donde hasta el selector de fecha y el toggle de tipo son custom. accent-color
-   solo recolorea ese cuadrado nativo; para que tenga la esquina redondeada y el tilde propios
-   de la app hace falta sacarlo del todo con appearance:none y dibujarlo de nuevo.
-   El color varía por casilla (ahorro/traspaso en verde o azul, frecuente en naranja) sin
-   necesidad de una clase por color: se pasa por la variable --chk en el style="" de cada input,
-   igual que --tema-color en la pantalla de Cargar. */
-.chk-custom{appearance:none;-webkit-appearance:none;width:20px;height:20px;flex-shrink:0;
-  border:1.5px solid var(--chk,var(--accent));border-radius:6px;background:transparent;
-  cursor:pointer;position:relative;transition:background-color .15s ease,border-color .15s ease,transform .12s ease}
-.chk-custom:checked{background:var(--chk,var(--accent));border-color:var(--chk,var(--accent))}
-.chk-custom:checked::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;
-  border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
-.chk-custom:active{transform:scale(.88)}
+/* CHECKBOX CUSTOM → SWITCH
+   Las casillas "Es un ahorro", "Sale de mis ahorros", "Es un traspaso", "Gasto frecuente" y
+   "Monto recuperable" son interruptores: toda la fila (ícono + texto) es su <label>, así que
+   tocar en cualquier parte alterna el estado. El color varía por casilla (ahorro en verde,
+   traspaso en azul, frecuente en naranja) sin necesidad de una clase por color: se pasa por la
+   variable --chk en el style="" de cada input, igual que --tema-color en la pantalla de Cargar.*/
+.chk-custom{appearance:none;-webkit-appearance:none;width:36px;height:22px;flex-shrink:0;
+  border-radius:999px;background:var(--border);position:relative;cursor:pointer;
+  transition:background-color .15s ease,transform .12s ease}
+.chk-custom::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;
+  border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s ease}
+.chk-custom:checked{background:var(--chk,var(--accent))}
+.chk-custom:checked::after{left:17px}
+.chk-custom:active{transform:scale(.94)}
 /* TYPE TOGGLE */
 .type-toggle{display:flex;background:var(--border);border-radius:14px;padding:4px;gap:3px;border:none}
 .type-btn{flex:1;padding:9px 2px;border:none;border-radius:10px;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s;background:none;color:var(--muted);position:relative;overflow:hidden}
@@ -118,9 +115,6 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .amount-hero .amount-prefix{position:static;font-size:22px;font-weight:600;color:var(--muted)}
 .amount-hero .amount-input{padding-left:0!important;font-size:44px!important;font-weight:700!important;background:transparent;border:none;outline:none;box-shadow:none;text-align:left;width:auto;max-width:230px;color:var(--text)}
 .amount-hero .amount-input::placeholder{color:var(--border)}
-.amount-hero-sm{gap:2px;padding:16px 0 4px}
-.amount-hero-sm .amount-prefix{font-size:14px}
-.amount-hero-sm .amount-input{font-size:26px!important;max-width:130px}
 .amount-hero-label{text-align:center;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:0}
 /* ═══ TEMATIZACIÓN DINÁMICA (pantalla Cargar): --tema-color/--tema-light cambian según el
    tipo de movimiento elegido (ver setTipo() en JS), y las reglas de abajo los usan en cascada
@@ -133,13 +127,124 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 #page-cargar .form-input:focus,#page-cargar .form-select:focus,#page-cargar .form-textarea:focus{border-color:var(--tema-color);box-shadow:0 0 0 3px var(--tema-light)}
 #page-cargar .amount-prefix{color:var(--tema-color);transition:color .25s ease}
 #page-cargar .amount-hero .amount-input{caret-color:var(--tema-color)}
-#page-cargar .card{transition:background .3s ease;background:linear-gradient(180deg,var(--tema-light) 0%,var(--surface) 160px)}
-#page-cargar .type-toggle{transition:background-color .3s ease}
-/* Chips de fecha rápida (Hoy/Ayer/-2d/-7d): misma base .btn-sm, solo más redondeados */
+/* El gradiente por tipo vive en .amount-card; el resto de las cards de Cargar quedan planas. */
+#page-cargar .card{margin:12px 16px 0;padding:14px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+#page-cargar .card .form-group{margin-bottom:0;display:flex;flex-direction:column;gap:6px}
+#page-cargar .card .form-label{margin-bottom:0}
+#page-cargar .card .form-input,#page-cargar .card .form-select,#page-cargar .card .form-textarea{
+  height:44px;padding:0 12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--bg)}
+#page-cargar .card .amount-wrap .amount-input{height:auto}
+/* Selector de tipo: fuera de la card, escala propia de Cargar (más chico y compacto que el
+   .type-toggle genérico que usan los filtros de Movimientos). */
+#page-cargar>.type-toggle{margin:12px 16px 0;transition:background-color .3s ease;border-radius:12px;padding:3px;gap:2px}
+#page-cargar>.type-toggle .type-btn{height:34px;border-radius:9px;font-size:11.5px;font-weight:600;white-space:nowrap;padding:0 2px}
+/* Chips de fecha rápida del modal de Editar (Hoy/Ayer/-2d/-7d): misma base .btn-sm, solo más redondeados */
 .date-quick-chip{border-radius:999px!important}
-/* Botón Guardar flotante: sticky por ID (la clase la pisa setTipo() en cada cambio de tipo,
-   pero el id="btn-guardar" nunca cambia, así que estilarlo por ID es lo que sobrevive) */
-#btn-guardar{position:sticky;bottom:16px;z-index:10;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+/* CARD DE MONTO: una por tipo, con el degradé que antes vivía en .card */
+.amount-card{margin:12px 16px 0;padding:18px 16px 16px;border:1px solid var(--border);border-radius:var(--radius);
+  background:linear-gradient(180deg,var(--tema-light),var(--surface) 140px);display:flex;flex-direction:column;
+  align-items:center;gap:10px;transition:background .3s ease;box-shadow:var(--shadow)}
+.amount-card .amount-hero-label{margin-bottom:0}
+.amount-card .amount-hero{padding:0;gap:4px;position:static}
+.amount-card .amount-hero .amount-prefix{position:static;font-size:20px;font-weight:600}
+.amount-card .amount-hero .amount-input{padding-left:0!important;font-size:38px!important;font-weight:700!important;
+  letter-spacing:-1px;field-sizing:content;min-width:1ch;max-width:240px;width:auto;text-align:left}
+/* Variante chica para montos secundarios (par ARS/USD de Inversión) */
+.amount-hero-sm{gap:2px;padding:0}
+.amount-hero-sm .amount-prefix{font-size:14px!important;font-weight:700!important}
+.amount-hero-sm .amount-input{font-size:28px!important;letter-spacing:-.6px;max-width:140px}
+/* Pills ARS/USD dentro de la card de monto, reemplazan el <select> de moneda */
+.currency-pills{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:2px}
+.currency-pill{height:26px;padding:0 12px;border:none;border-radius:999px;font-size:11px;font-weight:600;
+  cursor:pointer;background:transparent;color:var(--muted);transition:background-color .15s,color .15s}
+.currency-pill.active{background:var(--surface);color:var(--text)}
+/* Pill Compro/Vendo dólares (Cambio): a diferencia del type-toggle, el activo es un relleno
+   sólido del color del tipo, no la versión "light" — así se distingue de "elegir tipo de mov". */
+.sentido-pills{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:2px}
+.sentido-btn{height:30px;padding:0 14px;border:none;border-radius:999px;font-size:12px;font-weight:600;
+  cursor:pointer;background:transparent;color:var(--muted);transition:background-color .15s,color .15s}
+.sentido-btn.active{background:var(--tema-color);color:#fff}
+/* Divisor ⇅ entre los dos montos de Cambio */
+.cambio-divider{align-self:stretch;display:flex;align-items:center;gap:10px}
+.cambio-divider-line{flex:1;height:1px;background:var(--border)}
+.cambio-divider-dot{width:28px;height:28px;border-radius:50%;background:var(--surface);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--tema-color);flex-shrink:0}
+/* Franja siempre visible dentro de la card de monto: valor por cuota (Tarjeta) o tipo de
+   cambio (Cambio). Mismo patrón, distinto color de fondo/texto según el contexto. */
+.rate-strip{align-self:stretch;display:flex;justify-content:space-between;align-items:center;border-radius:8px;
+  padding:9px 12px;margin-top:2px;gap:8px}
+.rate-strip-warn{background:var(--warning-light);color:var(--warning)}
+.rate-strip-label{font-size:12px;font-weight:600}
+.rate-strip-val{font-size:17px;font-weight:700}
+.rate-box{align-self:stretch;background:var(--bg);border-radius:8px;padding:10px 12px;display:flex;
+  justify-content:space-between;align-items:baseline;gap:8px}
+.rate-box-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.rate-box-val{font-size:16px;font-weight:700;color:var(--accent);text-align:right}
+.rate-box-val.muted{font-size:12px;font-weight:500;color:var(--muted)}
+/* Grilla de dos columnas con "y/o" en el medio (Inversión: pesos y/o dólares) */
+.dual-amount-grid{align-self:stretch;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+  align-items:center;gap:8px}
+.dual-amount-col{display:flex;flex-direction:column;align-items:center;gap:2px}
+.dual-amount-sep{font-size:11px;font-weight:600;color:var(--muted)}
+.dual-amount-sub{font-size:11px;color:var(--muted)}
+/* Input nativo (fecha/moneda) que sigue existiendo para que JS lo lea, pero visualmente lo
+   reemplazan los chips/pills. position:absolute en vez de display:none/hidden: showPicker()
+   necesita que el elemento siga "renderizado" para abrir el selector nativo. */
+.field-hidden-native{width:1px;height:1px;padding:0;margin:-1px 0 0;border:0;overflow:hidden;opacity:0}
+/* Link "+ Nueva" alineado a la derecha del label */
+.field-head{display:flex;justify-content:space-between;align-items:baseline}
+.field-link{font-size:11px;font-weight:600;color:var(--accent);text-decoration:none;cursor:pointer;
+  background:none;border:none;padding:0;font-family:inherit}
+/* FECHA: input nativo oculto detrás de chips Hoy/Ayer/-2d/-7d + botón de calendario */
+.date-row{display:flex;gap:6px}
+.date-chip{flex:1;height:36px;border:1px solid var(--border);border-radius:999px;font-size:12px;font-weight:600;
+  background:var(--bg);color:var(--text);cursor:pointer;transition:background-color .15s,color .15s,border-color .15s}
+.date-chip.active{background:var(--tema-light);color:var(--tema-color);border-color:var(--tema-color)}
+.date-cal-btn{width:36px;height:36px;flex-shrink:0;border:1px solid var(--border);border-radius:999px;
+  font-size:14px;background:var(--bg);color:var(--text);cursor:pointer}
+/* CARD DE OPCIONES (Gasto): una fila por switch, separadas por línea */
+.options-card{padding:4px 14px!important}
+.opt-row{display:flex;align-items:center;gap:12px;min-height:48px;padding:8px 0;cursor:pointer;
+  border-top:1px solid var(--border)}
+.opt-row:first-child{border-top:none}
+.opt-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.opt-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.opt-title{font-size:13px;font-weight:600;color:var(--text)}
+.opt-sub{font-size:11px;color:var(--muted)}
+.opt-amount-wrap{display:flex;align-items:center;gap:8px;padding:0 0 12px 32px}
+.opt-amount-wrap .amount-wrap{flex:1}
+.opt-amount-wrap .form-input{height:40px!important}
+/* TARJETA: chips de cuotas totales, mismo look que .date-chip */
+.cuota-chip{flex:1;height:36px;border:1px solid var(--border);border-radius:999px;font-size:12px;font-weight:600;
+  background:var(--bg);color:var(--text);cursor:pointer;transition:background-color .15s,color .15s,border-color .15s}
+.cuota-chip.active{background:var(--tema-light);color:var(--tema-color);border-color:var(--tema-color)}
+/* Simulador inline (reemplaza el modal): caja con borde, cabecera clickeable, cuerpo plegable */
+.sim-box{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.sim-toggle{width:100%;height:44px;display:flex;align-items:center;gap:10px;padding:0 12px;border:none;
+  background:var(--bg);color:var(--text);cursor:pointer;text-align:left;font-size:13px;font-weight:600}
+.sim-toggle .muted{font-weight:500;color:var(--muted)}
+.sim-chevron{margin-left:auto;font-size:13px;color:var(--muted)}
+.sim-body{padding:12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--border)}
+/* INVERSIÓN: chips de categoría con scroll horizontal + recientes de ticker */
+.inv-cat-row{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -14px;padding:0 14px}
+.inv-cat-row::-webkit-scrollbar{display:none}
+.inv-cat-chip{flex-shrink:0;height:36px;padding:0 12px;border:1px solid var(--border);border-radius:999px;
+  font-size:12px;font-weight:600;background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap}
+.inv-cat-chip.active{background:var(--tema-light);border-color:var(--tema-color);color:var(--tema-color)}
+.ticker-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ticker-row .ticker-hint{font-size:11px;color:var(--muted)}
+.ticker-chip{height:26px;padding:0 10px;border:1px solid var(--border);border-radius:999px;font-size:11px;
+  font-weight:700;letter-spacing:.3px;background:var(--surface);color:var(--text);cursor:pointer}
+.ticker-chip.active{background:var(--tema-light);border-color:var(--tema-color);color:var(--tema-color)}
+/* BARRA GUARDAR: fija abajo, fuera del scroll del documento */
+.save-bar{position:sticky;bottom:0;z-index:10;margin-top:12px;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));
+  background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-top:1px solid var(--border)}
+#page-cargar #btn-guardar{position:static;height:48px;border-radius:12px;font-size:15px;font-weight:600;
+  color:#fff;background:var(--tema-color);box-shadow:none;transition:background-color .25s ease}
+/* Feedback de toque, igual que .chip, para todos los chips/pills nuevos de Cargar */
+.currency-pill:active,.sentido-btn:active,.date-chip:active,.date-cal-btn:active,.cuota-chip:active,
+.inv-cat-chip:active,.ticker-chip:active,.field-link:active{transform:scale(.97)}
 /* CHIPS */
 /* Grid en vez de fila que scrollea: los chips se acomodan solos según el ancho disponible.
    Si entran 3 en una fila, ocupan todo el ancho parejo; si hay más (4, 5, 6...), arma
