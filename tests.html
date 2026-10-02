@@ -4228,35 +4228,36 @@ test("Ahorros conserva su ícono de siempre", async ()=>{
 
 grupo("Casillas propias en vez de las del sistema");
 
-// Las tres casillas del alta ("Es un ahorro", "Sale de mis ahorros", "Es un traspaso") y las
-// dos de "Gasto frecuente" vivían dentro de un label ya rediseñado —pill de color, ícono,
-// texto— pero el cuadradito lo dibujaba el sistema operativo. accent-color solo lo recolorea:
-// no le cambia la forma. Con appearance:none se dibuja de nuevo, con la esquina redondeada y
-// el tilde propios de la app.
+// Las casillas del alta ("Es un ahorro", "Sale de mis ahorros", "Es un traspaso", "Gasto
+// frecuente" x2, "Monto recuperable", y las dos de Cambio) son switches: toda la fila
+// (ícono + texto) es su <label class="opt-row">, así que tocar en cualquier parte alterna el
+// estado. El color (--chk) se define en ese <label> que envuelve la fila, no en el <input>
+// suelto — como es una custom property de CSS, se hereda igual hacia el switch.
 function checkboxesDeAlta(html){
-  return [...html.matchAll(/<input type="checkbox" id="([\w-]+)"([^>]*)>/g)];
+  return [...html.matchAll(/<input type="checkbox" id="([\w-]+)"([^>]*)>/g)].map(m=>({id:m[1], attrs:m[2], index:m.index}));
 }
 
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 7, "esperaba las 7 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente x2, cambio-ahorro, cambio-usaahorro): " +
-    cajas.map(c=>c[1]).join(", "));
-  cajas.forEach(([, id, resto])=>{
-    cierto(resto.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${resto}`);
-    cierto(!resto.includes("accent-color"), `${id} quedó con el recoloreo nativo en vez de la clase: ${resto}`);
-    cierto(/--chk:\s*var\(--(save|accent|warning)\)/.test(resto), `${id} no define su color por --chk: ${resto}`);
+  igual(cajas.length, 8, "esperaba las 8 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente, recuperable, tc-frecuente, cambio-ahorro, cambio-usaahorro): " +
+    cajas.map(c=>c.id).join(", "));
+  cajas.forEach(({id, attrs, index})=>{
+    cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);
+    cierto(!attrs.includes("accent-color"), `${id} quedó con el recoloreo nativo en vez de la clase: ${attrs}`);
+    const entorno=html.slice(Math.max(0,index-400), index);
+    cierto(/--chk:\s*var\(--(save|accent|warning)\)/.test(entorno), `${id} no define su color por --chk en la fila (label.opt-row) que lo envuelve`);
   });
 });
 
-test("chk-custom se dibuja entera de nuevo, no solo se recolorea", async ()=>{
+test("chk-custom es un switch dibujado a mano, no un checkbox recoloreado", async ()=>{
   const css=await (await fetch("styles.css")).text();
   const i=css.indexOf(".chk-custom{");
   cierto(i>=0, "falta la clase .chk-custom");
   const regla=css.slice(i, css.indexOf("}", i)+1);
-  cierto(/appearance:\s*none/.test(regla), "sin appearance:none sigue siendo el cuadrado del sistema: " + regla);
+  cierto(/appearance:\s*none/.test(regla), "sin appearance:none sigue siendo el control del sistema: " + regla);
   cierto(css.includes(".chk-custom:checked{"), "falta el estado marcado");
-  cierto(css.includes(".chk-custom:checked::after{"), "falta el tilde dibujado a mano");
+  cierto(css.includes(".chk-custom:checked::after{"), "falta la perilla desplazada al marcarse");
   // Toque con feedback, como el resto de los controles de la app (.chip:active, .mes-caja:active).
   cierto(css.includes(".chk-custom:active{"), "le falta la respuesta al toque que tiene el resto de los controles");
 });

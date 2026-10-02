@@ -124,6 +124,61 @@ function setFechaQuick(inputId, deltaDays){
   d.setDate(d.getDate()+deltaDays);
   const ymd = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   document.getElementById(inputId).value=ymd;
+  refrescarFechaUI(inputId);
+}
+
+// ═══════════════════════════════════════════
+// FECHA EN CHIPS (pantalla Cargar)
+// ═══════════════════════════════════════════
+// El <input type="date"> sigue siendo la fuente de verdad (form-cargar.js lo lee tal cual
+// siempre hizo); lo que cambió es que ahora vive oculto detrás de chips Hoy/Ayer/-2d/-7d más
+// un botón de calendario. Esta función sincroniza el label ("Fecha · viernes 2 de octubre")
+// y qué chip queda marcado activo, tanto si el cambio vino de un chip (setFechaQuick) como del
+// selector nativo (el input dispara su propio onchange). Si la pantalla no tiene label/chips
+// para ese id (p. ej. el modal de edición, que reusa setFechaQuick con otro input) no hace nada.
+function refrescarFechaUI(inputId){
+  const input=document.getElementById(inputId);
+  if(!input || !input.value) return;
+  const lbl=document.getElementById(inputId+"-label");
+  if(lbl){
+    const [y,m,d]=input.value.split("-").map(Number);
+    const texto=new Date(y,m-1,d).toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
+    lbl.textContent="Fecha · "+texto;
+  }
+  const hoy=currentYMD();
+  const [hy,hm,hd]=hoy.split("-").map(Number);
+  const [vy,vm,vd]=input.value.split("-").map(Number);
+  const diff=Math.round((Date.UTC(vy,vm-1,vd)-Date.UTC(hy,hm-1,hd))/86400000);
+  document.querySelectorAll(`.date-chip[data-for="${inputId}"]`).forEach(chip=>{
+    chip.classList.toggle("active", Number(chip.dataset.delta)===diff);
+  });
+}
+// Abre el selector nativo de fecha/mes sobre un input oculto detrás de chips o pills.
+function abrirCalendario(inputId){
+  const el=document.getElementById(inputId);
+  if(!el) return;
+  if(el.showPicker){ try{ el.showPicker(); }catch(e){ el.focus(); } }
+  else el.focus();
+}
+
+// ═══════════════════════════════════════════
+// PILLS ARS/USD (pantalla Cargar)
+// ═══════════════════════════════════════════
+// El <select> de moneda sigue existiendo (oculto) y es lo que form-cargar.js lee siempre;
+// las pills solo le asignan .value y disparan "change" para que corran toggleUSD()/toggleTcMoneda().
+function pillMoneda(selectId, valor){
+  const sel=document.getElementById(selectId);
+  if(!sel) return;
+  sel.value=valor;
+  sel.dispatchEvent(new Event("change"));
+  syncCurrencyPill(selectId);
+}
+function syncCurrencyPill(selectId){
+  const sel=document.getElementById(selectId);
+  if(!sel) return;
+  document.querySelectorAll(`.currency-pill[data-for="${selectId}"]`).forEach(b=>{
+    b.classList.toggle("active", b.dataset.val===sel.value);
+  });
 }
 
 // ═══════════════════════════════════════════

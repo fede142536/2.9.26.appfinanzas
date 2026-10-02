@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v136">
+<meta name="enola-version" content="enola-v137">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -306,26 +306,6 @@
 </div>
 
 <!-- MODAL EDITAR MOVIMIENTO -->
-<div class="modal-overlay" id="modal-simulador" onclick="if(event.target===this)cerrarSimulador()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
-    <div class="modal-handle"></div>
-    <div class="modal-title">¿Me lo banco?</div>
-    <p class="txt-sm txt-muted mb-10">Suma esta compra a las cuotas que ya tenés y te muestra cómo queda cada mes.</p>
-    <div class="two-col">
-      <div class="form-group"><label class="form-label" for="sim-monto">Monto total ($)</label>
-        <input type="number" id="sim-monto" class="form-input" placeholder="50000" inputmode="decimal" oninput="correrSimulacion()"></div>
-      <div class="form-group"><label class="form-label" for="sim-cuotas">Cuotas</label>
-        <input type="number" id="sim-cuotas" class="form-input" value="6" min="1" inputmode="numeric" oninput="correrSimulacion()"></div>
-    </div>
-    <div class="form-group"><label class="form-label" for="sim-mes">1ª cuota en</label>
-      <input type="month" id="sim-mes" class="form-input" onchange="correrSimulacion()"></div>
-    <div id="sim-resultado"></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-sm u-flex1" onclick="cerrarSimulador()">Cerrar</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="modal-edit" onclick="if(event.target===this)closeEditModal()">
   <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
     <div class="modal-handle"></div>
@@ -361,213 +341,279 @@
 <div id="page-cargar" class="page theme-gasto">
   <div class="header"><h1>Nuevo movimiento</h1><p id="fecha-hoy"></p></div>
   <div id="alertas-frecuentes" style="padding:0 16px"></div>
-  <div class="card">
-    <div class="form-group">
-      <div class="type-toggle">
-        <button class="type-btn active-gasto" id="btn-gasto" onclick="setTipo('Gasto')">↑ Gasto</button>
-        <button class="type-btn" id="btn-ingreso" onclick="setTipo('Ingreso')">↓ Ingreso</button>
-        <button class="type-btn" id="btn-inversion" onclick="setTipo('Inversion')">◈ Inv.</button>
-        <button class="type-btn" id="btn-tarjeta" onclick="setTipo('Tarjeta')">▣ Tarj.</button>
-        <button class="type-btn" id="btn-cambio" onclick="setTipo('Cambio')">💱 Cambio</button>
-      </div>
-    </div>
-    <!-- GASTO/INGRESO -->
-    <div id="campos-gi">
+  <div class="type-toggle">
+    <button class="type-btn active-gasto" id="btn-gasto" onclick="setTipo('Gasto')">↑ Gasto</button>
+    <button class="type-btn" id="btn-ingreso" onclick="setTipo('Ingreso')">↓ Ingreso</button>
+    <button class="type-btn" id="btn-inversion" onclick="setTipo('Inversion')">◈ Inv.</button>
+    <button class="type-btn" id="btn-tarjeta" onclick="setTipo('Tarjeta')">▣ Tarj.</button>
+    <button class="type-btn" id="btn-cambio" onclick="setTipo('Cambio')">💱 Cambio</button>
+  </div>
+  <!-- GASTO/INGRESO -->
+  <div id="campos-gi">
+    <div class="amount-card">
       <div class="amount-hero-label" id="inp-importe-label">Importe (ARS)</div>
-      <div class="form-group">
-        <div class="amount-wrap amount-hero"><span class="amount-prefix" id="inp-importe-prefix">$</span>
-          <input type="text" id="inp-importe" class="form-input amount-input" aria-label="Importe" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearConMiles);updateImporteCalc()">
-        </div>
-        <div id="importe-calc-preview" style="font-size:11px;color:var(--accent);margin-top:4px;display:none;text-align:center"></div>
+      <div class="amount-wrap amount-hero"><span class="amount-prefix" id="inp-importe-prefix">$</span>
+        <input type="text" id="inp-importe" class="form-input amount-input" aria-label="Importe" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearConMiles);updateImporteCalc()">
       </div>
-      <div class="form-group"><label class="form-label" for="inp-moneda">Moneda</label>
-        <select id="inp-moneda" class="form-select" onchange="toggleUSD()">
-          <option value="ARS">🇦🇷 Pesos (ARS)</option>
-          <option value="USD">🇺🇸 Dólares (USD)</option>
-        </select>
+      <div id="importe-calc-preview" style="font-size:11px;color:var(--accent);margin-top:-6px;display:none;text-align:center"></div>
+      <div class="currency-pills">
+        <button type="button" class="currency-pill active" data-for="inp-moneda" data-val="ARS" onclick="pillMoneda('inp-moneda','ARS')">🇦🇷 ARS</button>
+        <button type="button" class="currency-pill" data-for="inp-moneda" data-val="USD" onclick="pillMoneda('inp-moneda','USD')">🇺🇸 USD</button>
       </div>
-      <div class="form-group"><label class="form-label" for="inp-cat">Categoría</label>
-        <div id="sugerencia-cat" role="button" tabindex="0" style="display:none;font-size:12px;background:var(--accent-light);color:var(--accent);padding:7px 10px;border-radius:8px;margin-bottom:6px;cursor:pointer" onclick="aplicarSugerenciaCat()"></div>
-        <div class="u-row"><select id="inp-cat" class="form-select u-flex1" onchange="updateSubcats()"></select>
-          <button class="btn-sm" onclick="openCatModal()">+ Cat.</button>
-        </div>
-      </div>
-      <div class="form-group"><label class="form-label" for="inp-subcat">Subcategoría</label><select id="inp-subcat" class="form-select" onchange="autoSeleccionarCuenta()"></select></div>
-      <div class="form-group"><label class="form-label" for="inp-cuenta">Cuenta</label>
-        <div class="u-row">
-          <select id="inp-cuenta" class="form-select u-flex1"></select>
-          <button type="button" class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="inp-fecha">Fecha</label>
-        <input type="date" id="inp-fecha" class="form-input">
-        <div style="display:flex;gap:6px;margin-top:8px">
-          <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('inp-fecha',0)">Hoy</button>
-          <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('inp-fecha',-1)">Ayer</button>
-          <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('inp-fecha',-2)">-2d</button>
-          <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('inp-fecha',-7)">-7d</button>
-        </div>
-      </div>
-      <div class="form-group" id="ahorro-toggle-group" style="display:none">
-        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm);margin-bottom:6px">
-          <input type="checkbox" id="inp-ahorro" class="chk-custom" style="--chk:var(--save)" onchange="onAhorroToggle()">
-          <span style="color:var(--save);font-weight:500">🏦 Es un ahorro (suma al fondo)</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
-          <input type="checkbox" id="inp-usa-ahorro" class="chk-custom" style="--chk:var(--save)" onchange="onUsaAhorroToggle()">
-          <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (resta del fondo)</span>
-        </label>
-        <!-- Sin esta casilla no había forma de registrar que la plata cambió de bolsillo sin
-             gastarse: sacarla del fondo para ponerla en CEDEARs obligaba a marcarla como gasto. -->
-        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm);margin-top:6px">
-          <input type="checkbox" id="inp-traspaso" class="chk-custom" style="--chk:var(--accent)">
-          <span style="color:var(--accent);font-weight:500">↔️ Es un traspaso (cambia de bolsillo, no lo gastaste)</span>
-        </label>
-      </div>
-      <div class="form-group" id="frecuente-toggle-group" style="display:none">
-        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--warning-light);border-radius:var(--radius-sm)">
-          <input type="checkbox" id="inp-frecuente" class="chk-custom" style="--chk:var(--warning)" onchange="onFrecuenteToggle()">
-          <span style="color:var(--warning);font-weight:500">🔁 Gasto frecuente (mensual fijo)</span>
-        </label>
-        <p style="font-size:11px;color:var(--muted);margin-top:4px">Ej: alquiler, ABL, expensas. Se va a registrar todos los meses con el mismo monto. Después podés cargar aumentos o darlo de baja.</p>
-      </div>
-      <div class="form-group" id="recuperable-group" style="display:none">
-        <label class="form-label" for="inp-recup">Monto recuperable (opcional)</label>
-        <div class="amount-wrap"><span class="amount-prefix">$</span>
-          <input type="number" id="inp-recup" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any">
-        </div>
-        <p style="font-size:11px;color:var(--muted);margin-top:4px">💡 Para gastos compartidos: ej. cena con amigos por $10.000 donde te devuelven $7.500.</p>
-      </div>
-      <div class="form-group"><label class="form-label" for="inp-nota">Nota (opcional)</label><textarea id="inp-nota" class="form-textarea" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()"></textarea></div>
+      <select id="inp-moneda" class="form-select" onchange="toggleUSD()" aria-label="Moneda" hidden>
+        <option value="ARS">🇦🇷 Pesos (ARS)</option>
+        <option value="USD">🇺🇸 Dólares (USD)</option>
+      </select>
     </div>
+    <div class="card">
+      <div class="two-col">
+        <div class="form-group">
+          <div class="field-head"><label class="form-label" for="inp-cat">Categoría</label><button type="button" class="field-link" onclick="openCatModal()">+ Nueva</button></div>
+          <div id="sugerencia-cat" role="button" tabindex="0" style="display:none;font-size:12px;background:var(--accent-light);color:var(--accent);padding:7px 10px;border-radius:8px;margin-bottom:2px;cursor:pointer" onclick="aplicarSugerenciaCat()"></div>
+          <select id="inp-cat" class="form-select" onchange="updateSubcats()"></select>
+        </div>
+        <div class="form-group"><label class="form-label" for="inp-subcat">Subcategoría</label><select id="inp-subcat" class="form-select" onchange="autoSeleccionarCuenta()"></select></div>
+      </div>
+      <div class="form-group">
+        <div class="field-head"><label class="form-label" for="inp-cuenta">Cuenta</label><button type="button" class="field-link" onclick="agregarCuentaRapida('inp-cuenta')">+ Nueva</button></div>
+        <select id="inp-cuenta" class="form-select"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="inp-fecha-label" for="inp-fecha">Fecha</label>
+        <div class="date-row">
+          <button type="button" class="date-chip" data-for="inp-fecha" data-delta="0" onclick="setFechaQuick('inp-fecha',0)">Hoy</button>
+          <button type="button" class="date-chip" data-for="inp-fecha" data-delta="-1" onclick="setFechaQuick('inp-fecha',-1)">Ayer</button>
+          <button type="button" class="date-chip" data-for="inp-fecha" data-delta="-2" onclick="setFechaQuick('inp-fecha',-2)">-2d</button>
+          <button type="button" class="date-chip" data-for="inp-fecha" data-delta="-7" onclick="setFechaQuick('inp-fecha',-7)">-7d</button>
+          <button type="button" class="date-cal-btn" onclick="abrirCalendario('inp-fecha')" aria-label="Elegir otra fecha">📅</button>
+        </div>
+        <input type="date" id="inp-fecha" class="field-hidden-native" onchange="refrescarFechaUI('inp-fecha')">
+      </div>
+      <div class="form-group"><label class="form-label" for="inp-nota">Nota (opcional)</label><input type="text" id="inp-nota" class="form-input" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()"></div>
+    </div>
+    <div class="card options-card" id="opciones-gasto" style="display:none">
+      <label class="opt-row" style="--chk:var(--save)">
+        <span class="opt-icon">🏦</span>
+        <span class="opt-text"><span class="opt-title">Es un ahorro</span><span class="opt-sub">Suma al fondo</span></span>
+        <input type="checkbox" id="inp-ahorro" class="chk-custom" onchange="onAhorroToggle()">
+      </label>
+      <label class="opt-row" style="--chk:var(--save)">
+        <span class="opt-icon">💸</span>
+        <span class="opt-text"><span class="opt-title">Sale de mis ahorros</span><span class="opt-sub">Resta del fondo</span></span>
+        <input type="checkbox" id="inp-usa-ahorro" class="chk-custom" onchange="onUsaAhorroToggle()">
+      </label>
+      <!-- Sin esta casilla no había forma de registrar que la plata cambió de bolsillo sin
+           gastarse: sacarla del fondo para ponerla en CEDEARs obligaba a marcarla como gasto. -->
+      <label class="opt-row" style="--chk:var(--accent)">
+        <span class="opt-icon">↔️</span>
+        <span class="opt-text"><span class="opt-title">Es un traspaso</span><span class="opt-sub">Cambia de bolsillo, no lo gastaste</span></span>
+        <input type="checkbox" id="inp-traspaso" class="chk-custom">
+      </label>
+      <label class="opt-row" style="--chk:var(--warning)">
+        <span class="opt-icon">🔁</span>
+        <span class="opt-text"><span class="opt-title">Gasto frecuente</span><span class="opt-sub">Se repite todos los meses</span></span>
+        <input type="checkbox" id="inp-frecuente" class="chk-custom" onchange="onFrecuenteToggle()">
+      </label>
+      <label class="opt-row" style="--chk:var(--accent)">
+        <span class="opt-icon">🤝</span>
+        <span class="opt-text"><span class="opt-title">Monto recuperable</span><span class="opt-sub">Gasto compartido: te devuelven una parte</span></span>
+        <input type="checkbox" id="inp-recup-switch" class="chk-custom" onchange="toggleRecuperable()">
+      </label>
+      <div class="opt-amount-wrap" id="recup-monto-wrap" style="display:none">
+        <div class="amount-wrap"><span class="amount-prefix">$</span>
+          <input type="number" id="inp-recup" class="form-input amount-input" aria-label="Monto recuperable" placeholder="Te devuelven…" inputmode="decimal" step="any">
+        </div>
+      </div>
+    </div>
+  </div>
     <!-- INVERSIÓN -->
     <div id="campos-inv" style="display:none">
-      <div class="amount-hero-label">Importe</div>
-      <div style="display:flex;justify-content:center;gap:18px">
-        <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">$</span>
-          <input type="text" id="inv-ars" class="form-input amount-input" aria-label="Importe en pesos" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
-        </div>
-        <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix" style="font-size:12px">USD</span>
-          <input type="text" id="inv-usd" class="form-input amount-input" aria-label="Importe en dólares" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
+      <div class="amount-card">
+        <div class="amount-hero-label">Importe</div>
+        <div class="dual-amount-grid">
+          <div class="dual-amount-col">
+            <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">$</span>
+              <input type="text" id="inv-ars" class="form-input amount-input" aria-label="Importe en pesos" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
+            </div>
+            <span class="dual-amount-sub">en pesos</span>
+          </div>
+          <span class="dual-amount-sep">y/o</span>
+          <div class="dual-amount-col">
+            <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">USD</span>
+              <input type="text" id="inv-usd" class="form-input amount-input" aria-label="Importe en dólares" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
+            </div>
+            <span class="dual-amount-sub">en dólares</span>
+          </div>
         </div>
       </div>
-      <div class="form-group" style="margin-top:4px"></div>
-      <div class="two-col">
-        <div class="form-group"><label class="form-label" for="inv-cat">Categoría</label>
-          <select id="inv-cat" class="form-select" onchange="updateInvSubcats()"></select>
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label" for="inv-cat">Categoría</label>
+          <div class="inv-cat-row" id="inv-cat-chips"></div>
+          <select id="inv-cat" class="form-select" onchange="updateInvSubcats()" hidden></select>
         </div>
         <div class="form-group"><label class="form-label" for="inv-subcat">Operación</label>
           <select id="inv-subcat" class="form-select" onchange="autoSeleccionarCuenta()"></select>
         </div>
-      </div>
-      <div class="form-group"><label class="form-label" for="inv-ticker">Ticker / Fondo</label><input type="text" id="inv-ticker" class="form-input" placeholder="BCMMA, AL30, SPY, IRCFO…"></div>
-      <div class="form-group"><label class="form-label" for="inv-fecha">Fecha</label><input type="date" id="inv-fecha" class="form-input"></div>
-      <div class="form-group"><label class="form-label" for="inv-cuenta">Cuenta</label>
-        <div class="u-row">
-          <select id="inv-cuenta" class="form-select u-flex1"></select>
-          <button type="button" class="btn-sm" onclick="agregarCuentaRapida('inv-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
+        <div class="form-group">
+          <label class="form-label" for="inv-ticker">Ticker / Fondo</label>
+          <input type="text" id="inv-ticker" class="form-input" placeholder="BCMMA, AL30, SPY, IRCFO…" style="font-weight:600;letter-spacing:.3px;text-transform:uppercase" oninput="buildTickerRecientes()">
+          <div class="ticker-row" id="inv-ticker-recientes"></div>
         </div>
+        <div class="form-group">
+          <div class="field-head"><label class="form-label" for="inv-cuenta">Cuenta</label><button type="button" class="field-link" onclick="agregarCuentaRapida('inv-cuenta')">+ Nueva</button></div>
+          <select id="inv-cuenta" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" id="inv-fecha-label" for="inv-fecha">Fecha</label>
+          <div class="date-row">
+            <button type="button" class="date-chip" data-for="inv-fecha" data-delta="0" onclick="setFechaQuick('inv-fecha',0)">Hoy</button>
+            <button type="button" class="date-chip" data-for="inv-fecha" data-delta="-1" onclick="setFechaQuick('inv-fecha',-1)">Ayer</button>
+            <button type="button" class="date-chip" data-for="inv-fecha" data-delta="-2" onclick="setFechaQuick('inv-fecha',-2)">-2d</button>
+            <button type="button" class="date-chip" data-for="inv-fecha" data-delta="-7" onclick="setFechaQuick('inv-fecha',-7)">-7d</button>
+            <button type="button" class="date-cal-btn" onclick="abrirCalendario('inv-fecha')" aria-label="Elegir otra fecha">📅</button>
+          </div>
+          <input type="date" id="inv-fecha" class="field-hidden-native" onchange="refrescarFechaUI('inv-fecha')">
+        </div>
+        <div class="form-group"><label class="form-label" for="inv-nota">Nota (opcional)</label><input type="text" id="inv-nota" class="form-input" placeholder="Descripción…"></div>
       </div>
-      <div class="form-group"><label class="form-label" for="inv-nota">Nota (opcional)</label><textarea id="inv-nota" class="form-textarea" placeholder="Descripción..."></textarea></div>
     </div>
     <!-- TARJETA -->
     <div id="campos-tc" style="display:none">
-      <div class="amount-hero-label" id="tc-total-label">Monto total ($)</div>
-      <div class="form-group">
+      <div class="amount-card">
+        <div class="amount-hero-label" id="tc-total-label">Monto total</div>
         <div class="amount-wrap amount-hero"><span class="amount-prefix" id="tc-amount-prefix">$</span>
           <input type="text" id="tc-total" class="form-input amount-input" aria-label="Monto total" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcCuota()">
         </div>
-      </div>
-      <div class="form-group"><label class="form-label" for="tc-desc">Descripción del gasto</label><input type="text" id="tc-desc" class="form-input" placeholder="Ej: Cuotas celular, Netflix"></div>
-      <div class="two-col">
-        <div class="form-group"><label class="form-label" for="tc-tarjeta">Tarjeta</label>
-          <div class="u-row-6">
-            <select id="tc-tarjeta" class="form-select u-flex1"></select>
-            <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')" title="Agregar tarjeta nueva" aria-label="Agregar tarjeta nueva">+</button>
-          </div>
+        <div class="currency-pills">
+          <button type="button" class="currency-pill active" data-for="tc-moneda" data-val="ARS" onclick="pillMoneda('tc-moneda','ARS')">🇦🇷 ARS</button>
+          <button type="button" class="currency-pill" data-for="tc-moneda" data-val="USD" onclick="pillMoneda('tc-moneda','USD')">🇺🇸 USD</button>
         </div>
-        <div class="form-group"><label class="form-label" for="tc-cat">Categoría</label>
-          <select id="tc-cat" class="form-select" onchange="autoSeleccionarCuenta()"></select>
-        </div>
-      </div>
-      <div class="form-group"><label class="form-label" for="tc-cuenta">Cuenta</label>
-        <div class="u-row">
-          <select id="tc-cuenta" class="form-select u-flex1"></select>
-          <button type="button" class="btn-sm" onclick="agregarCuentaRapida('tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
-        </div>
-      </div>
-      <div class="form-group"><label class="form-label" for="tc-moneda">Moneda</label>
-        <select id="tc-moneda" class="form-select" onchange="toggleTcMoneda()">
+        <select id="tc-moneda" class="form-select" onchange="toggleTcMoneda()" aria-label="Moneda" hidden>
           <option value="ARS">🇦🇷 Pesos (ARS)</option>
           <option value="USD">🇺🇸 Dólares (USD)</option>
         </select>
-      </div>
-      <div class="form-group">
-        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--warning-light);border-radius:var(--radius-sm)">
-          <input type="checkbox" id="tc-frecuente" class="chk-custom" style="--chk:var(--warning)" onchange="toggleFrecuente()">
-          <span style="color:var(--warning);font-weight:500">🔁 Gasto frecuente (mensual fijo)</span>
-        </label>
-      </div>
-      <div class="two-col" id="tc-cuotas-row">
-        <div class="form-group"><label class="form-label" for="tc-cuotas">Cuotas totales</label><input type="number" id="tc-cuotas" class="form-input" placeholder="1" min="1" inputmode="numeric" oninput="calcCuota()"></div>
-        <div class="form-group"><label class="form-label" for="tc-mes-inicio">1ª cuota en</label><input type="month" id="tc-mes-inicio" class="form-input"></div>
-      </div>
-      <div class="two-col" id="tc-frec-row" style="display:none">
-        <div class="form-group"><label class="form-label" for="tc-mes-inicio-frec">Mes de inicio</label><input type="month" id="tc-mes-inicio-frec" class="form-input"></div>
-        <div class="form-group"><label class="form-label" for="tc-mes-fin">Mes de fin (opcional)</label><input type="month" id="tc-mes-fin" class="form-input"></div>
-      </div>
-      <button type="button" class="btn-sm u-flex1" style="width:100%;margin-bottom:12px" onclick="abrirSimulador()">🧮 ¿Me lo banco? Simular la cuota</button>
-      <div id="tc-preview" style="display:none;margin-bottom:12px">
-        <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-          <span id="tc-cuota-label" style="font-size:12px;color:var(--warning);font-weight:500">Valor por cuota</span>
-          <span style="font-size:20px;font-weight:600;color:var(--warning)" id="tc-cuota-val">$0</span>
+        <div id="tc-preview" class="rate-strip rate-strip-warn">
+          <span id="tc-cuota-label" class="rate-strip-label">Valor por cuota</span>
+          <span class="rate-strip-val" id="tc-cuota-val">$0</span>
         </div>
       </div>
-      <div class="form-group"><label class="form-label" for="tc-fecha">Fecha</label><input type="date" id="tc-fecha" class="form-input"></div>
-      <div class="form-group"><label class="form-label" for="tc-nota">Nota (opcional)</label><textarea id="tc-nota" class="form-textarea" placeholder="Descripción adicional..."></textarea></div>
+      <div class="card">
+        <div class="form-group"><label class="form-label" for="tc-desc">Descripción del gasto</label><input type="text" id="tc-desc" class="form-input" placeholder="Ej: Cuotas celular, Netflix"></div>
+        <div class="two-col">
+          <div class="form-group">
+            <div class="field-head"><label class="form-label" for="tc-tarjeta">Tarjeta</label><button type="button" class="field-link" onclick="agregarTarjetaRapida('tc-tarjeta')">+ Nueva</button></div>
+            <select id="tc-tarjeta" class="form-select"></select>
+          </div>
+          <div class="form-group"><label class="form-label" for="tc-cat">Categoría</label>
+            <select id="tc-cat" class="form-select" onchange="autoSeleccionarCuenta()"></select>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="field-head"><label class="form-label" for="tc-cuenta">Cuenta</label><button type="button" class="field-link" onclick="agregarCuentaRapida('tc-cuenta')">+ Nueva</button></div>
+          <select id="tc-cuenta" class="form-select"></select>
+        </div>
+      </div>
+      <div class="card">
+        <label class="opt-row" style="--chk:var(--warning)">
+          <span class="opt-icon">🔁</span>
+          <span class="opt-text"><span class="opt-title">Gasto frecuente (mensual fijo)</span><span class="opt-sub">Se repite todos los meses, sin cuotas</span></span>
+          <input type="checkbox" id="tc-frecuente" class="chk-custom" onchange="toggleFrecuente()">
+        </label>
+        <div id="tc-cuotas-row" style="display:flex;flex-direction:column;gap:14px">
+          <div class="form-group">
+            <label class="form-label" for="tc-cuotas">Cuotas totales</label>
+            <div class="date-row" id="tc-cuotas-chips"></div>
+            <input type="number" id="tc-cuotas" class="field-hidden-native" min="1" inputmode="numeric">
+          </div>
+          <div class="form-group"><label class="form-label" for="tc-mes-inicio">1ª cuota en</label><input type="month" id="tc-mes-inicio" class="form-input" onchange="refreshSimIfOpen()"></div>
+          <div class="sim-box">
+            <button type="button" class="sim-toggle" onclick="toggleSimuladorInline()">
+              <span>🧮</span>
+              <span style="flex:1">¿Me lo banco? <span class="muted">Simular la cuota</span></span>
+              <span class="sim-chevron" id="tc-sim-chevron">▾</span>
+            </button>
+            <div id="tc-sim-body" class="sim-body" style="display:none">
+              <div style="display:flex;gap:14px;font-size:11px;color:var(--muted)">
+                <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--border);display:inline-block"></span>Ya tenés</span>
+                <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--warning);display:inline-block"></span>Esta compra</span>
+              </div>
+              <div id="tc-sim-rows"></div>
+            </div>
+          </div>
+        </div>
+        <div class="two-col" id="tc-frec-row" style="display:none">
+          <div class="form-group"><label class="form-label" for="tc-mes-inicio-frec">Mes de inicio</label><input type="month" id="tc-mes-inicio-frec" class="form-input"></div>
+          <div class="form-group"><label class="form-label" for="tc-mes-fin">Mes de fin (opcional)</label><input type="month" id="tc-mes-fin" class="form-input"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="form-group">
+          <label class="form-label" id="tc-fecha-label" for="tc-fecha">Fecha de compra</label>
+          <div class="date-row">
+            <button type="button" class="date-chip" data-for="tc-fecha" data-delta="0" onclick="setFechaQuick('tc-fecha',0)">Hoy</button>
+            <button type="button" class="date-chip" data-for="tc-fecha" data-delta="-1" onclick="setFechaQuick('tc-fecha',-1)">Ayer</button>
+            <button type="button" class="date-chip" data-for="tc-fecha" data-delta="-2" onclick="setFechaQuick('tc-fecha',-2)">-2d</button>
+            <button type="button" class="date-chip" data-for="tc-fecha" data-delta="-7" onclick="setFechaQuick('tc-fecha',-7)">-7d</button>
+            <button type="button" class="date-cal-btn" onclick="abrirCalendario('tc-fecha')" aria-label="Elegir otra fecha">📅</button>
+          </div>
+          <input type="date" id="tc-fecha" class="field-hidden-native" onchange="refrescarFechaUI('tc-fecha')">
+        </div>
+        <div class="form-group"><label class="form-label" for="tc-nota">Nota (opcional)</label><input type="text" id="tc-nota" class="form-input" placeholder="Descripción adicional..."></div>
+      </div>
     </div>
 
     <!-- CAMBIO DE MONEDA -->
     <div id="campos-cambio" style="display:none">
-      <p class="txt-sm txt-muted mb-10">Comprar o vender dólares no es un gasto: es plata que cambia de bolsillo. Se guardan las dos patas, así los pesos salen y los dólares entran.</p>
-      <div class="form-group">
-        <div class="type-toggle">
-          <button type="button" class="type-btn active-gasto" id="btn-cambio-compra" onclick="setSentidoCambio('compra')">Compro dólares</button>
-          <button type="button" class="type-btn" id="btn-cambio-venta" onclick="setSentidoCambio('venta')">Vendo dólares</button>
+      <div class="amount-card">
+        <div class="sentido-pills">
+          <button type="button" class="sentido-btn active" id="btn-cambio-compra" onclick="setSentidoCambio('compra')">Compro dólares</button>
+          <button type="button" class="sentido-btn" id="btn-cambio-venta" onclick="setSentidoCambio('venta')">Vendo dólares</button>
         </div>
-      </div>
-      <div class="form-group">
         <div class="amount-hero-label" id="cambio-ars-label">Pesos que pagué</div>
         <div class="amount-wrap amount-hero"><span class="amount-prefix">$</span>
           <input type="text" id="cambio-ars" class="form-input amount-input" aria-label="Monto en pesos" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcTipoCambio()">
         </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="cambio-usd" id="cambio-usd-label">Dólares que recibí</label>
-        <div class="amount-wrap amount-wrap-usd"><span class="amount-prefix">USD</span>
+        <div class="cambio-divider"><span class="cambio-divider-line"></span><span class="cambio-divider-dot">⇅</span><span class="cambio-divider-line"></span></div>
+        <label class="amount-hero-label" for="cambio-usd" id="cambio-usd-label">Dólares que recibí</label>
+        <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">USD</span>
           <input type="number" id="cambio-usd" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any" oninput="calcTipoCambio()">
         </div>
+        <div id="cambio-tc" class="rate-box">
+          <span class="rate-box-label">Tipo de cambio</span>
+          <span class="rate-box-val muted" id="cambio-tc-val">Poné los dos montos</span>
+        </div>
       </div>
-      <div class="form-group" id="cambio-ahorro-group" style="display:none">
-        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
-          <input type="checkbox" id="cambio-ahorro" class="chk-custom" style="--chk:var(--save)">
-          <span style="color:var(--save);font-weight:500">🏦 Guardarlos en el fondo de ahorro (no dejarlos como cash)</span>
+      <div class="card">
+        <label class="opt-row" id="cambio-ahorro-group" style="--chk:var(--save);border-top:none">
+          <span class="opt-icon">🏦</span>
+          <span class="opt-text"><span class="opt-title">Guardarlos en el fondo de ahorro</span><span class="opt-sub">No dejarlos como cash</span></span>
+          <input type="checkbox" id="cambio-ahorro" class="chk-custom">
+        </label>
+        <label class="opt-row" id="cambio-usaahorro-group" style="--chk:var(--save);border-top:none;display:none">
+          <span class="opt-icon">💸</span>
+          <span class="opt-text"><span class="opt-title">Sale de mis ahorros</span><span class="opt-sub">Resta del fondo</span></span>
+          <input type="checkbox" id="cambio-usaahorro" class="chk-custom">
         </label>
       </div>
-      <div class="form-group" id="cambio-usaahorro-group" style="display:none">
-        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
-          <input type="checkbox" id="cambio-usaahorro" class="chk-custom" style="--chk:var(--save)">
-          <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (resta del fondo)</span>
-        </label>
-      </div>
-      <div id="cambio-tc" class="inset mb-10" style="display:none"></div>
-      <div class="two-col">
+      <div class="card">
         <div class="form-group"><label class="form-label" for="cambio-cuenta">Cuenta</label><select id="cambio-cuenta" class="form-select"></select></div>
-        <div class="form-group"><label class="form-label" for="cambio-fecha">Fecha</label><input type="date" id="cambio-fecha" class="form-input"></div>
+        <div class="form-group">
+          <label class="form-label" id="cambio-fecha-label" for="cambio-fecha">Fecha</label>
+          <div class="date-row">
+            <button type="button" class="date-chip" data-for="cambio-fecha" data-delta="0" onclick="setFechaQuick('cambio-fecha',0)">Hoy</button>
+            <button type="button" class="date-chip" data-for="cambio-fecha" data-delta="-1" onclick="setFechaQuick('cambio-fecha',-1)">Ayer</button>
+            <button type="button" class="date-chip" data-for="cambio-fecha" data-delta="-2" onclick="setFechaQuick('cambio-fecha',-2)">-2d</button>
+            <button type="button" class="date-chip" data-for="cambio-fecha" data-delta="-7" onclick="setFechaQuick('cambio-fecha',-7)">-7d</button>
+            <button type="button" class="date-cal-btn" onclick="abrirCalendario('cambio-fecha')" aria-label="Elegir otra fecha">📅</button>
+          </div>
+          <input type="date" id="cambio-fecha" class="field-hidden-native" onchange="refrescarFechaUI('cambio-fecha')">
+        </div>
+        <div class="form-group"><label class="form-label" for="cambio-nota">Nota (opcional)</label><input type="text" id="cambio-nota" class="form-input" placeholder="Ej: MEP con AL30"></div>
       </div>
-      <div class="form-group"><label class="form-label" for="cambio-nota">Nota (opcional)</label><textarea id="cambio-nota" class="form-textarea" placeholder="Ej: MEP con AL30"></textarea></div>
+      <p class="txt-xs txt-muted" style="text-align:center;padding:0 20px">Comprar o vender dólares no es un gasto: es plata que cambia de bolsillo. Se guardan las dos patas.</p>
     </div>
+  <div class="save-bar">
     <button id="btn-guardar" class="btn-primary btn-gasto" onclick="guardar()">Guardar gasto</button>
   </div>
 </div>
