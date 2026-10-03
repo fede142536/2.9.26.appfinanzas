@@ -261,37 +261,45 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .chip-val{font-size:14px;font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.3px}
 .chip-val.positive{color:var(--success)}.chip-val.negative{color:var(--danger)}.chip-val.warn{color:var(--warning)}.chip-val.invest{color:var(--invest)}.chip-val.save{color:var(--save)}
 /* TX LIST */
-.tx-list{padding:0 16px}
-/* Separador de fecha: pegado justo debajo del header (sticky) mientras se scrollea la lista.
-   Márgen negativo para que se extienda de punta a punta, contrarrestando el padding de .tx-list.
-   Tipografía calcada de .card-title (mismo tamaño, peso, mayúsculas y tracking): antes era
-   texto gris sin más peso que un subtítulo, y quedaba pegado arriba de la pantalla en cada
-   scroll sin leerse como un encabezado. El borde inferior es el mismo recurso de .header
-   (glass + blur + borde), reutilizado porque cumple el mismo rol: separar lo fijo de lo que
-   se mueve debajo. */
-.tx-date-sep{position:sticky;top:60px;z-index:5;margin:0 -16px;padding:7px 16px;
-  font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;
-  background:var(--surface-glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border-bottom:1px solid var(--border)}
+.tx-list{padding:6px 16px 0}
+/* Separador de fecha: ya no queda pegado arriba al scrollear (position:sticky quitado a
+   propósito — ver handoff de Movimientos): ahora cada día agrupa sus filas en una tarjeta
+   propia (.tx-day) y el separador solo encabeza ese grupo. Tipografía calcada de .card-title
+   (mismo tamaño, peso, mayúsculas y tracking). A la derecha va el neto del día. */
+.tx-date-sep{display:flex;justify-content:space-between;align-items:baseline;padding:14px 4px 6px;
+  font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.tx-date-sep-net{text-transform:none;letter-spacing:0}
+/* Grupo de un día: una sola tarjeta con todas sus filas adentro, separadas por línea — en vez
+   de una tarjeta por movimiento. El color de tipo quedó solo en el ícono (.tx-icon.*) y en el
+   monto (.tx-amount.*); ya no hay un borde de color por fila (ver handoff de Movimientos). */
+.tx-day{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .tx-item{background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border);border-left:3px solid transparent;padding:8px 12px;display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+/* Dentro de #tx-list las filas viven adentro de .tx-day: sin borde ni radio propios (los pone
+   el grupo), más altas, separadas por una línea entre sí. #inv-movs (pestaña Inversión) sigue
+   usando la .tx-item "clásica" de arriba, con su propia tarjeta — no se toca. */
+#tx-list .tx-item{border:none;border-left:none;border-radius:0;min-height:60px;padding:10px 14px;gap:12px}
+#tx-list tx-item:not(:first-child) .tx-item-content{border-top:1px solid var(--border)}
+#tx-list .tx-icon{width:36px;height:36px;font-size:16px}
+#tx-list .tx-cat{font-size:14px}
+#tx-list .tx-sub{font-size:12px}
+#tx-list .tx-amount{font-size:14px}
+/* Antes todo gasto era rojo: con 20-30 filas la lista se volvía una pared roja. El color de
+   tipo ya lo dice el ícono; acá el monto vuelve al texto normal y el "−" alcanza para leerlo
+   como salida de plata. Ingresos/ahorros siguen con su color (son la excepción, no la norma). */
+#tx-list .tx-amount.gasto{color:var(--text)}
+/* Columna derecha de la fila: el monto arriba y, si es un gasto frecuente, el botón de
+   pago/impago debajo (antes vivía pegado al título, compitiendo con la categoría). */
+.tx-amount-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.tx-amount-wrap .tx-amount{max-width:none}
 /* <tx-item> (el Web Component, tag sin punto) envuelve a .tx-item (la fila visual, clase con punto):
-   el wrapper recorta y da el margen entre filas; la fila interna es la que desliza adentro. */
+   dentro de #tx-list ya no necesita su propio margen ni radio (los pone .tx-day). */
 tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radius-sm);margin-bottom:4px;animation:slideUpFade .4s ease forwards}
+#tx-list tx-item{border-radius:0;margin-bottom:0}
 .tx-swipe-bg{position:absolute;top:0;bottom:0;width:78px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;text-align:center;padding:0 4px;cursor:pointer}
 .tx-swipe-bg-left{left:0;background:var(--accent)}
 .tx-swipe-bg-right{right:0;background:var(--danger)}
 .tx-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .tx-icon.gasto{background:var(--danger-light)}.tx-icon.ingreso{background:var(--success-light)}.tx-icon.inversion{background:var(--invest-light)}.tx-icon.tarjeta{background:var(--warning-light)}.tx-icon.save{background:var(--save-light)}
-/* Mismo balde de color que el círculo del ícono y el monto (claseTipoDeMov() en
-   movimientos.js), ahora también en el borde izquierdo de la fila entera. Antes cada
-   movimiento era el mismo rectángulo blanco de borde gris: con 20-30 en el mes la lista se
-   volvía una pared de tarjetas casi idénticas y había que leer cada una para saber de qué
-   tipo era. El borde se ve de reojo, sin competir con el ícono ni el monto. */
-.tx-tipo-gasto{border-left-color:var(--danger)}
-.tx-tipo-ingreso{border-left-color:var(--success)}
-.tx-tipo-inversion{border-left-color:var(--invest)}
-.tx-tipo-tarjeta{border-left-color:var(--warning)}
-.tx-tipo-save{border-left-color:var(--save)}
 .tx-info{flex:1;min-width:0}
 .tx-cat{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tx-sub{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -304,11 +312,62 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .tx-del,.tx-edit{background:none;border:none;font-size:15px;cursor:pointer;padding:7px 9px;line-height:1}
 .tx-del{color:#ccc}
 .tx-edit{color:var(--muted)}
+/* Botón de pago/impago de un gasto frecuente: pill chica y tocable, siempre debajo del monto. */
+.js-toggle-pago{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;
+  cursor:pointer;font-size:10.5px;font-weight:600;border:1px solid transparent;white-space:nowrap}
+.js-toggle-pago:active{transform:scale(.92)}
+.js-toggle-pago.badge-success{background:transparent;border-color:var(--success-light)}
 /* NAV MONTH */
 .month-nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0}
 .month-nav button{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 13px;font-size:14px;cursor:pointer;color:var(--text)}
 .month-nav span{font-size:15px;font-weight:600}
 .mes-label-x{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:4px;border-radius:50%;background:var(--danger);color:#fff;font-size:11px;font-weight:700;vertical-align:middle}
+
+/* ═══════════════════════════════════════════
+   MOVIMIENTOS: barra unificada + resumen número/barras + filtro segmentado
+   ═══════════════════════════════════════════
+   Antes eran cinco franjas apiladas (header, nav de mes, filtros, buscador, chips) antes del
+   primer movimiento. Ahora el header y el mes viven en una sola barra, el buscador queda detrás
+   de una lupa, y el resumen es un número grande con barras entra/sale en vez de una grilla de
+   chips — ver handoff de Movimientos. */
+.mov-topbar{display:flex;align-items:center;gap:2px;padding:6px 6px 6px 8px;
+  background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.mov-icon-btn{width:40px;height:40px;border:none;border-radius:50%;background:transparent;
+  font-size:18px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mov-icon-btn.active{background:var(--accent-light)}
+.mov-topbar-center{flex:1;display:flex;align-items:center;justify-content:center;gap:2px;min-width:0}
+.mov-topbar-arrow{width:36px;height:36px;border:none;border-radius:50%;background:transparent;font-size:20px;color:var(--muted);cursor:pointer;flex-shrink:0}
+.mov-topbar-month{display:flex;flex-direction:column;align-items:center;min-width:128px}
+.mov-topbar-eyebrow{font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.mov-topbar-label{font-size:16px;font-weight:600;letter-spacing:-.3px}
+.mov-search-row input{height:40px;width:100%;padding:0 12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface);color:var(--text);outline:none}
+/* Resumen: número grande, barras entra/sale, leyenda — reemplaza la grilla de .chip de antes */
+.mov-summary{padding:18px 20px 2px;display:flex;flex-direction:column;gap:14px}
+.mov-summary-num{display:flex;flex-direction:column;align-items:center;gap:2px}
+.mov-summary-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.mov-summary-val{font-size:34px;font-weight:700;letter-spacing:-1.2px}
+.mov-bars{display:flex;flex-direction:column;gap:10px}
+.mov-bar-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:10px}
+.mov-bar-name{font-size:12px;font-weight:600;color:var(--muted)}
+.mov-bar-track{height:8px;border-radius:4px;background:var(--border);overflow:hidden;display:flex;gap:2px}
+.mov-bar-seg{height:100%;transition:width .25s ease}
+.mov-bar-val{font-size:13px;font-weight:600;min-width:92px;text-align:right}
+.mov-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px}
+.mov-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.mov-legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;display:inline-block}
+.mov-legend-item strong{font-weight:600;color:var(--text)}
+/* Tarjetas: #mov-arrastre pasa a ser texto centrado sin superficie (ver renderMovs) */
+.mov-tarjeta-info{margin:6px 16px 0;font-size:12px;color:var(--muted);text-align:center}
+/* Selector segmentado de los 4 filtros principales (Todos/Gastos/Ingresos/Tarjetas), con
+   cantidad al lado de cada uno. Los sub-filtros de categoría/tarjeta (#mov-cat-filtro,
+   #mov-tarjeta-filtro) siguen siendo .filter-chip, sin cambios. */
+.seg-filter{margin:16px 16px 0;display:flex;background:var(--border);border-radius:12px;padding:3px;gap:2px}
+.seg-btn{flex:1;height:32px;border:none;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;
+  background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:4px}
+.seg-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.seg-btn-count{font-size:10.5px;opacity:.6}
+
 /* BARS */
 .bar-wrap{display:flex;flex-direction:column;gap:8px}
 .bar-row{display:flex;align-items:center;gap:8px}
@@ -403,12 +462,8 @@ canvas{width:100%!important;max-width:100%}
 .badge-success{background:var(--success-light);color:var(--success)}
 .badge-accent{background:var(--accent-light);color:var(--accent)}
 .badge-warning{background:var(--warning-light);color:var(--warning)}
-/* Único badge que además es un botón (el pago/impago de un gasto frecuente, ver
-   construirCuerpoTxItem en movimientos.js): necesita su propio feedback de toque, que .badge
-   no tiene porque el resto son solo informativos. Un poco más grande que el resto de los
-   badges (9px/1px 6px) porque a este SÍ hay que poder tocarlo rápido y sin errar. */
-.js-toggle-pago{cursor:pointer;font-size:11px;padding:3px 9px;font-weight:600}
-.js-toggle-pago:active{transform:scale(.92)}
+/* El pago/impago de un gasto frecuente (construirCuerpoTxItem en movimientos.js) se estiliza
+   más arriba (.js-toggle-pago, junto a .tx-amount-wrap): es el único badge que además es botón. */
 
 /* Rótulo de sección en mayúsculas, dentro de una card ("DETALLE", "RANKING POR CATEGORÍA"). */
 .seccion-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}

@@ -67,6 +67,10 @@ function showPage(id,btn){
   // función y la pantalla quedaría a medio renderizar.
   const fabEl=document.getElementById('fab-cargar');
   if(fabEl) fabEl.style.display = (id === 'cargar') ? 'none' : 'flex';
+  // Movimientos tiene su propio ☰ adentro de la barra unificada (ver .mov-topbar): el botón
+  // flotante de siempre quedaría duplicado, uno al lado del otro.
+  const hamburgerEl=document.getElementById('hamburger-btn');
+  if(hamburgerEl) hamburgerEl.style.display = (id === 'mov') ? 'none' : 'flex';
   // Solo se re-renderiza si los datos cambiaron desde la última vez que se pintó ESTA
   // pestaña. Si no, alcanza con las clases CSS de arriba (mostrar/ocultar) sin recalcular
   // ni reinyectar HTML — eso es lo caro, no el cambio de pestaña en sí.
@@ -212,13 +216,14 @@ function getTcMovsEnRango(desde, hasta){
   return res;
 }
 
-function setFiltro(f,el){
+// El selector segmentado (#mov-filtros) se reconstruye entero en cada renderMovs() —igual que
+// los sub-filtros de categoría/tarjeta de siempre—, así que alcanza con cambiar la variable y
+// volver a renderizar: no hace falta tocar clases a mano sobre un botón puntual.
+function setFiltro(f){
   // Reseteo sub-filtros cuando cambio el filtro principal
   if(f!=="Tarjeta") filtroTarjeta="";
   if(f!=="Gasto" && f!=="Ingreso") filtroCategoria="";
   filtro=f;
-  document.querySelectorAll(".filter-chip").forEach(c=>c.classList.remove("active"));
-  el.classList.add("active");
   renderMovs();
 }
 // Aplica el sub-filtro por nombre de tarjeta (Visa, Mastercard, etc.)
@@ -233,7 +238,35 @@ function setFiltroCategoria(c){
 }
 function onSearchMovs(){
   searchQuery=(document.getElementById("mov-search").value||"").trim().toLowerCase();
+  syncMovSearchBtn();
   renderMovs();
+}
+// ═══════════════════════════════════════════
+// BUSCADOR COLAPSABLE (Movimientos)
+// ═══════════════════════════════════════════
+// El buscador vive detrás de la lupa: ocupa espacio solo cuando hace falta. Al cerrarlo se
+// vacía (si no, quedaría un filtro invisible activo sin forma de saber por qué la lista está
+// vacía). La lupa queda "activa" (fondo resaltado) con el panel abierto O con texto cargado,
+// así no se pierde la señal de que hay un filtro de búsqueda aplicado al cerrar el panel.
+function toggleMovSearch(){
+  const row=document.getElementById("mov-search-row");
+  const abrir = row.style.display==="none" || !row.style.display;
+  row.style.display = abrir ? "block" : "none";
+  if(abrir){
+    document.getElementById("mov-search").focus();
+  } else {
+    document.getElementById("mov-search").value="";
+    searchQuery="";
+    renderMovs();
+  }
+  syncMovSearchBtn();
+}
+function syncMovSearchBtn(){
+  const btn=document.getElementById("btn-mov-search");
+  const row=document.getElementById("mov-search-row");
+  if(!btn || !row) return;
+  const abierto = row.style.display!=="none" && !!row.style.display;
+  btn.classList.toggle("active", abierto || !!searchQuery);
 }
 // Aplica el filtro de búsqueda a un movimiento (busca en nota, cat, subcat, ticker, desc)
 function matchSearch(m){
@@ -365,6 +398,7 @@ function construirCuerpoTxItem(m){
     const invEsGasto=isInv && !isInvSalida(m);
     const amtClass=claseTipoDeMov(m);
     let amt;
+    let statusBadge=""; // botón de pago/impago de un gasto frecuente, debajo del monto
     if(isInv){
       const invSign=invEsIngreso?"+":"-";
       if(m.importeUSD>0) amt=`${invSign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`;
@@ -407,27 +441,27 @@ function construirCuerpoTxItem(m){
       // badge dice QUÉ operación fue (compra o venta); cuál de las dos mitades es ya lo dice
       // el color —rojo la que sale, verde la que entra— y repetirlo hacía tan largo el
       // título que se truncaba y el badge no llegaba a verse.
+      // Como máximo UN badge en el título (ver handoff de Movimientos): la prioridad es
+      // cambio > traspaso > ahorro > de-ahorros > recuperable. El de pago/impago de un gasto
+      // frecuente ya NO es un badge de título — vive debajo del monto (ver statusBadge, abajo).
       const infoCambio = esPataDeCambio(m) ? leerCambio(patasDelCambio(m.cambioId, movs)) : null;
       if(esPataDeCambio(m)) badge=` <span class="badge badge-accent">💱 ${infoCambio && infoCambio.sentido==="venta" ? "VENTA" : "COMPRA"}</span>`;
       else if(esTraspaso(m)) badge=` <span class="badge badge-accent">↔️ TRASPASO</span>`;
       else if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
       else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
-      // El badge de un gasto frecuente ahora también es el botón para marcarlo pago/impago
-      // mes a mes (pedido del usuario, solo como ayuda memoria: no cambia ningún cálculo).
-      // El texto en estado impago no dice "Impago" solo, dice "Marcar pagado": la primera
-      // versión (un badge rojo que solo INFORMABA el estado) generaba el mismo problema que
-      // el filtro de fecha del mes-label — el toque para cambiarlo ya funcionaba, pero nada
-      // invitaba a usarlo, así que el usuario lo veía en rojo después de pagar y no sabía que
-      // podía tocarlo. Una vez pagado sí alcanza con informar ("✓ Pagado"), porque ahí no hace
-      // falta invitar a ninguna acción.
-      else if(m.frecuente){
-        const ym=String(m.fecha||"").slice(0,7);
-        badge = m.pagado
-          ? ` <span class="badge badge-success js-toggle-pago" role="button" tabindex="0" aria-label="Pagado. Tocá para deshacerlo" data-ym="${ym}">✓ Pagado</span>`
-          : ` <span class="badge badge-danger js-toggle-pago" role="button" tabindex="0" aria-label="Impago. Tocá para marcarlo pagado" data-ym="${ym}">🔁 Marcar pagado</span>`;
-      }
       cat=`${escapeHtml(m.cat)}${badge}`;
-      if(m.recuperable>0) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
+      if(!badge && m.recuperable>0) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
+      // El botón de pago/impago de un gasto frecuente (pedido del usuario, solo como ayuda
+      // memoria: no cambia ningún cálculo) va debajo del monto, no en el título — ver el
+      // texto que arma esta sección en el handoff de Movimientos. El texto en estado impago
+      // no dice "Impago" solo, dice "Marcar pagado": un badge que solo INFORMABA el estado no
+      // invitaba a tocarlo. Una vez pagado alcanza con informar ("✓ Pagado").
+      if(m.frecuente){
+        const ym=String(m.fecha||"").slice(0,7);
+        statusBadge = m.pagado
+          ? `<span class="badge badge-success js-toggle-pago" role="button" tabindex="0" aria-label="Pagado. Tocá para deshacerlo" data-ym="${ym}">✓ Pagado</span>`
+          : `<span class="badge badge-danger js-toggle-pago" role="button" tabindex="0" aria-label="Impago. Tocá para marcarlo pagado" data-ym="${ym}">🔁 Marcar pagado</span>`;
+      }
       // En un cambio, el tipo de cambio es EL dato de la operación y en la fila no se veía
       // por ningún lado: hay que abrir el editor para saber a cuánto compraste. Se saca de
       // las dos patas juntas, así que se busca la hermana.
@@ -453,7 +487,10 @@ function construirCuerpoTxItem(m){
         <div class="tx-sub">${subtituloFila([sub, !isTc&&m.nota?escapeHtml(m.nota.slice(0,24)):""])}</div>
         ${!isTc?renderTagsChips(m):""}
       </div>
-      <div class="tx-amount ${amtClass}">${amt}</div>`;
+      <div class="tx-amount-wrap">
+        <div class="tx-amount ${amtClass}">${amt}</div>
+        ${statusBadge}
+      </div>`;
 }
 
 // Caché de datos por fila: como <tx-item> se "upgradea" a partir de un string HTML (el que
@@ -594,20 +631,47 @@ function formatearFechaSeparador(fecha){
   const MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
   return `${partes[2]} de ${MESES[partes[1]-1]}`;
 }
-// Recorre un lote de movimientos y arma su HTML intercalando un separador cada vez que la
-// fecha cambia respecto al ítem anterior (incluso entre lotes: txUltimaFechaSeparador se
-// mantiene entre llamadas dentro del mismo render completo — ver renderTxListaLazy).
+// Neto del día en ARS, para el separador (ver handoff de Movimientos): ingresos − gastos, sin
+// tarjetas ni patas de cambio (misma regla que getArrastre(), más abajo). En el filtro Tarjeta
+// es la suma de lo que se cargó ese día (siempre "sale", por eso va con signo −). 0 no se muestra.
+function formatearNetoDelDia(items){
+  let neto;
+  if(filtro==="Tarjeta"){
+    neto = -items.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  } else {
+    neto=0;
+    items.forEach(m=>{
+      if(m._isTc || esPataDeCambio(m) || m.moneda==="USD") return;
+      if(esIngreso(m)) neto+=(m.importe||0);
+      else if(esConsumo(m)) neto-=(m.importe||0);
+    });
+  }
+  neto=Math.round(neto*100)/100;
+  if(neto===0) return "";
+  return (neto>0?"+":"−")+fmtS(Math.abs(neto));
+}
+// Recorre un lote de movimientos y arma su HTML agrupando cada día en su propio <div
+// class="tx-day">, con el separador de fecha (+ el neto del día) encabezándolo. Como
+// construirLotesPorDia() garantiza que un lote nunca corta un día a la mitad, cada lote abre y
+// cierra sus propios grupos sin necesitar reabrir uno que ya quedó insertado en el DOM.
 let txUltimaFechaSeparador=null;
 function renderLoteConSeparadores(lote){
   let html="";
+  let grupoAbierto=false;
   lote.forEach(m=>{
     const fechaItem=m.fecha||"";
     if(fechaItem!==txUltimaFechaSeparador){
+      if(grupoAbierto) html+="</div>";
       txUltimaFechaSeparador=fechaItem;
-      html+=`<div class="tx-date-sep">${formatearFechaSeparador(fechaItem)}</div>`;
+      const itemsDelDia=lote.filter(x=>(x.fecha||"")===fechaItem);
+      const netoTxt=formatearNetoDelDia(itemsDelDia);
+      html+=`<div class="tx-date-sep"><span>${formatearFechaSeparador(fechaItem)}</span>${netoTxt?`<span class="tx-date-sep-net">${netoTxt}</span>`:""}</div>`;
+      html+=`<div class="tx-day">`;
+      grupoAbierto=true;
     }
     html+=renderTxItemHTML(m);
   });
+  if(grupoAbierto) html+="</div>";
   return html;
 }
 
@@ -615,8 +679,8 @@ function renderLoteConSeparadores(lote){
 // LAZY LOADING de la lista de Movimientos
 // ═══════════════════════════════════════════
 // Renderizar de una sola vez un mes con cientos de movimientos puede trabar el DOM.
-// Se renderiza un primer lote de 25 y, con un IntersectionObserver mirando un "centinela"
-// al final de la lista, se van agregando lotes de 25 más a medida que el usuario scrollea.
+// Se renderiza un primer lote y, con un IntersectionObserver mirando un "centinela" al final
+// de la lista, se van agregando más lotes a medida que el usuario scrollea.
 const TX_LOTE_SIZE=25;
 let txListObserver=null;
 let txListaCompleta=[]; // la lista filtrada completa (show), para que el observer sepa qué falta
@@ -628,6 +692,27 @@ function ordenCronologico(a, b){
   if (dateA !== dateB) return dateB.localeCompare(dateA);
   return (b.id || 0) - (a.id || 0);
 }
+// Arma lotes de ~tamanoObjetivo movimientos SIN cortar un día a la mitad: show ya viene
+// ordenado cronológicamente, así que las fechas iguales quedan siempre juntas, y alcanza con
+// seguir sumando al lote actual hasta terminar el día en curso antes de cerrarlo. Sin esto, el
+// <div class="tx-day"> de un día que cae justo en el borde de dos lotes quedaría cerrado a
+// mitad de camino y el resto aparecería en un grupo nuevo más abajo en vez de seguir el mismo.
+function construirLotesPorDia(show, tamanoObjetivo){
+  const lotes=[];
+  let loteActual=[];
+  let fechaActual=null;
+  show.forEach(m=>{
+    const f=m.fecha||"";
+    if(f!==fechaActual && loteActual.length>=tamanoObjetivo){
+      lotes.push(loteActual);
+      loteActual=[];
+    }
+    fechaActual=f;
+    loteActual.push(m);
+  });
+  if(loteActual.length) lotes.push(loteActual);
+  return lotes;
+}
 
 function renderTxListaLazy(show){
   txListaCompleta=show;
@@ -636,20 +721,19 @@ function renderTxListaLazy(show){
   if(txListObserver){ txListObserver.disconnect(); txListObserver=null; }
   txItemDataCache.clear(); // limpio la caché de datos de <tx-item> del render anterior
   txUltimaFechaSeparador=null; // reset: es un render de lista completa, arranca de cero
-  const primerLote=show.slice(0, TX_LOTE_SIZE);
-  list.innerHTML=renderLoteConSeparadores(primerLote);
-  if(show.length<=TX_LOTE_SIZE) return; // entra todo en un lote, no hace falta centinela
+  const lotes=construirLotesPorDia(show, TX_LOTE_SIZE);
+  list.innerHTML=renderLoteConSeparadores(lotes[0]||[]);
+  if(lotes.length<=1) return; // entra todo en un lote, no hace falta centinela
   list.insertAdjacentHTML("beforeend", `<div id="tx-list-sentinel" style="padding:14px;text-align:center;color:var(--muted);font-size:12px">Cargando más…</div>`);
-  let renderizados=TX_LOTE_SIZE;
+  let loteIdx=1;
   const sentinel=document.getElementById("tx-list-sentinel");
   txListObserver=new IntersectionObserver((entries)=>{
     entries.forEach(entry=>{
       if(!entry.isIntersecting) return;
-      const siguienteLote=txListaCompleta.slice(renderizados, renderizados+TX_LOTE_SIZE);
-      if(!siguienteLote.length) return;
-      sentinel.insertAdjacentHTML("beforebegin", renderLoteConSeparadores(siguienteLote));
-      renderizados+=siguienteLote.length;
-      if(renderizados>=txListaCompleta.length){
+      if(loteIdx>=lotes.length) return;
+      sentinel.insertAdjacentHTML("beforebegin", renderLoteConSeparadores(lotes[loteIdx]));
+      loteIdx++;
+      if(loteIdx>=lotes.length){
         txListObserver.disconnect();
         sentinel.remove();
       }
@@ -698,8 +782,25 @@ function renderMovs(){
   // Las tarjetas no afectan el balance.
   const balMes=totales.balance;
 
-  // ── CHIPS ADAPTADOS AL FILTRO ──
+  // ── SELECTOR SEGMENTADO (reemplaza .filter-row): se reconstruye entero en cada render, con
+  // la cantidad de movimientos de cada filtro — igual que ya hacían los sub-filtros de
+  // categoría/tarjeta de siempre. Los conteos son del balde completo, sin pisarlos con los
+  // sub-filtros de categoría/tarjeta ni con la búsqueda. ──
+  const segCounts={
+    Todos: mesMovs.length+mesTcs.length,
+    Gasto: mesMovs.filter(m=>(m.tipo==="Gasto")||(m.tipo==="Inversion"&&!isInvSalida(m))).length,
+    Ingreso: mesMovs.filter(m=>(m.tipo==="Ingreso")||(m.tipo==="Inversion"&&isInvSalida(m))).length,
+    Tarjeta: mesTcs.length
+  };
+  const segLabels=[["Todos","Todos"],["Gasto","Gastos"],["Ingreso","Ingresos"],["Tarjeta","Tarjetas"]];
+  document.getElementById("mov-filtros").innerHTML = segLabels.map(([key,label])=>
+    `<button type="button" class="seg-btn${filtro===key?' active':''}" onclick="setFiltro('${key}')">${label}<span class="seg-btn-count">${segCounts[key]}</span></button>`
+  ).join("");
+
+  // ── RESUMEN ADAPTADO AL FILTRO ──
   const arrastreEl=document.getElementById("mov-arrastre");
+  arrastreEl.className="info-line"; // Tarjeta lo cambia más abajo; el resto usa esta por default
+  const periodoTxt = filtroFecha ? "en el período" : `en ${mesLbl(mesActual)}`;
   if(filtro==="Tarjeta"){
     // Sub-filtro por nombre de tarjeta (Visa, Mastercard, etc.)
     // Listamos las tarjetas únicas que aparecen este mes
@@ -731,13 +832,31 @@ function renderMovs(){
     const totalTcUSD=mesTcsUSD.reduce((s,m)=>s+m.importe,0);
     const cantTc=mesTcsFiltrados.length;
 
-    let chipsHtml=`<div class="chip"><div class="chip-label">Total ARS</div><div class="chip-val warn">${fmtTotal(totalTcARS)}</div></div>`;
-    if(totalTcUSD>0){
-      chipsHtml+=`<div class="chip"><div class="chip-label">Total USD</div><div class="chip-val warn">USD ${totalTcUSD.toFixed(2)}</div></div>`;
+    // Barras: un segmento por tarjeta, tonos de --warning (más clara cuanto más atrás).
+    const porTarjeta={};
+    mesTcsARS.forEach(m=>{ porTarjeta[m.tarjeta]=(porTarjeta[m.tarjeta]||0)+m.importe; });
+    const tarjetasOrdenadas=Object.entries(porTarjeta).sort((a,b)=>b[1]-a[1]);
+    const maxTc=Math.max(totalTcARS,1);
+    const tonoTarjeta=i=>`color-mix(in srgb,var(--warning) ${Math.max(100-i*20,30)}%,var(--surface))`;
+
+    let html=`<div class="mov-summary-num">
+      <span class="mov-summary-label">Tarjetas ${periodoTxt}</span>
+      <span class="mov-summary-val" style="color:var(--warning)">${fmtTotal(totalTcARS)}</span>
+    </div>`;
+    if(tarjetasOrdenadas.length){
+      html+=`<div class="mov-bars"><div class="mov-bar-row">
+        <span class="mov-bar-name">Tarj.</span>
+        <div class="mov-bar-track">${tarjetasOrdenadas.map(([,v],i)=>`<span class="mov-bar-seg" style="width:${v/maxTc*100}%;background:${tonoTarjeta(i)}"></span>`).join("")}</div>
+        <span class="mov-bar-val">${fmtTotal(totalTcARS)}</span>
+      </div></div>
+      <div class="mov-legend">${tarjetasOrdenadas.map(([t,v],i)=>`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${tonoTarjeta(i)}"></span><span>${escapeHtml(t)}</span><strong>${fmtTotal(v)}</strong></div>`).join("")}
+        ${totalTcUSD>0?`<div class="mov-legend-item"><span>USD</span><strong>USD ${totalTcUSD.toFixed(2)}</strong></div>`:""}
+        <div class="mov-legend-item"><span>Gastos</span><strong>${cantTc}</strong></div>
+      </div>`;
     }
-    chipsHtml+=`<div class="chip"><div class="chip-label">Gastos</div><div class="chip-val warn">${cantTc}</div></div>`;
-    document.getElementById("mov-summary").innerHTML=chipsHtml;
-    // Línea informativa específica de tarjetas
+    document.getElementById("mov-summary").innerHTML=html;
+    // Línea informativa específica de tarjetas: ya no tiene superficie propia (ver handoff).
+    arrastreEl.className="mov-tarjeta-info";
     const nFrec=mesTcsFiltrados.filter(m=>m.frecuente).length;
     const nCuotas=mesTcsFiltrados.length-nFrec;
     if(mesTcsFiltrados.length){
@@ -799,30 +918,53 @@ function renderMovs(){
       ? todoGastos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
       : todoGastos.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(-gananciaUSD,0);
 
-    let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Gastos ARS";
-    let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val negative">${fmtTotal(gastosTotalARS)}</div></div>`;
-    if(gastosTotalUSD>0){
-      chipsHtml+=`<div class="chip"><div class="chip-label">${filtroCategoria?escapeHtml(filtroCategoria)+" USD":"Gastos USD"}</div><div class="chip-val negative">USD ${gastosTotalUSD.toFixed(2)}</div></div>`;
+    // Barras: por categoría (top 4 + "Otros"), tonos de --danger. Con un sub-filtro activo, el
+    // resto de los segmentos queda al 35% de opacidad y solo resalta el elegido.
+    const porCatGasto={};
+    todoGastos.forEach(m=>{ if(m.moneda!=="USD") porCatGasto[m.cat]=(porCatGasto[m.cat]||0)+(m.importe||0); });
+    let catsOrdenadas=Object.entries(porCatGasto).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+    if(catsOrdenadas.length>5){
+      const otros=catsOrdenadas.slice(4).reduce((s,[,v])=>s+v,0);
+      catsOrdenadas=catsOrdenadas.slice(0,4).concat(otros>0?[["Otros",otros]]:[]);
     }
-    chipsHtml+=`<div class="chip"><div class="chip-label">Cantidad</div><div class="chip-val">${todoGastos.length}</div></div>`;
+    const maxGasto=Math.max(gastosTotalARS,1);
+    const tonoGasto=i=>`color-mix(in srgb,var(--danger) ${Math.max(100-i*20,30)}%,var(--surface))`;
+
+    const labelTxt=filtroCategoria?escapeHtml(filtroCategoria):`Gastado ${periodoTxt}`;
+    let html=`<div class="mov-summary-num">
+      <span class="mov-summary-label">${labelTxt}</span>
+      <span class="mov-summary-val" style="color:var(--danger)">${fmtTotal(gastosTotalARS)}</span>
+    </div>`;
+    if(catsOrdenadas.length){
+      html+=`<div class="mov-bars"><div class="mov-bar-row">
+        <span class="mov-bar-name">Cat.</span>
+        <div class="mov-bar-track">${catsOrdenadas.map(([c,v],i)=>`<span class="mov-bar-seg" style="width:${v/maxGasto*100}%;background:${tonoGasto(i)};opacity:${(!filtroCategoria||c===filtroCategoria)?1:.35}"></span>`).join("")}</div>
+        <span class="mov-bar-val">${fmtTotal(gastosTotalARS)}</span>
+      </div></div>
+      <div class="mov-legend">${catsOrdenadas.map(([c,v],i)=>`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${tonoGasto(i)}"></span><span>${escapeHtml(c)}</span><strong>${fmtTotal(v)}</strong></div>`).join("")}</div>`;
+    }
+    const extrasGasto=[];
+    if(gastosTotalUSD>0) extrasGasto.push(`<div class="mov-legend-item"><span>USD</span><strong>USD ${gastosTotalUSD.toFixed(2)}</strong></div>`);
     // Chips informativos cuando no hay sub-filtro de categoría (desglose de qué compone el total)
     if(!filtroCategoria){
       if(Math.round(gananciaARS)!==0){
         const colorRes=gananciaARS>=0?"var(--success)":"var(--danger)";
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorRes}">📊 Resultado inv.</div><div class="chip-val" style="color:${colorRes}">${gananciaARS>=0?"+":""}${fmtTotal(gananciaARS)}</div></div>`;
+        extrasGasto.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorRes}"></span><span style="color:${colorRes}">📊 Resultado inv.</span><strong style="color:${colorRes}">${gananciaARS>=0?"+":""}${fmtTotal(gananciaARS)}</strong></div>`);
       }
       if(ahorradoARS>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Ahorrado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(ahorradoARS)}</div></div>`;
+        extrasGasto.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--save)"></span><span style="color:var(--save)">🏦 Ahorrado</span><strong style="color:var(--save)">${fmtTotal(ahorradoARS)}</strong></div>`);
       }
       // En verde, no en rojo: poner plata en una inversión no es perderla.
       if(suscripcionesARS>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(suscripcionesARS)}</div></div>`;
+        extrasGasto.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Invertido</span><strong style="color:var(--invest)">${fmtTotal(suscripcionesARS)}</strong></div>`);
       }
       if(suscripcionesUSD>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido USD</div><div class="chip-val" style="color:var(--invest)">USD ${suscripcionesUSD.toFixed(2)}</div></div>`;
+        extrasGasto.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Invertido USD</span><strong style="color:var(--invest)">USD ${suscripcionesUSD.toFixed(2)}</strong></div>`);
       }
     }
-    document.getElementById("mov-summary").innerHTML=chipsHtml;
+    extrasGasto.push(`<div class="mov-legend-item"><span>Cantidad</span><strong>${todoGastos.length}</strong></div>`);
+    html+=`<div class="mov-legend">${extrasGasto.join("")}</div>`;
+    document.getElementById("mov-summary").innerHTML=html;
     arrastreEl.style.display="none";
     document.getElementById("mov-tarjeta-filtro").style.display="none";
   } else if(filtro==="Ingreso"){
@@ -865,13 +1007,32 @@ function renderMovs(){
     const ingTotalUSD = filtroCategoria
       ? todoIngresos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
       : todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(ganInv.usd||0, 0);
-    let labelARS=filtroCategoria?`${escapeHtml(filtroCategoria)} ARS`:"Ingresos ARS";
-    let chipsHtml=`<div class="chip"><div class="chip-label">${labelARS}</div><div class="chip-val positive">${fmtTotal(ingTotalARS)}</div></div>`;
-    if(ingTotalUSD>0){
-      chipsHtml+=`<div class="chip"><div class="chip-label">${filtroCategoria?escapeHtml(filtroCategoria)+" USD":"Ingresos USD"}</div><div class="chip-val positive">USD ${ingTotalUSD.toFixed(2)}</div></div>`;
+    // Barras: por categoría (top 4 + "Otros"), tonos de --success.
+    const porCatIng={};
+    todoIngresos.forEach(m=>{ if(m.moneda!=="USD") porCatIng[m.cat]=(porCatIng[m.cat]||0)+(m.importe||0); });
+    let catsIngOrdenadas=Object.entries(porCatIng).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+    if(catsIngOrdenadas.length>5){
+      const otros=catsIngOrdenadas.slice(4).reduce((s,[,v])=>s+v,0);
+      catsIngOrdenadas=catsIngOrdenadas.slice(0,4).concat(otros>0?[["Otros",otros]]:[]);
     }
-    chipsHtml+=`<div class="chip"><div class="chip-label">Cantidad</div><div class="chip-val">${todoIngresos.length}</div></div>`;
-    // Chip informativo: resultado neto de inversiones del mes (rescates - suscripciones)
+    const maxIng=Math.max(ingTotalARS,1);
+    const tonoIng=i=>`color-mix(in srgb,var(--success) ${Math.max(100-i*20,30)}%,var(--surface))`;
+
+    const labelIngTxt=filtroCategoria?escapeHtml(filtroCategoria):`Ingresó ${periodoTxt}`;
+    let html=`<div class="mov-summary-num">
+      <span class="mov-summary-label">${labelIngTxt}</span>
+      <span class="mov-summary-val" style="color:var(--success)">${fmtTotal(ingTotalARS)}</span>
+    </div>`;
+    if(catsIngOrdenadas.length){
+      html+=`<div class="mov-bars"><div class="mov-bar-row">
+        <span class="mov-bar-name">Cat.</span>
+        <div class="mov-bar-track">${catsIngOrdenadas.map(([c,v],i)=>`<span class="mov-bar-seg" style="width:${v/maxIng*100}%;background:${tonoIng(i)};opacity:${(!filtroCategoria||c===filtroCategoria)?1:.35}"></span>`).join("")}</div>
+        <span class="mov-bar-val">${fmtTotal(ingTotalARS)}</span>
+      </div></div>
+      <div class="mov-legend">${catsIngOrdenadas.map(([c,v],i)=>`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${tonoIng(i)}"></span><span>${escapeHtml(c)}</span><strong>${fmtTotal(v)}</strong></div>`).join("")}</div>`;
+    }
+    const extrasIng=[];
+    if(ingTotalUSD>0) extrasIng.push(`<div class="mov-legend-item"><span>USD</span><strong>USD ${ingTotalUSD.toFixed(2)}</strong></div>`);
     // Solo cuando no hay sub-filtro de categoría, para no confundir con totales parciales.
     if(!filtroCategoria){
       // El resultado del mes NO es rescates − suscripciones: eso es el flujo, y da negativo
@@ -879,18 +1040,20 @@ function renderMovs(){
       // reconocida: primero recuperás capital, después ganás.
       if(Math.round(ganInv.ars)!==0){
         const colorRes=ganInv.ars>=0?"var(--success)":"var(--danger)";
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorRes}">📊 Resultado inv.</div><div class="chip-val" style="color:${colorRes}">${ganInv.ars>=0?"+":""}${fmtTotal(ganInv.ars)}</div></div>`;
+        extrasIng.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorRes}"></span><span style="color:${colorRes}">📊 Resultado inv.</span><strong style="color:${colorRes}">${ganInv.ars>=0?"+":""}${fmtTotal(ganInv.ars)}</strong></div>`);
       }
       const recuperado=todoIngresos.filter(m=>m.tipo==="Inversion"&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
       if(recuperado>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Recuperado</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(recuperado)}</div></div>`;
+        extrasIng.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Recuperado</span><strong style="color:var(--invest)">${fmtTotal(recuperado)}</strong></div>`);
       }
       const delFondo=todoIngresos.filter(m=>esRetiroAhorro(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
       if(delFondo>0){
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">💸 Del fondo</div><div class="chip-val" style="color:var(--save)">${fmtTotal(delFondo)}</div></div>`;
+        extrasIng.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--save)"></span><span style="color:var(--save)">💸 Del fondo</span><strong style="color:var(--save)">${fmtTotal(delFondo)}</strong></div>`);
       }
     }
-    document.getElementById("mov-summary").innerHTML=chipsHtml;
+    extrasIng.push(`<div class="mov-legend-item"><span>Cantidad</span><strong>${todoIngresos.length}</strong></div>`);
+    html+=`<div class="mov-legend">${extrasIng.join("")}</div>`;
+    document.getElementById("mov-summary").innerHTML=html;
     arrastreEl.style.display="none";
     document.getElementById("mov-tarjeta-filtro").style.display="none";
   } else {
@@ -946,46 +1109,58 @@ function renderMovs(){
       + mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
       + Math.max(gananciaUSD,0))*100)/100;
 
-    let chipsHtml=`
-      <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-mov-ing">${fmtTotal(0)}</div></div>
-      <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-mov-gas">${fmtTotal(0)}</div></div>
-      <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${balCaja>=0?"positive":"negative"}" id="chip-mov-bal">${fmtTotal(0)}</div></div>`;
-    if(Math.round(guardado)!==0){
-      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--save)">🏦 Guardado</div><div class="chip-val" style="color:var(--save)">${fmtTotal(guardado)}</div></div>`;
-    }
+    // Barras: Entró (referencia) / Salió (consumo + lo guardado), relativas al mayor de los dos.
+    const maxFlujo=Math.max(ingTotal,gasTotal,1);
+    const consumoPortion=Math.max(gasTotal-Math.max(guardado,0),0);
+
+    let html=`<div class="mov-summary-num">
+      <span class="mov-summary-label">Balance ${periodoTxt}</span>
+      <span class="mov-summary-val" id="chip-mov-bal" style="color:${balCaja>=0?"var(--success)":"var(--danger)"}">${fmtTotal(0)}</span>
+      <div class="mov-legend" style="margin-top:4px">
+        <div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--success)"></span><span>Entró</span><strong id="chip-mov-ing">${fmtTotal(0)}</strong></div>
+        <div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--danger)"></span><span>Salió</span><strong id="chip-mov-gas">${fmtTotal(0)}</strong></div>
+        ${Math.round(guardado)!==0?`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--save)"></span><span>Ahorrado</span><strong>${fmtTotal(guardado)}</strong></div>`:""}
+      </div>
+    </div>
+    <div class="mov-bars">
+      <div class="mov-bar-row"><span class="mov-bar-name">Entró</span><div class="mov-bar-track"><span class="mov-bar-seg" style="width:${ingTotal/maxFlujo*100}%;background:var(--success)"></span></div><span class="mov-bar-val">${fmtTotal(ingTotal)}</span></div>
+      <div class="mov-bar-row"><span class="mov-bar-name">Salió</span><div class="mov-bar-track"><span class="mov-bar-seg" style="width:${consumoPortion/maxFlujo*100}%;background:var(--danger)"></span>${guardado>0?`<span class="mov-bar-seg" style="width:${guardado/maxFlujo*100}%;background:var(--save)"></span>`:""}</div><span class="mov-bar-val">${fmtTotal(gasTotal)}</span></div>
+    </div>`;
+    const legendTodos=[];
     if(invertidoARS>0){
-      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido</div><div class="chip-val" style="color:var(--invest)">${fmtTotal(invertidoARS)}</div></div>`;
+      legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Invertido</span><strong style="color:var(--invest)">${fmtTotal(invertidoARS)}</strong></div>`);
     }
     if(Math.round(netoInv.ars)!==0){
       const colorNeto=netoInv.ars>=0?"var(--success)":"var(--invest)";
-      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorNeto}">◈ Neto inversión</div><div class="chip-val" style="color:${colorNeto}">${netoInv.ars>0?"+":""}${fmtTotal(netoInv.ars)}</div></div>`;
+      legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorNeto}"></span><span style="color:${colorNeto}">◈ Neto inversión</span><strong style="color:${colorNeto}">${netoInv.ars>0?"+":""}${fmtTotal(netoInv.ars)}</strong></div>`);
     }
     if(ingresosUSDTotal>0){
-      chipsHtml+=`<div class="chip"><div class="chip-label">Ingresos USD</div><div class="chip-val positive">USD ${ingresosUSDTotal.toFixed(2)}</div></div>`;
+      legendTodos.push(`<div class="mov-legend-item"><span>Ingresos USD</span><strong>USD ${ingresosUSDTotal.toFixed(2)}</strong></div>`);
     }
     if(gastosUSDTotal>0){
-      chipsHtml+=`<div class="chip"><div class="chip-label">Gastos USD</div><div class="chip-val negative">USD ${gastosUSDTotal.toFixed(2)}</div></div>`;
+      legendTodos.push(`<div class="mov-legend-item"><span>Gastos USD</span><strong>USD ${gastosUSDTotal.toFixed(2)}</strong></div>`);
     }
     if(invertidoUSD>=0.01){
-      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:var(--invest)">◈ Invertido USD</div><div class="chip-val" style="color:var(--invest)">USD ${invertidoUSD.toFixed(2)}</div></div>`;
+      legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Invertido USD</span><strong style="color:var(--invest)">USD ${invertidoUSD.toFixed(2)}</strong></div>`);
     }
     if(Math.abs(netoInv.usd)>=0.01){
       const colorNetoU=netoInv.usd>=0?"var(--success)":"var(--invest)";
-      chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorNetoU}">◈ Neto inversión USD</div><div class="chip-val" style="color:${colorNetoU}">${netoInv.usd>0?"+":""}USD ${netoInv.usd.toFixed(2)}</div></div>`;
+      legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorNetoU}"></span><span style="color:${colorNetoU}">◈ Neto inversión USD</span><strong style="color:${colorNetoU}">${netoInv.usd>0?"+":""}USD ${netoInv.usd.toFixed(2)}</strong></div>`);
     }
     // Los chips de inversión van al final, ya ordenados de mayor a menor por el módulo.
     netosTicker.forEach(t=>{
       const etiqueta=`◈ ${escapeHtml(t.ticker)}`;
       if(Math.round(t.ars)!==0){
         const color=t.ars>=0?"var(--success)":"var(--invest)";
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${color}">${etiqueta}</div><div class="chip-val" style="color:${color}">${t.ars>0?"+":""}${fmtTotal(t.ars)}</div></div>`;
+        legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${color}"></span><span style="color:${color}">${etiqueta}</span><strong style="color:${color}">${t.ars>0?"+":""}${fmtTotal(t.ars)}</strong></div>`);
       }
       if(Math.abs(t.usd)>=0.01){
         const colorU=t.usd>=0?"var(--success)":"var(--invest)";
-        chipsHtml+=`<div class="chip"><div class="chip-label" style="color:${colorU}">${etiqueta} USD</div><div class="chip-val" style="color:${colorU}">${t.usd>0?"+":""}USD ${t.usd.toFixed(2)}</div></div>`;
+        legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorU}"></span><span style="color:${colorU}">${etiqueta} USD</span><strong style="color:${colorU}">${t.usd>0?"+":""}USD ${t.usd.toFixed(2)}</strong></div>`);
       }
     });
-    document.getElementById("mov-summary").innerHTML=chipsHtml;
+    if(legendTodos.length) html+=`<div class="mov-legend">${legendTodos.join("")}</div>`;
+    document.getElementById("mov-summary").innerHTML=html;
     animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
     animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);

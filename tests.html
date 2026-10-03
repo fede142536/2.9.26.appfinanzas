@@ -386,17 +386,19 @@ test("◈ Invertido suma el total puesto en el mercado este mes, todos los activ
 
 test("◈ Neto inversión suma el flujo de todos los tickers, sin reemplazar los chips por ticker", ()=>{
   // 100.000 (BCAHA) − 300.000 (YPF) = −200.000, mismo número que netoInvTotal().
+  // El resumen de "Todos" ya no es una grilla de .chip: los ítems extra (USD, por ticker,
+  // etc.) viven en la leyenda (.mov-legend-item) debajo del número y las barras.
   const dom=document.createElement("div");
   document.body.appendChild(dom);
   try{
     dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
-    const chips=[...dom.querySelectorAll(".chip")].map(c=>c.innerHTML);
+    const chips=[...dom.querySelectorAll(".mov-legend-item")].map(c=>c.innerHTML);
     const neto=chips.find(c=>c.includes("Neto inversión"));
-    cierto(!!neto, "falta el chip de neto de inversión: "+chips.join(" | "));
+    cierto(!!neto, "falta el ítem de neto de inversión: "+chips.join(" | "));
     cierto(/200\.000/.test(neto.replace(/<[^>]*>/g,"")), "el neto no muestra 200.000: "+neto);
     cierto(neto.includes("--invest"), "neto negativo: sigue siendo tu plata puesta, no un gasto perdido: "+neto);
     cierto(chips.some(c=>c.includes("BCAHA")) && chips.some(c=>c.includes("YPF")),
-      "los chips por ticker no pueden desaparecer, este es un resumen ADEMÁS de esos: "+chips.join(" | "));
+      "los ítems por ticker no pueden desaparecer, este es un resumen ADEMÁS de esos: "+chips.join(" | "));
   } finally { dom.remove(); }
 });
 
@@ -411,7 +413,7 @@ test("el neto positivo lleva signo + y el negativo no es rojo de gasto", ()=>{
   document.body.appendChild(dom);
   try{
     dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
-    const chips=[...dom.querySelectorAll(".chip")].map(c=>c.innerHTML);
+    const chips=[...dom.querySelectorAll(".mov-legend-item")].map(c=>c.innerHTML);
     const bcaha=chips.find(c=>c.includes("BCAHA")), ypf=chips.find(c=>c.includes("YPF"));
     cierto(/\+\$?1?00\.000/.test(bcaha.replace(/<[^>]*>/g,"")), "el neto positivo va con signo +: " + bcaha);
     cierto(ypf.includes("--invest"), "poner plata en una inversión no es perderla: no va en rojo de gasto. " + ypf);
@@ -4344,16 +4346,22 @@ test("la fila entera lleva el balde en su clase, no solo el ícono", async ()=>{
     "la fila dejó de llevar su propio balde de color en la clase");
 });
 
-test("los cinco baldes tienen su color en el borde de la fila, sin inventar ninguno nuevo", async ()=>{
+// Rediseño de Movimientos: ahora las filas del mismo día viven juntas adentro de un
+// <div class="tx-day"> (una tarjeta por día, no una por movimiento), así que un borde de color
+// por fila competía con el de el grupo y quedaba redundante. El color de tipo sigue existiendo
+// —ver "el ícono y el monto de la fila usan el mismo balde..."— pero ya no se repite en un
+// tercer lugar.
+test("el color de tipo ya no se repite en un borde por fila: el grupo de día no se lo come", async ()=>{
   const css=await (await fetch("styles.css")).text();
-  const mapa={gasto:"--danger", ingreso:"--success", inversion:"--invest", tarjeta:"--warning", save:"--save"};
-  Object.entries(mapa).forEach(([balde, variable])=>{
-    const i=css.indexOf(`.tx-tipo-${balde}{`);
-    cierto(i>=0, `falta .tx-tipo-${balde}`);
-    const regla=css.slice(i, css.indexOf("}", i)+1);
-    cierto(regla.includes(`border-left-color:var(${variable})`),
-      `.tx-tipo-${balde} tiene que usar la misma variable que .tx-icon.${balde}/.tx-amount.${balde}: `+regla);
+  ["gasto","ingreso","inversion","tarjeta","save"].forEach(balde=>{
+    cierto(!css.includes(`.tx-tipo-${balde}{`),
+      `.tx-tipo-${balde} tendría que haber desaparecido: el color ya lo dan .tx-icon.${balde}/.tx-amount.${balde}`);
   });
+  const i=css.indexOf("#tx-list .tx-item{");
+  cierto(i>=0, "falta el override que saca el borde de color a las filas dentro de Movimientos");
+  const regla=css.slice(i, css.indexOf("}", i)+1);
+  cierto(/border-left:\s*none/.test(regla), "la fila sigue naciendo con el borde izquierdo de color: "+regla);
+  cierto(css.includes(".tx-day{"), "falta el grupo de día (.tx-day) que ahora envuelve las filas");
 });
 
 test(".tx-item ya nace con el borde izquierdo, para que ponerle color no mueva nada", async ()=>{
@@ -4381,14 +4389,16 @@ test("el separador tiene la tipografía de un rótulo de sección, como .card-ti
   cierto(/font-weight:\s*600/.test(regla), "el peso tiene que matchear .card-title (600): "+regla);
 });
 
-test("el separador conserva su comportamiento sticky y translúcido", async ()=>{
-  // El repaso visual pedía más presencia, no romper el mecanismo que ya andaba bien.
+// Rediseño de Movimientos: el separador DEJA de ser sticky a propósito (ver handoff) — ahora
+// encabeza un grupo propio (.tx-day) y además muestra el neto del día a la derecha, así que
+// quedarse pegado arriba de la pantalla ya no hace falta para que se lea como encabezado.
+test("el separador ya no queda pegado al scrollear: el día agrupa sus filas en .tx-day", async ()=>{
   const css=await (await fetch("styles.css")).text();
   const i=css.indexOf(".tx-date-sep{");
   const regla=css.slice(i, css.indexOf("}", i)+1);
-  cierto(/position:\s*sticky/.test(regla), "dejó de quedarse pegado arriba al scrollear");
-  cierto(/backdrop-filter:\s*blur/.test(regla), "perdió el efecto vidrio");
-  cierto(/border-bottom/.test(regla), "le falta el borde que lo separa de la fila de abajo, como en .header");
+  cierto(!/position:\s*sticky/.test(regla), "el separador volvió a quedar sticky");
+  cierto(/justify-content:\s*space-between/.test(regla), "le falta el lugar para el neto del día a la derecha");
+  cierto(css.includes(".tx-day{"), "falta el grupo de día que ahora separa visualmente cada fecha");
 });
 
 grupo("Dashboard: menos vacío");

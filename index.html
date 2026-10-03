@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v137">
+<meta name="enola-version" content="enola-v138">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -622,26 +622,27 @@
 <!-- PAGE: MOVIMIENTOS -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-mov" class="page">
-  <div class="header"><h1>Movimientos</h1></div>
-  <div class="month-nav">
-    <button onclick="cambiarMes(-1)" id="btn-mes-prev" aria-label="Mes anterior">‹</button>
-    <span id="mes-label" role="button" tabindex="0" aria-label="Mes mostrado. Tocá para limpiar el filtro de fecha" onclick="if(filtroFecha)limpiarFiltroFecha()" style="cursor:pointer"></span>
-    <button onclick="cambiarMes(1)" id="btn-mes-next" aria-label="Mes siguiente">›</button>
-    <button onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha" style="margin-left:4px">📅</button>
+  <div class="mov-topbar">
+    <button class="mov-icon-btn" onclick="toggleSideMenu()" aria-label="Abrir menú">☰</button>
+    <div class="mov-topbar-center">
+      <button class="mov-topbar-arrow" onclick="cambiarMes(-1)" id="btn-mes-prev" aria-label="Mes anterior">‹</button>
+      <div class="mov-topbar-month">
+        <span class="mov-topbar-eyebrow">Movimientos</span>
+        <span id="mes-label" class="mov-topbar-label" role="button" tabindex="0" aria-label="Mes mostrado. Tocá para limpiar el filtro de fecha" onclick="if(filtroFecha)limpiarFiltroFecha()" style="cursor:pointer"></span>
+      </div>
+      <button class="mov-topbar-arrow" onclick="cambiarMes(1)" id="btn-mes-next" aria-label="Mes siguiente">›</button>
+    </div>
+    <button class="mov-icon-btn" id="btn-mov-search" onclick="toggleMovSearch()" aria-label="Buscar movimientos">🔍</button>
+    <button class="mov-icon-btn" onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha">📅</button>
   </div>
-
-  <div class="filter-row">
-    <div class="filter-chip active" role="button" tabindex="0" onclick="setFiltro('Todos',this)">Todos</div>
-    <div class="filter-chip" role="button" tabindex="0" onclick="setFiltro('Gasto',this)">Gastos</div>
-    <div class="filter-chip" role="button" tabindex="0" onclick="setFiltro('Ingreso',this)">Ingresos</div>
-    <div class="filter-chip" role="button" tabindex="0" onclick="setFiltro('Tarjeta',this)">Tarjetas</div>
+  <div id="mov-search-row" class="mov-search-row" style="display:none;padding:10px 16px 0">
+    <input type="search" id="mov-search" aria-label="Buscar movimientos" placeholder="Buscar por nota, categoría, ticker…" oninput="onSearchMovs()">
   </div>
-  <div style="padding:0 16px 8px"><input type="search" id="mov-search" class="form-input" aria-label="Buscar movimientos" placeholder="🔍 Buscar por nota, categoría, ticker..." style="font-size:13px;padding:8px 12px" oninput="onSearchMovs()"></div>
-  <div id="mov-arrastre" class="info-line" style="display:none"></div>
+  <div class="mov-summary" id="mov-summary"></div>
+  <div class="seg-filter" id="mov-filtros"></div>
   <div id="mov-tarjeta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
   <div id="mov-cat-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
-  <div class="summary-row" id="mov-summary"></div>
-  <div style="height:10px"></div>
+  <div id="mov-arrastre" class="info-line" style="display:none"></div>
   <div id="mov-presup-resumen" style="padding:0 16px 8px;display:none"></div>
   <div class="tx-list" id="tx-list"></div>
 </div>
