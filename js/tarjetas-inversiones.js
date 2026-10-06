@@ -83,10 +83,6 @@ function getTcMovsEnMes(ym){
 // Al tocar una caja se abre abajo el desglose de las compras que arman ese monto.
 // Antes esto era un mini-recuadro fijo de 3 meses dentro de la card de balance, sin desglose.
 
-// Mes cuyo desglose está abierto (null = ninguno). Vive acá y no dentro del render porque
-// cada toque vuelve a dibujar la card entera y una variable local se perdería.
-let tcMesAbierto=null;
-
 // Hasta dónde proyectar. El horizonte lo marca la última cuota de las compras en cuotas: un
 // gasto frecuente sin fecha de fin seguiría para siempre, así que no puede definir el límite
 // (sí aparece DENTRO de los meses proyectados, porque también lo vas a pagar).
@@ -125,68 +121,134 @@ function mesesConCuotasPendientes(desde){
   return out;
 }
 
-function toggleTcMes(ym){
-  tcMesAbierto = (tcMesAbierto===ym) ? null : ym;
-  renderTcPendientes();
+// ═══════════════════════════════════════════
+// LÍNEA DE TIEMPO DE MESES (pestaña Tarjetas)
+// ═══════════════════════════════════════════
+// Reemplaza la franja .month-nav y la proyección futura que tenía "Cuotas pendientes" (una
+// caja por mes, tocar para desglosar): ahora cualquier mes de la tira —pasado, presente o
+// futuro— se selecciona tocándolo (ver irAMesTc), y el desglose de cualquier mes se ve
+// simplemente parado en él, en Balance del mes y Compras de este mes.
+
+// Rango a dibujar: arranca 2 meses antes de currentYM() y llega hasta el último mes de
+// horizonteCuotas; si navegaste con las flechas más allá de ese rango, se estira para incluir
+// mesTc (igual que decía el handoff).
+function rangoTcTimeline(){
+  const hoy=currentYM();
+  let desde=addMonths(hoy,-2);
+  let hasta=addMonths(hoy, horizonteCuotas(hoy));
+  if(mesTc<desde) desde=mesTc;
+  if(mesTc>hasta) hasta=mesTc;
+  return {desde,hasta};
 }
 
+function abrevMes3(ym){
+  return MESES[parseInt(ym.split("-")[1])-1].slice(0,3);
+}
+
+function renderTcTimeline(){
+  const el=document.getElementById("tc-timeline");
+  if(!el) return;
+  const {desde,hasta}=rangoTcTimeline();
+  const hoyYM=currentYM();
+  const datos=[];
+  for(let ym=desde; ym<=hasta; ym=addMonths(ym,1)){
+    const movs=getTcMovsEnMes(ym);
+    datos.push({
+      ym,
+      ars: movs.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0),
+      usd: movs.some(m=>m.moneda==="USD"),
+      incompleto: movs.some(m=>numeroRoto(m.importe))
+    });
+  }
+  // La altura de la barra se calcula solo con ARS (el punto USD es un indicador aparte).
+  const max=Math.max(1, ...datos.map(d=>d.ars||0));
+  el.innerHTML=datos.map(d=>{
+    const sel=d.ym===mesTc, pasado=d.ym<hoyYM;
+    const alto=Math.max(4, Math.round((d.ars||0)/max*62));
+    const barColor = sel ? "var(--warning)" : pasado ? "var(--border)" : "color-mix(in srgb,var(--warning) 32%,var(--surface))";
+    const trama = d.incompleto ? ";background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.2) 0 3px,transparent 3px 6px)" : "";
+    const colBg = sel ? "var(--warning-light)" : "transparent";
+    const lblStyle = sel ? "color:var(--warning);font-weight:700" : "";
+    const totalTxt = d.incompleto ? "monto incompleto" : fmtTotal(d.ars);
+    return `<button type="button" class="tc-col" style="background:${colBg}" aria-pressed="${sel}"
+        aria-label="${escapeHtml(mesLbl(d.ym))}: ${escapeHtml(totalTxt)}" onclick="irAMesTc(${attrJS(d.ym)})">
+      ${d.usd?'<span class="tc-col-usd"></span>':""}
+      <span class="tc-col-bar" style="height:${alto}px;background:${barColor}${trama}"></span>
+      <span class="tc-col-lbl" style="${lblStyle}">${abrevMes3(d.ym)}<br>'${d.ym.slice(2,4)}</span>
+    </button>`;
+  }).join("");
+  // Scroll manual a la columna seleccionada (scrollIntoView también movería la página entera).
+  const colSel=el.querySelector('.tc-col[aria-pressed="true"]');
+  if(colSel) el.scrollLeft = colSel.offsetLeft - 60;
+}
+
+// Única otra forma de cambiar mesTc además de cambiarMesTc(delta): tocar una columna de la
+// línea de tiempo salta directo a ese mes en vez de sumar de a uno, y anima en la dirección
+// real del salto (no siempre "hacia adelante").
+function irAMesTc(ym){
+  if(ym===mesTc) return;
+  const signo = ym>mesTc ? 1 : -1;
+  mesTc=ym;
+  renderTarjetas();
+  animarCambioDeMes(signo, document.getElementById("tc-balance"), document.getElementById("tc-pendientes"));
+}
+
+// ═══════════════════════════════════════════
+// COMPRAS DE ESTE MES (#tc-pendientes)
+// ═══════════════════════════════════════════
+// Antes esta card proyectaba los meses SIGUIENTES (una caja por mes, tocar para desglosar);
+// esa navegación ahora vive en la línea de tiempo. Acá se ve el detalle del mes seleccionado
+// —cada compra con su avance, tocable para editarla— más una línea de cierre con lo que queda
+// después de este mes.
 function renderTcPendientes(){
   const el=document.getElementById("tc-pendientes");
   if(!el) return;
-  // Arranca en el mes SIGUIENTE al que estás mirando: el mes en curso ya está detallado
-  // arriba, en "Balance del mes" (con desglose por tarjeta y los gastos de mayor a menor), y
-  // tenerlo también como primera cajita acá lo mostraba dos veces. Así cada mes aparece una
-  // sola vez y el encabezado ("N meses por delante") pasa a contar solo lo que falta.
-  const desde=addMonths(mesTc,1);
-  const meses=mesesConCuotasPendientes(desde);
-  if(!meses.length){
-    el.innerHTML=`<div class="empty" style="padding:20px"><div class="empty-icon">✓</div>Nada pendiente después de ${escapeHtml(mesLbl(mesTc))}</div>`;
-    return;
-  }
-  // Si el mes que estaba abierto ya no está en la lista (cambiaste de mes), se cierra.
-  if(tcMesAbierto && !meses.some(m=>m.ym===tcMesAbierto)) tcMesAbierto=null;
 
-  const totalARS=meses.reduce((s,m)=>s+m.totalARS,0);
-  const totalUSD=meses.reduce((s,m)=>s+m.totalUSD,0);
-  const algunoIncompleto=meses.some(m=>m.incompleto);
+  const movsMes=getTcMovsEnMes(mesTc);
+  const ars=movsMes.filter(m=>m.moneda!=="USD").sort((a,b)=>b.importe-a.importe);
+  const usd=movsMes.filter(m=>m.moneda==="USD").sort((a,b)=>b.importe-a.importe);
+  const ordenado=[...ars, ...usd];
 
-  // Se aclara desde cuándo cuenta el total, para que no parezca que se perdió plata al no
-  // incluir el mes en curso.
-  let html=`<div class="txt-sm txt-muted mb-10">
-    Después de ${escapeHtml(mesLbl(mesTc))} · ${meses.length} ${meses.length===1?"mes":"meses"} ·
-    <strong style="color:var(--warning)">${algunoIncompleto ? "—" : fmtTotal(totalARS)}</strong>${totalUSD>0?` + <strong style="color:var(--accent)">USD ${totalUSD.toFixed(2)}</strong>`:""} en total
-  </div>${algunoIncompleto?`<div class="txt-micro txt-muted mb-10">Hay una compra sin monto, así que el total no se puede calcular. Está en el aviso del Dashboard.</div>`:""}`;
-
-  html+=`<div class="mes-grid">`+meses.map(m=>`
-    <div class="mes-caja${tcMesAbierto===m.ym?" abierta":""}" role="button" tabindex="0"
-         aria-expanded="${tcMesAbierto===m.ym}" onclick="toggleTcMes(${attrJS(m.ym)})">
-      <div class="mes-caja-label">${escapeHtml(mesLbl(m.ym).replace(" "," ").slice(0,3))} ${m.ym.slice(2,4)}</div>
-      <div class="mes-caja-val">${m.incompleto ? "—" : fmtAbbr(m.totalARS)}</div>
-      ${m.totalUSD>0?`<div class="mes-caja-usd">USD ${m.totalUSD.toFixed(0)}</div>`:""}
-      <div class="mes-caja-n">${m.movs.length} ${m.movs.length===1?"cuota":"cuotas"}</div>
-    </div>`).join("")+`</div>`;
-
-  const abierto=meses.find(m=>m.ym===tcMesAbierto);
-  if(abierto){
-    html+=`<div class="mes-desglose">
-      <div class="seccion-label mb-6">${escapeHtml(mesLbl(abierto.ym))}</div>`;
-    html+=abierto.movs.slice().sort((a,b)=>b.importe-a.importe).map(m=>{
-      const tag=m.frecuente?"🔁 mensual fijo":`cuota ${m.nCuota}/${m.cuotasTotal}`;
-      const monto=m.moneda==="USD"?`USD ${(m.importe||0).toFixed(2)}`:fmtS(m.importe||0);
-      return `<div class="mes-desglose-fila">
-        <div class="u-min0">
-          <div class="txt-strong">${escapeHtml(m.desc||"")}</div>
-          <div class="txt-micro txt-muted">💳 ${escapeHtml(m.tarjeta||"Sin tarjeta")} · ${tag}</div>
-        </div>
-        <strong>${monto}</strong>
-      </div>`;
-    }).join("");
-    html+=`<div class="mes-desglose-fila" style="border-top:1px solid var(--border);border-bottom:none">
-      <span class="txt-muted">Total del mes</span>
-      <strong style="color:var(--warning)">${fmtTotal(abierto.totalARS)}${abierto.totalUSD>0?` + USD ${abierto.totalUSD.toFixed(2)}`:""}</strong>
-    </div></div>`;
+  let html=`<div class="seccion-label" style="padding:14px 20px 6px;font-size:12px;font-weight:600">Compras de este mes</div>`;
+  if(!ordenado.length){
+    html+=`<div class="card" style="margin:0 16px"><p style="font-size:13px;color:var(--muted);text-align:center;padding:24px;margin:0">Sin gastos en ${escapeHtml(mesLbl(mesTc))}</p></div>`;
   } else {
-    html+=`<div class="txt-micro txt-muted" style="text-align:center;margin-top:10px">Tocá un mes para ver qué lo compone</div>`;
+    // Tocar la fila abre el mismo modal de edición que usa Movimientos: hoy esta pantalla no
+    // tenía ningún acceso para corregir una compra con tarjeta.
+    html+=`<div class="card" style="margin:0 16px;padding:0;overflow:hidden">`+ordenado.map((m,i)=>{
+      const icon=getIcon(m.cat,"💳");
+      const tag=m.frecuente?"🔁 Mensual fijo":`Cuota ${m.nCuota} de ${m.cuotasTotal}`;
+      const barra=m.frecuente?"":`<div class="tc-row-progreso"><div class="tc-row-progreso-fill" style="width:${Math.max(0,Math.round(m.nCuota/m.cuotasTotal*100))}%"></div></div>`;
+      const monto=m.moneda==="USD"?`USD ${(m.importe||0).toFixed(2)}`:fmtS(m.importe);
+      const restantes=m.cuotasTotal-m.nCuota;
+      const finYm=addMonths(mesTc,restantes);
+      const finTxt=m.frecuente?"":(restantes<=0?"última cuota":`termina ${abrevMes3(finYm).toLowerCase()} ${finYm.slice(2,4)}`);
+      return `<div class="tc-row"${i>0?' style="border-top:1px solid var(--border)"':""} onclick="openEditTcModal(${m.id})">
+        <div class="tc-row-icon">${icon}</div>
+        <div class="tc-row-mid">
+          <div class="tc-row-desc">${escapeHtml(m.desc||"")}</div>
+          <div class="tc-row-sub"><span>${escapeHtml(m.tarjeta||"Sin tarjeta")} · ${tag}</span>${barra}</div>
+        </div>
+        <div class="tc-row-right">
+          <div class="tc-row-monto">${monto}</div>
+          ${finTxt?`<div class="tc-row-fin">${finTxt}</div>`:""}
+        </div>
+      </div>`;
+    }).join("")+`</div>`;
+  }
+
+  // Línea de cierre: lo que queda por pagar DESPUÉS de este mes (que ya está detallado arriba).
+  // mesesConCuotasPendientes sigue siendo inclusiva del mes que se le pasa, sin cambios.
+  const meses=mesesConCuotasPendientes(addMonths(mesTc,1));
+  if(!meses.length){
+    html+=`<div class="tc-cierre">No quedan cuotas después de este mes.</div>`;
+  } else if(meses.some(m=>m.incompleto)){
+    html+=`<div class="tc-cierre">Hay una compra sin monto, así que el total no se puede calcular. Está en el aviso del Dashboard.</div>`;
+  } else {
+    const totalARS=meses.reduce((s,m)=>s+m.totalARS,0);
+    const totalUSD=meses.reduce((s,m)=>s+m.totalUSD,0);
+    const ultimo=meses[meses.length-1].ym;
+    html+=`<div class="tc-cierre">Después de ${escapeHtml(mesLbl(mesTc))} quedan <strong style="color:var(--warning)">${fmtTotal(totalARS)}</strong>${totalUSD>0?` + <strong style="color:var(--accent)">USD ${totalUSD.toFixed(2)}</strong>`:""} en ${meses.length} ${meses.length===1?"mes":"meses"}. La última cuota es en ${escapeHtml(mesLbl(ultimo))}.</div>`;
   }
   el.innerHTML=html;
 }
@@ -194,6 +256,31 @@ function renderTcPendientes(){
 // ═══════════════════════════════════════════
 // TARJETAS
 // ═══════════════════════════════════════════
+// Vista de las barras de "Balance del mes": por tarjeta o por categoría, nunca las dos juntas
+// (antes se mostraban siempre las dos, una debajo de la otra). Se recuerda entre sesiones
+// porque es una preferencia de visualización, no un filtro de datos — igual idea que tcMesAbierto
+// antes, pero persistida.
+let tcVistaBarras = (function(){
+  try{ return localStorage.getItem("enola-tc-vista")==="categoria" ? "categoria" : "tarjeta"; }
+  catch(e){ return "tarjeta"; }
+})();
+function setTcVistaBarras(v){
+  tcVistaBarras = v;
+  try{ localStorage.setItem("enola-tc-vista", v); }catch(e){}
+  renderTarjetas();
+}
+
+// Una fila de "Por tarjeta"/"Por categoría": nombre+monto arriba, pista de progreso debajo.
+function filaBarraTc(nombreHtml, moneda, val, max){
+  const fmt=moneda==="USD"?`USD ${val.toFixed(2)}`:fmtS(val);
+  const badge=moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
+  const pct=Math.max(0, Math.round(val/max*100));
+  return `<div class="tc-bar-row">
+    <div class="tc-bar-top"><span>${nombreHtml}${badge}</span><span>${fmt}</span></div>
+    <div class="tc-bar-track"><div class="tc-bar-fill" style="width:${pct}%"></div></div>
+  </div>`;
+}
+
 function cambiarMesTc(delta){
   mesTc = addMonths(mesTc, delta);
   renderTarjetas();
@@ -205,18 +292,18 @@ function renderTarjetas(){
   const hoyYM = currentYM();
   document.getElementById("tc-mes-label").textContent=mesLbl(ymSel);
 
+  renderTcTimeline();
+
   // ── BALANCE DEL MES SELECCIONADO ──
   const movsMes = getTcMovsEnMes(ymSel);
-  const movsMesARS = movsMes.filter(m=>m.moneda!=="USD");
-  const movsMesUSD = movsMes.filter(m=>m.moneda==="USD");
-  const totalMesARS = movsMesARS.reduce((s,m)=>s+m.importe,0);
-  const totalMesUSD = movsMesUSD.reduce((s,m)=>s+m.importe,0);
+  const totalMesARS = movsMes.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+m.importe,0);
+  const totalMesUSD = movsMes.filter(m=>m.moneda==="USD").reduce((s,m)=>s+m.importe,0);
   const cantidadMes = movsMes.length;
-  // Subtotales por tarjeta (Visa, Master, etc.) — separados por moneda
+  const nFrec = movsMes.filter(m=>m.frecuente).length;
+  const nCuotas = cantidadMes - nFrec;
+  // Subtotales por tarjeta (Visa, Master, etc.) y por categoría del mes — separados por
+  // moneda, porque pesos y dólares no se suman entre sí.
   const porTarjeta = {};
-  // Subtotales por categoría del mes: "por tarjeta" dice con qué plástico pagaste, no en qué
-  // se te fue la plata. La clave lleva la moneda pegada por el mismo motivo que la de tarjeta:
-  // pesos y dólares no se suman entre sí.
   const porCategoria = {};
   movsMes.forEach(m=>{
     const moneda=m.moneda||"ARS";
@@ -226,100 +313,57 @@ function renderTarjetas(){
     const keyCat=`${cat}|${moneda}`;
     porCategoria[keyCat] = (porCategoria[keyCat]||0) + m.importe;
   });
-  // La fila de chips de arriba (Total ARS/USD, Gastos, Pendiente ARS/USD) se sacó a pedido:
-  // repetía números que ya están en las dos cards. El total del mes y la cantidad de gastos
-  // los muestra "Balance del mes"; el total de lo que falta pagar, "Cuotas pendientes".
 
-  // Card Balance del mes con desglose por tarjeta
   const balanceEl=document.getElementById("tc-balance");
   if(balanceEl){
     const esMesActual = ymSel===hoyYM;
-    let html=`<div class="seccion-label mb-6">${esMesActual?"A pagar este mes":"Total "+mesLbl(ymSel)}</div>
-      <div style="display:flex;gap:14px;align-items:baseline;margin-bottom:6px;flex-wrap:wrap">
-        <div style="font-size:24px;font-weight:600;color:var(--warning)" data-animar="${totalMesARS}">${fmtTotal(0)}</div>
-        ${totalMesUSD>0?`<div style="font-size:18px;font-weight:600;color:var(--warning)">+ USD ${totalMesUSD.toFixed(2)}</div>`:""}
-      </div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${cantidadMes} ${cantidadMes===1?"gasto":"gastos"} en este mes</div>`;
-    const tarjEntries=Object.entries(porTarjeta).sort((a,b)=>b[1]-a[1]);
-    if(tarjEntries.length){
-      html+=`<div class="seccion-label mb-6">Por tarjeta</div>`;
-      // Un solo máximo para las dos monedas hacía que, con una tarjeta en USD, su barra
-      // quedara invisible al lado de las de pesos: se comparaba 50 contra 300.000. Cada
-      // moneda se escala contra su propio máximo.
-      const maxTarjPorMoneda={};
-      tarjEntries.forEach(([key,val])=>{
-        const moneda=key.slice(key.lastIndexOf("|")+1);
-        maxTarjPorMoneda[moneda]=Math.max(maxTarjPorMoneda[moneda]||0, val);
-      });
-      html+=tarjEntries.map(([key,val])=>{
-        const sep=key.lastIndexOf("|");
-        const tarj=key.slice(0,sep), moneda=key.slice(sep+1);
-        const fmt=moneda==="USD"?`USD ${val.toFixed(2)}`:fmtS(val);
-        const monedaBadge=moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
-        const max=maxTarjPorMoneda[moneda]||1;
-        return `<div class="bar-row" style="margin-bottom:6px">
-          <div class="bar-label">💳 ${escapeHtml(tarj)}${monedaBadge}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/max*100)}%;background:var(--warning)"></div></div>
-          <div class="bar-val">${fmt}</div>
-        </div>`;
-      }).join("");
+    let subtitulo;
+    if(!cantidadMes){
+      subtitulo="Sin gastos con tarjeta";
     } else {
-      html+=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:8px 0">Sin gastos en ${mesLbl(ymSel)}</p>`;
+      const partes=[];
+      if(totalMesUSD>0) partes.push(`+ USD ${totalMesUSD.toFixed(2)}`);
+      if(nCuotas>0) partes.push(`${nCuotas} en cuotas`);
+      if(nFrec>0) partes.push(`${nFrec} fijos`);
+      subtitulo=partes.join(" · ");
     }
-    // Por categoría: mismo formato que "Por tarjeta", ordenado de mayor a menor.
-    // Las barras se comparan dentro de cada moneda, no entre monedas: si no, un gasto de
-    // USD 50 al lado de uno de $300.000 dibujaría una barra llena y otra invisible, comparando
-    // números que no son comparables.
-    const catEntries=Object.entries(porCategoria).sort((a,b)=>b[1]-a[1]);
-    if(catEntries.length){
-      html+=`<div class="seccion-label mt-14 mb-6">Por categoría</div>`;
+    let html=`<div style="padding:18px 20px 4px;display:flex;flex-direction:column;align-items:center;gap:2px">
+      <div class="seccion-label">${esMesActual?"A pagar este mes":"A pagar en "+escapeHtml(mesLbl(ymSel))}</div>
+      <div style="font-size:34px;font-weight:700;letter-spacing:-1.2px;color:var(--warning)" data-animar="${totalMesARS}">${fmtTotal(0)}</div>
+      <div style="font-size:12px;color:var(--muted)">${escapeHtml(subtitulo)}</div>
+    </div>`;
+
+    if(cantidadMes>0){
+      // Selector Por tarjeta/Por categoría: reusa .seg-filter de Movimientos (mismo aspecto;
+      // el handoff pide 14px de margen arriba en vez de 16px, diferencia mínima que no
+      // justifica una clase aparte).
+      html+=`<div class="seg-filter" style="margin-top:14px">
+        <button class="seg-btn${tcVistaBarras==="tarjeta"?" active":""}" onclick="setTcVistaBarras('tarjeta')">Por tarjeta</button>
+        <button class="seg-btn${tcVistaBarras==="categoria"?" active":""}" onclick="setTcVistaBarras('categoria')">Por categoría</button>
+      </div>`;
+
+      const vistaCategoria=tcVistaBarras==="categoria";
+      const entries=Object.entries(vistaCategoria?porCategoria:porTarjeta).sort((a,b)=>b[1]-a[1]);
+      // Un solo máximo para las dos monedas hacía que, con un gasto en USD, su barra quedara
+      // invisible al lado de las de pesos: cada moneda se escala contra su propio máximo.
       const maxPorMoneda={};
-      catEntries.forEach(([key,val])=>{
-        const moneda=key.split("|")[1];
+      entries.forEach(([key,val])=>{
+        const moneda=key.slice(key.lastIndexOf("|")+1);
         maxPorMoneda[moneda]=Math.max(maxPorMoneda[moneda]||0, val);
       });
-      html+=catEntries.map(([key,val])=>{
+      html+=`<div class="tc-bars">`+entries.map(([key,val])=>{
         const sep=key.lastIndexOf("|");
-        const cat=key.slice(0,sep), moneda=key.slice(sep+1);
-        const fmt=moneda==="USD"?`USD ${val.toFixed(2)}`:fmtS(val);
-        const monedaBadge=moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
-        const max=maxPorMoneda[moneda]||1;
-        return `<div class="bar-row" style="margin-bottom:6px">
-          <div class="bar-label">${getIcon(cat,"💳")} ${escapeHtml(cat)}${monedaBadge}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/max*100)}%;background:var(--warning)"></div></div>
-          <div class="bar-val">${fmt}</div>
-        </div>`;
-      }).join("");
+        const nombre=key.slice(0,sep), moneda=key.slice(sep+1);
+        const icono=vistaCategoria?getIcon(nombre,"💳"):"💳";
+        return filaBarraTc(`${icono} ${escapeHtml(nombre)}`, moneda, val, maxPorMoneda[moneda]||1);
+      }).join("")+`</div>`;
     }
-    // Lista detallada de gastos del mes
-    if(movsMes.length){
-      html+=`<div class="seccion-label mt-14 mb-6">Detalle</div>
-        <div style="font-size:12px">`;
-      movsMes.sort((a,b)=>b.importe-a.importe).forEach(m=>{
-        const tag=m.frecuente?"🔁":`${m.nCuota}/${m.cuotasTotal}`;
-        const monto=m.moneda==="USD"?`USD ${m.importe.toFixed(2)}`:fmtS(m.importe);
-        html+=`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
-          <span><span style="color:var(--muted);font-size:10px">${tag}</span> ${escapeHtml(m.desc)}</span>
-          <strong>${monto}</strong>
-        </div>`;
-      });
-      html+=`</div>`;
-    }
-    // (La proyección mes a mes vive ahora en su propia card: renderTcPendientes())
+
     balanceEl.innerHTML=html;
     animarNumerosDe(balanceEl);
   }
 
   renderTcPendientes();
-
-  // La sección "Activas" (una card por compra, con sus balances y barra de progreso) se sacó
-  // a pedido: era un desglose de cada movimiento cargado y ya está cubierto por la card de
-  // Cuotas pendientes (proyección mes a mes, con desglose al tocar) más el Balance del mes.
-  // `activas` sigue calculándose porque de ahí salen los chips "Pendiente ARS"/"Pendiente USD".
-
-  // "Completados" también se sacó a pedido: después de Cuotas pendientes no va nada más.
-  // El historial de compras terminadas y sus acciones (editar/eliminar) viven en la solapa
-  // Movimientos, donde cada cuota aparece como un movimiento con swipe para editar o borrar.
 }
 
 // ═══════════════════════════════════════════

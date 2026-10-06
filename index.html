@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v138">
+<meta name="enola-version" content="enola-v139">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -651,10 +651,21 @@
 <!-- PAGE: TARJETAS -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-tc" class="page">
-  <div class="header"><h1>Tarjetas de crédito</h1><p>No afecta el balance mensual</p></div>
-  <div class="month-nav"><button onclick="cambiarMesTc(-1)" aria-label="Mes anterior">‹</button><span id="tc-mes-label"></span><button onclick="cambiarMesTc(1)" aria-label="Mes siguiente">›</button></div>
-  <div class="card"><div class="card-title">Balance del mes</div><div id="tc-balance"></div></div>
-  <div class="card"><div class="card-title">Cuotas pendientes</div><div id="tc-pendientes"></div></div>
+  <div class="mov-topbar">
+    <button class="mov-icon-btn" onclick="toggleSideMenu()" aria-label="Abrir menú">☰</button>
+    <div class="mov-topbar-center">
+      <button class="mov-topbar-arrow" onclick="cambiarMesTc(-1)" aria-label="Mes anterior">‹</button>
+      <div class="mov-topbar-month">
+        <span class="mov-topbar-eyebrow">Tarjetas</span>
+        <span id="tc-mes-label" class="mov-topbar-label"></span>
+      </div>
+      <button class="mov-topbar-arrow" onclick="cambiarMesTc(1)" aria-label="Mes siguiente">›</button>
+    </div>
+    <div style="width:40px;flex-shrink:0"></div>
+  </div>
+  <div class="tc-timeline" id="tc-timeline"></div>
+  <div id="tc-balance"></div>
+  <div id="tc-pendientes"></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->

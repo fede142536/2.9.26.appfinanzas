@@ -67,10 +67,10 @@ function showPage(id,btn){
   // función y la pantalla quedaría a medio renderizar.
   const fabEl=document.getElementById('fab-cargar');
   if(fabEl) fabEl.style.display = (id === 'cargar') ? 'none' : 'flex';
-  // Movimientos tiene su propio ☰ adentro de la barra unificada (ver .mov-topbar): el botón
-  // flotante de siempre quedaría duplicado, uno al lado del otro.
+  // Movimientos y Tarjetas tienen su propio ☰ adentro de la barra unificada (ver .mov-topbar):
+  // el botón flotante de siempre quedaría duplicado, uno al lado del otro.
   const hamburgerEl=document.getElementById('hamburger-btn');
-  if(hamburgerEl) hamburgerEl.style.display = (id === 'mov') ? 'none' : 'flex';
+  if(hamburgerEl) hamburgerEl.style.display = (id === 'mov' || id === 'tc') ? 'none' : 'flex';
   // Solo se re-renderiza si los datos cambiaron desde la última vez que se pintó ESTA
   // pestaña. Si no, alcanza con las clases CSS de arriba (mostrar/ocultar) sin recalcular
   // ni reinyectar HTML — eso es lo caro, no el cambio de pestaña en sí.

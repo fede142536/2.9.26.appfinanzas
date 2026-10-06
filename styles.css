@@ -503,22 +503,47 @@ canvas{width:100%!important;max-width:100%}
 /* Comparativa contra el año anterior, al lado del nombre de la categoría (▲ 12%, nuevo). */
 .comp-anio{font-size:10px;margin-left:6px}
 
-/* ── Cuotas pendientes (pestaña Tarjetas) ──
-   Una caja por mes con lo que queda por pagar. Se toca una y se abre su desglose abajo. */
-.mes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
-.mes-caja{text-align:center;background:var(--bg);border:1px solid var(--border);border-radius:10px;
-  padding:9px 6px;cursor:pointer;transition:border-color .15s,background .15s}
-.mes-caja:active{transform:scale(.97)}
-.mes-caja.abierta{border-color:var(--warning);background:var(--warning-light)}
-.mes-caja-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.mes-caja-val{font-size:14px;font-weight:600;color:var(--warning);margin-top:3px}
-.mes-caja-usd{font-size:10px;color:var(--accent);margin-top:2px}
-.mes-caja-n{font-size:10px;color:var(--muted);margin-top:2px}
-/* Desglose del mes abierto */
-.mes-desglose{margin-top:12px;border-top:1px solid var(--border);padding-top:10px}
-.mes-desglose-fila{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
-  padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
-.mes-desglose-fila:last-child{border-bottom:none}
+/* ── Tarjetas (pestaña #page-tc) ──
+   La caja de "mes siguiente, tocar para abrir" (.mes-grid/.mes-caja/.mes-desglose) se reemplazó
+   por una línea de tiempo arriba de todo: tocar cualquier mes —pasado, presente o futuro— lo
+   selecciona y toda la pantalla pasa a mostrar ese mes. El header reusa .mov-topbar de
+   Movimientos y el selector Por tarjeta/categoría reusa .seg-filter — ver handoff de Tarjetas.
+   Los colores de cada estado de columna (seleccionada/pasada/futura) se calculan en JS porque
+   dependen de --warning + color-mix, igual que tonoTarjeta/tonoGasto en Movimientos. */
+.tc-timeline{display:flex;align-items:flex-end;gap:2px;height:112px;padding:14px 12px 0;
+  overflow-x:auto;scrollbar-width:none;background:var(--surface);border-bottom:1px solid var(--border)}
+.tc-timeline::-webkit-scrollbar{display:none}
+.tc-col{flex:0 0 40px;height:100%;border:none;background:transparent;border-radius:10px 10px 0 0;
+  padding:0 0 6px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+  gap:4px;cursor:pointer}
+.tc-col:active{transform:scale(.97)}
+.tc-col-usd{width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.tc-col-bar{width:18px;border-radius:4px 4px 1px 1px;min-height:4px}
+.tc-col-lbl{font-size:10px;text-transform:uppercase;line-height:1.1;text-align:center;color:var(--muted);font-weight:600}
+/* Barras "Por tarjeta"/"Por categoría" dentro de Balance del mes: una card con una fila por
+   tarjeta o categoría, nombre+monto arriba y la pista de progreso debajo (antes iban una al
+   lado de la otra con .bar-row; ahora solo se ve una vista a la vez). */
+.tc-bars{margin:10px 16px 0;background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:14px;display:flex;flex-direction:column;gap:12px}
+.tc-bar-row{display:flex;flex-direction:column;gap:6px}
+.tc-bar-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;font-weight:600}
+.tc-bar-track{height:6px;border-radius:3px;background:var(--border);overflow:hidden}
+.tc-bar-fill{height:100%;background:var(--warning);transition:width .25s ease}
+/* Lista "Compras de este mes" (#tc-pendientes): una fila por compra con su avance, tocarla
+   abre openEditTcModal (antes esta pantalla no tenía forma de editar/borrar). */
+.tc-row{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 14px;cursor:pointer}
+.tc-row-icon{width:36px;height:36px;border-radius:50%;background:var(--warning-light);font-size:16px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tc-row-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.tc-row-desc{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-row-sub{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);min-width:0}
+.tc-row-sub span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-row-progreso{width:44px;height:4px;border-radius:2px;background:var(--border);flex-shrink:0;overflow:hidden}
+.tc-row-progreso-fill{height:100%;background:var(--warning)}
+.tc-row-right{text-align:right;flex-shrink:0}
+.tc-row-monto{font-size:14px;font-weight:600;color:var(--text)}
+.tc-row-fin{font-size:11px;color:var(--muted);margin-top:2px}
+.tc-cierre{padding:14px 20px 0;font-size:12px;color:var(--muted);text-align:center}
 
 /* ═══════════════════════════════════════════
    CAMBIO DE MES

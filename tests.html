@@ -1225,15 +1225,20 @@ grupo("Tarjetas: la solapa termina en Cuotas pendientes");
 // hace desde Movimientos. Se prueba mirando el HTML y el CÓDIGO FUENTE, no el DOM: en
 // tests.html document.getElementById() devuelve un <div> descartable nuevo en cada llamada,
 // así que leer de vuelta lo que renderTarjetas() escribió no es confiable.
-test("después de Cuotas pendientes no hay ninguna card más", async ()=>{
+// La opción 1c "Línea de tiempo" (ver handoff de Tarjetas) sacó las dos cards con card-title
+// fijo: ahora el orden es línea de tiempo → Balance del mes → Compras de este mes, cada uno
+// un contenedor que JS llena entero (sin título estático en el HTML).
+test("la solapa de Tarjetas tiene línea de tiempo, balance y compras del mes, en ese orden", async ()=>{
   const html=await (await fetch("index.html")).text();
   const ini=html.indexOf('id="page-tc"');
   const fin=html.indexOf('id="page-', ini+5);
   cierto(ini>=0 && fin>ini, "no se encontró la solapa de tarjetas en index.html");
   const solapa=html.slice(ini,fin);
-  const titulos=[...solapa.matchAll(/<div class="card-title">([^<]*)<\/div>/g)].map(m=>m[1].trim());
-  igual(titulos.join(" | "), "Balance del mes | Cuotas pendientes",
-        "cambiaron las cards de la solapa Tarjetas (tiene que terminar en Cuotas pendientes)");
+  cierto(!solapa.includes("month-nav"), "la franja .month-nav vieja tiene que haber desaparecido (el header ahora es el de Movimientos)");
+  cierto(!solapa.includes("card-title"), "ya no hay card-title fijo: Balance del mes y Compras de este mes los dibuja JS");
+  const orden=["tc-timeline","tc-balance","tc-pendientes"].map(id=>solapa.indexOf(`id="${id}"`));
+  cierto(orden.every(i=>i>=0), "faltó alguno de los contenedores: línea de tiempo, balance o compras del mes");
+  cierto(orden[0]<orden[1] && orden[1]<orden[2], "el orden tiene que ser línea de tiempo, balance, compras del mes");
 });
 
 test('no quedó ni el contenedor ni el render de "Activas"/"Completados"', async ()=>{
@@ -1260,13 +1265,14 @@ test("no quedó la fila de chips del resumen ni su cálculo", async ()=>{
   cierto(!/\bconst activas\b/.test(js), "quedó código muerto: `activas` solo alimentaba el saldo pendiente");
 });
 
-// Lo que los chips decían tiene que seguir estando, pero dentro de las cards: el total del mes
-// y la cantidad de gastos en "Balance del mes", el total de lo que falta en "Cuotas pendientes".
+// Lo que los chips decían tiene que seguir estando: el total del mes en "Balance del mes" (con
+// su subtítulo de cuotas/fijos), el total de lo que falta en la línea de cierre de "Compras de
+// este mes". El subtítulo cambió de "N gastos en este mes" a "N en cuotas · M fijos" (handoff).
 test("los números que mostraban los chips siguen dentro de las cards", async ()=>{
   const js=await (await fetch("js/tarjetas-inversiones.js")).text();
   cierto(js.includes("A pagar este mes"), 'se perdió el total del mes en "Balance del mes"');
-  cierto(js.includes('cantidadMes===1?"gasto":"gastos"'), 'se perdió la cantidad de gastos en "Balance del mes"');
-  cierto(js.includes("en total"), 'se perdió el total pendiente en "Cuotas pendientes"');
+  cierto(js.includes("en cuotas") && js.includes("fijos"), 'se perdió la cantidad de cuotas/fijos del subtítulo de "Balance del mes"');
+  cierto(js.includes("Después de"), 'se perdió el total pendiente en la línea de cierre de "Compras de este mes"');
 });
 
 // Sin "Completados", Movimientos es el ÚNICO lugar desde donde se puede editar o borrar una
@@ -1304,13 +1310,13 @@ const NETFLIX    = {id:4, desc:"Netflix",    total:9000,    cuotasTotal:999, mes
 // Cuotas pendientes no va nada.
 // Hace falta DOM de verdad: el harness devuelve un <div> descartable para los ids que no
 // existen, así que leer de vuelta lo que renderTarjetas() escribió no funcionaría.
-function balanceTcDelMes(lista, ym){
+function balanceTcDelMes(lista, ym, vista="tarjeta"){
   const ids=["tc-mes-label","tc-balance","tc-pendientes"];
   const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
-  const mesAntes=mesTc;
-  mesTc=ym;
+  const mesAntes=mesTc, vistaAntes=tcVistaBarras;
+  mesTc=ym; tcVistaBarras=vista;
   try { return conTarjetas(lista, ()=>{ renderTarjetas(); return creados[1].innerHTML; }); }
-  finally { creados.forEach(e=>e.remove()); mesTc=mesAntes; }
+  finally { creados.forEach(e=>e.remove()); mesTc=mesAntes; tcVistaBarras=vistaAntes; }
 }
 
 const SUPER_VISA  = {id:11, desc:"Super",     total:300000, cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa",       moneda:"ARS", cat:"Supermercado"};
@@ -1318,61 +1324,61 @@ const SUPER_MASTE = {id:12, desc:"Chino",     total:100000, cuotasTotal:1, mesIn
 const NAFTA       = {id:13, desc:"Nafta",     total:80000,  cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa",       moneda:"ARS", cat:"Transporte"};
 const SPOTIFY     = {id:14, desc:"Spotify",   total:12,     cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa",       moneda:"USD", cat:"Suscripciones"};
 
+// "Por tarjeta"/"Por categoría" ya no se muestran juntas (ver tcVistaBarras en el handoff): la
+// vista a mostrar se pasa como tercer argumento de balanceTcDelMes en vez de slicear el HTML
+// entre un título y el otro.
 test("el balance del mes muestra el desglose por categoría", ()=>{
-  const html=balanceTcDelMes([SUPER_VISA, SUPER_MASTE, NAFTA], "2026-09");
-  cierto(html.includes("Por categoría"), "no aparece la sección por categoría");
+  const html=balanceTcDelMes([SUPER_VISA, SUPER_MASTE, NAFTA], "2026-09", "categoria");
   cierto(html.includes("Supermercado"), "falta la categoría Supermercado");
   cierto(html.includes("Transporte"), "falta la categoría Transporte");
 });
 
 test("suma las tarjetas dentro de una misma categoría", ()=>{
   // Supermercado son $300.000 de Visa + $100.000 de Mastercard: la categoría es una sola.
-  const html=balanceTcDelMes([SUPER_VISA, SUPER_MASTE, NAFTA], "2026-09");
-  const sec=html.slice(html.indexOf("Por categoría"));
-  cierto(sec.includes("$400.000"), "no sumó las dos tarjetas en Supermercado: " + sec.slice(0,400));
+  const html=balanceTcDelMes([SUPER_VISA, SUPER_MASTE, NAFTA], "2026-09", "categoria");
+  cierto(html.includes("$400.000"), "no sumó las dos tarjetas en Supermercado: " + html.slice(0,400));
 });
 
 test("ordena las categorías de mayor a menor", ()=>{
-  const html=balanceTcDelMes([NAFTA, SUPER_VISA, SUPER_MASTE], "2026-09");
-  const sec=html.slice(html.indexOf("Por categoría"));
-  cierto(sec.indexOf("Supermercado") < sec.indexOf("Transporte"),
+  const html=balanceTcDelMes([NAFTA, SUPER_VISA, SUPER_MASTE], "2026-09", "categoria");
+  cierto(html.indexOf("Supermercado") < html.indexOf("Transporte"),
          "Transporte ($80.000) quedó antes que Supermercado ($400.000)");
 });
 
 test("no suma pesos con dólares en una misma categoría", ()=>{
-  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09");
-  const sec=html.slice(html.indexOf("Por categoría"));
-  cierto(sec.includes("USD 12.00"), "el gasto en dólares no se muestra en su moneda: " + sec.slice(0,400));
-  cierto(sec.includes("$300.000"), "se perdió el total en pesos");
+  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09", "categoria");
+  cierto(html.includes("USD 12.00"), "el gasto en dólares no se muestra en su moneda: " + html.slice(0,400));
+  cierto(html.includes("$300.000"), "se perdió el total en pesos");
 });
 
 test("las barras se escalan dentro de cada moneda, no entre monedas", ()=>{
   // USD 12 contra $300.000 con un solo máximo daría una barra de 0%: invisible, comparando
   // números que no son comparables.
-  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09");
-  const sec=html.slice(html.indexOf("Por categoría"));
-  const anchos=[...sec.matchAll(/width:(\d+)%/g)].map(m=>Number(m[1]));
+  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09", "categoria");
+  const anchos=[...html.matchAll(/width:(\d+)%/g)].map(m=>Number(m[1]));
   igual(anchos.length, 2, "esperaba dos barras");
   cierto(anchos.every(w=>w===100), "cada moneda tiene una sola categoría, así que ambas van al 100%: " + anchos);
 });
 
 test("un gasto sin categoría no desaparece del desglose", ()=>{
   const sinCat={id:15, desc:"Algo", total:50000, cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa", moneda:"ARS"};
-  const html=balanceTcDelMes([sinCat], "2026-09");
+  const html=balanceTcDelMes([sinCat], "2026-09", "categoria");
   cierto(html.includes("Sin categoría"), "el gasto sin categoría se perdió");
 });
 
-test("el desglose por categoría va antes del Detalle", ()=>{
-  // Lo que importa del orden: primero el resumen, después la lista larga.
-  const html=balanceTcDelMes([SUPER_VISA, NAFTA], "2026-09");
-  cierto(html.indexOf("Por categoría") < html.indexOf("Detalle"), "el Detalle quedó antes del resumen por categoría");
+// El "Detalle" (lista plana de todos los gastos del mes) se sacó: queda cubierto por "Compras
+// de este mes" (#tc-pendientes), con más datos por fila (avance, mes de fin). Lo que importa
+// del orden ahora es que el selector de vista va antes de las barras que controla.
+test("el selector Por tarjeta/Por categoría va antes de las barras", ()=>{
+  const html=balanceTcDelMes([SUPER_VISA, NAFTA], "2026-09", "categoria");
+  cierto(html.indexOf("seg-filter") < html.indexOf("tc-bars"), "el selector tiene que ir antes de las barras que controla");
 });
 
 test("la barra de una tarjeta en USD no queda invisible al lado de las de pesos", ()=>{
-  // Mismo bug que el de categorías, dos líneas más arriba en el mismo archivo.
-  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09");
-  const sec=html.slice(html.indexOf("Por tarjeta"), html.indexOf("Por categoría"));
-  const anchos=[...sec.matchAll(/width:(\d+)%/g)].map(m=>Number(m[1]));
+  // Mismo bug que el de categorías, pero en la vista "Por tarjeta": Visa en pesos y Visa en
+  // dólares son dos filas (una por moneda), cada una escalada contra su propio máximo.
+  const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09", "tarjeta");
+  const anchos=[...html.matchAll(/width:(\d+)%/g)].map(m=>Number(m[1]));
   cierto(anchos.length>=2 && anchos.every(w=>w>0), "una barra quedó en 0%: " + anchos);
 });
 
@@ -1420,14 +1426,23 @@ test("el desglose de un mes trae las compras que lo componen", ()=>{
     "el total del mes tiene que ser la suma de su propio desglose");
 });
 
-test("tocar un mes lo abre y tocarlo de nuevo lo cierra", ()=>{
-  const antes=tcMesAbierto;
+// toggleTcMes/tcMesAbierto dejaron de existir (ver handoff): el desglose de cualquier mes se
+// ve ahora parado en él (tocando su columna en la línea de tiempo), no abriendo una caja aparte.
+// irAMesTc es la otra forma de cambiar mesTc además de cambiarMesTc(delta): salta directo al
+// mes tocado, no suma de a uno.
+test("irAMesTc salta directo al mes tocado, no de a uno", ()=>{
+  const ids=["tc-mes-label","tc-balance","tc-pendientes","tc-timeline"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const mesAntes=mesTc;
   try{
-    tcMesAbierto=null;
-    toggleTcMes("2026-10"); igual(tcMesAbierto, "2026-10", "no se abrió");
-    toggleTcMes("2026-11"); igual(tcMesAbierto, "2026-11", "no se cambió al mes tocado");
-    toggleTcMes("2026-11"); igual(tcMesAbierto, null, "tocar el mismo mes tiene que cerrarlo");
-  } finally { tcMesAbierto=antes; }
+    conTarjetas([NOTEBOOK], ()=>{
+      mesTc="2026-09";
+      irAMesTc("2027-01");
+      igual(mesTc, "2027-01", "irAMesTc tiene que fijar mesTc directo, sin pasar por los meses intermedios");
+      irAMesTc("2027-01"); // tocar el mismo mes no tiene que romper nada
+      igual(mesTc, "2027-01");
+    });
+  } finally { creados.forEach(e=>e.remove()); mesTc=mesAntes; }
 });
 
 test("sin compras en cuotas no hay meses que proyectar", ()=>{
@@ -1453,21 +1468,24 @@ test("la card muestra el guión, no un cero inventado", ()=>{
   const cont=document.createElement("div");
   cont.id="tc-pendientes"; cont.style.display="none";
   document.body.appendChild(cont);
-  const antesTcs=tcs, antesMes=mesTc, antesAbierto=tcMesAbierto;
+  const antesTcs=tcs, antesMes=mesTc;
   try{
-    tcs=[ROTA]; mesTc="2026-10"; tcMesAbierto=null;
+    // ROTA sigue activa en octubre (empezó en setiembre, 6 cuotas): aparece en "Compras de
+    // este mes" con su propio guión, y la línea de cierre también avisa del monto incompleto.
+    tcs=[ROTA]; mesTc="2026-10";
     renderTcPendientes();
     const html=cont.innerHTML;
     cierto(!/\$0/.test(html), "no puede aparecer un $0 donde el monto es desconocido: "+html.slice(0,300));
     cierto(html.includes("—"), "tiene que verse el guión");
     cierto(/no se puede calcular/.test(html), "y explicar por qué, con dónde mirar");
-  } finally { tcs=antesTcs; mesTc=antesMes; tcMesAbierto=antesAbierto; cont.remove(); }
+  } finally { tcs=antesTcs; mesTc=antesMes; cont.remove(); }
 });
 
-// ── LA CARD ARRANCA EN EL MES SIGUIENTE ──
-// mesesConCuotasPendientes(desde) sigue siendo inclusiva (los tests de arriba dependen de eso);
-// lo que cambia es QUIÉN la llama: renderTcPendientes() le pasa mesTc+1, porque el mes en curso
-// ya está detallado arriba en "Balance del mes" y antes aparecía dos veces.
+// ── LA CARD MUESTRA EL MES SELECCIONADO, NO UNA PROYECCIÓN FUTURA ──
+// Antes "Cuotas pendientes" proyectaba los meses SIGUIENTES (una caja por mes, tocar para
+// desglosar): esa navegación ahora vive en la línea de tiempo (#tc-timeline). Esta card
+// muestra las compras del mes mirado y, debajo, una línea de cierre con lo que queda DESPUÉS
+// de él (mesesConCuotasPendientes sigue siendo inclusiva del mes que se le pasa, sin cambios).
 
 // Corre renderTcPendientes() de verdad y devuelve el HTML que escribió. Hace falta crear el
 // contenedor real: el getElementById parcheado de esta página devuelve un <div> descartable
@@ -1477,41 +1495,42 @@ function htmlDePendientes(lista, ym){
   cont.id="tc-pendientes";
   cont.style.display="none";
   document.body.appendChild(cont);
-  const antesTcs=tcs, antesMes=mesTc, antesAbierto=tcMesAbierto;
+  const antesTcs=tcs, antesMes=mesTc;
   try{
-    tcs=lista; mesTc=ym; tcMesAbierto=null;
+    tcs=lista; mesTc=ym;
     renderTcPendientes();
     return cont.innerHTML;
   } finally {
-    tcs=antesTcs; mesTc=antesMes; tcMesAbierto=antesAbierto;
+    tcs=antesTcs; mesTc=antesMes;
     cont.remove();
   }
 }
 
-test("la grilla arranca en el mes siguiente al que estás mirando", ()=>{
+test("la lista de compras es la del mes seleccionado, no una proyección de los siguientes", ()=>{
   const html=htmlDePendientes([NOTEBOOK, HELADERA, ZAPATILLAS], "2026-09");
-  cierto(!html.includes("Sep 26"), "septiembre no va: ya está detallado en la card de arriba");
-  cierto(html.includes("Oct 26"), "la primera cajita tiene que ser octubre");
-  cierto(html.includes("Abr 27"), "la última cuota de la Notebook sigue teniendo que aparecer");
+  cierto(html.includes("Notebook") && html.includes("Heladera") && html.includes("Zapatillas"),
+    "tienen que aparecer las tres compras de septiembre: "+html.slice(0,200));
 });
 
-test("el total de la card no cuenta el mes en curso", ()=>{
+test("la línea de cierre cuenta lo que queda después del mes seleccionado", ()=>{
   const html=htmlDePendientes([NOTEBOOK, HELADERA, ZAPATILLAS], "2026-09");
   // Falta pagar 1.480.000 en total; septiembre son 300.000, así que después de septiembre
   // quedan 1.180.000 repartidos en 7 meses (oct 26 … abr 27).
-  cierto(html.includes("7 meses"), "tiene que contar 7 meses, no 8: "+html.slice(0,200));
-  cierto(html.includes(fmtTotal(1180000)), "el total tiene que excluir el mes en curso");
+  cierto(html.includes("7 meses"), "tiene que contar 7 meses, no 8: "+html.slice(0,300));
+  cierto(html.includes(fmtTotal(1180000)), "el total tiene que excluir el mes en curso: "+html.slice(0,300));
   cierto(html.includes("Después de Septiembre 2026"),
     "hace falta decir desde cuándo cuenta el total, si no parece que se perdió plata");
+  cierto(html.includes("La última cuota es en Abril 2027"), "tiene que decir cuándo es la última cuota");
 });
 
 test("si no queda nada después del mes en curso lo dice", ()=>{
-  // Zapatillas: 3 cuotas desde agosto 2026 → la última cae en octubre. Parado en octubre,
-  // no queda ningún mes por delante.
+  // Zapatillas: 3 cuotas desde agosto 2026 → la última cae en octubre. Parado en octubre, no
+  // queda ningún mes por delante.
   const html=htmlDePendientes([ZAPATILLAS], "2026-10");
-  cierto(html.includes("Nada pendiente después de Octubre 2026"),
-    "el vacío tiene que aclarar de qué mes en adelante no queda nada: "+html.slice(0,200));
+  cierto(html.includes("No quedan cuotas después de este mes."),
+    "el vacío tiene que decir que no queda nada después de este mes: "+html.slice(0,200));
 });
+
 
 // ═══════════════════════════════════════════
 // ANÁLISIS LOCAL: TEXTO Y NÚMEROS
