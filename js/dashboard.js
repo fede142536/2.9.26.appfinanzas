@@ -842,6 +842,17 @@ function themeColorAlpha(varName, alpha){
   const r=parseInt(hex.substring(0,2),16), g=parseInt(hex.substring(2,4),16), b=parseInt(hex.substring(4,6),16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+// Mezcla dos variables de tema en el porcentaje dado (equivalente a color-mix(), pero resuelto a
+// mano: ctx.fillStyle de un canvas no siempre interpreta color-mix()/var(), así que se calcula
+// el rgb() final acá, igual que ya hace themeColorAlpha con el alpha).
+function themeColorMix(varName, pct, baseVarName){
+  const a=themeColor(varName).replace('#',''), b=themeColor(baseVarName).replace('#','');
+  const canal=(i)=>{
+    const va=parseInt(a.substring(i,i+2),16), vb=parseInt(b.substring(i,i+2),16);
+    return Math.round(va*pct/100 + vb*(1-pct/100));
+  };
+  return `rgb(${canal(0)},${canal(2)},${canal(4)})`;
+}
 function drawBarRounded(ctx, x, y, w, h, r, corners){
   if(h<=0) return;
   corners=corners||"top";

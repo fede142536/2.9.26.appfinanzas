@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v139">
+<meta name="enola-version" content="enola-v140">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -736,71 +736,117 @@
 <!-- PAGE: AHORROS -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-ahorro" class="page">
-  <div class="header"><h1>Ahorros</h1><p>Fondo de retiro y metas</p></div>
-
-  <!-- Mis ahorros -->
-  <div class="card">
-    <div class="card-title" id="fondo-title">Mis ahorros</div>
-    <div id="fondo-msg" style="font-size:12px;color:var(--muted);background:var(--save-light);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:10px;display:none"></div>
-    <div class="summary-row" style="padding:0 0 12px" id="fondo-kpis"></div>
-
-    <!-- Selector de vista del gráfico -->
-    <div id="ahorro-view-selector" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn-sm ahorro-view-btn active" data-view="acum" onclick="setAhorroView('acum')">📈 Acumulado</button>
-      <button class="btn-sm ahorro-view-btn" data-view="mensual" onclick="setAhorroView('mensual')">📊 Por mes</button>
-      <button class="btn-sm ahorro-view-btn" data-view="categoria" onclick="setAhorroView('categoria')">🏷 Por categoría</button>
-    </div>
-
-    <!-- Dice en una línea qué se está mirando: el gráfico no tiene título propio y "Acumulado"
-         solo no alcanza para saber acumulado DE QUÉ. Lo completa renderAhorroChart(). -->
-    <div id="ahorro-view-desc" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.45"></div>
-
-    <canvas id="chart-fondo" height="180"></canvas>
-
-    <!-- Detalle del punto seleccionado -->
-    <div id="ahorro-tooltip" style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;min-height:18px"></div>
-
-    <!-- El desglose por categoría ES la tercera vista, no una tarjeta aparte. Antes había dos
-         cosas que mostraban lo mismo: una vista del gráfico dibujada en canvas (que mezclaba
-         pesos con dólares en un solo número y cortaba el nombre a 15 caracteres) y este
-         ranking, acá abajo. Ahora hay una sola, la buena, y el botón la trae a la vista en vez
-         de obligar a bajar hasta el final de la tarjeta. -->
-    <div id="ahorro-ranking" style="margin-top:14px"></div>
+  <div class="mov-topbar">
+    <button class="mov-icon-btn" onclick="toggleSideMenu()" aria-label="Abrir menú">☰</button>
+    <span class="ahorro-header-title">Ahorros</span>
+    <div style="width:40px;flex-shrink:0"></div>
   </div>
 
-  <!-- Mis dólares -->
-  <div class="card" id="usd-card" style="display:none">
-    <div class="card-title">💵 Mis dólares</div>
-    <div id="usd-msg" class="txt-sm txt-muted mb-10"></div>
-    <div class="summary-row" style="padding:0 0 12px" id="usd-kpis"></div>
-    <div id="usd-detail"></div>
+  <!-- Franja de saldo: reemplaza los chips Disponible/Depositado/Retirado de antes. Depositado
+       y Retirado se mudaron a #fondo-msg (si hubo retiros) y al chip "en N metas" de abajo. -->
+  <div class="ahorro-saldo" id="fondo-kpis"></div>
+  <!-- Legado oculto: ya no hay card-title visible, pero el código y algún test siguen leyendo
+       este id para saber si se están mostrando datos del usuario o el histórico importado. -->
+  <div id="fondo-title" style="display:none"></div>
+  <div id="fondo-msg" class="ahorro-fondo-msg" style="display:none"></div>
+
+  <!-- Mis metas: ahora arriba de todo (handoff: "la pantalla pasa a abrir con las metas") -->
+  <div class="metas-header">
+    <span class="metas-header-label">Mis metas</span>
+    <span class="metas-header-sum" id="metas-sum"></span>
+  </div>
+  <div class="metas-grid" id="metas-list"></div>
+
+  <!-- Historial: selector + lectura + gráfico/ranking + línea de dólares, todo en una sola card -->
+  <div class="card" style="margin:12px 16px 0;padding:14px;display:flex;flex-direction:column;gap:12px">
+    <div class="ahorro-view-tabs" id="ahorro-view-selector">
+      <button class="seg-btn active" data-view="acum" onclick="setAhorroView('acum')">Acumulado</button>
+      <button class="seg-btn" data-view="mensual" onclick="setAhorroView('mensual')">Por mes</button>
+      <button class="seg-btn" data-view="categoria" onclick="setAhorroView('categoria')">Por categoría</button>
+    </div>
+
+    <!-- Línea de lectura: antes solo se llenaba al tocar el gráfico; ahora muestra el último
+         mes por defecto, así nunca queda vacía (ver drawInteractiveLine/Bars). Reemplaza a
+         #ahorro-view-desc, que decía lo mismo que ya dicen el selector y esta línea. -->
+    <div id="ahorro-tooltip"></div>
+
+    <canvas id="chart-fondo" height="110"></canvas>
+
+    <!-- El desglose por categoría ES la tercera vista, no una tarjeta aparte: antes había dos
+         cosas mostrando lo mismo (un dibujo en canvas que mezclaba monedas y cortaba nombres, y
+         este ranking). Ahora hay una sola, la buena, en vez de la que estaba en canvas. -->
+    <div id="ahorro-ranking"></div>
+
+    <!-- Línea de dólares: antes era una card aparte (#usd-card), ahora vive acá y tocarla abre
+         el detalle en una hoja (#modal-usd-detail) en vez de mostrarlo siempre desplegado. -->
+    <div id="usd-card" style="display:none" onclick="openUsdDetalle()" role="button" tabindex="0">
+      <div class="ahorro-usd-cell"><span class="ahorro-usd-cell-label">💵 Cash</span><span class="ahorro-usd-cell-val" id="usd-cell-cash"></span></div>
+      <div class="ahorro-usd-cell"><span class="ahorro-usd-cell-label">💵 Fondo</span><span class="ahorro-usd-cell-val save" id="usd-cell-fondo"></span></div>
+      <div class="ahorro-usd-cell"><span class="ahorro-usd-cell-label">💵 Total</span><span class="ahorro-usd-cell-val" id="usd-cell-total"></span></div>
+    </div>
   </div>
 
-  <!-- Metas de ahorro -->
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div class="card-title" style="margin:0">Mis metas</div>
-      <button class="btn-sm" onclick="openMetaModal()">+ Nueva meta</button>
-    </div>
-    <div id="metas-list"></div>
-  </div>
-
-  <!-- Depósito a meta -->
-  <div class="card" id="depositar-card" style="display:none">
-    <div class="card-title">Depositar en meta</div>
-    <div class="form-group"><label class="form-label" for="dep-meta">Meta</label><select id="dep-meta" class="form-select"></select></div>
-    <div class="form-group"><label class="form-label" for="dep-monto">Monto ($)</label>
-      <div class="amount-wrap"><span class="amount-prefix">$</span><input type="number" id="dep-monto" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any"></div>
-    </div>
-    <button class="btn-primary" style="background:var(--save);color:#fff" onclick="depositarMeta()">Depositar</button>
+  <!-- Contenedor heredado oculto: #dep-meta lo sigue llenando renderMetas() (hay un test que
+       depende de eso), pero el depósito en sí ahora se hace desde la hoja #modal-depositar. -->
+  <div id="depositar-card" style="display:none">
+    <select id="dep-meta" hidden aria-label="Meta"></select>
   </div>
 </div>
 
-<!-- MODAL NUEVA META -->
+<!-- HOJA: DEPOSITAR EN META -->
+<div class="modal-overlay" id="modal-depositar" onclick="if(event.target===this)closeDepositoSheet()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-handle"></div>
+    <div class="deposito-header">
+      <span class="deposito-icon" id="deposito-emoji"></span>
+      <div class="deposito-titulos">
+        <strong id="deposito-nombre"></strong>
+        <span id="deposito-sub"></span>
+      </div>
+    </div>
+    <div class="deposito-monto">
+      <span style="font-size:20px;font-weight:600;color:var(--save)">$</span>
+      <input type="text" id="dep-monto" class="amount-input" aria-label="Monto a depositar"
+        style="padding-left:0;font-size:38px;font-weight:700;letter-spacing:-1px;background:transparent;border:none;outline:none;field-sizing:content;min-width:1ch;max-width:240px;color:var(--text)"
+        placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);actualizarPreviewDeposito()">
+    </div>
+    <div class="deposito-chips">
+      <button type="button" class="deposito-chip" onclick="depositoChipAdd(10000)">+$10k</button>
+      <button type="button" class="deposito-chip" onclick="depositoChipAdd(50000)">+$50k</button>
+      <button type="button" class="deposito-chip" onclick="depositoChipAdd(100000)">+$100k</button>
+      <button type="button" class="deposito-chip" onclick="depositoChipCompletar()">Completar</button>
+    </div>
+    <div class="deposito-preview" id="deposito-preview"></div>
+    <button class="btn-primary" style="background:var(--save);color:#fff" id="btn-depositar" onclick="depositarMeta()">Depositar</button>
+  </div>
+</div>
+
+<!-- HOJA: DETALLE DE DÓLARES -->
+<div class="modal-overlay" id="modal-usd-detail" onclick="if(event.target===this)closeUsdDetalle()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-handle"></div>
+    <div class="modal-title">💵 Dólares billete</div>
+    <div class="summary-row" style="padding:0 0 12px" id="usd-kpis"></div>
+    <div id="usd-detail"></div>
+    <div id="usd-msg" class="txt-sm txt-muted mb-10"></div>
+  </div>
+</div>
+
+<!-- MENÚ CONTEXTUAL DE UNA META: Editar / Eliminar (reemplaza la × siempre visible de antes) -->
+<div class="modal-overlay" id="modal-meta-menu" onclick="if(event.target===this)closeMetaMenu()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="meta-menu-nombre"></div>
+    <button type="button" class="meta-menu-btn" onclick="metaMenuEditar()">✎ Editar</button>
+    <button type="button" class="meta-menu-btn danger" onclick="metaMenuEliminar()">🗑 Eliminar</button>
+  </div>
+</div>
+
+<!-- MODAL NUEVA/EDITAR META -->
 <div class="modal-overlay" id="modal-meta" onclick="if(event.target===this)closeMetaModal()">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
-    <div class="modal-title">Nueva meta de ahorro</div>
+    <div class="modal-title" id="meta-modal-title">Nueva meta de ahorro</div>
     <div class="form-group"><label class="form-label" for="meta-nombre">Nombre</label><input type="text" id="meta-nombre" class="form-input" placeholder="Ej: Vacaciones, Auto, Emergencias"></div>
     <div class="form-group"><label class="form-label" for="meta-objetivo">Objetivo ($)</label>
       <div class="amount-wrap"><span class="amount-prefix">$</span><input type="number" id="meta-objetivo" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any"></div>
@@ -814,7 +860,7 @@
       </div>
       <input type="text" id="meta-emoji" class="form-input" style="margin-top:8px" placeholder="Ej: 🏖️" maxlength="2" value="🎯">
     </div>
-    <button class="btn-primary" style="background:var(--save);color:#fff" onclick="guardarMeta()">Crear meta</button>
+    <button class="btn-primary" style="background:var(--save);color:#fff" id="btn-guardar-meta" onclick="guardarMeta()">Crear meta</button>
   </div>
 </div>
 

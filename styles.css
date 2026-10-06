@@ -433,9 +433,6 @@ canvas{width:100%!important;max-width:100%}
 .hscroll{scroll-snap-type:x mandatory}
 .hscroll-item{scroll-snap-align:start}
 .year-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
-/* SAVINGS GOAL */
-.goal-bar-wrap{background:var(--bg);border-radius:8px;height:12px;overflow:hidden;margin:8px 0}
-.goal-bar-fill{height:100%;border-radius:8px;background:var(--save);transition:width .5s}
 
 /* ── ACCESIBILIDAD ── */
 /* Foco visible solo para navegación por teclado: :focus-visible no se activa al tocar o
@@ -544,6 +541,77 @@ canvas{width:100%!important;max-width:100%}
 .tc-row-monto{font-size:14px;font-weight:600;color:var(--text)}
 .tc-row-fin{font-size:11px;color:var(--muted);margin-top:2px}
 .tc-cierre{padding:14px 20px 0;font-size:12px;color:var(--muted);text-align:center}
+
+/* ── Ahorros (pestaña #page-ahorro) ──
+   Opción 1d "Metas primero" del handoff: las cuatro cards apiladas (Mis ahorros / Mis dólares /
+   Mis metas / Depositar) pasan a ser franja de saldo + grilla de metas con anillo + una sola
+   card de historial (selector, lectura, gráfico o ranking, línea de dólares al pie). El header
+   reusa .mov-topbar de Movimientos; el selector de vista reusa .seg-btn. */
+.ahorro-header-title{flex:1;text-align:center;font-size:16px;font-weight:600;letter-spacing:-.3px}
+.ahorro-saldo{margin:12px 16px 0;background:var(--save-light);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px}
+.ahorro-saldo-disp{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}
+.ahorro-saldo-label{font-size:11px;font-weight:600;color:var(--save);text-transform:uppercase;letter-spacing:.6px}
+.ahorro-saldo-val{font-size:26px;font-weight:700;letter-spacing:-.8px;color:var(--save)}
+.ahorro-saldo-usd{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex-shrink:0}
+.ahorro-saldo-usd-label{font-size:11px;color:var(--save)}
+.ahorro-saldo-usd-val{font-size:15px;font-weight:700;color:var(--save)}
+.ahorro-fondo-msg{font-size:12px;color:var(--muted);padding:8px 4px 0;line-height:1.45}
+/* Mis metas */
+.metas-header{display:flex;justify-content:space-between;align-items:baseline;padding:16px 20px 8px}
+.metas-header-label{font-size:12px;font-weight:600;color:var(--muted)}
+.metas-header-sum{font-size:12px;color:var(--muted)}
+.metas-grid{margin:0 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.meta-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 12px 12px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;cursor:pointer;color:var(--text)}
+.meta-card:active{transform:scale(.97)}
+.meta-ring{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background .3s}
+.meta-ring-inner{width:52px;height:52px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:22px}
+.meta-ring-inner.cumplida{background:var(--save-light)}
+.meta-nombre{font-size:13px;font-weight:600;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta-pct{font-size:15px;font-weight:700;color:var(--save)}
+.meta-falta{font-size:11px;color:var(--muted)}
+.meta-card-nueva{background:transparent;border:1.5px dashed var(--border);border-radius:14px;min-height:172px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);cursor:pointer}
+.meta-card-nueva:active{transform:scale(.97)}
+/* Card de historial: selector + lectura + gráfico/ranking + línea de dólares */
+.ahorro-view-tabs{display:flex;background:var(--border);border-radius:10px;padding:3px;gap:2px}
+.ahorro-view-tabs .seg-btn{height:30px;border-radius:8px}
+#ahorro-tooltip{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-height:18px}
+.ahorro-tip-lbl{font-size:12px;color:var(--muted)}
+.ahorro-tip-val{font-size:15px;font-weight:700}
+/* Ranking por categoría: ocupa el lugar del gráfico, no una card aparte */
+.ahorro-rank-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:9px 0;cursor:pointer}
+.ahorro-rank-row:not(:first-child){border-top:1px solid var(--border)}
+.ahorro-rank-cat{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;min-width:0}
+.ahorro-rank-val{font-size:13px;font-weight:600;text-align:right}
+.ahorro-rank-val small{display:block;font-size:11px;font-weight:600}
+.ahorro-rank-bar{grid-column:1/-1;height:5px;border-radius:3px;background:var(--border);overflow:hidden}
+.ahorro-rank-bar-fill{height:100%}
+.ahorro-rank-meta{grid-column:1/-1;font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
+/* Línea de dólares: ahora dentro de la card de historial, tocable para abrir el detalle */
+#usd-card{border-top:1px solid var(--border);padding-top:12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;
+  background:transparent;border-left:none;border-right:none;border-bottom:none;cursor:pointer;text-align:left;margin:0}
+.ahorro-usd-cell{display:flex;flex-direction:column;gap:2px}
+.ahorro-usd-cell-label{font-size:11px;color:var(--muted)}
+.ahorro-usd-cell-val{font-size:13px;font-weight:700;color:var(--text)}
+.ahorro-usd-cell-val.save{color:var(--save)}
+/* Hoja "Depositar en meta" y hoja de detalle en USD: mismo patrón .modal/.modal-handle */
+.deposito-header{display:flex;align-items:center;gap:12px}
+.deposito-icon{width:40px;height:40px;border-radius:50%;background:var(--save-light);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.deposito-titulos{display:flex;flex-direction:column;gap:1px;min-width:0}
+.deposito-titulos strong{font-size:16px;font-weight:600}
+.deposito-titulos span{font-size:12px;color:var(--muted)}
+.deposito-monto{display:flex;align-items:baseline;justify-content:center;gap:4px;padding:6px 0}
+.deposito-chips{display:flex;gap:6px}
+.deposito-chip{flex:1;height:36px;border:1px solid var(--border);border-radius:999px;font-size:12px;font-weight:600;
+  background:var(--bg);color:var(--text);cursor:pointer;white-space:nowrap}
+.deposito-chip:active{transform:scale(.97)}
+.deposito-preview{font-size:12px;color:var(--muted);text-align:center}
+/* Menú contextual de una meta: Editar / Eliminar (reemplaza la × siempre visible de antes) */
+.meta-menu-btn{width:100%;height:48px;border:none;background:transparent;display:flex;align-items:center;gap:10px;
+  font-size:15px;color:var(--text);cursor:pointer;border-radius:10px;padding:0 6px}
+.meta-menu-btn:active{background:var(--bg)}
+.meta-menu-btn.danger{color:var(--danger)}
 
 /* ═══════════════════════════════════════════
    CAMBIO DE MES

@@ -2970,9 +2970,10 @@ test("no volvió el dibujo en canvas de la vista por categoría", async ()=>{
 });
 
 // Helper: pone el DOM mínimo de la tarjeta de ahorros, corre renderAhorroChart() con una vista
-// y devuelve qué quedó visible.
+// y devuelve qué quedó visible. #ahorro-view-desc ya no existe (handoff de Ahorros: el selector
+// y la línea de lectura, #ahorro-tooltip, ya dicen qué se está mirando) — se lee esta última.
 function vistaAhorro(view, datos){
-  const ids=["chart-fondo","ahorro-ranking","ahorro-tooltip","ahorro-view-desc"];
+  const ids=["chart-fondo","ahorro-ranking","ahorro-tooltip"];
   const creados=ids.map(id=>{
     const el=document.createElement(id==="chart-fondo"?"canvas":"div");
     el.id=id; document.body.appendChild(el); return el;
@@ -2985,7 +2986,7 @@ function vistaAhorro(view, datos){
   try{
     renderAhorroChart();
     r={canvas:creados[0].style.display, ranking:creados[1].style.display,
-       rankingHtml:creados[1].innerHTML, desc:creados[3].textContent};
+       rankingHtml:creados[1].innerHTML, desc:creados[2].textContent};
   } finally {
     creados.forEach(e=>e.remove());
     ahorroState.view=previo.view; ahorroState.depositos=previo.dep;
@@ -3018,10 +3019,18 @@ test("en las otras vistas se ve el gráfico y no el ranking", ()=>{
   });
 });
 
-test("cada vista dice qué estás mirando", ()=>{
-  const vistas=["acum","mensual","categoria"].map(v=>vistaAhorro(v, AHORROS_DEMO).desc);
-  vistas.forEach((d,i)=>cierto(d.length>10, "la vista " + VISTAS_AHORRO[i] + " se quedó sin descripción"));
-  igual(new Set(vistas).size, 3, "dos vistas comparten la misma descripción");
+// #ahorro-view-desc se sacó (handoff de Ahorros): Acumulado y Por mes ahora dicen qué se está
+// mirando a través de la línea de lectura (#ahorro-tooltip, con el último mes por defecto, no
+// solo al tocar); Por categoría no necesita una, porque el ranking ya es autoexplicativo.
+test("acumulado y por mes muestran una lectura con mes y valor", ()=>{
+  const lecturas=["acum","mensual"].map(v=>vistaAhorro(v, AHORROS_DEMO).desc);
+  lecturas.forEach((d,i)=>cierto(d.length>10, "la vista " + ["acum","mensual"][i] + " se quedó sin lectura"));
+  cierto(lecturas[0]!==lecturas[1], "acumulado y por mes no pueden decir lo mismo");
+});
+
+test("en Por categoría no queda una lectura vieja pisando el ranking", ()=>{
+  const r=vistaAhorro("categoria", AHORROS_DEMO);
+  igual(r.desc, "", "la vista por categoría no necesita línea de lectura: ya lo dice el ranking");
 });
 
 test("sin ahorros cargados la vista por categoría no queda en blanco", ()=>{
@@ -3437,8 +3446,11 @@ function taparEnLaCurva(dprForzado){
     const dibujar=()=>drawInteractiveLine(canvas,meses,valores,"#2d7a3a",tip,(ym,v)=>ym+": "+v);
     dibujar();
     const ctx=canvas.getContext("2d");
-    const antes=ctx.getImageData(0,0,canvas.width,canvas.height).data;
     const caja=canvas.getBoundingClientRect();
+    // drawInteractiveLine ya arranca con el último mes seleccionado (ver handoff de Ahorros),
+    // así que el primer dibujo ya trae su propio marcador en un punto CONOCIDO (el último, x=
+    // padL+cw en px CSS). "antes" se captura ahí mismo, sin tocar nada.
+    const antes=ctx.getImageData(0,0,canvas.width,canvas.height).data;
     canvas.onclick({clientX:caja.left+caja.width*0.7, clientY:caja.top+caja.height/2});
     const despues=ctx.getImageData(0,0,canvas.width,canvas.height).data;
     const cambiados=[];
@@ -3447,7 +3459,15 @@ function taparEnLaCurva(dprForzado){
         cambiados.push({x:(i/4)%canvas.width, y:Math.floor((i/4)/canvas.width)});
       }
     }
-    return {cambiados, detalle:tip.textContent.trim(), ancho:canvas.width, dpr:dprForzado};
+    // El diff trae DOS guías: la del marcador por defecto (último mes), que desaparece, y la del
+    // tap, que aparece. Antes de esta función solo había una (no existía selección por defecto),
+    // así que se descarta la que ya se sabe de antemano dónde está —misma fórmula de padL/cw que
+    // usa drawInteractiveLine— para que el resto del test (que busca "la" columna con más
+    // cambios) vuelva a ver una sola, como siempre asumió.
+    const padL=44, padR=12, W=320, cw=W-padL-padR;
+    const guiaViejaX=Math.round((padL+cw)*dprForzado); // último punto = padL + cw*(n-1)/(n-1)
+    const sinLaGuiaVieja=cambiados.filter(c=>Math.abs(c.x-guiaViejaX)>6*dprForzado);
+    return {cambiados:sinLaGuiaVieja, detalle:tip.textContent.trim(), ancho:canvas.width, dpr:dprForzado};
   } finally {
     canvas.remove(); tip.remove();
     if(dprOriginal) Object.defineProperty(window,"devicePixelRatio",dprOriginal);
