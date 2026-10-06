@@ -59,7 +59,8 @@ function renderAhorro(){
   let acum=0;
   ahorrosArr.forEach(d=>{acum+=d.monto;d.acum=Math.round(acum*100)/100;});
 
-  // Actualizar título según fuente de datos
+  // Título legado: ya no se muestra (la franja de saldo no tiene card-title), pero el id se
+  // conserva porque el código lo sigue leyendo/escribiendo (ver #fondo-title en index.html).
   const ahorroTitle=document.getElementById("fondo-title");
   if(ahorroTitle){
     ahorroTitle.textContent=usingUserData?"Mis ahorros":"Fondo de retiro (histórico)";
@@ -68,15 +69,12 @@ function renderAhorro(){
   const fondoAcum=ahorrosArr.length?ahorrosArr[ahorrosArr.length-1].acum:0;
   const totalDepositado=depositos.reduce((s,m)=>s+m.importe,0);
   const totalRetirado=retiros.reduce((s,m)=>s+m.importe,0);
-  const cantMovs=depositos.length+retiros.length;
-  const fondoKpis=document.getElementById("fondo-kpis");
-  fondoKpis.innerHTML=`
-    <div class="chip"><div class="chip-label">Disponible</div><div class="chip-val ${fondoAcum>=0?"save":"negative"}" data-animar="${fondoAcum}">${fmtTotal(0)}</div></div>
-    <div class="chip"><div class="chip-label">Depositado</div><div class="chip-val positive" data-animar="${totalDepositado}">${fmtTotal(0)}</div></div>
-    <div class="chip"><div class="chip-label">Retirado</div><div class="chip-val negative" data-animar="${totalRetirado}">${fmtTotal(0)}</div></div>`;
-  animarNumerosDe(fondoKpis);
 
-  // Mensaje informativo
+  // Franja de saldo: reemplaza los tres chips (Disponible/Depositado/Retirado) de antes.
+  // Depositado y Retirado se cuentan ahora en #fondo-msg si hubo retiros, igual que ya hacía.
+  renderAhorroSaldo(fondoAcum, calcularFondoUSD());
+
+  // Mensaje informativo (sin cambios de contenido ni de cuándo se muestra)
   const fondoMsg=document.getElementById("fondo-msg");
   if(fondoMsg){
     if(!ahorrosArr.length){
@@ -93,7 +91,10 @@ function renderAhorro(){
     }
   }
 
-  // ── GRÁFICO Y RANKING DE AHORROS ──
+  // Metas: van primero en el nuevo orden ("la pantalla pasa a abrir con las metas").
+  renderMetas();
+
+  // ── GRÁFICO, RANKING Y DÓLARES (card de historial) ──
   // Guardo los datos en una variable global para que setAhorroView pueda re-renderizar
   // sin recalcular todo cada vez
   ahorroState.ahorrosArr=ahorrosArr;
@@ -101,9 +102,37 @@ function renderAhorro(){
   ahorroState.retiros=retiros;
   renderAhorroChart();
   renderAhorroRanking();
-
-  renderMetas();
   renderUSD();
+}
+
+// Fondo USD = lo ahorrado al fondo en dólares menos lo retirado de él. Misma fórmula que usa
+// renderUSD() para su propio chip "Fondo USD"; se repite acá (en vez de hacer que renderUSD
+// la exponga) para no acoplar la franja de saldo al resto de sus cálculos de cash/detalle.
+function calcularFondoUSD(){
+  const ahorrosUSD=movs
+    .filter(m=>esDepositoAhorro(m)&&m.moneda==="USD"&&m.importeOrig)
+    .reduce((s,m)=>s+m.importeOrig,0);
+  const retirosUSD=movs
+    .filter(m=>esRetiroAhorro(m)&&m.moneda==="USD"&&m.importeOrig)
+    .reduce((s,m)=>s+m.importeOrig,0);
+  return ahorrosUSD-retirosUSD;
+}
+
+// Franja de saldo (#fondo-kpis): Disponible en pesos a la izquierda, Fondo USD a la derecha
+// (oculto si no hay dólares guardados). Reemplaza a los chips Disponible/Depositado/Retirado.
+function renderAhorroSaldo(fondoAcum, fondoUSD){
+  const el=document.getElementById("fondo-kpis");
+  if(!el) return;
+  el.innerHTML=`
+    <div class="ahorro-saldo-disp">
+      <span class="ahorro-saldo-label">Disponible</span>
+      <span class="ahorro-saldo-val" style="color:${fondoAcum>=0?"var(--save)":"var(--danger)"}" data-animar="${fondoAcum}">${fmtTotal(0)}</span>
+    </div>
+    ${fondoUSD!==0?`<div class="ahorro-saldo-usd">
+      <span class="ahorro-saldo-usd-label">Fondo USD</span>
+      <span class="ahorro-saldo-usd-val">USD ${fondoUSD.toFixed(2)}</span>
+    </div>`:""}`;
+  animarNumerosDe(el);
 }
 
 // ═══════════════════════════════════════════
@@ -135,12 +164,12 @@ function renderUSD(){
     .filter(m=>esRetiroAhorro(m)&&m.moneda==="USD"&&m.importeOrig)
     .reduce((s,m)=>s+m.importeOrig,0);
 
-  // Si no hay ningún movimiento USD, no mostramos la card
+  // Si no hay ningún movimiento USD, no mostramos la línea de dólares
   if(ingresosUSD===0 && gastosUSD===0 && ahorrosUSD===0 && retirosUSD===0){
     card.style.display="none";
     return;
   }
-  card.style.display="block";
+  card.style.display="grid";
 
   // Cash disponible = lo que entró menos lo que salió. El depósito al fondo SALE del cash
   // (por eso gastosUSD ahora lo incluye) y el retiro VUELVE al cash, así que se suma.
@@ -150,6 +179,13 @@ function renderUSD(){
   // Fondo USD: ahorros - retiros
   const fondoUSD = ahorrosUSD - retirosUSD;
 
+  // Línea de dólares, siempre visible dentro de la card de historial (antes era #usd-card
+  // completo, una card aparte con detalle siempre desplegado).
+  document.getElementById("usd-cell-cash").textContent=`USD ${cashUSD.toFixed(2)}`;
+  document.getElementById("usd-cell-fondo").textContent=`USD ${fondoUSD.toFixed(2)}`;
+  document.getElementById("usd-cell-total").textContent=`USD ${(cashUSD+fondoUSD).toFixed(2)}`;
+
+  // Lo de abajo alimenta la hoja #modal-usd-detail, que se abre al tocar la línea de dólares.
   const cashColor=cashUSD>=0?"save":"negative";
   const fondoColor=fondoUSD>=0?"save":"negative";
   document.getElementById("usd-kpis").innerHTML=`
@@ -176,6 +212,12 @@ function renderUSD(){
   document.getElementById("usd-detail").innerHTML=html;
   document.getElementById("usd-msg").innerHTML=`Saldo en dólares billete: cash + lo guardado en el fondo. Las inversiones en USD se ven en la pestaña Inversiones.`;
 }
+function openUsdDetalle(){
+  document.getElementById("modal-usd-detail").classList.add("open");
+}
+function closeUsdDetalle(){
+  document.getElementById("modal-usd-detail").classList.remove("open");
+}
 
 // ═══════════════════════════════════════════
 // AHORROS — VISTAS Y RANKING POR CATEGORÍA
@@ -195,17 +237,35 @@ const ahorroState = {
 function setAhorroView(v){
   ahorroState.view=v;
   guardarPreferencia("fahorrov",v);
-  document.querySelectorAll(".ahorro-view-btn").forEach(b=>{
-    b.classList.toggle("active", b.dataset.view===v);
-  });
+  syncAhorroViewButtons();
   renderAhorroChart();
 }
 
-// Activa el botón de la vista actual al entrar a Ahorros
+// Activa el botón de la vista actual al entrar a Ahorros. Los botones ya no llevan una clase
+// propia (".ahorro-view-btn"): son .seg-btn, iguales a los de Movimientos/Tarjetas, así que se
+// identifican por su atributo data-view dentro del selector de Ahorros.
 function syncAhorroViewButtons(){
-  document.querySelectorAll(".ahorro-view-btn").forEach(b=>{
+  document.querySelectorAll("#ahorro-view-selector [data-view]").forEach(b=>{
     b.classList.toggle("active", b.dataset.view===ahorroState.view);
   });
+}
+
+// Arma el HTML de dos partes (rótulo gris + valor destacado) de la línea de lectura, para
+// cualquiera de las dos vistas de gráfico. "mensual" en 0/positivo/negativo tienen cada uno su
+// propio texto, igual que en el prototipo del handoff.
+function lecturaAhorroHTML(view, ym, val){
+  let lbl, txt, color;
+  if(view==="acum"){
+    lbl="Acumulado a "+mesLbl(ym).toLowerCase();
+    txt=fmtS(val);
+    color="var(--save)";
+  } else {
+    const mesSolo=MESES[parseInt(ym.split("-")[1],10)-1].toLowerCase();
+    if(val===0){ lbl=mesLbl(ym); txt="Sin movimientos"; color="var(--muted)"; }
+    else if(val>0){ lbl="Depositado en "+mesSolo; txt="+"+fmtS(val); color="var(--save)"; }
+    else { lbl="Retirado en "+mesSolo; txt="−"+fmtS(-val); color="var(--danger)"; }
+  }
+  return `<span class="ahorro-tip-lbl">${escapeHtml(lbl)}</span><span class="ahorro-tip-val" style="color:${color}">${escapeHtml(txt)}</span>`;
 }
 
 // Renderiza el gráfico de ahorros según la vista activa
@@ -215,20 +275,10 @@ function renderAhorroChart(){
   if(!canvas) return;
   const tipEl=document.getElementById("ahorro-tooltip");
 
-  // Qué estás mirando, en una línea. Cada vista responde una pregunta distinta y sin esto
-  // hay que deducirlo del nombre del botón.
-  const descEl=document.getElementById("ahorro-view-desc");
-  if(descEl){
-    descEl.textContent={
-      acum:      "Cuánto llevás ahorrado en total, mes a mes. El último punto es lo que tenés disponible hoy.",
-      mensual:   "Cuánto pusiste o sacaste en cada mes por separado. Verde es depósito, rojo es retiro.",
-      categoria: "Dónde está guardado hoy. Tocá una categoría para ver los movimientos que la arman."
-    }[ahorroState.view] || "";
-  }
-
   // "Por categoría" no es un gráfico en el lienzo: es el ranking, que ya sabe separar pesos de
   // dólares y abre el detalle al tocar. Se muestra uno u otro, nunca los dos: tenerlos juntos
-  // era mostrar el mismo dato dos veces.
+  // era mostrar el mismo dato dos veces. El selector y esta misma línea de lectura (en las
+  // otras vistas) ya dicen qué se está mirando, así que no hace falta una descripción aparte.
   const esCategoria = ahorroState.view==="categoria";
   const ranking=document.getElementById("ahorro-ranking");
   if(ranking) ranking.style.display = esCategoria ? "" : "none";
@@ -240,16 +290,17 @@ function renderAhorroChart(){
     renderAhorroRanking();
     return;
   }
-  // Se limpia el detalle y la selección porque acá se llega al cambiar de vista o cuando
-  // cambiaron los datos: el punto que habías tocado ya no significa lo mismo en el gráfico
-  // nuevo. El redibujo por un tap NO pasa por acá justamente para no borrar lo recién escrito.
-  if(tipEl) tipEl.textContent="";
+  // Se limpia la selección porque acá se llega al cambiar de vista o cuando cambiaron los
+  // datos: el punto que habías tocado ya no significa lo mismo en el gráfico nuevo. Al quedar
+  // en null, drawInteractiveLine/Bars arrancan mostrando el último mes, no vacío. El redibujo
+  // por un tap NO pasa por acá justamente para no perder la selección recién hecha.
   limpiarSeleccionLinea();
 
   const {ahorrosArr}=ahorroState;
   if(!ahorrosArr.length){
+    if(tipEl) tipEl.textContent="";
     const ctx=canvas.getContext("2d");
-    canvas.width=canvas.offsetWidth||320;canvas.height=180;
+    canvas.width=canvas.offsetWidth||320;canvas.height=110;
     ctx.clearRect(0,0,canvas.width,canvas.height);
     return;
   }
@@ -263,19 +314,16 @@ function renderAhorroChart(){
       ahorrosArr.map(d=>d.acum),
       themeColor('--save'),
       tipEl,
-      (ym,val)=>`${mesLbl(ym)}: ${fmtS(val)}`
+      (ym,val)=>lecturaAhorroHTML("acum",ym,val)
     );
   } else if(view==="mensual"){
-    // Vista mes a mes: barras (depósitos en verde, retiros en rojo)
+    // Vista mes a mes: barras (seleccionado en --save, retiro en --danger, $0 en --border)
     drawInteractiveBars(
       canvas,
       ahorrosArr.map(d=>d.mes),
       ahorrosArr.map(d=>d.monto),
       tipEl,
-      (ym,val)=>{
-        const lbl=val>=0?"Depositado":"Retirado";
-        return `${mesLbl(ym)}: ${lbl} ${fmtS(Math.abs(val))}`;
-      }
+      (ym,val)=>lecturaAhorroHTML("mensual",ym,val)
     );
   }
 }
@@ -327,8 +375,9 @@ function renderAhorroRanking(){
   };
   const escalaArs=escala("ARS"), escalaUsd=escala("USD");
 
-  let html=`<div class="seccion-label mb-8">🏆 Ranking por categoría</div>`;
-  html+=items.map(it=>{
+  // Sin título propio ("🏆 Ranking por categoría" se saca): el selector de arriba ya dice que
+  // estás en "Por categoría", repetirlo acá era decir lo mismo dos veces.
+  el.innerHTML=items.map(it=>{
     const esUsd=soloUsd(it);
     const {total: totalAbs, max: maxV}=esUsd?escalaUsd:escalaArs;
     const valor=Math.abs(esUsd?it.saldoUsd:it.saldoArs);
@@ -337,24 +386,19 @@ function renderAhorroRanking(){
     const cUsd=it.saldoUsd>=0?"var(--save)":"var(--danger)";
     const icon=getIcon(it.cat,"🏦");
     const catEsc=attrJS(it.cat);
-    return `<div role="button" tabindex="0" style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);cursor:pointer" onclick="showAhorroCatDetail(${catEsc})">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <div class="txt-md txt-strong">${icon} ${escapeHtml(it.cat)}</div>
-        <div style="text-align:right">
-          ${it.saldoArs!==0?`<div style="font-size:13px;font-weight:600;color:${c}">${fmtS(it.saldoArs)}</div>`:""}
-          ${it.saldoUsd!==0?`<div style="font-size:${it.saldoArs!==0?'11px':'13px'};font-weight:600;color:${cUsd}">USD ${it.saldoUsd.toFixed(2)}</div>`:""}
-        </div>
+    return `<div class="ahorro-rank-row" role="button" tabindex="0" onclick="showAhorroCatDetail(${catEsc})">
+      <div class="ahorro-rank-cat">${icon} ${escapeHtml(it.cat)}</div>
+      <div class="ahorro-rank-val" style="color:${c}">
+        ${it.saldoArs!==0?fmtS(it.saldoArs):""}
+        ${it.saldoUsd!==0?`<small style="color:${cUsd}">USD ${it.saldoUsd.toFixed(2)}</small>`:""}
       </div>
-      <div style="background:var(--bg);height:6px;border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${Math.round(valor/maxV*100)}%;background:${c}"></div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px;display:flex;justify-content:space-between">
+      <div class="ahorro-rank-bar"><div class="ahorro-rank-bar-fill" style="width:${Math.round(valor/maxV*100)}%;background:${c}"></div></div>
+      <div class="ahorro-rank-meta">
         <span>${pct}% de ${esUsd?"tus dólares":"tus pesos"} · ${it.count} ${it.count===1?"movimiento":"movimientos"}</span>
         <span>${it.depositadoArs>0?`+${fmtAbbr(it.depositadoArs)}`:""}${it.retiradoArs>0?` -${fmtAbbr(it.retiradoArs)}`:""}</span>
       </div>
     </div>`;
   }).join("");
-  el.innerHTML=html;
 }
 
 // ── DETALLE DE CATEGORÍA DE AHORRO (Ahorros → Ranking → tocar una categoría) ──
