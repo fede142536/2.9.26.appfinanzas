@@ -4583,6 +4583,129 @@ test("renderDashYear calcula y muestra el promedio mensual", async ()=>{
   cierto(cuerpo.includes("promedioMensualHTML(yearData)"), "no calcula el promedio: "+cuerpo);
 });
 
+// ═══════════════════════════════════════════
+// DASHBOARD NARRATIVO: MOTOR DE FRASES
+// ═══════════════════════════════════════════
+// El resumen del mes (handoff de Dashboard, opción 2a) no toca los cálculos de base de
+// dashboard.js (getDashData, esConsumo, etc.): lo nuevo es solo cómo se eligen y redactan
+// los hallazgos. Estas pruebas cubren esa elección, no los números de siempre.
+grupo("Dashboard narrativo: motor de frases");
+
+test("primerMesConDatos encuentra el movimiento más viejo cargado", ()=>{
+  const antes=movs;
+  try{
+    movs=[];
+    igual(primerMesConDatos(), null, "sin movimientos no hay desde cuándo navegar");
+    movs=[{id:1,tipo:"Gasto",cat:"Varios",importe:1000,fecha:"2026-05-10"},
+          {id:2,tipo:"Ingreso",cat:"Sueldo",importe:500000,fecha:"2026-02-01"},
+          {id:3,tipo:"Gasto",cat:"Varios",importe:2000,fecha:"2026-08-01"}];
+    igual(primerMesConDatos(), "2026-02", "tiene que ser el más viejo de los tres, no el primero de la lista");
+  } finally { movs=antes; }
+});
+
+test("mesesBaseDelAnio excluye el mes en curso solo cuando es el que se está mirando", ()=>{
+  const hoy=currentYM();
+  const monthly=[{mes:"2026-01",ingreso:100,gasto:50,balance:50},{mes:hoy,ingreso:100,gasto:50,balance:50}];
+  const base=mesesBaseDelAnio(monthly, hoy);
+  igual(base.map(d=>d.mes), ["2026-01"], "el mes en curso tiene que quedar afuera de su propio promedio");
+  const baseOtro=mesesBaseDelAnio(monthly, "2026-01");
+  igual(baseOtro.map(d=>d.mes).sort(), ["2026-01",hoy].sort(), "un mes que no es el actual no se excluye a sí mismo");
+});
+
+// Usa el mes en curso como mes mirado: es el único caso en el que desviacionCategoriasDelMes
+// EXCLUYE ese mes de su propio promedio (mesesBaseDelAnio: solo se excluye el mes en curso,
+// por estar incompleto — un mes pasado se compara con un promedio que lo incluye a él mismo).
+const MES_DESVIO_ANT1=addMonths(currentYM(),-2), MES_DESVIO_ANT2=addMonths(currentYM(),-1), MES_DESVIO_HOY=currentYM();
+const MOVS_DESVIO=[
+  {id:1,tipo:"Gasto",cat:"Comida",importe:50000,fecha:MES_DESVIO_ANT1+"-05"},
+  {id:2,tipo:"Gasto",cat:"Comida",importe:50000,fecha:MES_DESVIO_ANT2+"-05"},
+  {id:3,tipo:"Gasto",cat:"Comida",importe:120000,fecha:MES_DESVIO_HOY+"-05"},
+  {id:4,tipo:"Gasto",cat:"Transporte",importe:20000,fecha:MES_DESVIO_ANT1+"-05"},
+  {id:5,tipo:"Gasto",cat:"Transporte",importe:20000,fecha:MES_DESVIO_ANT2+"-05"},
+  {id:6,tipo:"Gasto",cat:"Transporte",importe:5000,fecha:MES_DESVIO_HOY+"-05"}
+];
+
+test("desviacionCategoriasDelMes compara el mes contra el promedio de esa categoría en el resto del año", ()=>{
+  const antes=movs;
+  try{
+    movs=MOVS_DESVIO;
+    const desv=desviacionCategoriasDelMes(MES_DESVIO_HOY);
+    const comida=desv.find(d=>d.cat==="Comida"), transporte=desv.find(d=>d.cat==="Transporte");
+    cierto(!!comida && !!transporte, "faltó alguna de las dos categorías");
+    igual(comida.avg, 50000, "el promedio de Comida sale de los dos meses anteriores, sin contar el mes en curso (incompleto)");
+    cierto(comida.ratio>1.1, "Comida (120k contra un promedio de 50k) tiene que marcar una suba clara");
+    igual(transporte.avg, 20000);
+    cierto(transporte.ratio<0.9, "Transporte (5k contra un promedio de 20k) tiene que marcar una baja clara");
+  } finally { movs=antes; }
+});
+
+test("desviacionCategoriasDelMes no inventa un promedio para una categoría nueva", ()=>{
+  const antes=movs;
+  try{
+    movs=[{id:1,tipo:"Gasto",cat:"Mascotas",importe:30000,fecha:currentYM()+"-05"}];
+    const desv=desviacionCategoriasDelMes(currentYM());
+    igual(desv.length, 0, "sin historia previa en el año no hay con qué comparar: no puede salir ninguna fila");
+  } finally { movs=antes; }
+});
+
+const MONTHLY_INSIGHTS=[
+  {mes:"2026-06", ingreso:300000, gasto:200000, balance:100000},
+  {mes:"2026-07", ingreso:300000, gasto:200000, balance:100000},
+  {mes:"2026-08", ingreso:300000, gasto:260000, balance:40000}
+];
+
+test("construirInsights arma balance y gastos primero, con la comparación contra el promedio", ()=>{
+  const antes=movs;
+  try{
+    movs=[]; // sin categorías cargadas: no hay 3/4 que arme ruido en el resultado
+    const ins=construirInsights("2026-08", MONTHLY_INSIGHTS[2], MONTHLY_INSIGHTS);
+    igual(ins[0].icon, "💰", "la primera tarjeta tiene que ser el balance del mes");
+    igual(ins[0].b, fmtTotal(40000));
+    cierto(ins[0].c.includes("menos"), "40k contra un promedio de 80k tiene que decir que quedó por debajo: "+ins[0].c);
+    igual(ins[1].icon, "📤", "la segunda tarjeta tiene que ser el gasto del mes");
+    igual(ins[1].b, fmtTotal(260000));
+    const mejor=ins.find(x=>x.icon==="🏆");
+    cierto(!!mejor, "con 3 meses con datos en el año tiene que aparecer el mejor mes");
+  } finally { movs=antes; }
+});
+
+test("construirInsights no compara contra un promedio con menos de 2 meses con datos", ()=>{
+  const unSoloMes=[{mes:"2026-08", ingreso:300000, gasto:260000, balance:40000}];
+  const ins=construirInsights("2026-08", unSoloMes[0], unSoloMes);
+  igual(ins.length, 2, "sin promedio no puede haber tarjetas de categoría ni de mejor mes: solo balance y gasto");
+  cierto(!ins[0].c.includes("%") && !ins[1].c.includes("%"),
+    "sin promedio la frase no puede traer un porcentaje inventado: "+ins[0].c+" | "+ins[1].c);
+  igual(ins[0].rows.length, 0, "sin promedio no hay barras de comparación que dibujar");
+});
+
+test("las tarjetas de aviso solo aparecen parado en el mes en curso", ()=>{
+  const antesMovs=movs, antesTcs=tcs;
+  try{
+    const hoy=currentYM();
+    // Un importe roto dispara siempre la alerta de "registros incompletos", sin depender de
+    // fechas ni de historial — sirve para probar el caso "sí hay algo para avisar".
+    movs=[{id:99, tipo:"Gasto", cat:"Comida", importe:undefined, fecha:hoy+"-05", moneda:"ARS"}];
+    tcs=[];
+    const mesDataHoy={mes:hoy, ingreso:0, gasto:0, balance:0};
+    const insHoy=construirInsights(hoy, mesDataHoy, [mesDataHoy]);
+    cierto(insHoy.some(x=>x.action==="Ir a Movimientos"), "parado en el mes en curso tienen que aparecer los avisos");
+
+    const otroMes=addMonths(hoy,-1);
+    const mesDataOtro={mes:otroMes, ingreso:0, gasto:0, balance:0};
+    const insOtro=construirInsights(otroMes, mesDataOtro, [mesDataOtro]);
+    cierto(!insOtro.some(x=>x.action==="Ir a Movimientos"), "en un mes que no es el actual no tienen que aparecer avisos de hoy");
+  } finally { movs=antesMovs; tcs=antesTcs; }
+});
+
+test("construirInsightHTML escapa el nombre de la categoría en la frase", ()=>{
+  // Las categorías las elige el usuario: un nombre con </strong><img onerror=...> no puede
+  // ejecutarse ni romper el marcado de la tarjeta.
+  const malicioso={icon:"🏷", bg:"var(--danger-light)", a:"En ", b:'<img src=x onerror=alert(1)>', bc:"var(--danger)", c:" gastaste de más.", rows:[]};
+  const html=construirInsightHTML(malicioso, 0);
+  cierto(!html.includes("<img"), "se coló una etiqueta sin escapar: "+html.slice(0,300));
+  cierto(html.includes("&lt;img"), "el texto tiene que quedar escapado, no desaparecido");
+});
+
 grupo("Duplicados en Inversiones");
 
 // Con ticker, fecha, categoría, subcategoría e importe iguales a la vez, la chance de que

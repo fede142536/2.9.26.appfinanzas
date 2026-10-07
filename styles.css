@@ -613,6 +613,38 @@ canvas{width:100%!important;max-width:100%}
 .meta-menu-btn:active{background:var(--bg)}
 .meta-menu-btn.danger{color:var(--danger)}
 
+/* ── Dashboard narrativo (pestaña #page-dash, opción 2a del handoff) ──
+   El mes contado en frases: un titular y tarjetas de un hallazgo cada una, que se abren y
+   muestran la comparación que las respalda. El header reusa .mov-topbar de Movimientos; "Ver
+   el año completo" lleva al tablero de siempre (year-tabs, gráfico Chart.js, cuentas, USD),
+   que queda intacto pero oculto detrás de ese enlace — ver #dash-year-full en index.html. */
+.dash-headline{padding:20px 20px 8px;display:flex;flex-direction:column;gap:4px}
+.dash-headline-frase{font-size:22px;font-weight:700;letter-spacing:-.6px;line-height:1.25;text-wrap:pretty}
+.dash-headline-sub{font-size:12px;color:var(--muted)}
+.dash-insights{padding:0 16px 90px;display:grid;gap:10px}
+.dash-insight-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:14px;display:flex;flex-direction:column;gap:12px;cursor:pointer;text-align:left}
+.dash-insight-card:active{transform:scale(.99)}
+.dash-insight-top{display:flex;align-items:flex-start;gap:12px}
+.dash-insight-icon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:16px;flex-shrink:0}
+.dash-insight-frase{flex:1;font-size:14.5px;line-height:1.45;padding-top:7px;text-wrap:pretty}
+.dash-insight-chev{font-size:12px;color:var(--muted);padding-top:10px;flex-shrink:0}
+/* Trampa grid-template-rows 0fr→1fr: anima un alto que no se conoce de antemano (el contenido
+   varía según la tarjeta), algo que height:auto no puede animar. El hijo con overflow:hidden
+   es lo que hace que "0fr" lo recorte en vez de desbordar. */
+.dash-insight-body-wrap{display:grid;grid-template-rows:0fr;transition:grid-template-rows .2s ease}
+.dash-insight-body{min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:8px;padding-left:48px}
+.dash-insight-row{display:grid;grid-template-columns:74px minmax(0,1fr) auto;align-items:center;gap:8px}
+.dash-insight-row-label{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-insight-row-track{height:6px;border-radius:3px;background:var(--border);overflow:hidden}
+.dash-insight-row-fill{height:100%;border-radius:3px;transition:width .25s ease}
+.dash-insight-row-val{font-size:12px;font-weight:600;min-width:62px;text-align:right}
+.dash-insight-detalle{font-size:12px;color:var(--muted);line-height:1.45}
+.dash-insight-action{font-size:12px;font-weight:600;color:var(--accent)}
+.dash-year-link{display:block;text-align:center;font-size:12px;font-weight:600;color:var(--accent);
+  text-decoration:none;padding:8px 0 20px;cursor:pointer}
+
 /* ═══════════════════════════════════════════
    CAMBIO DE MES
    ═══════════════════════════════════════════

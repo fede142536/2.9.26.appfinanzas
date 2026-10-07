@@ -1,15 +1,26 @@
 // ═══════════════════════════════════════════
 // DASHBOARD CON CHARTS
 // ═══════════════════════════════════════════
+// Punto de entrada de la pestaña: pinta el resumen narrativo (siempre) y, si "Ver el año
+// completo" está abierto, también ese tablero — por ejemplo cuando Chart.js termina de cargar
+// tarde (ver el listener de window.load en main.js) y hay que repintar lo que esté a la vista.
 function renderDash(){
+  renderDashResumen();
+  const yearFull=document.getElementById("dash-year-full");
+  if(yearFull && yearFull.style.display!=="none") renderDashYearCompleto();
+}
+
+// Arma el tablero de siempre: pestañas de año, alertas, gráfico, categorías, cuentas, USD.
+// Separado de openDashYearCompleto() para poder repintarlo sin reabrir la subpágina (ver
+// renderDash arriba).
+function renderDashYearCompleto(){
   renderAlertas();
-  // Build year list from hist + live movs
   const histYears = [...new Set(HIST_MONTHLY.map(d=>parseInt(d.mes.slice(0,4))))];
   const liveYears = [...new Set(movs.map(m=>parseInt(String(m.fecha||"").slice(0,4))).filter(y=>y>2000))];
   const years = [...new Set([...histYears,...liveYears])].sort();
-  // Default to latest year
   if(!years.includes(dashYear)) dashYear = years[years.length-1];
-  document.getElementById("year-tabs").innerHTML=years.map(y=>
+  const tabsEl=document.getElementById("year-tabs");
+  if(tabsEl) tabsEl.innerHTML=years.map(y=>
     `<div role="button" tabindex="0" class="year-tab${y===dashYear?" active":""}" onclick="setDashYear(${y},this)">${y}</div>`
   ).join("");
   renderDashYear();
@@ -20,6 +31,325 @@ function setDashYear(y,el){
   el.classList.add("active");
   renderDashYear();
 }
+// "Ver el año completo" se arma recién al abrirse (no en cada renderDash): así el canvas de
+// Chart.js no mide 0×0 por estar con display:none cuando se crea el gráfico.
+function openDashYearCompleto(){
+  document.getElementById("dash-resumen").style.display="none";
+  document.getElementById("dash-year-full").style.display="block";
+  renderDashYearCompleto();
+}
+function closeDashYearCompleto(){
+  document.getElementById("dash-year-full").style.display="none";
+  document.getElementById("dash-resumen").style.display="block";
+}
+
+// ═══════════════════════════════════════════
+// DASHBOARD NARRATIVO (handoff: opción 2a, "el mes contado en frases")
+// ═══════════════════════════════════════════
+// Mes que se está mirando en el resumen narrativo. Separado de dashYear (el año de "Ver el año
+// completo"): son dos navegaciones independientes, una por mes y otra por año.
+let dashMes = currentYM();
+// Índice de la tarjeta de hallazgo abierta (null = ninguna). Una sola a la vez; cambiar de mes
+// las cierra todas.
+let dashInsightAbierto = null;
+
+// Primer mes con algún movimiento cargado: marca hasta dónde se puede retroceder con ‹.
+// Sin esto, "‹" dejaría ir a un 1900 vacío para siempre.
+function primerMesConDatos(){
+  let min=null;
+  movs.forEach(m=>{
+    const ym=String(m.fecha||"").slice(0,7);
+    if(ym.length===7 && (!min || ym<min)) min=ym;
+  });
+  return min;
+}
+
+function cambiarDashMes(delta){
+  const hoyYM=currentYM();
+  const nuevo=addMonths(dashMes, delta);
+  if(nuevo>hoyYM) return; // no se puede ir al futuro
+  const primero=primerMesConDatos();
+  if(delta<0 && primero && nuevo<primero) return; // nada que mostrar más atrás
+  dashMes=nuevo;
+  dashInsightAbierto=null;
+  renderDashResumen();
+  animarCambioDeMes(delta, document.getElementById("dash-insights-lista"));
+}
+
+// Promedio de un año, excluyendo el mes en curso si es el que se está mirando (está
+// incompleto: contarlo distorsionaría el promedio contra el que se lo compara).
+function mesesBaseDelAnio(monthlyArr, ymExcluir){
+  const esActual = ymExcluir===currentYM();
+  return (monthlyArr||[]).filter(d => (d.ingreso>0 || d.gasto>0) && !(esActual && d.mes===ymExcluir));
+}
+
+// Gasto de cada categoría, mes a mes, dentro de un año — misma expansión de frecuentes que usa
+// getDashData (getMesMov), para que el promedio por categoría no subestime un gasto fijo que
+// tiene un solo registro guardado pero cae en muchos meses.
+function categoriasPorMesDelAnio(year){
+  const meses12=["01","02","03","04","05","06","07","08","09","10","11","12"];
+  const hastaYM=currentYM();
+  const out={};
+  meses12.forEach(mm=>{
+    const ym=year+"-"+mm;
+    if(ym>hastaYM) return;
+    const porCat={};
+    getMesMov(ym).forEach(m=>{
+      if(m.moneda==="USD") return;
+      if(esConsumo(m)) porCat[m.cat]=(porCat[m.cat]||0)+(m.importe||0);
+    });
+    out[ym]=porCat;
+  });
+  return out;
+}
+
+// Para cada categoría con gasto en `ym`, su monto del mes contra el promedio de esa misma
+// categoría en el resto del año (excluyendo `ym` si es el mes en curso). Sin promedio previo
+// (categoría nueva este año) no hay con qué comparar, así que queda afuera.
+function desviacionCategoriasDelMes(ym){
+  const year=ym.slice(0,4);
+  const porMes=categoriasPorMesDelAnio(year);
+  const esActual = ym===currentYM();
+  const sumaCat={}, countCat={};
+  Object.keys(porMes).forEach(m=>{
+    if(m===ym && esActual) return;
+    Object.entries(porMes[m]).forEach(([cat,val])=>{
+      sumaCat[cat]=(sumaCat[cat]||0)+val;
+      countCat[cat]=(countCat[cat]||0)+1;
+    });
+  });
+  const delMes=porMes[ym]||{};
+  return Object.entries(delMes).map(([cat,val])=>{
+    if(!countCat[cat]) return null;
+    const avg=sumaCat[cat]/countCat[cat];
+    if(avg<=0) return null;
+    return {cat, val, avg, ratio: val/avg};
+  }).filter(Boolean);
+}
+
+// Arma una fila de barra "Mes vs Promedio" para una tarjeta de hallazgo.
+function filaInsight(label, val, max, color){
+  return {label, val: fmtAbbr(val), w: max>0 ? Math.round(Math.abs(val)/max*100) : 0, color};
+}
+
+// El motor de frases: arma las tarjetas de hallazgo del mes, en el orden del handoff. Cada
+// regla decide sola si corresponde mostrarse; `null` la saca de la lista.
+function construirInsights(ym, mesData, monthlyAnio){
+  const Mes=mesLbl(ym).split(" ")[0];
+  const base=mesesBaseDelAnio(monthlyAnio, ym);
+  const hayProm=base.length>=2;
+  const promBal=hayProm ? base.reduce((s,d)=>s+d.balance,0)/base.length : null;
+  const promGas=hayProm ? base.reduce((s,d)=>s+d.gasto,0)/base.length : null;
+
+  // Arma el cierre de la frase ("en línea con tu promedio" / "N% más|menos que X") para las
+  // reglas 1 y 2. Sin promedio suficiente, no hay cierre: solo el monto.
+  function cierre(val, prom, fraseNormal){
+    if(!hayProm || !prom) return ".";
+    const pct=Math.round((val-prom)/Math.abs(prom)*100);
+    if(Math.abs(pct)<=3) return ": en línea con tu promedio.";
+    return `: ${Math.abs(pct)}% ${pct>0?"más":"menos"} ${fraseNormal}`;
+  }
+
+  const out=[];
+
+  // 1. Balance del mes
+  {
+    const val=mesData.balance;
+    const bueno=val>=0;
+    const max=Math.max(Math.abs(val), Math.abs(promBal||0));
+    out.push({
+      icon:"💰", bg:"var(--success-light)",
+      a: bueno?"Te quedaron ":"Te faltaron ",
+      b: fmtTotal(Math.abs(val)),
+      bc: bueno?"var(--success)":"var(--danger)",
+      c: ` en ${Mes}`+cierre(val, promBal, "que en un mes normal."),
+      rows: hayProm ? [
+        filaInsight(Mes, val, max, bueno?"var(--success)":"var(--danger)"),
+        filaInsight("Promedio", promBal, max, `color-mix(in srgb,${bueno?"var(--success)":"var(--danger)"} 40%,var(--surface))`)
+      ] : []
+    });
+  }
+
+  // 2. Gastos del mes
+  {
+    const val=mesData.gasto;
+    const max=Math.max(val, promGas||0);
+    out.push({
+      icon:"📤", bg:"var(--danger-light)",
+      a:"Gastaste ", b: fmtTotal(val), bc:"var(--text)",
+      c: cierre(val, promGas, "que tu promedio."),
+      rows: hayProm ? [
+        filaInsight(Mes, val, max, "var(--danger)"),
+        filaInsight("Promedio", promGas, max, "color-mix(in srgb,var(--danger) 40%,var(--surface))")
+      ] : []
+    });
+  }
+
+  // 3 y 4. La categoría que más se desvió para arriba / para abajo (solo con promedio propio)
+  if(hayProm){
+    const desv=desviacionCategoriasDelMes(ym).sort((a,b)=>b.ratio-a.ratio);
+    if(desv.length){
+      const arriba=desv[0], abajo=desv[desv.length-1];
+      if(arriba.ratio>=1.1){
+        const max=Math.max(arriba.val, arriba.avg);
+        out.push({
+          icon:getIcon(arriba.cat,"🏷"), bg:"var(--danger-light)",
+          a:`En ${arriba.cat} `, b:`gastaste ${Math.round((arriba.ratio-1)*100)}% más`, bc:"var(--danger)",
+          c:" que lo habitual.",
+          rows:[filaInsight(Mes, arriba.val, max, "var(--danger)"), filaInsight("Promedio", arriba.avg, max, "color-mix(in srgb,var(--danger) 40%,var(--surface))")],
+          action:"Ver gastos de "+arriba.cat, actionFn:()=>irAGastosDeCategoria(ym, arriba.cat)
+        });
+      }
+      // No hace falta descartar que sea la misma categoría que "arriba": un ratio no puede ser
+      // a la vez ≥1.1 y ≤0.9, así que las dos reglas nunca eligen la misma.
+      if(abajo.ratio<=0.9){
+        const max=Math.max(abajo.val, abajo.avg);
+        out.push({
+          icon:getIcon(abajo.cat,"🏷"), bg:"var(--success-light)",
+          a:`En ${abajo.cat} `, b:`gastaste ${Math.round((1-abajo.ratio)*100)}% menos`, bc:"var(--success)",
+          c:" que lo habitual.",
+          rows:[filaInsight(Mes, abajo.val, max, "var(--success)"), filaInsight("Promedio", abajo.avg, max, "color-mix(in srgb,var(--success) 40%,var(--surface))")]
+        });
+      }
+    }
+  }
+
+  // 5. Mejor mes del año (con al menos 3 meses con datos, el mes mirado incluido)
+  {
+    const year=ym.slice(0,4);
+    const conDatos=(monthlyAnio||[]).filter(d=>d.ingreso>0 || d.gasto>0);
+    if(conDatos.length>=3){
+      const top3=conDatos.slice().sort((a,b)=>b.balance-a.balance).slice(0,3);
+      const mejor=top3[0];
+      out.push({
+        icon:"🏆", bg:"var(--warning-light)",
+        a:`Tu mejor mes de ${year} fue `, b: mesLbl(mejor.mes).split(" ")[0], bc:"var(--text)",
+        c:`: te quedaron ${fmtTotal(mejor.balance)}.`,
+        rows: top3.map(d=>filaInsight(mesLbl(d.mes).split(" ")[0], d.balance, top3[0].balance, "var(--success)"))
+      });
+    }
+  }
+
+  // 6+. Los avisos de siempre (renderAlertas), uno por tarjeta — solo tienen sentido parado en
+  // el mes en curso: alertasDelMomento() siempre mira "hoy", no el mes que se esté navegando.
+  if(ym===currentYM()){
+    alertasDelMomento(movs, tcs, currentYMD()).forEach(al=>{
+      out.push({
+        icon:al.icono, bg:"var(--warning-light)",
+        a:"", b:al.titulo, bc:"var(--warning)", c:"",
+        rows:[], detalle:al.detalle,
+        action:"Ir a Movimientos", actionFn:irAMovimientos
+      });
+    });
+  }
+
+  return out;
+}
+
+function irAGastosDeCategoria(ym, cat){
+  mesActual=ym;
+  filtroTarjeta="";
+  filtro="Gasto";
+  filtroCategoria=cat;
+  showPage('mov', document.querySelector('.nav-btn[onclick*="\'mov\'"]'));
+  renderMovs();
+}
+function irAMovimientos(){
+  mesActual=currentYM();
+  filtroTarjeta=""; filtroCategoria=""; filtro="Todos";
+  showPage('mov', document.querySelector('.nav-btn[onclick*="\'mov\'"]'));
+  renderMovs();
+}
+
+function construirInsightHTML(it, i){
+  const bodyRows=(it.rows||[]).map(r=>`
+    <div class="dash-insight-row">
+      <span class="dash-insight-row-label">${escapeHtml(r.label)}</span>
+      <div class="dash-insight-row-track"><div class="dash-insight-row-fill" data-w="${r.w}" style="width:0%;background:${r.color}"></div></div>
+      <span class="dash-insight-row-val">${r.val}</span>
+    </div>`).join("");
+  const detalleHTML = it.detalle ? `<div class="dash-insight-detalle">${escapeHtml(it.detalle)}</div>` : "";
+  const accionHTML = it.action ? `<span class="dash-insight-action" onclick="event.stopPropagation();dashInsightAccion(${i})">${escapeHtml(it.action)} ›</span>` : "";
+  return `<div class="dash-insight-card" role="button" tabindex="0" aria-expanded="false" onclick="toggleDashInsight(${i})">
+    <div class="dash-insight-top">
+      <span class="dash-insight-icon" style="background:${it.bg}">${it.icon}</span>
+      <span class="dash-insight-frase">${escapeHtml(it.a)}<strong style="color:${it.bc}">${escapeHtml(it.b)}</strong>${escapeHtml(it.c)}</span>
+      <span class="dash-insight-chev">▾</span>
+    </div>
+    <div class="dash-insight-body-wrap">
+      <div class="dash-insight-body">${bodyRows}${detalleHTML}${accionHTML}</div>
+    </div>
+  </div>`;
+}
+
+// Las acciones de las tarjetas viven acá, indexadas por posición en la lista actual: el HTML
+// generado no puede guardar una función directamente en un atributo onclick.
+let dashInsightsActuales=[];
+function dashInsightAccion(i){
+  const it=dashInsightsActuales[i];
+  if(it && it.actionFn) it.actionFn();
+}
+
+// Togglea UNA tarjeta sin re-renderizar la lista entera: así grid-template-rows anima de
+// verdad (0fr→1fr) y las barras crecen desde 0, en vez de aparecer ya abiertas de un render
+// nuevo que no tiene estado previo del que partir.
+function toggleDashInsight(i){
+  dashInsightAbierto = (dashInsightAbierto===i) ? null : i;
+  document.querySelectorAll("#dash-insights-lista .dash-insight-card").forEach((card,idx)=>{
+    const abierta=idx===dashInsightAbierto;
+    card.setAttribute("aria-expanded", String(abierta));
+    const wrap=card.querySelector(".dash-insight-body-wrap");
+    if(wrap) wrap.style.gridTemplateRows = abierta ? "1fr" : "0fr";
+    const chev=card.querySelector(".dash-insight-chev");
+    if(chev) chev.textContent = abierta ? "▴" : "▾";
+    card.querySelectorAll(".dash-insight-row-fill").forEach(f=>{
+      f.style.width = abierta ? (f.dataset.w||"0")+"%" : "0%";
+    });
+  });
+}
+
+function renderDashResumen(){
+  const ym=dashMes;
+  const hoyYM=currentYM();
+  const year=ym.slice(0,4);
+
+  const lblEl=document.getElementById("dash-mes-label");
+  if(lblEl) lblEl.textContent=mesLbl(ym);
+  const primero=primerMesConDatos();
+  const btnPrev=document.getElementById("dash-mes-prev");
+  const btnNext=document.getElementById("dash-mes-next");
+  if(btnPrev) btnPrev.style.color = (primero && addMonths(ym,-1)<primero) ? "var(--border)" : "var(--muted)";
+  if(btnNext) btnNext.style.color = (ym>=hoyYM) ? "var(--border)" : "var(--muted)";
+
+  const {monthly}=getDashData(year);
+  const mesData=monthly.find(d=>d.mes===ym);
+  const headlineEl=document.getElementById("dash-headline");
+  const subEl=document.getElementById("dash-headline-sub");
+  const listaEl=document.getElementById("dash-insights-lista");
+  if(!mesData){
+    if(headlineEl) headlineEl.textContent=`No hay movimientos cargados en ${mesLbl(ym)}.`;
+    if(subEl) subEl.textContent="";
+    if(listaEl) listaEl.innerHTML=`<a href="#" class="dash-year-link" onclick="event.preventDefault();openDashYearCompleto()">Ver el año completo ›</a>`;
+    dashInsightsActuales=[];
+    return;
+  }
+
+  const esActual = ym===hoyYM;
+  const bal=mesData.balance;
+  const Mes=mesLbl(ym).split(" ")[0];
+  if(headlineEl) headlineEl.textContent = bal>=0
+    ? `${Mes} ${esActual?"viene":"cerró"} en positivo: te quedaron ${fmtAbbr(bal)}.`
+    : `${Mes} ${esActual?"viene":"cerró"} en negativo: gastaste ${fmtAbbr(-bal)} más de lo que entró.`;
+  if(subEl) subEl.textContent=`Entraron ${fmtAbbr(mesData.ingreso)} · salieron ${fmtAbbr(mesData.gasto)}`;
+
+  dashInsightsActuales=construirInsights(ym, mesData, monthly);
+  dashInsightAbierto=null;
+  if(listaEl){
+    listaEl.innerHTML=dashInsightsActuales.map((it,i)=>construirInsightHTML(it,i)).join("")
+      + `<a href="#" class="dash-year-link" onclick="event.preventDefault();openDashYearCompleto()">Ver el año completo ›</a>`;
+  }
+}
+
 // ═══════════════════════════════════════════
 // ANALÍTICA: ajuste por inflación (comparativa interanual)
 // ═══════════════════════════════════════════
