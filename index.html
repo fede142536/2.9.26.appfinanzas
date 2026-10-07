@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v140">
+<meta name="enola-version" content="enola-v141">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -691,44 +691,76 @@
 <!-- PAGE: DASHBOARD -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-dash" class="page">
-  <div class="header"><h1>Dashboard</h1><p>Histórico desde 2024</p></div>
-  <div class="year-tabs" id="year-tabs"></div>
-  <div class="summary-row" id="dash-kpis"></div>
-  <div style="height:4px"></div>
-
-  <!-- Card entera con id propio: cuando no hay nada que destacar se oculta completa (título
-       incluido), igual que #dash-usd-card más abajo. Antes se quedaba visible con un renglón
-       "Nada para destacar" del mismo tamaño que las demás cards — la única que podía estar
-       vacía y ocupar el mismo lugar que una con contenido real. -->
-  <div class="card" id="dash-alertas-card" style="display:none">
-    <div class="card-title">Para tener en cuenta</div>
-    <div id="dash-alertas"></div>
+  <!-- Resumen narrativo (handoff Dashboard, opción 2a): visible por defecto. El mes se navega
+       con ‹ › acá arriba; "Ver el año completo" abre #dash-year-full, con el tablero de
+       siempre, sin tocar. -->
+  <div id="dash-resumen">
+    <div class="mov-topbar">
+      <button class="mov-icon-btn" onclick="toggleSideMenu()" aria-label="Abrir menú">☰</button>
+      <div class="mov-topbar-center">
+        <button class="mov-topbar-arrow" id="dash-mes-prev" onclick="cambiarDashMes(-1)" aria-label="Mes anterior">‹</button>
+        <div class="mov-topbar-month">
+          <span class="mov-topbar-eyebrow">Resumen</span>
+          <span id="dash-mes-label" class="mov-topbar-label"></span>
+        </div>
+        <button class="mov-topbar-arrow" id="dash-mes-next" onclick="cambiarDashMes(1)" aria-label="Mes siguiente">›</button>
+      </div>
+      <div style="width:40px;flex-shrink:0"></div>
+    </div>
+    <div class="dash-headline">
+      <span class="dash-headline-frase" id="dash-headline"></span>
+      <span class="dash-headline-sub" id="dash-headline-sub"></span>
+    </div>
+    <div class="dash-insights" id="dash-insights-lista"></div>
   </div>
 
-  <!-- Ingresos, gastos y balance comparten unidad (pesos) y meses, así que van en un solo
-       gráfico con un solo eje Y: la línea del balance se lee contra las mismas barras en vez
-       de contra una escala aparte. -->
-  <div class="card">
-    <div class="card-title">Ingresos, gastos y balance</div>
-    <div id="dash-promedio" class="txt-xs txt-muted" style="text-align:center;margin-bottom:8px"></div>
-    <div id="dash-detail" style="background:var(--bg);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--muted);text-align:center">Tocá un mes para ver el detalle</div>
-    <div style="position:relative;height:230px"><canvas id="chart-mensual"></canvas></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Gastos por categoría</div>
-    <div class="bar-wrap" id="dash-bars-gasto"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Saldo por cuenta</div>
-    <div id="dash-cuentas"></div>
-  </div>
-  <div class="card" id="dash-usd-card" style="display:none">
-    <div class="card-title">💵 Flujo USD del año</div>
-    <div id="dash-usd"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">Ingresos por categoría</div>
-    <div class="bar-wrap" id="dash-bars-ingreso"></div>
+  <!-- Año completo: el tablero de antes (pestañas de año, chips, avisos, gráfico Chart.js,
+       categorías, cuentas, USD), intacto — solo se renderiza cuando se abre (ver
+       openDashYearCompleto en dashboard.js), para que el canvas no mida 0×0 por estar oculto. -->
+  <div id="dash-year-full" style="display:none">
+    <div class="mov-topbar">
+      <button class="mov-icon-btn" onclick="closeDashYearCompleto()" aria-label="Volver al resumen">‹</button>
+      <span class="ahorro-header-title">Año completo</span>
+      <div style="width:40px;flex-shrink:0"></div>
+    </div>
+    <div class="year-tabs" id="year-tabs"></div>
+    <div class="summary-row" id="dash-kpis"></div>
+    <div style="height:4px"></div>
+
+    <!-- Card entera con id propio: cuando no hay nada que destacar se oculta completa (título
+         incluido), igual que #dash-usd-card más abajo. Antes se quedaba visible con un renglón
+         "Nada para destacar" del mismo tamaño que las demás cards — la única que podía estar
+         vacía y ocupar el mismo lugar que una con contenido real. -->
+    <div class="card" id="dash-alertas-card" style="display:none">
+      <div class="card-title">Para tener en cuenta</div>
+      <div id="dash-alertas"></div>
+    </div>
+
+    <!-- Ingresos, gastos y balance comparten unidad (pesos) y meses, así que van en un solo
+         gráfico con un solo eje Y: la línea del balance se lee contra las mismas barras en vez
+         de contra una escala aparte. -->
+    <div class="card">
+      <div class="card-title">Ingresos, gastos y balance</div>
+      <div id="dash-promedio" class="txt-xs txt-muted" style="text-align:center;margin-bottom:8px"></div>
+      <div id="dash-detail" style="background:var(--bg);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--muted);text-align:center">Tocá un mes para ver el detalle</div>
+      <div style="position:relative;height:230px"><canvas id="chart-mensual"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Gastos por categoría</div>
+      <div class="bar-wrap" id="dash-bars-gasto"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Saldo por cuenta</div>
+      <div id="dash-cuentas"></div>
+    </div>
+    <div class="card" id="dash-usd-card" style="display:none">
+      <div class="card-title">💵 Flujo USD del año</div>
+      <div id="dash-usd"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Ingresos por categoría</div>
+      <div class="bar-wrap" id="dash-bars-ingreso"></div>
+    </div>
   </div>
 </div>
 
