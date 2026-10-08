@@ -814,7 +814,11 @@ test("los gráficos se apagan con movimiento reducido", ()=>{
 test("la animación del gráfico es explícita, no el default de la librería", async ()=>{
   const js=await (await fetch("js/dashboard.js")).text();
   cierto(js.includes("animation:animacionDeGrafico()"), "algún gráfico volvió a depender del default");
-  igual((js.match(/animation:animacionDeGrafico\(\)/g)||[]).length, 2, "quedó un gráfico sin cablear");
+  // Antes eran 2: el gráfico mensual (Chart.js) y el histórico de Inversiones (también
+  // Chart.js). El de Inversiones se reemplazó por drawInteractiveLine (handoff opción 1c de
+  // Inversiones: tap/drag para seleccionar mes, mismo patrón canvas que ya usa Ahorros), que no
+  // depende de Chart.js y por lo tanto no necesita este cableado — queda 1.
+  igual((js.match(/animation:animacionDeGrafico\(\)/g)||[]).length, 1, "quedó un gráfico sin cablear");
   cierto(/prefiereMenosMovimiento/.test(js.slice(js.indexOf("function animacionDeGrafico"), js.indexOf("function animacionDeGrafico")+300)),
          "dejó de consultar la preferencia del sistema");
 });

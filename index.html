@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v141">
+<meta name="enola-version" content="enola-v142">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -236,11 +236,9 @@
 
 <!-- MODAL DETALLE DE INSTRUMENTO (Cartera → tocar un ticker) -->
 <div class="modal-overlay" id="modal-instrumento-detail" onclick="if(event.target===this)closeInstrumentoDetail()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:78vh;display:flex;flex-direction:column;padding-bottom:calc(20px + env(safe-area-inset-bottom))">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="instrumento-detail-title">Detalle</div>
-    <div id="instrumento-detail-content" style="overflow-y:auto;max-height:65vh"></div>
-    <button class="btn-sm" style="margin-top:14px" onclick="closeInstrumentoDetail()">Cerrar</button>
+    <div id="instrumento-detail-content" style="overflow-y:auto;display:flex;flex-direction:column;gap:12px"></div>
   </div>
 </div>
 
@@ -672,19 +670,32 @@
 <!-- PAGE: INVERSIONES -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-inv" class="page">
-  <div class="header"><h1>Inversiones</h1><p>Cartera y movimientos</p></div>
-  <div class="month-nav"><button onclick="cambiarMesInv(-1)" aria-label="Mes anterior">‹</button><span id="inv-mes-label"></span><button onclick="cambiarMesInv(1)" aria-label="Mes siguiente">›</button></div>
-  <div class="summary-row" id="inv-summary"></div>
-  <div style="height:4px"></div>
-  <div class="card"><div class="card-title">Balance del mes</div><div id="inv-balance"></div></div>
-  <div class="card"><div class="card-title">Movimientos del mes</div><div id="inv-movs"></div></div>
-  <div class="card">
-    <div class="card-title">Histórico total</div>
-    <div id="inv-historico-kpis" class="summary-row" style="padding:0 0 12px"></div>
-    <div style="position:relative;height:180px"><canvas id="chart-inv-historico"></canvas></div>
-    <div id="inv-top-tickers" style="margin-top:14px"></div>
+  <div class="mov-topbar">
+    <button class="mov-icon-btn" onclick="toggleSideMenu()" aria-label="Abrir menú">☰</button>
+    <div class="mov-topbar-center">
+      <button class="mov-topbar-arrow" onclick="cambiarMesInv(-1)" aria-label="Mes anterior">‹</button>
+      <div class="mov-topbar-month">
+        <span class="mov-topbar-eyebrow">Inversiones</span>
+        <span id="inv-mes-label" class="mov-topbar-label"></span>
+      </div>
+      <button class="mov-topbar-arrow" id="inv-mes-next" onclick="cambiarMesInv(1)" aria-label="Mes siguiente">›</button>
+    </div>
+    <div style="width:40px;flex-shrink:0"></div>
   </div>
-  <div class="card"><div class="card-title">Cartera (acumulado)</div><div id="inv-cartera"></div></div>
+  <div id="inv-summary"></div>
+  <div class="seg-filter" style="margin:14px 16px 0">
+    <button class="seg-btn" id="inv-tab-mes" onclick="setInvVista('mes')">Este mes</button>
+    <button class="seg-btn" id="inv-tab-cart" onclick="setInvVista('cart')">Cartera</button>
+    <button class="seg-btn" id="inv-tab-evo" onclick="setInvVista('evo')">Evolución</button>
+  </div>
+  <div id="inv-movs" class="inv-panel"></div>
+  <div id="inv-cartera" class="inv-panel"></div>
+  <div id="inv-evo-panel" class="inv-panel inv-panel-pad">
+    <div id="inv-historico-kpis" style="display:flex;justify-content:space-between;align-items:center;gap:10px"></div>
+    <div style="position:relative;height:120px"><canvas id="chart-inv-historico"></canvas></div>
+    <div id="inv-top-tickers"></div>
+  </div>
+  <div style="height:24px"></div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->

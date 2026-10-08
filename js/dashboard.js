@@ -951,81 +951,92 @@ function closeCatDetail(){
   document.getElementById("modal-cat-detail").classList.remove("open");
 }
 
-// ── DETALLE DE INSTRUMENTO (Cartera → tocar un ticker) ──
-// Muestra todos los movimientos de inversión de ese ticker/fondo, con opción de editar o eliminar cada uno.
+// ── HOJA DE DETALLE DE POSICIÓN (Cartera → tocar un ticker) ──
+// Perspectiva CARTERA (invSigno): "Invertido" es lo que neto tenés puesto, no un balance de
+// cash flow. Reemplaza el viejo modal de detalle (handoff opción 1c, punto 5).
 function showInstrumentoDetail(ticker){
   const movsTicker=movs.filter(m=>m.tipo==="Inversion" && (m.ticker||"Sin ticker")===ticker)
     .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
-  document.getElementById("instrumento-detail-title").textContent=`📊 ${ticker}`;
+  const contentEl=document.getElementById("instrumento-detail-content");
   if(!movsTicker.length){
-    document.getElementById("instrumento-detail-content").innerHTML=`<p class="txt-md txt-muted">Sin movimientos para este instrumento.</p>`;
+    contentEl.innerHTML=`<p class="txt-md txt-muted">Sin movimientos para este instrumento.</p>`;
     document.getElementById("modal-instrumento-detail").classList.add("open");
     return;
   }
-  // Totales acumulados (misma lógica de cash flow que la cartera)
-  let totalArs=0, totalUsd=0;
-  movsTicker.forEach(m=>{
-    const sg=invSignoCash(m);
-    totalArs+=(m.importe||0)*sg;
-    totalUsd+=(m.importeUSD||0)*sg;
-  });
-  const colorTotal=totalArs>=0?"var(--success)":"var(--danger)";
-  let html=`<div class="inset">
-    <div class="seccion-label">Balance acumulado</div>
-    <div style="font-size:20px;font-weight:600;color:${colorTotal};margin-top:3px">${fmtSignoGrande(totalArs)}</div>
-    ${totalUsd!==0?`<div class="txt-md txt-muted">USD ${totalUsd.toFixed(2)}</div>`:""}
-    <div style="font-size:12px;color:var(--muted);margin-top:3px">${movsTicker.length} ${movsTicker.length===1?"movimiento":"movimientos"}</div>
-  </div>`;
-  html+=movsTicker.map(m=>{
-    const esIngreso=isInvSalida(m);
-    const color=esIngreso?"var(--success)":"var(--danger)";
-    const sign=esIngreso?"+":"-";
-    const fecha=(m.fecha||"").split("-").reverse().join("/");
-    const montoTxt = (m.importeUSD||0)>0
-      ? `${sign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`
-      : `${sign}${fmtS(m.importe||0)}`;
-    const badge=esIngreso
-      ?`<span class="badge badge-success">📥 INGRESO</span>`
-      :`<span class="badge badge-danger">📤 GASTO</span>`;
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div class="u-flex1 u-min0">
-        <div class="txt-md txt-strong">${escapeHtml(m.subcat||m.cat)} ${badge}</div>
-        <div class="txt-xs txt-muted">${fecha}${m.cuenta?" · "+escapeHtml(m.cuenta):""}${m.nota?" · "+escapeHtml(m.nota):""}</div>
+  const cat=movsTicker[0].cat, cuenta=movsTicker[0].cuenta;
+  let ars=0, usd=0;
+  movsTicker.forEach(m=>{ ars+=(m.importe||0)*invSigno(m); usd+=(m.importeUSD||0)*invSigno(m); });
+  const valorTxt = usd!==0 ? fmtUsdInv(usd) : fmtS(ars);
+  const sumaTxt=arr=>{
+    const a=arr.reduce((s,m)=>s+(m.importe||0),0), u=arr.reduce((s,m)=>s+(m.importeUSD||0),0);
+    return [a?fmtS(a):"", u?fmtUsdInv(u):""].filter(Boolean).join(" y ")||"—";
+  };
+  const puso=movsTicker.filter(m=>!isInvSalida(m)), cobro=movsTicker.filter(isInvSalida);
+
+  let html=`<div style="display:flex;align-items:center;gap:12px">
+    <span style="width:44px;height:44px;border-radius:50%;background:var(--invest-light);display:flex;align-items:center;justify-content:center;font-size:20px">${getIcon(cat,"📦")}</span>
+    <div style="flex:1;display:flex;flex-direction:column;gap:1px;min-width:0">
+      <span style="font-size:17px;font-weight:700;letter-spacing:.3px">${escapeHtml(ticker)}</span>
+      <span style="font-size:12px;color:var(--muted)">${escapeHtml(cat)}${cuenta?" · "+escapeHtml(cuenta):""}</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0">
+      <span style="font-size:11px;color:var(--muted)">Invertido</span>
+      <span style="font-size:17px;font-weight:700;color:var(--invest)">${valorTxt}</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:16px;font-size:12px;padding:10px 12px;background:var(--bg);border-radius:10px">
+    <span><span style="color:var(--muted)">Pusiste </span><strong>${sumaTxt(puso)}</strong></span>
+    <span><span style="color:var(--muted)">Cobraste </span><strong style="color:var(--success)">${sumaTxt(cobro)}</strong></span>
+  </div>
+  <div style="display:flex;flex-direction:column">`+
+  movsTicker.map((m,i)=>{
+    const sale=isInvSalida(m);
+    return `<div style="display:flex;align-items:center;gap:12px;min-height:50px;${i?"border-top:1px solid var(--border)":""};cursor:pointer" onclick="closeInstrumentoDetail();openEditModal(${m.id})">
+      <span style="width:30px;height:30px;border-radius:50%;background:${sale?"var(--success-light)":"var(--invest-light)"};color:${sale?"var(--success)":"var(--invest)"};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${sale?"↓":"↑"}</span>
+      <div style="flex:1;display:flex;flex-direction:column;gap:1px;min-width:0">
+        <span style="font-size:13.5px;font-weight:600">${escapeHtml(m.subcat||m.cat)}</span>
+        <span style="font-size:11.5px;color:var(--muted)">${fdyInv(m.fecha)}</span>
       </div>
-      <div style="text-align:right;display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <div style="font-size:14px;font-weight:600;color:${color}">${montoTxt}</div>
-        <button class="tx-edit" onclick="closeInstrumentoDetail();openEditModal(${m.id})" title="Editar">✎</button>
-        <button class="tx-del" onclick="borrarMovDesdeInstrumento(${m.id},${attrJS(ticker)},this)" title="Eliminar">×</button>
-      </div>
+      <span style="font-size:13.5px;font-weight:600;color:${sale?"var(--success)":"var(--text)"}">${invMontoTxt(m)}</span>
     </div>`;
-  }).join("");
-  document.getElementById("instrumento-detail-content").innerHTML=html;
+  }).join("")+
+  `</div>
+  <div style="display:flex;gap:8px">
+    <button type="button" style="flex:1;height:44px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);font-size:13px;font-weight:600;cursor:pointer" onclick="irACargarInversion(${attrJS(ticker)},'cobro')">Cargar cobro</button>
+    <button type="button" style="flex:1;height:44px;border:none;border-radius:12px;background:var(--invest);color:#fff;font-size:13px;font-weight:600;cursor:pointer" onclick="irACargarInversion(${attrJS(ticker)},'compra')">Sumar compra</button>
+  </div>`;
+  contentEl.innerHTML=html;
   document.getElementById("modal-instrumento-detail").classList.add("open");
 }
 function closeInstrumentoDetail(){
   document.getElementById("modal-instrumento-detail").classList.remove("open");
 }
-// Borra un movimiento de inversión desde el modal de detalle, con doble-toque de confirmación,
-// y refresca tanto el modal (si sigue habiendo movimientos) como la pantalla de Inversiones detrás.
-function borrarMovDesdeInstrumento(id, ticker, btn){
-  if(btn && btn.dataset.confirm!=="1"){
-    btn.dataset.confirm="1";
-    btn.style.color="var(--danger)";
-    btn.style.fontWeight="bold";
-    btn.textContent="?";
-    setTimeout(()=>{
-      if(btn){btn.dataset.confirm="0";btn.style.color="";btn.style.fontWeight="";btn.textContent="×";}
-    },2500);
-    return;
-  }
-  movs=movs.filter(m=>m.id!==id);
-  save();
-  showToast("Movimiento eliminado");
-  renderInv();
-  // Si todavía quedan movimientos de este ticker, refrescar el modal; si no, cerrarlo.
-  const quedan=movs.some(m=>m.tipo==="Inversion" && (m.ticker||"Sin ticker")===ticker);
-  if(quedan) showInstrumentoDetail(ticker);
-  else closeInstrumentoDetail();
+// "Cargar cobro"/"Sumar compra" de la hoja de detalle: abre Cargar en tipo Inversión con
+// categoría, ticker y cuenta precargados, y la primera operación de salida (cobro) o de
+// entrada (compra) de esa categoría ya seleccionada en "Operación".
+function irACargarInversion(ticker, modo){
+  const pos=movs.filter(m=>m.tipo==="Inversion" && (m.ticker||"Sin ticker")===ticker);
+  if(!pos.length) return;
+  const cat=pos[0].cat, cuenta=pos[0].cuenta;
+  const esCobro=modo==="cobro";
+  const subs=getCats("Inversion")[cat]||[];
+  const subcat = subs.find(s=>isInvSalida({subcat:s,cat})===esCobro)
+    || (pos.find(m=>isInvSalida(m)===esCobro)||{}).subcat
+    || subs[0];
+  closeInstrumentoDetail();
+  showPage("cargar");
+  setTipo("Inversion");
+  const catSel=document.getElementById("inv-cat");
+  if(catSel) catSel.value=cat;
+  buildInvCatChips();
+  updateInvSubcats();
+  const subSel=document.getElementById("inv-subcat");
+  if(subSel && subcat) subSel.value=subcat;
+  const tickerEl=document.getElementById("inv-ticker");
+  if(tickerEl) tickerEl.value=ticker;
+  buildTickerRecientes();
+  const cuentaSel=document.getElementById("inv-cuenta");
+  if(cuentaSel && cuenta) cuentaSel.value=cuenta;
 }
 
 // ── DETALLE DE CUENTA (Dashboard → Saldo por cuenta → tocar una cuenta) ──
@@ -1248,7 +1259,6 @@ function animacionDeGrafico(){
 // Instancias guardadas para poder destruirlas antes de re-crear (Chart.js tira error
 // "Canvas is already in use" si no se destruye la instancia anterior sobre el mismo canvas).
 let chartMensualInstance=null;
-let chartInvHistoricoInstance=null;
 
 // Ingresos, gastos y balance en un solo gráfico.
 //
@@ -1337,39 +1347,6 @@ function renderChartMensualBI(yearData){
         const d=yearData[elements[0].index];
         if(!d) return;
         document.getElementById("dash-detail").innerHTML=detalleMesHTML(d);
-      }
-    }
-  });
-}
-
-// Gráfico de área del histórico acumulado de inversiones (pestaña Inversiones)
-function renderChartInvHistoricoBI(labels, values){
-  const canvas=document.getElementById("chart-inv-historico");
-  if(!canvas || typeof Chart==="undefined") return;
-  if(chartInvHistoricoInstance){ chartInvHistoricoInstance.destroy(); chartInvHistoricoInstance=null; }
-  const investColor=themeColor('--invest');
-  const muted=themeColor('--muted'), border=themeColor('--border');
-  chartInvHistoricoInstance=new Chart(canvas.getContext("2d"), {
-    type:"line",
-    data:{
-      labels,
-      datasets:[{
-        data:values,
-        borderColor:investColor,
-        backgroundColor:themeColorAlpha('--invest',0.15),
-        fill:true, tension:0.35, borderWidth:2.5, pointRadius:0
-      }]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      animation:animacionDeGrafico(),
-      plugins:{
-        legend:{display:false},
-        tooltip:{callbacks:{label:ctx=>fmtS(ctx.parsed.y)}}
-      },
-      scales:{
-        x:{grid:{display:false}, ticks:{color:muted, font:{size:9}, maxTicksLimit:6}},
-        y:{grid:{color:border}, ticks:{color:muted, font:{size:9}, callback:v=>fmtAbbr(v)}}
       }
     }
   });

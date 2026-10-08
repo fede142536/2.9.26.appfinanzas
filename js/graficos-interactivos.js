@@ -48,9 +48,18 @@ function limpiarSeleccionLinea(){
 
 // Línea con tap: dibuja curva acumulada y permite tocar para ver el valor de cada punto.
 // Sin selección previa, arranca mostrando el último punto (el mes más reciente).
-function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
+//
+// `estado` es opcional: un objeto {v} propio de quien llama (ver renderInvHistorico, en
+// Inversiones) para tener una selección aislada de la de Ahorros, que vive en la variable
+// de módulo `seleccionLinea` de siempre. Sin `estado`, el comportamiento es idéntico al de antes.
+// `fmtEje` es opcional: formateador de las etiquetas del eje Y (por defecto fmtAbbr, en pesos).
+// Inversiones lo pasa distinto en la vista Dólares — ahí un "$552" sería plata que no es.
+function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn, estado, fmtEje){
   if(!canvas||!values.length) return;
-  if(seleccionLinea===null || seleccionLinea>=values.length) seleccionLinea=values.length-1;
+  fmtEje = fmtEje || fmtAbbr;
+  const leerSel=()=> estado ? estado.v : seleccionLinea;
+  const setSel=v=>{ if(estado) estado.v=v; else seleccionLinea=v; };
+  if(leerSel()===null || leerSel()===undefined || leerSel()>=values.length) setSel(values.length-1);
   const ctx=canvas.getContext("2d");
   const dpr=window.devicePixelRatio||1;
   const W=canvas.offsetWidth||320, H=110;
@@ -78,7 +87,7 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
     const y=padT+ch-(ch*i/3);
     ctx.strokeStyle=gridColor;
     ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke();
-    ctx.fillText(fmtAbbr(v), padL-4, y+3);
+    ctx.fillText(fmtEje(v), padL-4, y+3);
   }
 
   // Posiciones de los puntos
@@ -112,8 +121,8 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
 
   // ── Marcador del punto tocado ──
   // Se dibuja como parte del render normal, no parcheado encima después con un setTimeout.
-  if(seleccionLinea!==null && pts[seleccionLinea]){
-    const sel=pts[seleccionLinea];
+  if(leerSel()!==null && pts[leerSel()]){
+    const sel=pts[leerSel()];
     // Línea guía vertical, discreta: ancla el punto al eje X sin competir con la curva.
     ctx.strokeStyle=gridColor;
     ctx.lineWidth=1;
@@ -131,7 +140,7 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
 
   // Sin esto, la línea de lectura quedaba vacía hasta el primer tap. Ahora arranca mostrando
   // el punto seleccionado (el último mes, por defecto) y se actualiza igual al tocar otro.
-  if(tipEl) tipEl.innerHTML=fmtFn(pts[seleccionLinea].label, pts[seleccionLinea].val);
+  if(tipEl) tipEl.innerHTML=fmtFn(pts[leerSel()].label, pts[leerSel()].val);
 
   canvas.onclick=(e)=>{
     const rect=canvas.getBoundingClientRect();
@@ -142,11 +151,11 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn){
       const d=Math.abs(p.x-x);
       if(d<minDist){minDist=d;idx=i;}
     });
-    seleccionLinea=idx;
+    setSel(idx);
     // Se vuelve a llamar a ESTA función, no a renderAhorroChart(): esa limpia el tooltip como
     // primer paso, así que borraba el detalle recién escrito y el tap parecía no hacer nada.
     // El redibujo ya deja tipEl actualizado (ver arriba), así que no hace falta repetirlo acá.
-    drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn);
+    drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn, estado, fmtEje);
   };
 }
 
