@@ -370,10 +370,13 @@ function renderTarjetas(){
 // INVERSIONES (pestaña dedicada)
 // ═══════════════════════════════════════════
 function cambiarMesInv(delta){
-  mesInv = addMonths(mesInv, delta);
+  const hoyYM=currentYM();
+  const nuevo=addMonths(mesInv, delta);
+  if(nuevo>hoyYM) return; // no se puede ir al futuro (mismo criterio que Dashboard/Tarjetas)
+  mesInv=nuevo;
   renderInv();
-  animarCambioDeMes(delta, document.getElementById("inv-summary"),
-                    document.getElementById("inv-balance"), document.getElementById("inv-movs"));
+  const panelId = invVista==="cart" ? "inv-cartera" : invVista==="evo" ? "inv-evo-panel" : "inv-movs";
+  animarCambioDeMes(delta, document.getElementById("inv-summary"), document.getElementById(panelId));
 }
 
 // Helper: detecta si una operación de inversión es SALIDA DEL PORTFOLIO
@@ -497,236 +500,324 @@ function sumInvCash(arr){
   return arr.reduce((s,m)=>s+(m.importe||0)*invSignoCash(m),0);
 }
 
+// Selector Este mes/Cartera/Evolución (persistido, mismo patrón que tcVistaBarras)
+let invVista=(function(){
+  try{ const v=localStorage.getItem("enola-inv-vista"); return (v==="cart"||v==="evo")?v:"mes"; }
+  catch(e){ return "mes"; }
+})();
+function setInvVista(v){
+  invVista=v;
+  try{ localStorage.setItem("enola-inv-vista", v); }catch(e){}
+  renderInv();
+}
+
+// Helpers de formato propios de Inversiones (perspectiva cartera, nunca se suma ARS con USD)
+function fmtUsdInv(n){ return "USD "+Math.abs(n||0).toLocaleString("es-AR",{maximumFractionDigits:2}); }
+function fmtInvNeto(n){ return (n<0?"−":"+")+fmtTotal(Math.abs(n)); }
+function fmtInvNetoUsd(n){ return (n<0?"−":"+")+fmtUsdInv(n); }
+function fdInv(f){ f=String(f||""); return f.length<10 ? "" : Number(f.slice(8,10))+"/"+f.slice(5,7); }
+function fdyInv(f){ f=String(f||""); return f.length<10 ? "" : Number(f.slice(8,10))+"/"+f.slice(5,7)+"/"+f.slice(2,4); }
+// "COMPRA"/"COLOCADA" para lo que entra al portfolio, "COBRO" para lo que sale (perspectiva cartera)
+function invBadgeTxt(m){
+  if(isInvSalida(m)) return "COBRO";
+  return /^colocada/i.test(m.subcat||"") ? "COLOCADA" : "COMPRA";
+}
+// Entra: monto sin signo en --text. Sale: monto con "+" en --success (perspectiva cartera)
+function invMontoTxt(m){
+  const sale=isInvSalida(m);
+  const txt=(m.importeUSD||0)>0 ? fmtUsdInv(m.importeUSD) : fmtS(m.importe||0);
+  return sale ? "+"+txt : txt;
+}
+
+// Gesto de swipe en las filas de "Este mes" (izquierda revela Editar, derecha revela Eliminar):
+// versión liviana del patrón <tx-item>/_attachSwipe de Movimientos, sin custom element, porque
+// acá alcanza con conectar el gesto sobre filas que ya se pintaron en HTML.
+function attachInvSwipe(container){
+  if(!container) return;
+  container.querySelectorAll(".inv-swipe").forEach(wrap=>{
+    const id=parseInt(wrap.dataset.id,10);
+    const content=wrap.querySelector(".inv-row-content");
+    const bgLeft=wrap.querySelector(".tx-swipe-bg-left");
+    const bgRight=wrap.querySelector(".tx-swipe-bg-right");
+    if(!content||!bgLeft||!bgRight) return;
+    const REVEAL=78, SLOP=12;
+    let openState=0, startX=0, startY=0, dx=0, dragging=false, locked=null;
+    const mover=x=>{ content.style.transform=`translateX(${x}px)`; };
+    const cerrar=()=>{ content.style.transition="transform .18s ease"; mover(0); openState=0; };
+    bgLeft.addEventListener("click", ()=>{ cerrar(); openEditModal(id); });
+    bgRight.addEventListener("click", e=>{ borrarMovInv(id, e.currentTarget); });
+    content.addEventListener("touchstart", e=>{
+      startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+      dragging=true; locked=null; content.style.transition="none";
+    }, {passive:true});
+    content.addEventListener("touchmove", e=>{
+      if(!dragging) return;
+      const touch=e.touches[0];
+      const rawDx=touch.clientX-startX, rawDy=touch.clientY-startY;
+      if(locked===null){
+        if(Math.abs(rawDx)<SLOP && Math.abs(rawDy)<SLOP) return;
+        locked = Math.abs(rawDx)>Math.abs(rawDy) ? "h" : "v";
+      }
+      if(locked==="v") return;
+      dx=rawDx+(openState*REVEAL);
+      dx=Math.max(-REVEAL, Math.min(REVEAL, dx));
+      mover(dx);
+    }, {passive:true});
+    const onEnd=()=>{
+      if(!dragging) return;
+      dragging=false;
+      content.style.transition="transform .18s ease";
+      if(locked==="h"){
+        if(dx<=-REVEAL*0.75){ mover(-REVEAL); openState=-1; }
+        else if(dx>=REVEAL*0.75){ mover(REVEAL); openState=1; }
+        else { mover(openState*REVEAL); }
+      }
+      dx=0; locked=null;
+    };
+    content.addEventListener("touchend", onEnd);
+    content.addEventListener("touchcancel", onEnd);
+    content.addEventListener("click", e=>{
+      if(openState!==0){ e.stopPropagation(); e.preventDefault(); cerrar(); }
+    }, true);
+  });
+}
+
 function renderInv(){
   const ymSel=mesInv;
+  const hoyYM=currentYM();
   document.getElementById("inv-mes-label").textContent=mesLbl(ymSel);
+  const nextBtn=document.getElementById("inv-mes-next");
+  if(nextBtn) nextBtn.style.color = (ymSel>=hoyYM) ? "var(--border)" : "var(--muted)";
 
-  // Movimientos de inversión del mes seleccionado
-  const invsMes=movs.filter(m=>{
-    if(m.tipo!=="Inversion") return false;
-    return String(m.fecha||"").slice(0,7)===ymSel;
-  }).sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+  ["mes","cart","evo"].forEach(v=>{
+    const btn=document.getElementById("inv-tab-"+v);
+    if(btn) btn.classList.toggle("active", invVista===v);
+  });
+  const panelMes=document.getElementById("inv-movs");
+  const panelCart=document.getElementById("inv-cartera");
+  const panelEvo=document.getElementById("inv-evo-panel");
+  if(panelMes) panelMes.style.display = invVista==="mes" ? "" : "none";
+  if(panelCart) panelCart.style.display = invVista==="cart" ? "" : "none";
+  if(panelEvo) panelEvo.style.display = invVista==="evo" ? "" : "none";
 
-  // Totales del mes (NETO desde perspectiva del CASH: rescates suman, compras restan)
-  // Esto refleja el efecto real en el bolsillo del usuario
-  const totalARS=sumInvCash(invsMes);
-  const totalUSD=invsMes.reduce((s,m)=>s+(m.importeUSD||0)*invSignoCash(m),0);
-  const cantMes=invsMes.length;
-  // Rescates/cupones = INGRESO (entra plata). Compras/suscripciones = GASTO (sale plata)
-  const ingresos=invsMes.filter(m=>isInvSalida(m));   // las "salidas del portfolio" son ingresos al bolsillo
-  const gastosInv=invsMes.filter(m=>!isInvSalida(m)); // las "entradas al portfolio" son gastos del bolsillo
-  const totalIngresos=ingresos.reduce((s,m)=>s+(m.importe||0),0);
-  const totalGastos=gastosInv.reduce((s,m)=>s+(m.importe||0),0);
-  const tiposMes=new Set(invsMes.map(m=>m.cat));
+  // Movimientos de inversión del mes seleccionado (orden fecha desc)
+  const invsMes=movs.filter(m=>m.tipo==="Inversion" && String(m.fecha||"").slice(0,7)===ymSel)
+    .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
 
-  // ── CHIPS ──
-  const colorNeto=totalARS>=0?"positive":"negative";
-  document.getElementById("inv-summary").innerHTML=`
-    <div class="chip"><div class="chip-label">Balance ARS</div><div class="chip-val ${colorNeto}">${fmtTotal(totalARS)}</div></div>
-    <div class="chip"><div class="chip-label">Balance USD</div><div class="chip-val ${colorNeto}">${totalUSD!==0?"USD "+totalUSD.toFixed(2):"—"}</div></div>
-    <div class="chip"><div class="chip-label">Movimientos</div><div class="chip-val">${cantMes}</div></div>`;
-
-  // ── BALANCE DEL MES (desglose por categoría y por ticker) ──
-  const balanceEl=document.getElementById("inv-balance");
-  if(!cantMes){
-    balanceEl.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:14px 0">Sin movimientos en ${mesLbl(ymSel)}</p>`;
-  } else {
-    const lblNeto=totalARS>=0?"Ingreso neto":"Gasto neto";
-    let html=`<div class="seccion-label mb-6">${lblNeto} en ${mesLbl(ymSel)}</div>
-      <div style="font-size:24px;font-weight:600;color:var(--${totalARS>=0?'success':'danger'});margin-bottom:6px">${fmtTotal(totalARS)}</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
-        ${cantMes} ${cantMes===1?"movimiento":"movimientos"} · ${tiposMes.size} ${tiposMes.size===1?"tipo":"tipos"}
-        ${totalIngresos>0?` · 📥 Ingresos: <strong style="color:var(--success)">${fmtS(totalIngresos)}</strong>`:""}
-        ${totalGastos>0?` · 📤 Gastos: <strong style="color:var(--danger)">${fmtS(totalGastos)}</strong>`:""}
-      </div>`;
-
-    // Desglose por categoría (perspectiva cash)
-    const porCat={};
-    invsMes.forEach(m=>{
-      porCat[m.cat]=(porCat[m.cat]||0)+(m.importe||0)*invSignoCash(m);
-    });
-    const catEntries=Object.entries(porCat).filter(([_,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
-    if(catEntries.length){
-      html+=`<div class="seccion-label mb-6">Por categoría (balance)</div>`;
-      const maxV=Math.max(...catEntries.map(([_,v])=>Math.abs(v)));
-      html+=catEntries.map(([cat,val])=>{
-        const c=val>=0?"var(--success)":"var(--danger)";
-        return `<div class="bar-row" style="margin-bottom:6px">
-          <div class="bar-label">◈ ${escapeHtml(cat)}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(val)/maxV*100)}%;background:${c}"></div></div>
-          <div class="bar-val" style="color:${c}">${fmtS(val)}</div>
-        </div>`;
-      }).join("");
-    }
-
-    // Desglose por ticker (NETO)
-    const porTicker={};
-    invsMes.forEach(m=>{
-      const t=m.ticker||"Sin ticker";
-      porTicker[t]=(porTicker[t]||0)+(m.importe||0)*invSignoCash(m);
-    });
-    const tickerEntries=Object.entries(porTicker).filter(([_,v])=>v!==0).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
-    if(tickerEntries.length>1){
-      html+=`<div class="seccion-label mt-14 mb-6">Por ticker (balance)</div>`;
-      const maxV=Math.max(...tickerEntries.map(([_,v])=>Math.abs(v)));
-      html+=tickerEntries.map(([ticker,val])=>{
-        const c=val>=0?"var(--success)":"var(--danger)";
-        return `<div class="bar-row" style="margin-bottom:6px">
-          <div class="bar-label">${escapeHtml(ticker)}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(val)/maxV*100)}%;background:${c}"></div></div>
-          <div class="bar-val" style="color:${c}">${fmtS(val)}</div>
-        </div>`;
-      }).join("");
-    }
-    balanceEl.innerHTML=html;
-    animarNumerosDe(balanceEl);
-  }
-
-  // ── LISTA DE MOVIMIENTOS DEL MES (con editar/eliminar) ──
-  // Perspectiva CASH: rescate = ingreso (verde, +), suscripción = gasto (rojo, -)
-  const movsEl=document.getElementById("inv-movs");
-  if(!cantMes){
-    movsEl.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>Sin movimientos este mes</div>`;
-  } else {
-    movsEl.innerHTML=invsMes.map(m=>{
-      const esIngreso=isInvSalida(m); // rescate/cupón = ingreso al bolsillo
-      const sign=esIngreso?"+":"-";
-      let amt;
-      if(m.importeUSD>0) amt=`${sign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`;
-      else amt=`${sign}${fmtS(m.importe||0)}`;
-      const sub=`${escapeHtml(m.subcat||m.cat)} · ${(m.fecha||"").split("-").reverse().join("/")}`;
-      const badge=esIngreso
-        ?`<span class="badge badge-success">📥 INGRESO</span>`
-        :`<span class="badge badge-danger">📤 GASTO</span>`;
-      const amtColor=esIngreso?"var(--success)":"var(--danger)";
-      return `<div class="tx-item">
-        <div class="tx-icon ${esIngreso?'ingreso':'gasto'}">${esIngreso?"📥":"📤"}</div>
-        <div class="tx-info">
-          <div class="tx-cat">${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${badge}</div>
-          <div class="tx-sub">${sub}${m.nota?" · "+escapeHtml(m.nota.slice(0,18)):""}</div>
-        </div>
-        <div class="tx-amount" style="color:${amtColor}">${amt}</div>
-        <div class="tx-actions">
-          <button class="tx-edit" onclick="openEditModal(${m.id})" title="Editar">✎</button>
-          <button class="tx-del" onclick="borrarMovInv(${m.id},this)" title="Eliminar (tocá dos veces)">×</button>
-        </div>
-      </div>`;
-    }).join("");
-  }
-
-  // ── CARTERA ACUMULADA (todas las inversiones, agrupadas por ticker) ──
-  // Perspectiva CASH: lo que neto te dio o te costó cada posición
-  const carteraEl=document.getElementById("inv-cartera");
-  const allInv=movs.filter(m=>m.tipo==="Inversion");
-  if(!allInv.length){
-    carteraEl.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:8px 0">Sin inversiones cargadas todavía</p>`;
-  } else {
-    const cartera={};
-    allInv.forEach(m=>{
-      const t=m.ticker||"Sin ticker";
-      const sg=invSignoCash(m);
-      if(!cartera[t]) cartera[t]={ticker:t, ars:0, usd:0, cat:m.cat, count:0};
-      cartera[t].ars+=(m.importe||0)*sg;
-      cartera[t].usd+=(m.importeUSD||0)*sg;
-      cartera[t].count++;
-    });
-    const items=Object.values(cartera).sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars));
-    let html=`<div class="seccion-label mb-8">${items.length} ${items.length===1?"posición":"posiciones"} · balance acumulado</div>`;
-    html+=items.map(p=>{
-      const arsColor=p.ars>=0?"var(--success)":"var(--danger)";
-      const tickerEsc=attrJS(p.ticker);
-      return `<div role="button" tabindex="0" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showInstrumentoDetail(${tickerEsc})">
-        <div class="u-flex1 u-min0">
-          <div class="txt-md txt-strong">${escapeHtml(p.ticker)}</div>
-          <div class="txt-xs txt-muted">${escapeHtml(p.cat)} · ${p.count} ${p.count===1?"mov":"movs"}</div>
-        </div>
-        <div style="text-align:right">
-          ${p.ars!==0?`<div style="font-size:13px;font-weight:600;color:${arsColor}">${fmtS(p.ars)}</div>`:""}
-          ${p.usd!==0?`<div style="font-size:11px;color:${p.usd>=0?'var(--muted)':'var(--danger)'}">USD ${p.usd.toFixed(2)}</div>`:""}
-        </div>
-      </div>`;
-    }).join("");
-    carteraEl.innerHTML=html;
-  }
-
-  // ── HISTÓRICO TOTAL ──
+  renderInvSummary(ymSel, invsMes);
+  renderInvMovs(invsMes, ymSel);
+  renderInvCartera();
   renderInvHistorico();
 }
 
-// Renderiza el card de histórico total: KPIs, gráfico mensual y top tickers
+// Número grande del header: lo que se sumó (o se sacó) de la CARTERA en el mes (invSigno/sumInvNeto)
+function renderInvSummary(ymSel, invsMes){
+  const el=document.getElementById("inv-summary");
+  const netoARS=sumInvNeto(invsMes), netoUSD=sumInvNetoUSD(invsMes);
+  if(!invsMes.length){
+    el.innerHTML=`<div style="padding:18px 20px 4px;display:flex;flex-direction:column;align-items:center;gap:2px">
+      <span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Sin movimientos</span>
+      <span style="font-size:34px;font-weight:700;letter-spacing:-1.2px;color:var(--muted)">—</span>
+      <span style="font-size:12px;color:var(--muted);margin-top:4px">Cambiá de mes con ‹ ›</span>
+    </div>`;
+    return;
+  }
+  const soloUsd = !netoARS && !!netoUSD;
+  const principal = soloUsd ? netoUSD : netoARS;
+  const heroUp = principal>=0;
+  const lbl = heroUp ? "Sumaste a la cartera" : "Sacaste de la cartera";
+  const heroColor = heroUp ? "var(--invest)" : "var(--text)";
+  const heroFmt = soloUsd ? "fmtInvNetoUsd" : "fmtInvNeto";
+  const mostrarUsd = !soloUsd && netoUSD;
+  const pusoArs=invsMes.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
+  const pusoUsd=invsMes.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importeUSD||0),0);
+  const cobroArs=invsMes.filter(isInvSalida).reduce((s,m)=>s+(m.importe||0),0);
+  const cobroUsd=invsMes.filter(isInvSalida).reduce((s,m)=>s+(m.importeUSD||0),0);
+  const partes=(a,u)=>[a?fmtS(a):"", u?fmtUsdInv(u):""].filter(Boolean).join(" y ");
+  const sub = (pusoArs||pusoUsd||cobroArs||cobroUsd)
+    ? `Pusiste ${partes(pusoArs,pusoUsd)||"—"} · Cobraste ${partes(cobroArs,cobroUsd)||"—"}`
+    : "Cambiá de mes con ‹ ›";
+  el.innerHTML=`<div style="padding:18px 20px 4px;display:flex;flex-direction:column;align-items:center;gap:2px">
+    <span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">${lbl}</span>
+    <span style="font-size:34px;font-weight:700;letter-spacing:-1.2px;color:${heroColor}" data-animar="${principal}" data-animar-fmt="${heroFmt}">${window[heroFmt](principal)}</span>
+    ${mostrarUsd?`<span style="font-size:13px;font-weight:600;color:${netoUSD>=0?"var(--invest)":"var(--text)"}" data-animar="${netoUSD}" data-animar-fmt="fmtInvNetoUsd">${fmtInvNetoUsd(netoUSD)}</span>`:""}
+    <span style="font-size:12px;color:var(--muted);margin-top:4px">${sub}</span>
+  </div>`;
+  animarNumerosDe(el);
+}
+
+// Panel "Este mes": lista con badge COMPRA/COLOCADA/COBRO y swipe editar/eliminar
+function renderInvMovs(invsMes, ymSel){
+  const el=document.getElementById("inv-movs");
+  if(!invsMes.length){
+    el.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:28px 14px;margin:0">Sin movimientos en ${mesLbl(ymSel)}</p>`;
+    return;
+  }
+  el.innerHTML=invsMes.map((m,i)=>{
+    const sale=isInvSalida(m);
+    return `<div class="inv-swipe" data-id="${m.id}" style="${i?"border-top:1px solid var(--border)":""}">
+      <div class="tx-swipe-bg tx-swipe-bg-left">✎ Editar</div>
+      <div class="tx-swipe-bg tx-swipe-bg-right">🗑 Eliminar</div>
+      <div class="inv-row inv-row-content">
+        <div class="inv-row-icon">${getIcon(m.cat,"📦")}</div>
+        <div class="inv-row-mid">
+          <div class="inv-row-top"><span class="inv-row-ticker">${escapeHtml(m.ticker||"?")}</span><span class="inv-row-badge ${sale?"sale":"entra"}">${invBadgeTxt(m)}</span></div>
+          <span class="inv-row-sub">${escapeHtml(m.cat)} · ${fdInv(m.fecha)}</span>
+        </div>
+        <span class="inv-row-amt" style="color:${sale?"var(--success)":"var(--text)"}">${invMontoTxt(m)}</span>
+      </div>
+    </div>`;
+  }).join("");
+  attachInvSwipe(el);
+}
+
+// Panel "Cartera": agrupado por ticker (perspectiva cartera, invSigno), con posiciones cerradas colapsadas
+function renderInvCartera(){
+  const el=document.getElementById("inv-cartera");
+  const allInv=movs.filter(m=>m.tipo==="Inversion");
+  if(!allInv.length){
+    el.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:24px 14px;margin:0">Sin inversiones cargadas todavía</p>`;
+    return;
+  }
+  const porTicker={};
+  allInv.forEach(m=>{
+    const t=m.ticker||"Sin ticker";
+    if(!porTicker[t]) porTicker[t]={ticker:t, cat:m.cat, ars:0, usd:0, count:0};
+    porTicker[t].ars+=(m.importe||0)*invSigno(m);
+    porTicker[t].usd+=(m.importeUSD||0)*invSigno(m);
+    porTicker[t].count++;
+  });
+  const items=Object.values(porTicker).map(p=>({...p, esUsd:p.usd!==0}));
+  const abiertas=items.filter(p=>(p.esUsd?p.usd:p.ars)>0);
+  const cerradas=items.filter(p=>(p.esUsd?p.usd:p.ars)<=0);
+  const usdAb=abiertas.filter(p=>p.esUsd).sort((a,b)=>b.usd-a.usd);
+  const arsAb=abiertas.filter(p=>!p.esUsd).sort((a,b)=>b.ars-a.ars);
+  // Sin un tipo de cambio de referencia global en la app, se listan primero las posiciones en
+  // USD y después las en ARS (cada grupo por monto) — es el modo que el handoff deja como
+  // alternativa cuando no hay TC para intercalarlas.
+  const ordenAbiertas=[...usdAb, ...arsAb];
+  const totArs=arsAb.reduce((s,p)=>s+p.ars,0), totUsd=usdAb.reduce((s,p)=>s+p.usd,0);
+
+  let html=`<div style="padding:10px 14px 0;display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted)">
+    <span>${abiertas.length} ${abiertas.length===1?"posición":"posiciones"}</span>
+    <span>${totArs?`<strong style="color:var(--invest)">${fmtS(totArs)}</strong>`:""}${totArs&&totUsd?" · ":""}${totUsd?`<strong style="color:var(--invest)">${fmtUsdInv(totUsd)}</strong>`:""}</span>
+  </div>`;
+  if(!abiertas.length){
+    html+=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:24px 14px;margin:0">Sin posiciones abiertas</p>`;
+  } else {
+    html+=ordenAbiertas.map((p,i)=>{
+      const maxV = p.esUsd ? (usdAb[0]?usdAb[0].usd:1) : (arsAb[0]?arsAb[0].ars:1);
+      const val = p.esUsd ? p.usd : p.ars;
+      const pct = Math.max(0, Math.round(val/(maxV||1)*100));
+      const share = p.esUsd ? pct+"% de tus USD" : pct+"% de tus $";
+      const tickerEsc=attrJS(p.ticker);
+      return `<div class="inv-row" style="${i?"border-top:1px solid var(--border)":""};cursor:pointer" onclick="showInstrumentoDetail(${tickerEsc})">
+        <div class="inv-row-icon">${getIcon(p.cat,"📦")}</div>
+        <div class="inv-pos-col">
+          <div class="inv-pos-top"><span class="inv-row-ticker">${escapeHtml(p.ticker)}</span><span style="font-size:14px;font-weight:600">${p.esUsd?fmtUsdInv(p.usd):fmtS(p.ars)}</span></div>
+          <div class="inv-pos-bar-row"><div class="inv-pos-track"><div class="inv-pos-fill" style="width:${pct}%"></div></div><span class="inv-pos-share">${share}</span></div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  if(cerradas.length){
+    html+=`<button type="button" class="inv-cerradas-link" data-cerrado="1" data-n="${cerradas.length}" onclick="toggleInvCerradas(this)">Ver ${cerradas.length} ${cerradas.length===1?"posición cerrada":"posiciones cerradas"} ›</button>
+      <div class="inv-cerradas-lista" style="display:none">`+cerradas.map((p,i)=>{
+        const val = p.esUsd ? p.usd : p.ars;
+        return `<div class="inv-row" style="${i?"border-top:1px solid var(--border)":""};cursor:pointer;color:var(--muted)" onclick="showInstrumentoDetail(${attrJS(p.ticker)})">
+          <div class="inv-row-icon">${getIcon(p.cat,"📦")}</div>
+          <div class="inv-row-mid"><span class="inv-row-ticker" style="color:var(--muted)">${escapeHtml(p.ticker)}</span><span class="inv-row-sub">${escapeHtml(p.cat)}</span></div>
+          <span style="font-size:13px;color:var(--muted)">${p.esUsd?fmtUsdInv(val):fmtS(val)}</span>
+        </div>`;
+      }).join("")+`</div>`;
+  }
+  el.innerHTML=html;
+}
+function toggleInvCerradas(btn){
+  const panel=btn.nextElementSibling;
+  if(!panel) return;
+  const abrir=btn.dataset.cerrado==="1";
+  panel.style.display=abrir?"":"none";
+  btn.dataset.cerrado=abrir?"0":"1";
+  btn.textContent=abrir?"Ocultar posiciones cerradas ‹":`Ver ${btn.dataset.n} ${btn.dataset.n==="1"?"posición cerrada":"posiciones cerradas"} ›`;
+}
+
+// Panel "Evolución": selector Pesos/Dólares + gráfico interactivo (acumulado de sumInvNeto/
+// sumInvNetoUSD) + top 3 tickers. Estado propio (no se comparte con el de Ahorros).
+let invEvoCur="ars";
+let invEvoChartSel={v:null};
+function setInvEvoCur(c){
+  invEvoCur=c;
+  invEvoChartSel={v:null};
+  renderInvHistorico();
+}
 function renderInvHistorico(){
   const allInv=movs.filter(m=>m.tipo==="Inversion");
   const kpisEl=document.getElementById("inv-historico-kpis");
   const canvas=document.getElementById("chart-inv-historico");
   const topEl=document.getElementById("inv-top-tickers");
+  if(!kpisEl||!canvas||!topEl) return;
 
   if(!allInv.length){
-    kpisEl.innerHTML=`<div class="chip u-flex1"><div class="chip-label" style="text-align:center">Sin inversiones cargadas</div></div>`;
-    if(chartInvHistoricoInstance){ chartInvHistoricoInstance.destroy(); chartInvHistoricoInstance=null; }
+    kpisEl.innerHTML=`<p style="font-size:13px;color:var(--muted);margin:0">Sin inversiones cargadas</p>`;
+    canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);
     topEl.innerHTML="";
     return;
   }
 
-  // KPIs totales acumulados (perspectiva CASH: rescates - compras = balance del bolsillo)
-  const totalARS=sumInvCash(allInv);
-  const totalUSD=allInv.reduce((s,m)=>s+(m.importeUSD||0)*invSignoCash(m),0);
-  const totalIngresosARS=allInv.filter(m=>isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
-  const totalGastosARS=allInv.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
-  const colorNeto=totalARS>=0?"positive":"negative";
-  kpisEl.innerHTML=`
-    <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${colorNeto}">${fmtTotal(totalARS)}</div></div>
-    <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive">${fmtTotal(totalIngresosARS)}</div></div>
-    <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative">${fmtTotal(totalGastosARS)}</div></div>`;
+  kpisEl.innerHTML=`<div class="inv-cur-pills">
+      <button type="button" class="inv-cur-btn${invEvoCur==="ars"?" active":""}" onclick="setInvEvoCur('ars')">Pesos</button>
+      <button type="button" class="inv-cur-btn${invEvoCur==="usd"?" active":""}" onclick="setInvEvoCur('usd')">Dólares</button>
+    </div>
+    <div id="inv-evo-lectura" style="display:flex;flex-direction:column;align-items:flex-end"></div>`;
 
-  // Agrupado por mes (curva acumulada en perspectiva cash)
+  // Acumulado mensual en perspectiva CARTERA (invSigno), en la moneda elegida — nunca se suma
+  // ARS con USD. Meses sin movimiento se completan en 0 para que el eje no mienta sobre el tiempo.
+  const campo = invEvoCur==="usd" ? "importeUSD" : "importe";
   const porMes={};
   allInv.forEach(m=>{
     const ym=String(m.fecha||"").slice(0,7);
     if(!ym||ym.length!==7) return;
-    porMes[ym]=(porMes[ym]||0)+(m.importe||0)*invSignoCash(m);
+    porMes[ym]=(porMes[ym]||0)+(m[campo]||0)*invSigno(m);
   });
-  const mesesOrdenados=Object.keys(porMes).sort();
-  if(mesesOrdenados.length){
-    const labels=mesesOrdenados.map(ym=>{
-      const [y,m]=ym.split("-");
-      return m+"/"+y.slice(2);
-    });
-    // Acumulado mes a mes (curva del balance cash)
-    let acum=0;
-    const values=mesesOrdenados.map(ym=>{
-      acum+=porMes[ym];
-      return Math.round(acum*100)/100;
-    });
-    renderChartInvHistoricoBI(labels, values);
-  }
+  const serie=rellenarMesesSinMovimiento(Object.keys(porMes).sort().map(ym=>({mes:ym, monto:porMes[ym]})));
+  const labels=serie.map(d=>d.mes);
+  let acum=0;
+  const values=serie.map(d=>{ acum+=d.monto; return Math.round(acum*100)/100; });
 
-  // Top 5 tickers por monto neto (perspectiva cash)
+  const tipEl=document.getElementById("inv-evo-lectura");
+  const fmtLinea=(ym,v)=>`<span style="font-size:11px;color:var(--muted)">Invertido a fin de ${mesLbl(ym).split(" ")[0]}</span>
+    <span style="font-size:15px;font-weight:700;color:var(--invest)">${invEvoCur==="usd"?fmtUsdInv(v):fmtTotal(v)}</span>`;
+  // El eje Y también tiene que hablar en la moneda elegida: un "$552" en la vista Dólares sería
+  // plata que no es (regla del handoff: pesos y dólares nunca se mezclan ni se confunden). Sin
+  // el prefijo "USD" (el pill de arriba ya aclara la moneda): con él, el texto no entraba en
+  // los 44px del margen izquierdo del gráfico y se recortaba.
+  const fmtEjeUsd=v=>Math.abs(v).toLocaleString("es-AR",{maximumFractionDigits:0});
+  drawInteractiveLine(canvas, labels, values, themeColor("--invest"), tipEl, fmtLinea, invEvoChartSel,
+    invEvoCur==="usd" ? fmtEjeUsd : undefined);
+
+  // "Dónde más pusiste": top 3 tickers de la moneda elegida (perspectiva cartera)
   const porTicker={};
   allInv.forEach(m=>{
     const t=m.ticker||"Sin ticker";
-    const sg=invSignoCash(m);
-    if(!porTicker[t]) porTicker[t]={ars:0,usd:0,count:0,cat:m.cat};
-    porTicker[t].ars+=(m.importe||0)*sg;
-    porTicker[t].usd+=(m.importeUSD||0)*sg;
-    porTicker[t].count++;
+    if(!porTicker[t]) porTicker[t]={ars:0,usd:0};
+    porTicker[t].ars+=(m.importe||0)*invSigno(m);
+    porTicker[t].usd+=(m.importeUSD||0)*invSigno(m);
   });
   const topItems=Object.entries(porTicker)
-    .map(([ticker,d])=>({ticker,...d}))
-    .filter(x=>Math.abs(x.ars)>0)
-    .sort((a,b)=>Math.abs(b.ars)-Math.abs(a.ars))
-    .slice(0,5);
+    .map(([ticker,d])=>({ticker, val: invEvoCur==="usd" ? d.usd : d.ars}))
+    .filter(x=>x.val>0)
+    .sort((a,b)=>b.val-a.val)
+    .slice(0,3);
   if(topItems.length){
-    const maxV=Math.max(...topItems.map(t=>Math.abs(t.ars)));
-    let html=`<div class="seccion-label mb-6">Top tickers (balance)</div>`;
-    html+=topItems.map(p=>{
-      const c=p.ars>=0?"var(--success)":"var(--danger)";
-      return `<div class="bar-row" style="margin-bottom:6px">
-        <div class="bar-label">${escapeHtml(p.ticker)}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(Math.abs(p.ars)/maxV*100)}%;background:${c}"></div></div>
-        <div class="bar-val" style="color:${c}">${fmtAbbr(p.ars)}</div>
-      </div>`;
-    }).join("");
-    topEl.innerHTML=html;
+    const maxV=topItems[0].val;
+    topEl.innerHTML=`<div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:8px">
+      <span style="font-size:12px;font-weight:600;color:var(--muted)">Dónde más pusiste</span>`+
+      topItems.map(p=>`<div style="display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:center">
+        <span style="font-size:12.5px;font-weight:700;letter-spacing:.3px">${escapeHtml(p.ticker)}</span>
+        <div style="height:6px;border-radius:3px;background:var(--border);overflow:hidden"><div style="height:100%;width:${Math.round(p.val/maxV*100)}%;background:var(--invest)"></div></div>
+        <span style="font-size:12.5px;font-weight:600;min-width:80px;text-align:right">${invEvoCur==="usd"?fmtUsdInv(p.val):fmtS(p.val)}</span>
+      </div>`).join("")+`</div>`;
   } else {
     topEl.innerHTML="";
   }
