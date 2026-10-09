@@ -386,13 +386,14 @@ test("◈ Invertido suma el total puesto en el mercado este mes, todos los activ
 
 test("◈ Neto inversión suma el flujo de todos los tickers, sin reemplazar los chips por ticker", ()=>{
   // 100.000 (BCAHA) − 300.000 (YPF) = −200.000, mismo número que netoInvTotal().
-  // El resumen de "Todos" ya no es una grilla de .chip: los ítems extra (USD, por ticker,
-  // etc.) viven en la leyenda (.mov-legend-item) debajo del número y las barras.
+  // El resumen de "Todos" ya no es una grilla de .chip ni una leyenda: los ítems extra (USD,
+  // por ticker, etc.) son mosaicos (.mov-mosaic) debajo del número grande (handoff "número +
+  // mosaicos").
   const dom=document.createElement("div");
   document.body.appendChild(dom);
   try{
     dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
-    const chips=[...dom.querySelectorAll(".mov-legend-item")].map(c=>c.innerHTML);
+    const chips=[...dom.querySelectorAll(".mov-mosaic")].map(c=>c.innerHTML);
     const neto=chips.find(c=>c.includes("Neto inversión"));
     cierto(!!neto, "falta el ítem de neto de inversión: "+chips.join(" | "));
     cierto(/200\.000/.test(neto.replace(/<[^>]*>/g,"")), "el neto no muestra 200.000: "+neto);
@@ -413,7 +414,7 @@ test("el neto positivo lleva signo + y el negativo no es rojo de gasto", ()=>{
   document.body.appendChild(dom);
   try{
     dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
-    const chips=[...dom.querySelectorAll(".mov-legend-item")].map(c=>c.innerHTML);
+    const chips=[...dom.querySelectorAll(".mov-mosaic")].map(c=>c.innerHTML);
     const bcaha=chips.find(c=>c.includes("BCAHA")), ypf=chips.find(c=>c.includes("YPF"));
     cierto(/\+\$?1?00\.000/.test(bcaha.replace(/<[^>]*>/g,"")), "el neto positivo va con signo +: " + bcaha);
     cierto(ypf.includes("--invest"), "poner plata en una inversión no es perderla: no va en rojo de gasto. " + ypf);

@@ -368,6 +368,18 @@ function subcatVisible(subcat){
   const s=String(subcat||"").trim();
   return SUBCAT_SIN_VALOR.includes(s) ? "" : escapeHtml(s);
 }
+// Operación corta de un movimiento de Inversión, para el subtítulo ("SPY · Compra"): m.subcat
+// se guarda como "{categoría} {operación}" (ver guardar() en form-cargar.js), a veces con el
+// ticker repetido al final ("CEDEARs Compra SPY"). Se le saca el prefijo de categoría y, si
+// termina en el propio ticker, también eso — así queda solo el verbo ("Compra", "Suscripción").
+function operacionCortaInv(m){
+  let op=String(m.subcat||"").trim();
+  const prefijo=(m.cat||"")+" ";
+  if(op.startsWith(prefijo)) op=op.slice(prefijo.length);
+  const ticker=String(m.ticker||"").toUpperCase();
+  if(ticker && op.toUpperCase().endsWith(" "+ticker)) op=op.slice(0, op.length-ticker.length-1);
+  return op;
+}
 
 // La MISMA clasificación en cinco baldes (gasto/ingreso/inversion/tarjeta/save) que ya
 // pintaba el círculo del ícono y el monto, ahora también en el borde izquierdo de la fila
@@ -433,8 +445,11 @@ function construirCuerpoTxItem(m){
       const invBadge=invEsIngreso
         ?` <span class="badge badge-accent">📥 RECUPERO</span>`
         :` <span class="badge badge-accent">📤 INVERTIDO</span>`;
-      cat=`${escapeHtml(m.cat)}<span class="inv-badge">${escapeHtml(m.ticker||"?")}</span>${invBadge}`;
-      sub=subtituloFila([subcatVisible(m.subcat)]);
+      cat=`${escapeHtml(m.cat)}${invBadge}`;
+      // El ticker pasa al subtítulo, junto con la operación corta (ver handoff de Movimientos):
+      // m.subcat se guarda como "{categoría} {operación}" (p.ej. "CEDEARs Compra SPY"), así que
+      // alcanza con sacarle el prefijo de la categoría y, si termina en el ticker, también eso.
+      sub=subtituloFila([m.ticker?escapeHtml(m.ticker):"", escapeHtml(operacionCortaInv(m))]);
     } else {
       let badge="";
       // Las dos patas de un cambio van marcadas: sin el badge, en la lista se ven como un
@@ -743,6 +758,34 @@ function renderTxListaLazy(show){
   txListObserver.observe(sentinel);
 }
 
+// ═══════════════════════════════════════════
+// RESUMEN: número + mosaicos (handoff Movimientos, opción 3b)
+// ═══════════════════════════════════════════
+// Una card por dato, con el fondo tintado del color del tipo (par --X/--X-light que ya existe
+// en styles.css: nada de colores nuevos). "Cantidad" es la excepción: va en --text sobre
+// --bg, no sobre un tinte de color, porque no es ni un color de tipo ni una de --X-light.
+function mosaicoHTML(glyph, name, color, val, sub){
+  const tint = color==="var(--text)" ? "var(--bg)" : color.replace(")", "-light)");
+  return `<div class="mov-mosaic" style="background:${tint}">
+    <div class="mov-mosaic-top">
+      <span class="mov-mosaic-glyph" style="color:${color}">${glyph}</span>
+      <span class="mov-mosaic-name" style="color:${color}">${escapeHtml(name)}</span>
+    </div>
+    <span class="mov-mosaic-val">${val}</span>
+    ${sub?`<span class="mov-mosaic-sub">${escapeHtml(sub)}</span>`:""}
+  </div>`;
+}
+// Arma la grilla a partir de una lista de mosaicos ya armados (mosaicoHTML): si la cantidad es
+// impar, el último ocupa las dos columnas en vez de quedar solo en la primera (ver handoff).
+function mosaicosGridHTML(mosaicos){
+  if(!mosaicos.length) return "";
+  const items=mosaicos.slice();
+  if(items.length%2===1){
+    items[items.length-1]=items[items.length-1].replace('class="mov-mosaic"','class="mov-mosaic mov-mosaic-wide"');
+  }
+  return `<div class="mov-mosaic-grid">${items.join("")}</div>`;
+}
+
 function renderMovs(){
   const mesMovs = filtroFecha ? getMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getMesMov(mesActual);
   const mesTcs = filtroFecha ? getTcMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getTcMovsEnMes(mesActual);
@@ -832,29 +875,24 @@ function renderMovs(){
     const totalTcARS=mesTcsARS.reduce((s,m)=>s+m.importe,0);
     const totalTcUSD=mesTcsUSD.reduce((s,m)=>s+m.importe,0);
     const cantTc=mesTcsFiltrados.length;
-
-    // Barras: un segmento por tarjeta, tonos de --warning (más clara cuanto más atrás).
-    const porTarjeta={};
-    mesTcsARS.forEach(m=>{ porTarjeta[m.tarjeta]=(porTarjeta[m.tarjeta]||0)+m.importe; });
-    const tarjetasOrdenadas=Object.entries(porTarjeta).sort((a,b)=>b[1]-a[1]);
-    const maxTc=Math.max(totalTcARS,1);
-    const tonoTarjeta=i=>`color-mix(in srgb,var(--warning) ${Math.max(100-i*20,30)}%,var(--surface))`;
+    // El desglose por tarjeta (antes, barras + leyenda acá mismo) ya vive en su propia pestaña
+    // (Tarjetas → "Por tarjeta"): repetirlo acá era la misma cuenta dos veces. Lo único que
+    // queda del resumen es la cantidad de compras y en cuántas tarjetas (ver handoff).
+    const nTarjetasUnicas=new Set(mesTcsFiltrados.map(m=>m.tarjeta).filter(Boolean)).size;
 
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">Tarjetas ${periodoTxt}</span>
       <span class="mov-summary-val" style="color:var(--warning)">${fmtTotal(totalTcARS)}</span>
     </div>`;
-    if(tarjetasOrdenadas.length){
-      html+=`<div class="mov-bars"><div class="mov-bar-row">
-        <span class="mov-bar-name">Tarj.</span>
-        <div class="mov-bar-track">${tarjetasOrdenadas.map(([,v],i)=>`<span class="mov-bar-seg" style="width:${v/maxTc*100}%;background:${tonoTarjeta(i)}"></span>`).join("")}</div>
-        <span class="mov-bar-val">${fmtTotal(totalTcARS)}</span>
-      </div></div>
-      <div class="mov-legend">${tarjetasOrdenadas.map(([t,v],i)=>`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${tonoTarjeta(i)}"></span><span>${escapeHtml(t)}</span><strong>${fmtTotal(v)}</strong></div>`).join("")}
-        ${totalTcUSD>0?`<div class="mov-legend-item"><span>USD</span><strong>USD ${totalTcUSD.toFixed(2)}</strong></div>`:""}
-        <div class="mov-legend-item"><span>Gastos</span><strong>${cantTc}</strong></div>
-      </div>`;
+    const mosTc=[];
+    if(cantTc){
+      mosTc.push(mosaicoHTML("#","Compras","var(--warning)",String(cantTc),
+        `en ${nTarjetasUnicas} ${nTarjetasUnicas===1?"tarjeta":"tarjetas"}`));
     }
+    if(totalTcUSD>0){
+      mosTc.push(mosaicoHTML("$","Tarjetas USD","var(--warning)",`USD ${totalTcUSD.toFixed(2)}`,""));
+    }
+    html+=mosaicosGridHTML(mosTc);
     document.getElementById("mov-summary").innerHTML=html;
     // Línea informativa específica de tarjetas: ya no tiene superficie propia (ver handoff).
     arrastreEl.className="mov-tarjeta-info";
@@ -919,52 +957,33 @@ function renderMovs(){
       ? todoGastos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
       : todoGastos.filter(m=>esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(-gananciaUSD,0);
 
-    // Barras: por categoría (top 4 + "Otros"), tonos de --danger. Con un sub-filtro activo, el
-    // resto de los segmentos queda al 35% de opacidad y solo resalta el elegido.
-    const porCatGasto={};
-    todoGastos.forEach(m=>{ if(m.moneda!=="USD") porCatGasto[m.cat]=(porCatGasto[m.cat]||0)+(m.importe||0); });
-    let catsOrdenadas=Object.entries(porCatGasto).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
-    if(catsOrdenadas.length>5){
-      const otros=catsOrdenadas.slice(4).reduce((s,[,v])=>s+v,0);
-      catsOrdenadas=catsOrdenadas.slice(0,4).concat(otros>0?[["Otros",otros]]:[]);
-    }
-    const maxGasto=Math.max(gastosTotalARS,1);
-    const tonoGasto=i=>`color-mix(in srgb,var(--danger) ${Math.max(100-i*20,30)}%,var(--surface))`;
-
     const labelTxt=filtroCategoria?escapeHtml(filtroCategoria):`Gastado ${periodoTxt}`;
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">${labelTxt}</span>
       <span class="mov-summary-val" style="color:var(--danger)">${fmtTotal(gastosTotalARS)}</span>
     </div>`;
-    if(catsOrdenadas.length){
-      html+=`<div class="mov-bars"><div class="mov-bar-row">
-        <span class="mov-bar-name">Cat.</span>
-        <div class="mov-bar-track">${catsOrdenadas.map(([c,v],i)=>`<span class="mov-bar-seg" style="width:${v/maxGasto*100}%;background:${tonoGasto(i)};opacity:${(!filtroCategoria||c===filtroCategoria)?1:.35}"></span>`).join("")}</div>
-        <span class="mov-bar-val">${fmtTotal(gastosTotalARS)}</span>
-      </div></div>
-      <div class="mov-legend">${catsOrdenadas.map(([c,v],i)=>`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${tonoGasto(i)}"></span><span>${escapeHtml(c)}</span><strong>${fmtTotal(v)}</strong></div>`).join("")}</div>`;
-    }
-    const extrasGasto=[];
-    if(gastosTotalUSD>0) extrasGasto.push(`<div class="mov-legend-item"><span>USD</span><strong>USD ${gastosTotalUSD.toFixed(2)}</strong></div>`);
-    // Chips informativos cuando no hay sub-filtro de categoría (desglose de qué compone el total)
+    const mosGasto=[];
+    if(gastosTotalUSD>0) mosGasto.push(mosaicoHTML("$","Gastos USD","var(--text)",`USD ${gastosTotalUSD.toFixed(2)}`,""));
+    // Mosaicos informativos cuando no hay sub-filtro de categoría (desglose de qué compone el total)
     if(!filtroCategoria){
       if(Math.round(gananciaARS)!==0){
         const colorRes=gananciaARS>=0?"var(--success)":"var(--danger)";
-        extrasGasto.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorRes}"></span><span style="color:${colorRes}">📊 Resultado inv.</span><strong style="color:${colorRes}">${gananciaARS>=0?"+":""}${fmtTotal(gananciaARS)}</strong></div>`);
+        mosGasto.push(mosaicoHTML("📊","Resultado inv.",colorRes,(gananciaARS>=0?"+":"")+fmtTotal(gananciaARS),""));
       }
       if(ahorradoARS>0){
-        extrasGasto.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--save)"></span><span style="color:var(--save)">🏦 Ahorrado</span><strong style="color:var(--save)">${fmtTotal(ahorradoARS)}</strong></div>`);
+        mosGasto.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(ahorradoARS),
+          gastosTotalARS?Math.round(ahorradoARS/gastosTotalARS*100)+"% del total":""));
       }
       // En verde, no en rojo: poner plata en una inversión no es perderla.
       if(suscripcionesARS>0){
-        extrasGasto.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Invertido</span><strong style="color:var(--invest)">${fmtTotal(suscripcionesARS)}</strong></div>`);
+        mosGasto.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(suscripcionesARS),""));
       }
       if(suscripcionesUSD>0){
-        extrasGasto.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Invertido USD</span><strong style="color:var(--invest)">USD ${suscripcionesUSD.toFixed(2)}</strong></div>`);
+        mosGasto.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${suscripcionesUSD.toFixed(2)}`,""));
       }
     }
-    extrasGasto.push(`<div class="mov-legend-item"><span>Cantidad</span><strong>${todoGastos.length}</strong></div>`);
-    html+=`<div class="mov-legend">${extrasGasto.join("")}</div>`;
+    mosGasto.push(mosaicoHTML("#","Cantidad","var(--text)",String(todoGastos.length),"movimientos"));
+    html+=mosaicosGridHTML(mosGasto);
     document.getElementById("mov-summary").innerHTML=html;
     arrastreEl.style.display="none";
     document.getElementById("mov-tarjeta-filtro").style.display="none";
@@ -1008,32 +1027,13 @@ function renderMovs(){
     const ingTotalUSD = filtroCategoria
       ? todoIngresos.reduce((s,m)=>s+(m.moneda==="USD"?(m.importeOrig||0):0)+(m.tipo==="Inversion"?(m.importeUSD||0):0),0)
       : todoIngresos.filter(m=>m.tipo==="Ingreso"&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0) + Math.max(ganInv.usd||0, 0);
-    // Barras: por categoría (top 4 + "Otros"), tonos de --success.
-    const porCatIng={};
-    todoIngresos.forEach(m=>{ if(m.moneda!=="USD") porCatIng[m.cat]=(porCatIng[m.cat]||0)+(m.importe||0); });
-    let catsIngOrdenadas=Object.entries(porCatIng).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
-    if(catsIngOrdenadas.length>5){
-      const otros=catsIngOrdenadas.slice(4).reduce((s,[,v])=>s+v,0);
-      catsIngOrdenadas=catsIngOrdenadas.slice(0,4).concat(otros>0?[["Otros",otros]]:[]);
-    }
-    const maxIng=Math.max(ingTotalARS,1);
-    const tonoIng=i=>`color-mix(in srgb,var(--success) ${Math.max(100-i*20,30)}%,var(--surface))`;
-
     const labelIngTxt=filtroCategoria?escapeHtml(filtroCategoria):`Ingresó ${periodoTxt}`;
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">${labelIngTxt}</span>
       <span class="mov-summary-val" style="color:var(--success)">${fmtTotal(ingTotalARS)}</span>
     </div>`;
-    if(catsIngOrdenadas.length){
-      html+=`<div class="mov-bars"><div class="mov-bar-row">
-        <span class="mov-bar-name">Cat.</span>
-        <div class="mov-bar-track">${catsIngOrdenadas.map(([c,v],i)=>`<span class="mov-bar-seg" style="width:${v/maxIng*100}%;background:${tonoIng(i)};opacity:${(!filtroCategoria||c===filtroCategoria)?1:.35}"></span>`).join("")}</div>
-        <span class="mov-bar-val">${fmtTotal(ingTotalARS)}</span>
-      </div></div>
-      <div class="mov-legend">${catsIngOrdenadas.map(([c,v],i)=>`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${tonoIng(i)}"></span><span>${escapeHtml(c)}</span><strong>${fmtTotal(v)}</strong></div>`).join("")}</div>`;
-    }
-    const extrasIng=[];
-    if(ingTotalUSD>0) extrasIng.push(`<div class="mov-legend-item"><span>USD</span><strong>USD ${ingTotalUSD.toFixed(2)}</strong></div>`);
+    const mosIng=[];
+    if(ingTotalUSD>0) mosIng.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${ingTotalUSD.toFixed(2)}`,"por cambio"));
     // Solo cuando no hay sub-filtro de categoría, para no confundir con totales parciales.
     if(!filtroCategoria){
       // El resultado del mes NO es rescates − suscripciones: eso es el flujo, y da negativo
@@ -1041,19 +1041,19 @@ function renderMovs(){
       // reconocida: primero recuperás capital, después ganás.
       if(Math.round(ganInv.ars)!==0){
         const colorRes=ganInv.ars>=0?"var(--success)":"var(--danger)";
-        extrasIng.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorRes}"></span><span style="color:${colorRes}">📊 Resultado inv.</span><strong style="color:${colorRes}">${ganInv.ars>=0?"+":""}${fmtTotal(ganInv.ars)}</strong></div>`);
+        mosIng.push(mosaicoHTML("📊","Resultado inv.",colorRes,(ganInv.ars>=0?"+":"")+fmtTotal(ganInv.ars),""));
       }
       const recuperado=todoIngresos.filter(m=>m.tipo==="Inversion"&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
       if(recuperado>0){
-        extrasIng.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Recuperado</span><strong style="color:var(--invest)">${fmtTotal(recuperado)}</strong></div>`);
+        mosIng.push(mosaicoHTML("◈","Recuperado","var(--invest)",fmtTotal(recuperado),""));
       }
       const delFondo=todoIngresos.filter(m=>esRetiroAhorro(m)&&m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
       if(delFondo>0){
-        extrasIng.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--save)"></span><span style="color:var(--save)">💸 Del fondo</span><strong style="color:var(--save)">${fmtTotal(delFondo)}</strong></div>`);
+        mosIng.push(mosaicoHTML("💸","Del fondo","var(--save)",fmtTotal(delFondo),""));
       }
     }
-    extrasIng.push(`<div class="mov-legend-item"><span>Cantidad</span><strong>${todoIngresos.length}</strong></div>`);
-    html+=`<div class="mov-legend">${extrasIng.join("")}</div>`;
+    mosIng.push(mosaicoHTML("#","Cantidad","var(--text)",String(todoIngresos.length),""));
+    html+=mosaicosGridHTML(mosIng);
     document.getElementById("mov-summary").innerHTML=html;
     arrastreEl.style.display="none";
     document.getElementById("mov-tarjeta-filtro").style.display="none";
@@ -1110,89 +1110,79 @@ function renderMovs(){
       + mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda==="USD"&&m.importeOrig).reduce((s,m)=>s+m.importeOrig,0)
       + Math.max(gananciaUSD,0))*100)/100;
 
-    // Barras: Entró (referencia) / Salió (consumo + lo guardado), relativas al mayor de los dos.
-    const maxFlujo=Math.max(ingTotal,gasTotal,1);
-    const consumoPortion=Math.max(gasTotal-Math.max(guardado,0),0);
+    // Contexto "X% de lo que entró" (ver handoff): se calcula sobre lo que entró este período.
+    const pctDeIngreso=v=>ingTotal?Math.round(v/ingTotal*100)+"% de lo que entró":"";
+    const nMovsIngreso=mesMovs.filter(m=>m.tipo==="Ingreso").length;
+    // "N compras · TICKER (o el ticker principal)" del mosaico de Invertido USD.
+    const comprasUSD=mesMovs.filter(m=>m.tipo==="Inversion"&&!isInvSalida(m)&&(m.importeUSD||0)>0);
+    const porTickerUSD={};
+    comprasUSD.forEach(m=>{ porTickerUSD[m.ticker]=(porTickerUSD[m.ticker]||0)+m.importeUSD; });
+    const tickerPrincipalUSD=Object.entries(porTickerUSD).sort((a,b)=>b[1]-a[1])[0];
+    const subInvertidoUSD=comprasUSD.length
+      ? `${comprasUSD.length} ${comprasUSD.length===1?"compra":"compras"}${tickerPrincipalUSD?" · "+tickerPrincipalUSD[0]:""}`
+      : "";
 
+    const balLabel=filtroFecha?"Balance del período":"Balance del mes";
     let html=`<div class="mov-summary-num">
-      <span class="mov-summary-label">Balance ${periodoTxt}</span>
+      <span class="mov-summary-label">${balLabel}</span>
       <span class="mov-summary-val" id="chip-mov-bal" style="color:${balCaja>=0?"var(--success)":"var(--danger)"}">${fmtTotal(0)}</span>
-      <div class="mov-legend" style="margin-top:4px">
-        <div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--success)"></span><span>Entró</span><strong id="chip-mov-ing">${fmtTotal(0)}</strong></div>
-        <div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--danger)"></span><span>Salió</span><strong id="chip-mov-gas">${fmtTotal(0)}</strong></div>
-        ${Math.round(guardado)!==0?`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--save)"></span><span>Ahorrado</span><strong>${fmtTotal(guardado)}</strong></div>`:""}
-      </div>
-    </div>
-    <div class="mov-bars">
-      <div class="mov-bar-row"><span class="mov-bar-name">Entró</span><div class="mov-bar-track"><span class="mov-bar-seg" style="width:${ingTotal/maxFlujo*100}%;background:var(--success)"></span></div><span class="mov-bar-val">${fmtTotal(ingTotal)}</span></div>
-      <div class="mov-bar-row"><span class="mov-bar-name">Salió</span><div class="mov-bar-track"><span class="mov-bar-seg" style="width:${consumoPortion/maxFlujo*100}%;background:var(--danger)"></span>${guardado>0?`<span class="mov-bar-seg" style="width:${guardado/maxFlujo*100}%;background:var(--save)"></span>`:""}</div><span class="mov-bar-val">${fmtTotal(gasTotal)}</span></div>
     </div>`;
-    const legendTodos=[];
+    const mosTodos=[];
+    mosTodos.push(mosaicoHTML("↓","Ingresos","var(--success)",fmtTotal(ingTotal),
+      `${nMovsIngreso} ${nMovsIngreso===1?"movimiento":"movimientos"}`));
+    mosTodos.push(mosaicoHTML("↑","Gastos","var(--danger)",fmtTotal(gasTotal),pctDeIngreso(gasTotal)));
+    if(guardado>0){
+      mosTodos.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(guardado),pctDeIngreso(guardado)));
+    }
+    if(invertidoUSD>=0.01){
+      mosTodos.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${invertidoUSD.toFixed(2)}`,subInvertidoUSD));
+    }
     if(invertidoARS>0){
-      legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Invertido</span><strong style="color:var(--invest)">${fmtTotal(invertidoARS)}</strong></div>`);
+      mosTodos.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(invertidoARS),""));
+    }
+    if(Math.round(ganInv.ars)!==0){
+      const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
+      mosTodos.push(mosaicoHTML("📊","Resultado inv.",cg,(ganInv.ars>=0?"+":"")+fmtTotal(ganInv.ars),""));
     }
     if(Math.round(netoInv.ars)!==0){
       const colorNeto=netoInv.ars>=0?"var(--success)":"var(--invest)";
-      legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorNeto}"></span><span style="color:${colorNeto}">◈ Neto inversión</span><strong style="color:${colorNeto}">${netoInv.ars>0?"+":""}${fmtTotal(netoInv.ars)}</strong></div>`);
+      mosTodos.push(mosaicoHTML("◈","Neto inversión",colorNeto,(netoInv.ars>0?"+":"")+fmtTotal(netoInv.ars),""));
     }
     if(ingresosUSDTotal>0){
-      legendTodos.push(`<div class="mov-legend-item"><span>Ingresos USD</span><strong>USD ${ingresosUSDTotal.toFixed(2)}</strong></div>`);
+      mosTodos.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${ingresosUSDTotal.toFixed(2)}`,""));
     }
     if(gastosUSDTotal>0){
-      legendTodos.push(`<div class="mov-legend-item"><span>Gastos USD</span><strong>USD ${gastosUSDTotal.toFixed(2)}</strong></div>`);
-    }
-    if(invertidoUSD>=0.01){
-      legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:var(--invest)"></span><span style="color:var(--invest)">◈ Invertido USD</span><strong style="color:var(--invest)">USD ${invertidoUSD.toFixed(2)}</strong></div>`);
+      mosTodos.push(mosaicoHTML("↑","Gastos USD","var(--danger)",`USD ${gastosUSDTotal.toFixed(2)}`,""));
     }
     if(Math.abs(netoInv.usd)>=0.01){
       const colorNetoU=netoInv.usd>=0?"var(--success)":"var(--invest)";
-      legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorNetoU}"></span><span style="color:${colorNetoU}">◈ Neto inversión USD</span><strong style="color:${colorNetoU}">${netoInv.usd>0?"+":""}USD ${netoInv.usd.toFixed(2)}</strong></div>`);
-    }
-    // Los chips de inversión van al final, ya ordenados de mayor a menor por el módulo.
-    netosTicker.forEach(t=>{
-      const etiqueta=`◈ ${escapeHtml(t.ticker)}`;
-      if(Math.round(t.ars)!==0){
-        const color=t.ars>=0?"var(--success)":"var(--invest)";
-        legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${color}"></span><span style="color:${color}">${etiqueta}</span><strong style="color:${color}">${t.ars>0?"+":""}${fmtTotal(t.ars)}</strong></div>`);
-      }
-      if(Math.abs(t.usd)>=0.01){
-        const colorU=t.usd>=0?"var(--success)":"var(--invest)";
-        legendTodos.push(`<div class="mov-legend-item"><span class="mov-legend-dot" style="background:${colorU}"></span><span style="color:${colorU}">${etiqueta} USD</span><strong style="color:${colorU}">${t.usd>0?"+":""}USD ${t.usd.toFixed(2)}</strong></div>`);
-      }
-    });
-    if(legendTodos.length) html+=`<div class="mov-legend">${legendTodos.join("")}</div>`;
-    document.getElementById("mov-summary").innerHTML=html;
-    animarNumero(document.getElementById("chip-mov-ing"), ingTotal, 700, fmtTotal);
-    animarNumero(document.getElementById("chip-mov-gas"), gasTotal, 700, fmtTotal);
-    animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);
-    document.getElementById("mov-tarjeta-filtro").style.display="none";
-    document.getElementById("mov-cat-filtro").style.display="none";
-    // Línea informativa: extras del mes (sin arrastre)
-    const partes=[];
-    // El movido bruto ya lo dicen los chips por ticker. Acá queda el resultado, que es otra cosa:
-    // el neto de un chip es el FLUJO del mes (negativo si pusiste plata y no la sacaste), y esto
-    // es lo que realmente ganaste o perdiste, llevando el capital por ticker desde el principio.
-    if(Math.round(ganInv.ars)!==0){
-      const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
-      partes.push(`◈ Resultado: <strong style="color:${cg}">${ganInv.ars>=0?"+":""}${fmtS(ganInv.ars)}</strong>`);
-    }
-    if(aho>0){
-      partes.push(`🏦 Ahorrado: <strong style="color:var(--save)">${fmtS(aho)}</strong>`);
+      mosTodos.push(mosaicoHTML("◈","Neto inversión USD",colorNetoU,(netoInv.usd>0?"+":"")+`USD ${Math.abs(netoInv.usd).toFixed(2)}`,""));
     }
     if(retirado>0){
-      partes.push(`💸 De ahorros: <strong style="color:var(--save)">${fmtS(retirado)}</strong>`);
+      mosTodos.push(mosaicoHTML("💸","De ahorros","var(--save)",fmtTotal(retirado),""));
     }
     // Total a recuperar (gastos compartidos)
     const recup=mesMovs.filter(m=>esConsumo(m)&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
     if(recup>0){
-      partes.push(`🔁 A recuperar: <strong style="color:var(--accent)">${fmtS(recup)}</strong>`);
+      mosTodos.push(mosaicoHTML("🔁","A recuperar","var(--accent)",fmtTotal(recup),""));
     }
-    if(partes.length){
-      arrastreEl.innerHTML=partes.join(" · ");
-      arrastreEl.style.display="block";
-    } else {
-      arrastreEl.style.display="none";
-    }
+    // Los mosaicos por ticker van al final, ya ordenados de mayor a menor por el módulo.
+    netosTicker.forEach(t=>{
+      if(Math.round(t.ars)!==0){
+        const color=t.ars>=0?"var(--success)":"var(--invest)";
+        mosTodos.push(mosaicoHTML("◈",t.ticker,color,(t.ars>0?"+":"")+fmtTotal(t.ars),""));
+      }
+      if(Math.abs(t.usd)>=0.01){
+        const colorU=t.usd>=0?"var(--success)":"var(--invest)";
+        mosTodos.push(mosaicoHTML("◈",`${t.ticker} USD`,colorU,(t.usd>0?"+":"")+`USD ${Math.abs(t.usd).toFixed(2)}`,""));
+      }
+    });
+    html+=mosaicosGridHTML(mosTodos);
+    document.getElementById("mov-summary").innerHTML=html;
+    animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);
+    document.getElementById("mov-tarjeta-filtro").style.display="none";
+    document.getElementById("mov-cat-filtro").style.display="none";
+    arrastreEl.style.display="none";
   }
 
   // ── RESUMEN DE PRESUPUESTOS (solo cuando filtro = Gasto) ──

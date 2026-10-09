@@ -353,21 +353,23 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .mov-topbar-eyebrow{font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .mov-topbar-label{font-size:16px;font-weight:600;letter-spacing:-.3px}
 .mov-search-row input{height:40px;width:100%;padding:0 12px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface);color:var(--text);outline:none}
-/* Resumen: número grande, barras entra/sale, leyenda — reemplaza la grilla de .chip de antes */
+/* Resumen: número grande + mosaicos de color — reemplaza la grilla de .chip de antes (y, antes
+   de eso, las barras entra/sale: ver handoff "número + mosaicos"). */
 .mov-summary{padding:18px 20px 2px;display:flex;flex-direction:column;gap:14px}
 .mov-summary-num{display:flex;flex-direction:column;align-items:center;gap:2px}
 .mov-summary-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .mov-summary-val{font-size:34px;font-weight:700;letter-spacing:-1.2px}
-.mov-bars{display:flex;flex-direction:column;gap:10px}
-.mov-bar-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:10px}
-.mov-bar-name{font-size:12px;font-weight:600;color:var(--muted)}
-.mov-bar-track{height:8px;border-radius:4px;background:var(--border);overflow:hidden;display:flex;gap:2px}
-.mov-bar-seg{height:100%;transition:width .25s ease}
-.mov-bar-val{font-size:13px;font-weight:600;min-width:92px;text-align:right}
-.mov-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px}
-.mov-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
-.mov-legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;display:inline-block}
-.mov-legend-item strong{font-weight:600;color:var(--text)}
+/* Mosaicos: una card por dato, con el fondo tintado del color del tipo — el color se reconoce
+   antes de leer. Si la cantidad es impar, el último ocupa las dos columnas (.mov-mosaic-wide). */
+.mov-mosaic-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.mov-mosaic{border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.mov-mosaic-wide{grid-column:1 / -1}
+.mov-mosaic-top{display:flex;align-items:center;gap:8px;min-width:0}
+.mov-mosaic-glyph{width:26px;height:26px;border-radius:50%;background:var(--surface);display:flex;
+  align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.mov-mosaic-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mov-mosaic-val{font-size:19px;font-weight:700;letter-spacing:-.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mov-mosaic-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Tarjetas: #mov-arrastre pasa a ser texto centrado sin superficie (ver renderMovs) */
 .mov-tarjeta-info{margin:6px 16px 0;font-size:12px;color:var(--muted);text-align:center}
 /* Selector segmentado de los 4 filtros principales (Todos/Gastos/Ingresos/Tarjetas), con
@@ -421,7 +423,6 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .modal-title{font-size:16px;font-weight:600;margin-bottom:14px}
 /* TARJETA CARDS */
 /* MISC */
-.inv-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--invest-light);color:var(--invest);display:inline-block;margin-left:4px}
 
 /* INVERSIONES (handoff opción 1c "Mes primero"): paneles Este mes/Cartera/Evolución, todos del
    mismo tamaño de card que .mov-topbar usa como referencia visual (14px de radio, borde fino). */
