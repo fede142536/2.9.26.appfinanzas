@@ -17,7 +17,7 @@ function init(){
   document.getElementById("exp-desde").value=ym;
   document.getElementById("exp-hasta").value=ym;
   const tcCuotasEl=document.getElementById("tc-cuotas");
-  if(tcCuotasEl) tcCuotasEl.value="6";
+  if(tcCuotasEl) tcCuotasEl.value="1";
   buildCuotasChips();
   ["inp-fecha","inv-fecha","tc-fecha","cambio-fecha"].forEach(refrescarFechaUI);
   syncCurrencyPill("inp-moneda");
@@ -333,6 +333,15 @@ function toggleUSD(){
   const lbl=document.getElementById("inp-importe-label");
   if(lbl) lbl.textContent=isUSD?"Importe (USD)":"Importe (ARS)";
 }
+// Mismo patrón que toggleUSD(), para el importe único de Inversión (antes dos campos
+// ARS/USD por separado; ahora uno solo con pills, igual que Gasto/Ingreso).
+function toggleInvMoneda(){
+  const isUSD=document.getElementById("inv-moneda").value==="USD";
+  const prefix=document.getElementById("inv-importe-prefix");
+  if(prefix) prefix.textContent=isUSD?"USD":"$";
+  const lbl=document.getElementById("inv-importe-label");
+  if(lbl) lbl.textContent=isUSD?"Importe (USD)":"Importe (ARS)";
+}
 // ═══════════════════════════════════════════
 // SWIPE para cambiar de tipo en Cargar (Gasto ↔ Ingreso ↔ Inversión ↔ Tarjeta)
 // ═══════════════════════════════════════════
@@ -561,7 +570,7 @@ function buildCuotasChips(){
   const cont=document.getElementById("tc-cuotas-chips");
   const input=document.getElementById("tc-cuotas");
   if(!cont || !input) return;
-  const actual=parseInt(input.value,10)||6;
+  const actual=parseInt(input.value,10)||1;
   cont.innerHTML=[1,3,6,9,12,18].map(q=>
     `<button type="button" class="cuota-chip${q===actual?" active":""}" data-q="${q}" onclick="pickCuotas(${q})">${q}</button>`
   ).join("");
@@ -687,15 +696,17 @@ async function guardarSinFreno(){
     return;
   }
   if(tipo==="Inversion"){
-    const ars=parseFloat(limpiarImporte(document.getElementById("inv-ars").value))||0;
-    const usd=parseFloat(limpiarImporte(document.getElementById("inv-usd").value))||0;
+    const importeInv=parseFloat(limpiarImporte(document.getElementById("inv-importe").value))||0;
+    const isUSDInv=document.getElementById("inv-moneda").value==="USD";
     const ticker=document.getElementById("inv-ticker").value.trim();
-    if(ars<=0&&usd<=0){showToast("Ingresá al menos un importe");return;}
+    if(importeInv<=0){showToast("Ingresá un importe válido");return;}
     if(!ticker){showToast("Ingresá el ticker o fondo");return;}
     const cat=document.getElementById("inv-cat").value;
     const subcat=document.getElementById("inv-subcat").value;
     const cuentaInvEl=document.getElementById("inv-cuenta");
-    movs.unshift({id:Date.now(),tipo:"Inversion",importe:ars,importeUSD:usd,
+    movs.unshift({id:Date.now(),tipo:"Inversion",
+      importe: isUSDInv ? 0 : importeInv,
+      importeUSD: isUSDInv ? importeInv : 0,
       cat,subcat:cat+" "+subcat,ticker,fecha:document.getElementById("inv-fecha").value,
       cuenta:cuentaInvEl?cuentaInvEl.value:"",
       nota:document.getElementById("inv-nota").value.trim()});
@@ -791,14 +802,17 @@ function resetForm(t){
     // Foco en el importe para cargar el siguiente
     enfocarCampoDeArriba("inp-importe");
   } else if(t==="Inversion"){
-    ["inv-ars","inv-usd","inv-ticker","inv-nota"].forEach(id=>document.getElementById(id).value="");
+    ["inv-importe","inv-ticker","inv-nota"].forEach(id=>document.getElementById(id).value="");
+    document.getElementById("inv-moneda").value="ARS";
+    syncCurrencyPill("inv-moneda");
+    toggleInvMoneda();
     document.getElementById("inv-fecha").value=iso;
     refrescarFechaUI("inv-fecha");
     buildTickerRecientes();
     enfocarCampoDeArriba("inv-ticker");
   } else if(t==="Tarjeta"){
     ["tc-desc","tc-total","tc-nota","tc-mes-fin"].forEach(id=>document.getElementById(id).value="");
-    document.getElementById("tc-cuotas").value="6";
+    document.getElementById("tc-cuotas").value="1";
     buildCuotasChips();
     document.getElementById("tc-frecuente").checked=false;
     document.getElementById("tc-moneda").value="ARS";
