@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v144">
+<meta name="enola-version" content="enola-v145">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -610,11 +610,11 @@
   <!-- Calculadora flotante: vive DENTRO de #page-cargar a propósito (ver handoff) — así hereda
        --tema-color/--tema-light del tipo activo y queda oculta sola cuando no estás en Cargar,
        sin tener que coordinarla a mano con showPage() como al FAB de siempre. -->
-  <button type="button" id="fab-calculadora" onclick="abrirCalculadora()" aria-label="Abrir calculadora">🖩</button>
+  <button type="button" id="fab-calculadora" onclick="abrirCalculadora()" aria-label="Abrir calculadora">=</button>
   <div class="modal-overlay" id="modal-calculadora" onclick="if(event.target===this)cerrarCalculadora()">
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-handle"></div>
-      <div class="modal-title">🖩 Calculadora</div>
+      <div class="modal-title">Calculadora</div>
       <div class="calc-display" id="calc-display">0</div>
       <!-- Mismo orden que la calculadora del teléfono: C ⌫ ÷ × / 7 8 9 − / 4 5 6 + / 1 2 3 = /
            0 , — sin celdas que ocupen más de una fila o columna (eso corría "=" y "0" de lugar:
