@@ -182,6 +182,153 @@ function syncCurrencyPill(selectId){
 }
 
 // ═══════════════════════════════════════════
+// CALCULADORA FLOTANTE (pantalla Cargar)
+// ═══════════════════════════════════════════
+// Para hacer una cuenta rápida (suma, resta, multiplicación, división) sin salir de Cargar ni
+// perder lo que ya tenías tipeado en el resto del formulario. "Usar este resultado" lo escribe
+// en el campo de importe que estabas tocando (se seguimiento con el foco; sin foco previo, cae
+// en el campo principal del tipo activo) y dispara el mismo oninput de siempre, así la máscara
+// de miles y los cálculos dependientes (calcCuota, calcTipoCambio) corren solos.
+let calcExpr="";
+let calcMostrandoResultado=false;
+let calcUltimoCampoId=null;
+
+document.addEventListener("focusin", e=>{
+  const el=e.target.closest && e.target.closest(".amount-input");
+  if(el) calcUltimoCampoId=el.id;
+});
+
+function abrirCalculadora(){
+  calcExpr="";
+  calcMostrandoResultado=false;
+  actualizarDisplayCalc();
+  document.getElementById("modal-calculadora").classList.add("open");
+}
+function cerrarCalculadora(){
+  document.getElementById("modal-calculadora").classList.remove("open");
+}
+function actualizarDisplayCalc(){
+  const d=document.getElementById("calc-display");
+  if(d) d.textContent=calcExpr||"0";
+}
+function calcEsOperador(ch){
+  return ch==="+"||ch==="−"||ch==="×"||ch==="÷";
+}
+function calcInput(tecla){
+  if(tecla==="C"){
+    calcExpr="";
+    calcMostrandoResultado=false;
+    actualizarDisplayCalc();
+    return;
+  }
+  if(tecla==="⌫"){
+    calcExpr=calcExpr.slice(0,-1);
+    calcMostrandoResultado=false;
+    actualizarDisplayCalc();
+    return;
+  }
+  if(tecla==="="){
+    const r=evaluarExpresionCalc(calcExpr);
+    if(r===null) return;
+    calcExpr=formatearResultadoCalc(r);
+    calcMostrandoResultado=true;
+    actualizarDisplayCalc();
+    return;
+  }
+  if(calcEsOperador(tecla)){
+    if(!calcExpr) return; // no arrancar la cuenta con un operador
+    const ultimo=calcExpr.slice(-1);
+    if(calcEsOperador(ultimo)){ calcExpr=calcExpr.slice(0,-1)+tecla; }
+    else { calcExpr+=tecla; }
+    calcMostrandoResultado=false;
+    actualizarDisplayCalc();
+    return;
+  }
+  if(tecla===","){
+    if(calcMostrandoResultado){ calcExpr=""; calcMostrandoResultado=false; }
+    const numeroActual=calcExpr.split(/[+−×÷]/).pop();
+    if(numeroActual.includes(",")) return; // ya tiene coma decimal
+    calcExpr += calcExpr ? "," : "0,";
+    actualizarDisplayCalc();
+    return;
+  }
+  // dígito
+  if(calcMostrandoResultado){ calcExpr=""; calcMostrandoResultado=false; }
+  calcExpr+=tecla;
+  actualizarDisplayCalc();
+}
+// "1234,5" → 1234.5 (sin puntos de miles: acá se tipea en crudo, no hace falta limpiarImporte)
+function formatearResultadoCalc(n){
+  return (Math.round(n*100)/100).toString().replace(".", ",");
+}
+// Separa la expresión en números y operadores ("120×3−40" → ["120","×","3","−","40"])
+function tokenizarCalc(expr){
+  const tokens=[]; let actual="";
+  for(const ch of expr){
+    if(calcEsOperador(ch)){
+      if(actual){ tokens.push(actual); actual=""; }
+      tokens.push(ch);
+    } else { actual+=ch; }
+  }
+  if(actual) tokens.push(actual);
+  return tokens;
+}
+// Evalúa una expresión con +, −, ×, ÷ respetando la precedencia (× ÷ antes que + −). Sin
+// paréntesis: alcanza para las "cuentas simples" que pidió el handoff, y evita meter un eval().
+function evaluarExpresionCalc(expr){
+  if(!expr) return null;
+  const tokens=tokenizarCalc(expr).map(t=> calcEsOperador(t) ? t : parseFloat(t.replace(",",".")));
+  if(typeof tokens[0]!=="number" || isNaN(tokens[0])) return null;
+  const paso1=[tokens[0]];
+  for(let i=1;i<tokens.length;i+=2){
+    const op=tokens[i], val=tokens[i+1];
+    if(val===undefined || isNaN(val)) break;
+    if(op==="×"||op==="÷"){
+      const prev=paso1.pop();
+      paso1.push(op==="×" ? prev*val : (val!==0 ? prev/val : NaN));
+    } else {
+      paso1.push(op, val);
+    }
+  }
+  let total=paso1[0];
+  for(let i=1;i<paso1.length;i+=2){
+    const op=paso1[i], val=paso1[i+1];
+    if(val===undefined || isNaN(val)) break;
+    total = op==="+" ? total+val : total-val;
+  }
+  return isNaN(total) ? null : Math.round(total*100)/100;
+}
+// Qué campo de importe recibe el resultado: el último que tocaste (con foco), o si todavía no
+// tocaste ninguno, el campo principal del tipo de movimiento que está activo en Cargar.
+function campoImporteActivo(){
+  if(calcUltimoCampoId && document.getElementById(calcUltimoCampoId)) return calcUltimoCampoId;
+  if(typeof tipo==="undefined") return "inp-importe";
+  if(tipo==="Inversion") return "inv-importe";
+  if(tipo==="Tarjeta") return "tc-total";
+  if(tipo==="Cambio") return "cambio-ars";
+  return "inp-importe";
+}
+function usarResultadoCalculadora(){
+  if(!calcMostrandoResultado){
+    const r=evaluarExpresionCalc(calcExpr);
+    if(r===null){ showToast("Completá una cuenta válida"); return; }
+    calcExpr=formatearResultadoCalc(r);
+    calcMostrandoResultado=true;
+  }
+  const valor=parseFloat(calcExpr.replace(",","."));
+  if(isNaN(valor)){ showToast("Completá una cuenta válida"); return; }
+  const campo=document.getElementById(campoImporteActivo());
+  if(!campo){ cerrarCalculadora(); return; }
+  // Los campos enmascarados (texto) se escriben en crudo con coma decimal y dejan que su propio
+  // oninput (aplicarMascaraMiles) los formatee; los <input type="number"> (cambio-usd, inp-recup)
+  // necesitan punto decimal y sin puntos de miles.
+  campo.value = campo.type==="number" ? String(valor) : calcExpr;
+  campo.dispatchEvent(new Event("input", {bubbles:true}));
+  cerrarCalculadora();
+  campo.focus();
+}
+
+// ═══════════════════════════════════════════
 // TEMA (claro / oscuro / auto)
 // ═══════════════════════════════════════════
 function setTheme(t){

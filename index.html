@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v142">
+<meta name="enola-version" content="enola-v143">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -427,22 +427,18 @@
     <!-- INVERSIÓN -->
     <div id="campos-inv" style="display:none">
       <div class="amount-card">
-        <div class="amount-hero-label">Importe</div>
-        <div class="dual-amount-grid">
-          <div class="dual-amount-col">
-            <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">$</span>
-              <input type="text" id="inv-ars" class="form-input amount-input" aria-label="Importe en pesos" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
-            </div>
-            <span class="dual-amount-sub">en pesos</span>
-          </div>
-          <span class="dual-amount-sep">y/o</span>
-          <div class="dual-amount-col">
-            <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">USD</span>
-              <input type="text" id="inv-usd" class="form-input amount-input" aria-label="Importe en dólares" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
-            </div>
-            <span class="dual-amount-sub">en dólares</span>
-          </div>
+        <div class="amount-hero-label" id="inv-importe-label">Importe (ARS)</div>
+        <div class="amount-wrap amount-hero"><span class="amount-prefix" id="inv-importe-prefix">$</span>
+          <input type="text" id="inv-importe" class="form-input amount-input" aria-label="Importe" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
         </div>
+        <div class="currency-pills">
+          <button type="button" class="currency-pill active" data-for="inv-moneda" data-val="ARS" onclick="pillMoneda('inv-moneda','ARS')">🇦🇷 ARS</button>
+          <button type="button" class="currency-pill" data-for="inv-moneda" data-val="USD" onclick="pillMoneda('inv-moneda','USD')">🇺🇸 USD</button>
+        </div>
+        <select id="inv-moneda" class="form-select" onchange="toggleInvMoneda()" aria-label="Moneda" hidden>
+          <option value="ARS">🇦🇷 Pesos (ARS)</option>
+          <option value="USD">🇺🇸 Dólares (USD)</option>
+        </select>
       </div>
       <div class="card">
         <div class="form-group">
@@ -611,6 +607,39 @@
       </div>
       <p class="txt-xs txt-muted" style="text-align:center;padding:0 20px">Comprar o vender dólares no es un gasto: es plata que cambia de bolsillo. Se guardan las dos patas.</p>
     </div>
+  <!-- Calculadora flotante: vive DENTRO de #page-cargar a propósito (ver handoff) — así hereda
+       --tema-color/--tema-light del tipo activo y queda oculta sola cuando no estás en Cargar,
+       sin tener que coordinarla a mano con showPage() como al FAB de siempre. -->
+  <button type="button" id="fab-calculadora" onclick="abrirCalculadora()" aria-label="Abrir calculadora">🧮</button>
+  <div class="modal-overlay" id="modal-calculadora" onclick="if(event.target===this)cerrarCalculadora()">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-handle"></div>
+      <div class="modal-title">🧮 Calculadora</div>
+      <div class="calc-display" id="calc-display">0</div>
+      <div class="calc-grid">
+        <button type="button" class="calc-btn calc-btn-op calc-btn-clear" onclick="calcInput('C')">C</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcInput('⌫')" aria-label="Borrar">⌫</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcInput('÷')" aria-label="Dividido">÷</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcInput('×')" aria-label="Por">×</button>
+        <button type="button" class="calc-btn" onclick="calcInput('7')">7</button>
+        <button type="button" class="calc-btn" onclick="calcInput('8')">8</button>
+        <button type="button" class="calc-btn" onclick="calcInput('9')">9</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcInput('−')" aria-label="Menos">−</button>
+        <button type="button" class="calc-btn" onclick="calcInput('4')">4</button>
+        <button type="button" class="calc-btn" onclick="calcInput('5')">5</button>
+        <button type="button" class="calc-btn" onclick="calcInput('6')">6</button>
+        <button type="button" class="calc-btn calc-btn-op" onclick="calcInput('+')" aria-label="Más">+</button>
+        <button type="button" class="calc-btn" onclick="calcInput('1')">1</button>
+        <button type="button" class="calc-btn" onclick="calcInput('2')">2</button>
+        <button type="button" class="calc-btn" onclick="calcInput('3')">3</button>
+        <button type="button" class="calc-btn calc-btn-eq" style="grid-row:4 / span 2" onclick="calcInput('=')" aria-label="Igual">=</button>
+        <button type="button" class="calc-btn" style="grid-column:1 / span 2" onclick="calcInput('0')">0</button>
+        <button type="button" class="calc-btn" onclick="calcInput(',')" aria-label="Coma decimal">,</button>
+      </div>
+      <button type="button" class="btn-primary" onclick="usarResultadoCalculadora()">Usar este resultado</button>
+      <button type="button" class="btn-sm" style="margin-top:8px" onclick="cerrarCalculadora()">Cerrar</button>
+    </div>
+  </div>
   <div class="save-bar">
     <button id="btn-guardar" class="btn-primary btn-gasto" onclick="guardar()">Guardar gasto</button>
   </div>
