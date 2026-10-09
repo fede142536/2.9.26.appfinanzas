@@ -34,7 +34,9 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .calc-btn{border:none;border-radius:12px;background:var(--bg);color:var(--text);font-size:19px;font-weight:600;
   cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .1s}
 .calc-btn:active{transform:scale(.94)}
-.calc-btn-op{background:var(--tema-light,var(--accent-light));color:var(--tema-color,var(--accent))}
+/* Mismo fondo neutro que los dígitos (igual que la calculadora del teléfono): la diferencia es
+   solo el color del texto, no un fondo aparte — eso hacía que se viera recargada. */
+.calc-btn-op{color:var(--tema-color,var(--accent))}
 .calc-btn-clear{color:var(--danger)}
 .calc-btn-eq{background:var(--tema-color,var(--accent));color:#fff}
 /* Fondo oscuro detrás del menú: invisible y sin capturar toques hasta que se abre */
