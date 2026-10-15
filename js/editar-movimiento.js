@@ -19,6 +19,7 @@ function openEditModal(id){
   if(m.tipo==="Gasto"||m.tipo==="Ingreso"){
     populateEditCatSelect(m.tipo,m.cat,m.subcat);
   }
+  if(m.tipo==="Inversion") previsualizarMepUsd();
 }
 // ═══════════════════════════════════════════
 // EDITAR UN CAMBIO DE MONEDA
@@ -63,6 +64,15 @@ function openEditCambioModal(cambioId){
   const btnGuardar=document.querySelector("#modal-edit .btn-primary");
   if(btnGuardar) btnGuardar.setAttribute("onclick","guardarEditCambio()");
   previsualizarEditCambio();
+}
+
+// Tipo de cambio en vivo debajo del campo de dólares de una compra MEP.
+function previsualizarMepUsd(){
+  const el=document.querySelector("#edit-mep-tc");
+  const arsEl=document.querySelector("#edit-ars"), usdEl=document.querySelector("#edit-mep-usd");
+  if(!el||!arsEl||!usdEl) return;
+  const tc=tipoDeCambio(parseFloat(arsEl.value)||0, parseFloat(usdEl.value)||0);
+  el.textContent = tc ? `Tipo de cambio: ${fmtS(tc)} por dólar` : "";
 }
 
 function previsualizarEditCambio(){
@@ -288,11 +298,32 @@ function renderEditForm(m){
     `;
   }
   if(m.tipo==="Inversion"){
+    // Una compra MEP en pesos no tiene "Importe USD" de inversión: los dólares son lo que recibió,
+    // y al cargarlos pasa a ser una compra de dólares (ver convertirMepEnCambio).
+    const mep=esCompraMepEditable(m);
     return `
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--invest-light);color:var(--invest);margin-bottom:10px">INVERSIÓN · ${escapeHtml(m.subcat)}</div>
       <div class="form-group"><label class="form-label">Ticker / Fondo</label>
         <input type="text" id="edit-ticker" class="form-input" value="${escapeHtml(m.ticker)}">
       </div>
+      ${mep?`
+      <div class="form-group"><label class="form-label" for="edit-ars">Pesos que pagaste</label>
+        <div class="amount-wrap"><span class="amount-prefix">$</span>
+          <input type="number" id="edit-ars" class="form-input" style="padding-left:26px" value="${m.importe||0}" inputmode="decimal" step="any" oninput="previsualizarMepUsd()">
+        </div>
+      </div>
+      <div class="form-group" style="background:var(--accent-light);border-radius:var(--radius-sm);padding:12px">
+        <label class="form-label" for="edit-mep-usd" style="color:var(--accent);font-weight:600">💵 Dólares que recibiste</label>
+        <div class="amount-wrap"><span class="amount-prefix" style="font-size:11px;left:8px">USD</span>
+          <input type="number" id="edit-mep-usd" class="form-input" style="padding-left:40px" value="${m.importeUSD||""}" placeholder="0" inputmode="decimal" step="any" oninput="previsualizarMepUsd()">
+        </div>
+        <div id="edit-mep-tc" class="txt-xs txt-muted" style="margin-top:6px"></div>
+        <p class="txt-xs txt-muted" style="margin:8px 0 10px;line-height:1.45">Al cargarlos, esta compra pasa a ser una compra de dólares: deja de figurar como inversión, y los dólares suman a tu saldo en USD y al Dashboard.</p>
+        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
+          <input type="checkbox" id="edit-mep-ahorro" class="chk-custom" style="--chk:var(--save)">
+          <span style="color:var(--save);font-weight:500">🏦 Guardarlos en el fondo de ahorro</span>
+        </label>
+      </div>`:`
       <div class="two-col">
         <div class="form-group"><label class="form-label">Importe ARS</label>
           <div class="amount-wrap"><span class="amount-prefix">$</span>
@@ -304,7 +335,7 @@ function renderEditForm(m){
             <input type="number" id="edit-usd" class="form-input" style="padding-left:40px" value="${m.importeUSD||0}" inputmode="decimal" step="any">
           </div>
         </div>
-      </div>
+      </div>`}
       <div class="form-group"><label class="form-label">Fecha</label>
         <input type="date" id="edit-fecha" class="form-input" value="${(m.fecha||'').slice(0,10)}">
       </div>
@@ -406,16 +437,38 @@ function guardarEdit(){
       m.recuperable=parseFloat(document.getElementById("edit-recup").value)||0;
     }
   } else if(m.tipo==="Inversion"){
+    // querySelector, no getElementById — ver el comentario de onEditMonedaChange() más arriba.
+    // Si está el campo de dólares de una compra MEP, es ese; si no, el "Importe USD" de siempre.
+    const mepUsdEl=document.querySelector("#edit-mep-usd");
     const ars=parseFloat(document.getElementById("edit-ars").value)||0;
-    const usd=parseFloat(document.getElementById("edit-usd").value)||0;
+    const usd=parseFloat((mepUsdEl||document.getElementById("edit-usd")).value)||0;
     if(ars<=0&&usd<=0){showToast("Ingresá al menos un importe");return;}
     m.ticker=document.getElementById("edit-ticker").value.trim();
     m.importe=Math.round(ars*100)/100;
-    m.importeUSD=Math.round(usd*100)/100;
     m.fecha=document.getElementById("edit-fecha").value;
     const cuentaInvEl=document.getElementById("edit-cuenta");
     if(cuentaInvEl) m.cuenta=cuentaInvEl.value;
     m.nota=document.getElementById("edit-nota").value.trim();
+    if(mepUsdEl && usd>0){
+      if(ars<=0){showToast("Poné los pesos que pagaste");return;}
+      m.importeUSD=0;
+      const ahorroEl=document.querySelector("#edit-mep-ahorro");
+      const conv=convertirMepEnCambio(m, usd, {guardarEnFondo:!!(ahorroEl&&ahorroEl.checked), lista:movs, idDeposito:Date.now()});
+      if(!conv){showToast("No pude cargar los dólares");return;}
+      movs.splice(movs.findIndex(x=>x.id===m.id), 1, conv.sale, conv.entra);
+      if(conv.deposito) movs.push(conv.deposito);
+      save();
+      vibrar([15,50,15]);
+      closeEditModal();
+      const tc=tipoDeCambio(conv.montoARS, conv.montoUSD);
+      showToast(`Compra de dólares cargada${tc?` · ${fmtS(tc)} por dólar`:""}${conv.deposito?" · al fondo de ahorro":""} ✓`);
+      renderMovs();
+      renderInv();
+      renderAhorro();
+      if(document.getElementById("dash-cuentas")) renderDashCuentas();
+      return;
+    }
+    m.importeUSD = mepUsdEl ? 0 : Math.round(usd*100)/100;
   }
   save();
   vibrar([15,50,15]);

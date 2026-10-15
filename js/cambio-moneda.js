@@ -233,6 +233,49 @@ function completarCambioDesde(mov, montoFaltante){
 }
 
 // ═══════════════════════════════════════════
+// COMPRA MEP CARGADA COMO INVERSIÓN → CARGARLE LOS DÓLARES DESDE EL EDITOR
+// ═══════════════════════════════════════════
+// Misma conversión que ofrece la migración de arriba, pero disparada desde el editor de la
+// propia inversión: el usuario abre la compra MEP, escribe cuántos dólares recibió y (si quiere)
+// los manda al fondo de ahorro. Reusa completarCambioDesde() y crearDepositoAhorroUSD(), así que
+// el resto de la app (flujo USD del Dashboard, "Mis dólares", Fondo USD) ya lo entiende.
+const MEP_PISTAS = /\bmep\b|\bccl\b|contado\s*con\s*liqui/i;
+
+// ¿Es una compra MEP en pesos, a la que todavía se le pueden cargar los dólares? Una venta no
+// (es un cobro, no una compra de dólares) ni una cargada solo en dólares (esa pide los pesos).
+function esCompraMepEditable(m){
+  if(!m || m.tipo!=="Inversion" || isInvSalida(m)) return false;
+  if(!((m.importe||0)>0)) return false;
+  return MEP_PISTAS.test(`${m.cat||""} ${m.subcat||""} ${m.nota||""}`);
+}
+
+// Primer id >= `desde` que no esté tomado en `lista`. completarCambioDesde() le pone a la pata
+// que entra `cambioId+1`, y los ids de un import vienen consecutivos: sin esto la pata nueva
+// pisaba el id del movimiento siguiente.
+function idLibre(desde, lista){
+  const usados=new Set((lista||[]).map(x=>x.id));
+  let id=desde;
+  while(usados.has(id)) id++;
+  return id;
+}
+
+// Convierte la compra MEP `mov` en un cambio con `usd` dólares. Función pura: no toca `movs`.
+// Devuelve {sale, entra, deposito, montoARS, montoUSD}; `deposito` es el movimiento que manda los
+// dólares al fondo USD (o null). El que llama reemplaza `mov` por sale+entra y agrega el depósito.
+function convertirMepEnCambio(mov, usd, {guardarEnFondo, lista, idDeposito}={}){
+  const r=completarCambioDesde(mov, usd);
+  if(!r) return null;
+  const otros=(lista||[]).filter(x=>x.id!==mov.id);
+  r.entra.id=idLibre(r.sale.id+1, otros);
+  const deposito = guardarEnFondo
+    ? crearDepositoAhorroUSD({fecha:r.entra.fecha, montoUSD:r.montoUSD, cuenta:r.entra.cuenta,
+        nota:r.entra.nota, origenCambioId:r.sale.cambioId,
+        idBase:idLibre(idDeposito||r.entra.id+1, [...otros, r.entra])})
+    : null;
+  return {...r, deposito};
+}
+
+// ═══════════════════════════════════════════
 // RENDER DE LA MIGRACIÓN
 // ═══════════════════════════════════════════
 
