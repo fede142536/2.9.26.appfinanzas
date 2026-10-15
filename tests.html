@@ -2464,6 +2464,143 @@ test("guardarEditCambio actualiza usaAhorro en la pata que sale, vendiendo", asy
 });
 
 // ═══════════════════════════════════════════
+// COMPRA MEP: CARGARLE LOS DÓLARES DESDE EL EDITOR DE LA INVERSIÓN
+// ═══════════════════════════════════════════
+grupo("Compra MEP: dólares desde el editor");
+
+// Abrir una inversión MEP en pesos, escribir cuántos dólares recibiste y (si querés) mandarlos al
+// fondo de ahorro. Reusa el cambio de moneda de dos patas, así que Dashboard, "Mis dólares" y
+// Fondo USD ya lo entienden. Pagar la tarjeta con esos dólares es un Gasto en USD común.
+const MEP_EDIT = ()=>({id:7100, tipo:"Inversion", importe:39467.53, importeUSD:0, cat:"MEP", subcat:"MEP Compra",
+                       ticker:"AL30", fecha:"2026-09-03", cuenta:"Balanz", nota:""});
+
+test("solo una compra MEP en pesos admite cargarle los dólares", ()=>{
+  cierto(esCompraMepEditable(MEP_EDIT()), "la compra MEP en pesos tiene que ser editable");
+  cierto(!esCompraMepEditable({...MEP_EDIT(), subcat:"MEP Venta"}), "una venta es un cobro, no una compra de dólares");
+  cierto(!esCompraMepEditable({...MEP_EDIT(), importe:0, importeUSD:54.21}), "la cargada solo en dólares pide los pesos, no los dólares");
+  cierto(!esCompraMepEditable({id:1, tipo:"Inversion", importe:300000, cat:"CEDEARs", subcat:"CEDEARs Compra", ticker:"SPY"}), "un CEDEAR no es MEP");
+  cierto(!esCompraMepEditable({id:2, tipo:"Gasto", importe:1000, cat:"MEP", subcat:"MEP Compra"}), "un Gasto tampoco");
+  cierto(!esCompraMepEditable(null));
+});
+
+test("convertir sin tildar el fondo deja las dos patas y ningún depósito", ()=>{
+  const r=convertirMepEnCambio(MEP_EDIT(), 27, {lista:[]});
+  igual(r.sale.tipo, "Gasto"); igual(r.sale.importe, 39467.53); igual(r.sale.ticker, undefined, "ya no es una inversión");
+  igual(r.entra.tipo, "Ingreso"); igual(r.entra.moneda, "USD"); igual(r.entra.importeOrig, 27);
+  igual(r.sale.cambioId, r.entra.cambioId, "las dos patas tienen que estar ligadas");
+  igual(r.deposito, null);
+});
+
+test("tildando el fondo se agrega un depósito en USD ligado al cambio", ()=>{
+  const r=convertirMepEnCambio(MEP_EDIT(), 27, {guardarEnFondo:true, lista:[]});
+  igual(r.deposito.tipo, "Gasto"); igual(r.deposito.moneda, "USD"); igual(r.deposito.importeOrig, 27);
+  cierto(r.deposito.esAhorro, "tiene que ser un depósito al fondo");
+  igual(r.deposito.origenCambioId, r.sale.cambioId, "ligado por origenCambioId, como el cambio normal");
+  igual(depositoDeCambio(r.sale.cambioId, [r.sale, r.entra, r.deposito]), r.deposito);
+});
+
+test("la pata nueva no pisa el id del movimiento que viene justo después", ()=>{
+  const siguiente={id:7101, tipo:"Gasto", importe:10, cat:"Otros", fecha:"2026-09-03"};
+  const r=convertirMepEnCambio(MEP_EDIT(), 27, {guardarEnFondo:true, lista:[MEP_EDIT(), siguiente], idDeposito:7101});
+  const ids=[r.sale.id, r.entra.id, r.deposito.id, siguiente.id];
+  igual(new Set(ids).size, 4, "ids repetidos: "+ids.join(","));
+});
+
+test("el balance en pesos baja por lo pagado y los dólares entran al flujo USD del Dashboard", ()=>{
+  const r=convertirMepEnCambio(MEP_EDIT(), 27, {lista:[]});
+  const t=totalesDePlata([r.sale, r.entra], 0);
+  igual(t.balance, -39467.53, "igual que cualquier compra de dólares");
+  const usd=conTarjetas([], ()=>resumenUSDdelAnio([r.sale, r.entra], 2026));
+  igual(usd.ing, 27, "los dólares tienen que entrar");
+  igual(usd.neto, 27);
+});
+
+test("al fondo: Fondo USD sube, y pagar la tarjeta con ellos queda registrado y lo baja", ()=>{
+  const r=convertirMepEnCambio(MEP_EDIT(), 27, {guardarEnFondo:true, lista:[]});
+  const pagoTarjeta={id:7200, tipo:"Gasto", cat:"Tarjeta de Crédito", subcat:"", moneda:"USD", importe:0,
+                     importeOrig:20, fecha:"2026-09-05", usaAhorro:true, nota:"Pago de la tarjeta"};
+  const lista=[r.sale, r.entra, r.deposito, pagoTarjeta];
+  const antes=movs;
+  try{
+    movs=[r.sale, r.entra, r.deposito];
+    igual(calcularFondoUSD(), 27, "los dólares tildados como ahorro tienen que sumar al fondo");
+    movs=lista;
+    igual(calcularFondoUSD(), 7, "el pago de la tarjeta con esos dólares tiene que restar del fondo");
+  } finally { movs=antes; }
+  const usd=conTarjetas([], ()=>resumenUSDdelAnio(lista, 2026));
+  igual(usd.ret, 20, "el pago figura como pagado con el fondo");
+  igual(usd.aho, 27);
+  igual(usd.neto, 0, "27 entran, 27 van al fondo y lo pagado con el fondo no mueve el saldo a mano");
+});
+
+test("sin fondo, pagar la tarjeta con esos dólares resta del cash USD", ()=>{
+  const r=convertirMepEnCambio(MEP_EDIT(), 27, {lista:[]});
+  const pagoTarjeta={id:7200, tipo:"Gasto", cat:"Tarjeta de Crédito", moneda:"USD", importe:0, importeOrig:20,
+                     fecha:"2026-09-05", nota:""};
+  const usd=conTarjetas([], ()=>resumenUSDdelAnio([r.sale, r.entra, pagoTarjeta], 2026));
+  igual(usd.neto, 7, "27 que entraron menos 20 que se fueron");
+});
+
+test("el pago de la tarjeta en USD no toca el balance en pesos", ()=>{
+  const pagoTarjeta={id:7200, tipo:"Gasto", cat:"Tarjeta de Crédito", moneda:"USD", importe:0, importeOrig:20,
+                     fecha:"2026-09-05", nota:""};
+  igual(totalesDePlata([pagoTarjeta], 0).balance, 0);
+});
+
+test("el editor de una compra MEP ofrece los dólares y el fondo, no el Importe USD de siempre", ()=>{
+  const e=abrirEdicion(MEP_EDIT());
+  try{
+    cierto(!!document.querySelector("#edit-mep-usd"), "falta el campo de dólares recibidos");
+    cierto(!!document.querySelector("#edit-mep-ahorro"), "falta la casilla del fondo de ahorro");
+    cierto(!document.querySelector("#edit-usd"), "no puede haber dos campos de dólares");
+  } finally { e.cerrar(); }
+});
+
+test("el editor de una inversión que no es MEP no cambió", ()=>{
+  const e=abrirEdicion({id:7300, tipo:"Inversion", importe:300000, importeUSD:0, cat:"CEDEARs", subcat:"CEDEARs Compra",
+                        ticker:"SPY", fecha:"2026-09-03", cuenta:"Balanz", nota:""});
+  try{
+    cierto(!!document.querySelector("#edit-usd"), "perdió su Importe USD");
+    cierto(!document.querySelector("#edit-mep-usd"), "un CEDEAR no puede ofrecer dólares recibidos");
+  } finally { e.cerrar(); }
+});
+
+// renderInv() y renderAhorro() dibujan gráficos en un <canvas>, que esta página de tests no
+// tiene: se apagan solo mientras corre guardarEdit() y se devuelven en el finally.
+function sinGraficos(fn){
+  const inv=renderInv, aho=renderAhorro;
+  renderInv=()=>{}; renderAhorro=()=>{};
+  try { return fn(); } finally { renderInv=inv; renderAhorro=aho; }
+}
+
+test("guardar con dólares convierte la compra en cambio y la manda al fondo", ()=>sinGraficos(()=>{
+  const e=abrirEdicion(MEP_EDIT());
+  try{
+    document.querySelector("#edit-mep-usd").value="27";
+    document.querySelector("#edit-mep-ahorro").checked=true;
+    guardarEdit();
+    cierto(!movs.some(m=>m.tipo==="Inversion"), "tendría que haber dejado de ser una inversión");
+    const sale=movs.find(m=>m.cambioPata==="sale"), entra=movs.find(m=>m.cambioPata==="entra");
+    cierto(!!sale && !!entra, "faltan las patas del cambio");
+    igual(sale.importe, 39467.53); igual(entra.importeOrig, 27);
+    const dep=depositoDeCambio(sale.cambioId, movs);
+    cierto(!!dep && dep.esAhorro && dep.importeOrig===27, "falta el depósito al fondo USD");
+    igual(new Set(movs.map(m=>m.id)).size, movs.length, "ids repetidos");
+  } finally { e.cerrar(); }
+}));
+
+test("guardar con los dólares vacíos sigue siendo una inversión y no los inventa", ()=>sinGraficos(()=>{
+  const e=abrirEdicion({...MEP_EDIT(), importeUSD:12});
+  try{
+    document.querySelector("#edit-mep-usd").value="";
+    guardarEdit();
+    igual(movs.length, 1);
+    igual(movs[0].tipo, "Inversion");
+    igual(movs[0].importeUSD, 0, "el USD que había quedó borrado a pedido del usuario");
+  } finally { e.cerrar(); }
+}));
+
+// ═══════════════════════════════════════════
 // ORDEN DE LA LISTA DE MOVIMIENTOS
 // ═══════════════════════════════════════════
 grupo("Movimientos: orden cronológico");
