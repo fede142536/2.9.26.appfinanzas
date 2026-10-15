@@ -1122,10 +1122,15 @@ function renderMovs(){
       ? `${comprasUSD.length} ${comprasUSD.length===1?"compra":"compras"}${tickerPrincipalUSD?" · "+tickerPrincipalUSD[0]:""}`
       : "";
 
+    // El número grande es lo DISPONIBLE: el balance menos lo que se mandó al fondo de ahorro. Lo
+    // ahorrado no se pierde de vista (sigue su mosaico "Ahorrado"), pero esa plata ya no está a
+    // mano. Las inversiones no se descuentan acá: solo cuenta su resultado, como en el balance.
+    const disponible=Math.round((balCaja-guardado)*100)/100;
     const balLabel=filtroFecha?"Balance del período":"Balance del mes";
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">${balLabel}</span>
-      <span class="mov-summary-val" id="chip-mov-bal" style="color:${balCaja>=0?"var(--success)":"var(--danger)"}">${fmtTotal(0)}</span>
+      <span class="mov-summary-val" id="chip-mov-bal" style="color:${disponible>=0?"var(--success)":"var(--danger)"}">${fmtTotal(0)}</span>
+      ${guardado>0?`<span class="mov-summary-sub">Disponible, ya descontado lo ahorrado (${fmtTotal(guardado)})</span>`:""}
     </div>`;
     const mosTodos=[];
     mosTodos.push(mosaicoHTML("↓","Ingresos","var(--success)",fmtTotal(ingTotal),
@@ -1179,7 +1184,7 @@ function renderMovs(){
     });
     html+=mosaicosGridHTML(mosTodos);
     document.getElementById("mov-summary").innerHTML=html;
-    animarNumero(document.getElementById("chip-mov-bal"), balCaja, 700, fmtTotal);
+    animarNumero(document.getElementById("chip-mov-bal"), disponible, 700, fmtTotal);
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
     arrastreEl.style.display="none";

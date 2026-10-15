@@ -359,6 +359,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .mov-summary-num{display:flex;flex-direction:column;align-items:center;gap:2px}
 .mov-summary-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .mov-summary-val{font-size:34px;font-weight:700;letter-spacing:-1.2px}
+.mov-summary-sub{font-size:12px;color:var(--muted);margin-top:2px}
 /* Mosaicos: una card por dato, con el fondo tintado del color del tipo — el color se reconoce
    antes de leer. Si la cantidad es impar, el último ocupa las dos columnas (.mov-mosaic-wide). */
 .mov-mosaic-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}

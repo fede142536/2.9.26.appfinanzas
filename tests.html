@@ -433,6 +433,39 @@ test("Balance = Ingresos − Gastos, con el resultado de inversión adentro de l
   igual(netoInvTotal(MES_INV).ars, -200000, "el flujo de caja en sí no cambió, solo dejó de sumarse al balance");
 });
 
+// El número grande de "Todos" es lo DISPONIBLE: el balance menos lo que se mandó al fondo de
+// ahorro. El mosaico "Ahorrado" sigue mostrando cuánto se ahorró.
+const MES_CON_AHORRO=(ahorro)=>[
+  {id:1, tipo:"Ingreso", cat:"Sueldo",       subcat:"", moneda:"ARS", importe:2000000, fecha:"2026-08-05"},
+  {id:2, tipo:"Gasto",   cat:"Supermercado", subcat:"", moneda:"ARS", importe:500000,  fecha:"2026-08-06"},
+  {id:3, tipo:"Gasto",   cat:"Ahorro",       subcat:"", moneda:"ARS", importe:ahorro,  fecha:"2026-08-07", esAhorro:true}
+];
+
+test("el balance del mes es lo disponible: descuenta lo ahorrado y el mosaico Ahorrado sigue ahí", async ()=>{
+  const txt=await chipsDeMovsAnimados(MES_CON_AHORRO(300000), "Todos", "", "2026-08");
+  cierto(txt.includes("1.200.000"), "tiene que ser 2.000.000 − 500.000 − 300.000: " + txt);
+  cierto(!txt.includes("1.500.000"), "volvió a mostrar el balance sin descontar lo ahorrado: " + txt);
+  cierto(txt.includes("Ahorrado") && txt.includes("300.000"), "no se puede perder de vista cuánto se ahorró: " + txt);
+  cierto(txt.toLowerCase().includes("ya descontado lo ahorrado"), "falta la línea que explica el descuento: " + txt);
+});
+
+test("sin ahorro, el balance es el de siempre y no aparece la línea del descuento", async ()=>{
+  const txt=await chipsDeMovsAnimados(MES_CON_AHORRO(0).slice(0,2), "Todos", "", "2026-08");
+  cierto(txt.includes("1.500.000"), "2.000.000 − 500.000: " + txt);
+  cierto(!txt.toLowerCase().includes("ya descontado"), "no hay nada descontado que explicar: " + txt);
+});
+
+test("si lo ahorrado supera lo que sobró, el disponible va en rojo", ()=>{
+  const dom=document.createElement("div");
+  document.body.appendChild(dom);
+  try{
+    dom.innerHTML=chipsDeMovsHTML(MES_CON_AHORRO(1800000), "Todos", "", "2026-08");
+    const num=dom.querySelector("#chip-mov-bal");
+    cierto(!!num, "falta el número grande");
+    cierto(num.getAttribute("style").includes("--danger"), "disponible negativo (−300.000) tiene que ir en rojo: " + num.outerHTML);
+  } finally { dom.remove(); }
+});
+
 test("un mes sin inversiones no agrega chips de más", async ()=>{
   const txt=await chipsDeMovsAnimados(MES_INV.slice(0,2), "Todos", "", "2026-08");
   cierto(!txt.includes("◈"), "aparecieron chips de inversión sin inversiones: " + txt);
