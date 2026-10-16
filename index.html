@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v149">
+<meta name="enola-version" content="enola-v150">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -1066,7 +1066,8 @@
   </div>
   <div class="card">
     <div class="card-title">💾 Copia de seguridad</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Descargá un archivo JSON con todos tus datos (movimientos, tarjetas, categorías, metas). Subilo a tu Drive o guardalo donde quieras. Si cambiás de celular o se rompe, lo restaurás acá mismo.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Un archivo con todos tus datos (movimientos, tarjetas, categorías, metas). Mandalo a tu Drive o a donde quieras: es la única copia que te salva si perdés o formateás el celular. Si cambiás de celular o se rompe, lo restaurás acá mismo.</p>
+    <button class="btn-primary" style="background:var(--save);color:#fff;width:100%;margin-bottom:8px" onclick="compartirBackup()">☁️ Enviar copia a mi Drive / WhatsApp</button>
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <button class="btn-primary" style="background:var(--accent);color:#fff;flex:1" onclick="exportarBackup()">📥 Descargar backup</button>
       <label class="btn-primary" style="background:var(--surface);color:var(--accent);border:1px solid var(--accent);flex:1;text-align:center;cursor:pointer">
@@ -1075,7 +1076,13 @@
       </label>
     </div>
     <p style="font-size:11px;color:var(--muted);margin-top:6px">💡 Tip: hacé backup cada vez que cargues movimientos importantes. El archivo es chico (suele pesar menos de 1 MB).</p>
+    <p style="font-size:11px;color:var(--muted);margin-top:4px">El archivo va sin cifrar, aunque tengas PIN: guardalo en un lugar tuyo.</p>
     <p id="backup-estado" class="txt-xs" style="margin-top:8px;font-weight:600"></p>
+  </div>
+  <div class="card">
+    <div class="card-title">🕑 Copias automáticas en este celular</div>
+    <p class="txt-sm txt-muted mb-10">Cada día que abrís la app con cambios se guarda una copia acá mismo (las últimas 14, cifradas si tenés PIN). Sirven para deshacer un error o un borrado. <strong>No te salvan si perdés el celular</strong>: para eso mandá una copia afuera.</p>
+    <div id="copias-auto-lista"></div>
   </div>
   <div class="card">
     <div class="card-title">📊 Exportar para BI</div>

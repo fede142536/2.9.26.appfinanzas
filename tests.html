@@ -4261,6 +4261,214 @@ test('posponer el recordatorio NO dispara el backup, pero sí registra que se av
   cierto(r.quedoRegistradoElAviso, "aunque posponga, no hay que volver a preguntar hasta que pase el cooldown");
 });
 
+// ═══════════════════════════════════════════
+// COPIAS AUTOMÁTICAS EN EL CELULAR + ENVIAR LA COPIA AFUERA
+// ═══════════════════════════════════════════
+grupo("Backup: copias automáticas y envío");
+
+// Una base de IndexedDB aparte: si estos tests corren en el navegador de quien usa la app, no
+// pueden tocar sus copias reales.
+async function conBaseDeCopias(fn){
+  const antes=COPIAS_DB, movsAntes=movs, tcsAntes=tcs;
+  const borrar=()=>new Promise(r=>{ const rq=indexedDB.deleteDatabase("enola-copias-test"); rq.onsuccess=rq.onerror=rq.onblocked=()=>r(); });
+  COPIAS_DB="enola-copias-test";
+  await borrar();
+  try{ return await fn(); }
+  finally{ await borrar(); COPIAS_DB=antes; movs=movsAntes; tcs=tcsAntes; }
+}
+const MOV_COPIA=(id,nota)=>({id, tipo:"Gasto", cat:"Casa", subcat:"", moneda:"ARS", importe:1000, fecha:"2026-10-01", nota:nota||""});
+const COPIA_REC=(id, motivo, dia, hash)=>({id, motivo, dia, hash:hash||"h", cifrada:false, movs:1, tcs:0, payload:"{}"});
+
+test("hashDatos cambia si cambian los datos y es estable si no", ()=>{
+  const a=hashDatos(JSON.stringify([MOV_COPIA(1)])), b=hashDatos(JSON.stringify([MOV_COPIA(1)])), c=hashDatos(JSON.stringify([MOV_COPIA(2)]));
+  igual(a, b); cierto(a!==c, "dos datos distintos no pueden dar la misma huella");
+});
+
+test("toca una copia si todavía no hay ninguna automática", ()=>{
+  cierto(tocaCopiaAuto([], "h1", "2026-10-16"));
+  cierto(tocaCopiaAuto([COPIA_REC("2026-10-15T10:00:00.000Z","seguridad","2026-10-15")], "h1", "2026-10-16"),
+    "una copia de seguridad (antes de restaurar) no reemplaza a la automática");
+});
+
+test("no toca otra si ya hay una de hoy, aunque los datos cambien", ()=>{
+  igual(tocaCopiaAuto([COPIA_REC("2026-10-16T08:00:00.000Z","auto","2026-10-16","h1")], "h2", "2026-10-16"), false);
+});
+
+test("de un día para otro, solo toca si hubo cambios", ()=>{
+  const ayer=[COPIA_REC("2026-10-15T08:00:00.000Z","auto","2026-10-15","h1")];
+  igual(tocaCopiaAuto(ayer, "h1", "2026-10-16"), false, "mismos datos: otra copia idéntica no aporta nada");
+  igual(tocaCopiaAuto(ayer, "h2", "2026-10-16"), true, "hubo cambios: toca");
+  igual(tocaCopiaAuto(ayer, "", "2026-10-16"), false, "sin huella no hay qué copiar");
+});
+
+test("se quedan las últimas 14 automáticas y las últimas 3 de seguridad", ()=>{
+  const auto=Array.from({length:16},(_,i)=>COPIA_REC(`2026-09-${String(30-i).padStart(2,"0")}T10:00:00.000Z`,"auto","2026-09-"+(30-i)));
+  const seg=Array.from({length:5},(_,i)=>COPIA_REC(`2026-10-0${5-i}T10:00:00.000Z`,"seguridad","2026-10-0"+(5-i)));
+  const sobran=copiasQueSobran([...seg,...auto]);   // la más nueva primero dentro de cada grupo
+  igual(sobran.length, 4);
+  igual(sobran.filter(c=>c.motivo==="auto").map(c=>c.id), [auto[14].id, auto[15].id], "sobran las 2 automáticas más viejas");
+  igual(sobran.filter(c=>c.motivo!=="auto").map(c=>c.id), [seg[3].id, seg[4].id], "y las 2 de seguridad más viejas");
+});
+
+test("el backup tiene todo lo que se guarda y se arma desde la memoria", ()=>{
+  const b=armarBackup();
+  igual(b.app, "Enola"); igual(b.version, 1);
+  ["movs","tcs","custom","metas","importHistory","cuentasCustom","tarjetasCustom","presupuestos","catOrder","iconsCustom"]
+    .forEach(k=>cierto(k in b.datos, "falta "+k+" en el backup"));
+});
+
+test("guardar una copia la deja en IndexedDB con sus datos", ()=>conBaseDeCopias(async ()=>{
+  movs=[MOV_COPIA(1,"hola")]; tcs=[];
+  const rec=await guardarCopiaLocal("auto");
+  const lista=await copiasListar();
+  igual(lista.length, 1);
+  igual(lista[0].id, rec.id); igual(lista[0].motivo, "auto"); igual(lista[0].dia, hoyLocal());
+  igual(lista[0].cifrada, false); igual(lista[0].movs, 1);
+  igual(JSON.parse(lista[0].payload).datos.movs[0].nota, "hola");
+}));
+
+test("al guardar, se podan las que sobran", ()=>conBaseDeCopias(async ()=>{
+  for(let i=1;i<=16;i++) await copiaGuardar(COPIA_REC(`2026-09-${String(i).padStart(2,"0")}T10:00:00.000Z`,"auto","2026-09-"+i));
+  movs=[MOV_COPIA(1)]; tcs=[];
+  await guardarCopiaLocal("auto");
+  const auto=(await copiasListar()).filter(c=>c.motivo==="auto");
+  igual(auto.length, 14);
+  cierto(!auto.some(c=>c.id.startsWith("2026-09-01") || c.id.startsWith("2026-09-02") || c.id.startsWith("2026-09-03")),
+    "las más viejas tienen que ser las que se van");
+}));
+
+test("copiaAutomaticaSiToca guarda la primera del día y no una segunda", ()=>conBaseDeCopias(async ()=>{
+  movs=[MOV_COPIA(1)]; tcs=[];
+  igual(await copiaAutomaticaSiToca(), true);
+  igual(await copiaAutomaticaSiToca(), false, "ya hay una de hoy");
+  igual((await copiasListar()).length, 1);
+}));
+
+test("con la app vacía no se guarda nada", ()=>conBaseDeCopias(async ()=>{
+  movs=[]; tcs=[];
+  igual(await copiaAutomaticaSiToca(), false);
+  igual((await copiasListar()).length, 0);
+}));
+
+test("con PIN y la app bloqueada no se guarda nada: no hay clave para cifrar", ()=>conBaseDeCopias(async ()=>{
+  const encActivoAntes=isEncActive, encKeyAntes=encKey;
+  isEncActive=()=>true; encKey=null;
+  try{
+    movs=[MOV_COPIA(1)]; tcs=[];
+    igual(await copiaAutomaticaSiToca(), false);
+    igual((await copiasListar()).length, 0, "no puede escribir una copia en claro con el PIN puesto");
+  } finally { isEncActive=encActivoAntes; encKey=encKeyAntes; }
+}));
+
+test("con PIN la copia se guarda cifrada y se puede abrir con la clave", ()=>conBaseDeCopias(async ()=>{
+  const encActivoAntes=isEncActive, encKeyAntes=encKey;
+  isEncActive=()=>true; encKey=await deriveKey("1234", randomSaltB64());
+  try{
+    movs=[MOV_COPIA(1,"SECRETO-XYZ")]; tcs=[];
+    const rec=await guardarCopiaLocal("auto");
+    igual(rec.cifrada, true);
+    cierto(!JSON.stringify(rec).includes("SECRETO-XYZ"), "los datos quedaron en claro dentro de la copia");
+    igual((await decryptBlob(encKey, rec.payload)).datos.movs[0].nota, "SECRETO-XYZ");
+  } finally { isEncActive=encActivoAntes; encKey=encKeyAntes; }
+}));
+
+test("al cambiar el PIN, las copias viejas en claro se descartan y se arma una nueva cifrada", ()=>conBaseDeCopias(async ()=>{
+  movs=[MOV_COPIA(1,"SECRETO-XYZ")]; tcs=[];
+  await guardarCopiaLocal("auto");
+  igual((await copiasListar())[0].cifrada, false);
+  const encActivoAntes=isEncActive, encKeyAntes=encKey;
+  isEncActive=()=>true; encKey=await deriveKey("1234", randomSaltB64());
+  try{
+    await reiniciarCopiasAuto();
+    const lista=await copiasListar();
+    cierto(lista.length>=1 && lista.every(c=>c.cifrada), "quedó alguna copia en claro después de poner el PIN: "+JSON.stringify(lista.map(c=>c.cifrada)));
+    cierto(!JSON.stringify(lista).includes("SECRETO-XYZ"), "los datos siguen legibles en alguna copia");
+  } finally { isEncActive=encActivoAntes; encKey=encKeyAntes; }
+}));
+
+test("restaurar una copia vuelve a esos datos y deja una copia de seguridad de los actuales", ()=>conBaseDeCopias(async ()=>{
+  const confirmAntes=window.mostrarConfirm;
+  window.mostrarConfirm=()=>Promise.resolve(true);
+  try{
+    movs=[MOV_COPIA(1,"original")]; tcs=[];
+    const rec=await guardarCopiaLocal("auto");
+    movs=[MOV_COPIA(1,"original"), MOV_COPIA(2,"borré-lo-que-no-debía")];
+    await restaurarCopiaLocal(rec.id);
+    igual(movs.length, 1, "no volvió a la copia");
+    igual(movs[0].nota, "original");
+    const seg=(await copiasListar()).filter(c=>c.motivo==="seguridad");
+    igual(seg.length, 1, "falta la copia de seguridad previa a restaurar");
+    igual(seg[0].movs, 2, "la de seguridad tiene que ser de cómo estaban los datos ANTES de restaurar");
+  } finally { window.mostrarConfirm=confirmAntes; save(); }
+}));
+
+test("restaurar no se hace sin confirmar", ()=>conBaseDeCopias(async ()=>{
+  const confirmAntes=window.mostrarConfirm;
+  window.mostrarConfirm=()=>Promise.resolve(false);
+  try{
+    movs=[MOV_COPIA(1,"original")]; tcs=[];
+    const rec=await guardarCopiaLocal("auto");
+    movs=[MOV_COPIA(1,"original"), MOV_COPIA(2,"nuevo")];
+    await restaurarCopiaLocal(rec.id);
+    igual(movs.length, 2, "restauró sin que el usuario aceptara");
+    igual((await copiasListar()).filter(c=>c.motivo==="seguridad").length, 0);
+  } finally { window.mostrarConfirm=confirmAntes; }
+}));
+
+test("activar, cambiar y quitar el PIN reinician las copias automáticas", async ()=>{
+  const js=await (await fetch("js/seguridad-pin.js")).text();
+  const cuerpo=n=>{ const i=js.indexOf("async function "+n+"("); return js.slice(i, js.indexOf("\n}\n", i)+3); };
+  cierto(cuerpo("setupPin").includes("reiniciarCopiasAuto()"), "setupPin (activar y cambiar) no reinicia las copias");
+  cierto(cuerpo("removePin").includes("reiniciarCopiasAuto()"), "removePin no reinicia las copias");
+});
+
+// Envío por el menú de compartir del celular (Drive, WhatsApp…) con caída a la descarga.
+async function conCompartir(canShare, share, fn){
+  const tenia={cs:Object.getOwnPropertyDescriptor(navigator,"canShare"), sh:Object.getOwnPropertyDescriptor(navigator,"share")};
+  Object.defineProperty(navigator,"canShare",{value:canShare, configurable:true, writable:true});
+  Object.defineProperty(navigator,"share",{value:share, configurable:true, writable:true});
+  const exportReal=window.exportarBackup; let descargas=0;
+  window.exportarBackup=()=>{ descargas++; };
+  try{ return await conEstadoDeBackup({movs:[MOV_COPIA(1,"x")]}, ()=>fn(()=>descargas)); }
+  finally{
+    window.exportarBackup=exportReal;
+    ["canShare","share"].forEach(k=>{ delete navigator[k]; });
+    if(tenia.cs) Object.defineProperty(navigator,"canShare",tenia.cs);
+    if(tenia.sh) Object.defineProperty(navigator,"share",tenia.sh);
+  }
+}
+
+test("enviar el backup abre el menú de compartir con un archivo .json con los datos", ()=>{
+  let recibido=null;
+  return conCompartir(()=>true, async d=>{ recibido=d; }, async descargas=>{
+    igual(await compartirBackup(), true);
+    igual(recibido.files.length, 1);
+    cierto(/^misgastos-backup-\d{4}-\d{2}-\d{2}\.json$/.test(recibido.files[0].name), "nombre raro: "+recibido.files[0].name);
+    igual(JSON.parse(await recibido.files[0].text()).datos.movs.length, 1);
+    igual(descargas(), 0, "si se pudo compartir no hace falta descargar");
+    igual(diasDesde(localStorage.getItem("fultimobackup")), 0, "compartirlo cuenta como backup hecho");
+  });
+});
+
+test("si el usuario cierra el menú de compartir no cuenta como backup hecho ni descarga nada", ()=>
+  conCompartir(()=>true, async()=>{ const e=new Error("cancelado"); e.name="AbortError"; throw e; }, async descargas=>{
+    igual(await compartirBackup(), false);
+    igual(descargas(), 0);
+    igual(diasDesde(localStorage.getItem("fultimobackup")), Infinity);
+  }));
+
+test("sin menú de compartir en el navegador, cae a la descarga de siempre", ()=>
+  conCompartir(undefined, undefined, async descargas=>{
+    igual(await compartirBackup(), true);
+    igual(descargas(), 1);
+  }));
+
+test("si compartir falla por otro motivo, también cae a la descarga", ()=>
+  conCompartir(()=>true, async()=>{ throw new Error("sin apps"); }, async descargas=>{
+    await compartirBackup();
+    igual(descargas(), 1);
+  }));
+
 grupo("Robustez de datos guardados");
 
 // Guarda y restaura las variables globales de datos, para no ensuciar el resto de los tests

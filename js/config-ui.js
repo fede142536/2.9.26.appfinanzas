@@ -562,6 +562,7 @@ function renderEstadoBackup(){
   const d=diasDesde(localStorage.getItem("fultimobackup"));
   el.style.color = d===Infinity ? "var(--danger)" : d>=DIAS_PARA_AVISAR ? "var(--warning)" : "var(--muted)";
   el.textContent=textoUltimoBackup();
+  renderCopiasAuto();
 }
 
 // Decide si CORRESPONDE avisar ahora, sin tocar la UI: separado de avisarSiFaltaBackup()
@@ -584,14 +585,17 @@ async function avisarSiFaltaBackup(){
     ? "Todavía no hiciste ningún backup de tus datos."
     : `Hace ${dias} días que no hacés un backup.`;
   const hacerlo=await mostrarConfirm(
-    `${cuando} Es un archivo chico (suele pesar menos de 1 MB) que podés guardar donde quieras.`,
+    `${cuando} Es un archivo chico (suele pesar menos de 1 MB): te abro el menú para mandarlo a tu Drive, a WhatsApp o donde prefieras.`,
     {titulo:"💾 Recordatorio de backup", textoOk:"Hacer backup ahora", textoCancelar:"Más tarde"}
   );
-  if(hacerlo) exportarBackup();
+  if(hacerlo) compartirBackup();
 }
 
-function exportarBackup(){
-  const backup={
+// El backup completo, armado desde la MEMORIA (los datos ya están descifrados si hay PIN). Función
+// aparte para que el archivo, el envío por el menú de compartir y las copias automáticas
+// guarden exactamente lo mismo.
+function armarBackup(){
+  return {
     version:1,
     fecha:new Date().toISOString(),
     app:"Enola",
@@ -608,6 +612,43 @@ function exportarBackup(){
       iconsCustom
     }
   };
+}
+
+// Fecha de HOY en hora local ("2026-10-16"). Con toISOString() en Argentina (UTC-3), después de
+// las 21:00 ya es el día siguiente.
+function hoyLocal(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+// Manda el backup por el menú de compartir del celular (Drive, WhatsApp, mail…): es la forma de
+// sacar una copia FUERA del dispositivo en un toque, sin cuentas ni servidores. Si el navegador
+// no lo soporta, cae a la descarga de siempre. Ojo: el archivo va sin cifrar, aunque tengas PIN.
+async function compartirBackup(){
+  const nombre=`misgastos-backup-${hoyLocal()}.json`;
+  let archivo=null;
+  try{
+    archivo=new File([new Blob([JSON.stringify(armarBackup(),null,2)],{type:"application/json"})], nombre, {type:"application/json"});
+  }catch(e){ archivo=null; }
+  // Sin ningún await antes: navigator.share() exige que se llame dentro del toque del usuario.
+  if(archivo && typeof navigator.canShare==="function" && navigator.canShare({files:[archivo]})){
+    try{
+      await navigator.share({files:[archivo], title:"Backup de Enola", text:"Copia de seguridad de mis datos"});
+      marcarBackupHecho();
+      renderEstadoBackup();
+      showToast("✓ Copia enviada");
+      return true;
+    }catch(e){
+      if(e && e.name==="AbortError") return false;   // cerró el menú a propósito: no insistir
+      // cualquier otro motivo (permiso, sin apps para compartir): se cae a la descarga
+    }
+  }
+  exportarBackup();
+  return true;
+}
+
+function exportarBackup(){
+  const backup=armarBackup();
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
@@ -641,52 +682,12 @@ function restaurarBackup(input){
         input.value="";
         return;
       }
-      movs=backup.datos.movs||[];
-      tcs=backup.datos.tcs||[];
-      custom=backup.datos.custom||{Gasto:{},Ingreso:{},Inversion:{},Tarjeta:{}};
-      // Migración: si custom no tiene la clave Tarjeta
-      if(!custom.Tarjeta) custom.Tarjeta={};
-      importHistory=backup.datos.importHistory||[];
-      // Metas (van a su propia key)
-      if(Array.isArray(backup.datos.metas)){
-        metas=backup.datos.metas;
-        setSensitiveRaw("fmetas",JSON.stringify(metas));
-      }
-      // Campos agregados junto con el cifrado ligado al PIN: pueden no estar presentes
-      // en backups viejos, en cuyo caso se conservan los valores actuales.
-      if(Array.isArray(backup.datos.cuentasCustom)){
-        cuentasCustom=backup.datos.cuentasCustom;
-        saveCuentasCustom();
-      }
-      if(Array.isArray(backup.datos.tarjetasCustom)){
-        tarjetasCustom=backup.datos.tarjetasCustom;
-        saveTarjetasCustom();
-      }
-      if(backup.datos.catOrder && typeof backup.datos.catOrder==="object"){
-        catOrder=backup.datos.catOrder;
-        saveCatOrder();
-      }
-      if(backup.datos.presupuestos && typeof backup.datos.presupuestos==="object"){
-        presupuestos=backup.datos.presupuestos;
-        setSensitiveRaw("fpresup", JSON.stringify(presupuestos));
-      }
-      if(backup.datos.iconsCustom && typeof backup.datos.iconsCustom==="object"){
-        iconsCustom=backup.datos.iconsCustom;
-        setSensitiveRaw("ficons", JSON.stringify(iconsCustom));
-      }
-      save();
-      setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
+      aplicarBackup(backup);
       // Restaurar deja los datos actuales idénticos a un archivo que YA existe afuera:
       // para el propósito del recordatorio, es lo mismo que acabar de hacer un backup.
       marcarBackupHecho();
       renderEstadoBackup();
       showToast(`✓ Restaurados ${cant} movimientos`);
-      // Refrescar vistas
-      renderExportStats();
-      renderCatManager();
-      buildCats();
-      buildTcCats();
-      buildInvCats();
       input.value="";
     }catch(err){
       showToast("❌ Error al leer el archivo");
@@ -696,4 +697,223 @@ function restaurarBackup(input){
   };
   reader.readAsText(file);
 }
+
+// Reemplaza TODOS los datos por los del backup y repinta las vistas. No pregunta nada ni toca el
+// recordatorio: eso lo decide quien llama (un archivo de afuera cuenta como backup hecho; una
+// copia automática del mismo celular, no). Devuelve la cantidad de movimientos.
+function aplicarBackup(backup){
+  movs=backup.datos.movs||[];
+  tcs=backup.datos.tcs||[];
+  custom=backup.datos.custom||{Gasto:{},Ingreso:{},Inversion:{},Tarjeta:{}};
+  // Migración: si custom no tiene la clave Tarjeta
+  if(!custom.Tarjeta) custom.Tarjeta={};
+  importHistory=backup.datos.importHistory||[];
+  // Metas (van a su propia key)
+  if(Array.isArray(backup.datos.metas)){
+    metas=backup.datos.metas;
+    setSensitiveRaw("fmetas",JSON.stringify(metas));
+  }
+  // Campos agregados junto con el cifrado ligado al PIN: pueden no estar presentes
+  // en backups viejos, en cuyo caso se conservan los valores actuales.
+  if(Array.isArray(backup.datos.cuentasCustom)){
+    cuentasCustom=backup.datos.cuentasCustom;
+    saveCuentasCustom();
+  }
+  if(Array.isArray(backup.datos.tarjetasCustom)){
+    tarjetasCustom=backup.datos.tarjetasCustom;
+    saveTarjetasCustom();
+  }
+  if(backup.datos.catOrder && typeof backup.datos.catOrder==="object"){
+    catOrder=backup.datos.catOrder;
+    saveCatOrder();
+  }
+  if(backup.datos.presupuestos && typeof backup.datos.presupuestos==="object"){
+    presupuestos=backup.datos.presupuestos;
+    setSensitiveRaw("fpresup", JSON.stringify(presupuestos));
+  }
+  if(backup.datos.iconsCustom && typeof backup.datos.iconsCustom==="object"){
+    iconsCustom=backup.datos.iconsCustom;
+    setSensitiveRaw("ficons", JSON.stringify(iconsCustom));
+  }
+  save();
+  setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
+  // Refrescar vistas
+  renderExportStats();
+  renderCatManager();
+  buildCats();
+  buildTcCats();
+  buildInvCats();
+  return movs.length;
+}
+
+// ═══════════════════════════════════════════
+// COPIAS AUTOMÁTICAS EN ESTE CELULAR
+// ═══════════════════════════════════════════
+// Una copia por día —si hubo cambios— guardada en IndexedDB (gratis, sin cuentas, sin
+// conexión). Sirven para deshacer un error, un borrado o un import equivocado. NO protegen si
+// perdés o formateás el celular: IndexedDB vive en el mismo dispositivo. Para eso está
+// compartirBackup(), que saca una copia afuera.
+//
+// "Automático" acá significa "cuando abrís la app": una PWA cerrada no puede correr nada sola.
+//
+// Con PIN, la copia se guarda CIFRADA con la misma clave de la sesión: si no, el PIN protegería
+// el almacenamiento principal mientras copias en claro quedaban al lado. Por la misma razón,
+// al activar, cambiar o quitar el PIN las copias viejas se descartan (en claro quedarían
+// expuestas; cifradas con la clave anterior no se podrían abrir) y se arma una nueva.
+const COPIAS_MAX_AUTO=14;        // las últimas 14 copias diarias
+const COPIAS_MAX_SEGURIDAD=3;    // las de "antes de restaurar": la red para deshacer un restore
+const COPIAS_STORE="copias";
+let COPIAS_DB="enola-copias";    // let: los tests usan otra base para no tocar las copias reales
+
+// Huella barata de los datos, para saber si cambiaron desde la última copia sin guardar copias
+// idénticas todos los días. No es criptográfica ni hace falta que lo sea.
+function hashDatos(txt){
+  let h=5381;
+  for(let i=0;i<txt.length;i++) h=((h<<5)+h+txt.charCodeAt(i))|0;
+  return (h>>>0).toString(36)+":"+txt.length;
+}
+
+// ¿Corresponde guardar una copia automática ahora? Función pura. `lista` viene con la más nueva
+// primero. Solo cuenta la última copia AUTOMÁTICA: una de seguridad (antes de restaurar) no
+// reemplaza a la del día.
+function tocaCopiaAuto(lista, hash, hoy){
+  if(!hash) return false;
+  const ultima=(lista||[]).find(c=>c.motivo==="auto");
+  if(!ultima) return true;
+  if(ultima.dia===hoy) return false;       // ya hay una de hoy
+  return ultima.hash!==hash;               // sin cambios desde la última: no hace falta otra
+}
+
+// Qué copias sobran para quedarse con las últimas COPIAS_MAX_AUTO automáticas y las últimas
+// COPIAS_MAX_SEGURIDAD de seguridad. `lista` con la más nueva primero.
+function copiasQueSobran(lista){
+  const auto=(lista||[]).filter(c=>c.motivo==="auto");
+  const seg=(lista||[]).filter(c=>c.motivo!=="auto");
+  return [...auto.slice(COPIAS_MAX_AUTO), ...seg.slice(COPIAS_MAX_SEGURIDAD)];
+}
+
+function copiasAbrirDB(){
+  return new Promise((ok,fail)=>{
+    if(typeof indexedDB==="undefined") return fail(new Error("Este navegador no tiene IndexedDB"));
+    const rq=indexedDB.open(COPIAS_DB,1);
+    rq.onupgradeneeded=()=>{ rq.result.createObjectStore(COPIAS_STORE,{keyPath:"id"}); };
+    rq.onsuccess=()=>ok(rq.result);
+    rq.onerror=()=>fail(rq.error);
+  });
+}
+// Una operación sobre el store, con su propia conexión: resuelve con el resultado cuando la
+// transacción TERMINA de verdad (no cuando se pide), que es cuando el dato quedó escrito.
+function copiasOp(modo, fn){
+  return copiasAbrirDB().then(db=>new Promise((ok,fail)=>{
+    const tx=db.transaction(COPIAS_STORE, modo);
+    let resultado;
+    const rq=fn(tx.objectStore(COPIAS_STORE));
+    if(rq) rq.onsuccess=()=>{ resultado=rq.result; };
+    tx.oncomplete=()=>{ db.close(); ok(resultado); };
+    tx.onerror=tx.onabort=()=>{ db.close(); fail(tx.error||new Error("Se canceló la operación")); };
+  }));
+}
+const copiasListar=()=>copiasOp("readonly", st=>st.getAll()).then(l=>(l||[]).sort((a,b)=>b.id.localeCompare(a.id)));
+const copiaLeer=id=>copiasOp("readonly", st=>st.get(id));
+const copiaGuardar=rec=>copiasOp("readwrite", st=>st.put(rec));
+const copiaBorrar=id=>copiasOp("readwrite", st=>st.delete(id));
+
+// Guarda una copia de lo que hay AHORA en memoria. `motivo`: "auto" o "seguridad". Devuelve el
+// registro, o null si no se puede (cifrado activo y la app bloqueada: no hay clave para cifrar).
+async function guardarCopiaLocal(motivo){
+  const backup=armarBackup();
+  const hash=hashDatos(JSON.stringify(backup.datos));
+  const cifrada=isEncActive();
+  if(cifrada && !encKey) return null;
+  const rec={id:backup.fecha, dia:hoyLocal(), motivo, hash, cifrada,
+             movs:movs.length, tcs:tcs.length,
+             payload: cifrada ? await encryptBlob(encKey, backup) : JSON.stringify(backup)};
+  await copiaGuardar(rec);
+  for(const c of copiasQueSobran(await copiasListar())) await copiaBorrar(c.id);
+  return rec;
+}
+
+// Se llama al abrir la app y al volver a ella (una PWA puede quedar abierta días). Nunca tira:
+// una copia que falla no puede romper el arranque.
+async function copiaAutomaticaSiToca(){
+  try{
+    if(!movs.length && !tcs.length) return false;     // nada que copiar todavía
+    if(isEncActive() && !encKey) return false;        // bloqueada: los datos todavía no existen
+    const hash=hashDatos(JSON.stringify(armarBackup().datos));
+    if(!tocaCopiaAuto(await copiasListar(), hash, hoyLocal())) return false;
+    const rec=await guardarCopiaLocal("auto");
+    if(rec) renderCopiasAuto();
+    return !!rec;
+  }catch(e){
+    console.warn("No se pudo guardar la copia automática:", e);
+    return false;
+  }
+}
+
+// Al activar, cambiar o quitar el PIN: ver el comentario de arriba. No tira.
+async function reiniciarCopiasAuto(){
+  try{
+    for(const c of await copiasListar()) await copiaBorrar(c.id);
+    await copiaAutomaticaSiToca();
+  }catch(e){ console.warn("No se pudieron reiniciar las copias automáticas:", e); }
+  renderCopiasAuto();
+}
+
+async function restaurarCopiaLocal(id){
+  let rec;
+  try{ rec=await copiaLeer(id); }catch(e){ rec=null; }
+  if(!rec){ showToast("Esa copia ya no está"); return renderCopiasAuto(); }
+  let backup;
+  try{ backup = rec.cifrada ? await decryptBlob(encKey, rec.payload) : JSON.parse(rec.payload); }
+  catch(e){ showToast("No pude abrir esta copia"); return; }
+  if(!backup || !backup.datos || !Array.isArray(backup.datos.movs)){ showToast("❌ Copia inválida"); return; }
+  if(!await mostrarConfirm(`Volver a la copia del ${fmtFechaCopia(rec.id)}?\n\n• ${backup.datos.movs.length} movimientos\n• ${(backup.datos.tcs||[]).length} tarjetas\n\nReemplaza TODOS los datos actuales. Antes te guardo una copia de cómo están ahora, por si querés deshacerlo.`,
+    {titulo:"Restaurar copia", textoOk:"Restaurar", peligroso:true})) return;
+  try{ await guardarCopiaLocal("seguridad"); }
+  catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
+  const cant=aplicarBackup(backup);
+  showToast(`✓ Restaurados ${cant} movimientos`);
+  renderCopiasAuto();
+}
+
+async function borrarCopiaLocal(id){
+  if(!await mostrarConfirm("Se borra esta copia automática. Tus datos no se tocan.", {titulo:"Borrar copia", textoOk:"Borrar", peligroso:true})) return;
+  try{ await copiaBorrar(id); }catch(e){ showToast("No pude borrarla"); return; }
+  renderCopiasAuto();
+}
+
+function fmtFechaCopia(iso){
+  const d=new Date(iso);
+  if(isNaN(d)) return "";
+  return d.toLocaleString("es-AR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+}
+
+// La lista de Config. Todo con escapeHtml/attrJS: el id de una copia es una fecha, pero igual
+// va por los helpers de siempre.
+async function renderCopiasAuto(){
+  const el=document.getElementById("copias-auto-lista");
+  if(!el) return;
+  let lista;
+  try{ lista=await copiasListar(); }
+  catch(e){ el.innerHTML=`<p class="txt-xs txt-muted">Este navegador no permite guardar copias automáticas.</p>`; return; }
+  if(!lista.length){
+    el.innerHTML=`<p class="txt-xs txt-muted">Todavía no hay copias. La primera se guarda al abrir la app con datos cargados.</p>`;
+    return;
+  }
+  el.innerHTML=lista.map(c=>{
+    const etiqueta=c.motivo==="auto" ? "" : ` <span class="badge badge-accent">antes de restaurar</span>`;
+    const lock=c.cifrada ? " · 🔐 cifrada" : "";
+    return `<div class="copia-row">
+      <div class="copia-mid"><div class="copia-fecha">${escapeHtml(fmtFechaCopia(c.id))}${etiqueta}</div>
+        <div class="copia-sub">${c.movs} ${c.movs===1?"movimiento":"movimientos"} · ${c.tcs} ${c.tcs===1?"tarjeta":"tarjetas"}${lock}</div></div>
+      <div class="copia-acciones">
+        <button type="button" class="btn-sm" onclick="restaurarCopiaLocal(${attrJS(c.id)})">Restaurar</button>
+        <button type="button" class="copia-borrar" aria-label="Borrar esta copia" onclick="borrarCopiaLocal(${attrJS(c.id)})">×</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// Una PWA puede quedar abierta días: al volver a ella se revisa si ya toca la copia de hoy.
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) copiaAutomaticaSiToca(); });
 
