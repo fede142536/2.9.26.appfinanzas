@@ -152,6 +152,22 @@ function construirInsights(ym, mesData, monthlyAnio){
 
   const out=[];
 
+  // 0. Vencimientos: lo más accionable va primero. Solo mirando el mes actual (avisar de lo que
+  // vence en un mes que ya pasó no sirve) y solo si el usuario cargó algún día de vencimiento.
+  if(ym===currentYM()){
+    const venc=proximosVencimientos(hoyLocal(), movs, leerVencTc());
+    if(venc.length){
+      const v=venc[0];
+      out.push({
+        icon:"🗓", bg:"var(--warning-light)",
+        a:"", b:v.nombre, bc:v.dias<0?"var(--danger)":"var(--warning)",
+        c:` ${textoVencimiento(v.dias)} · ${montoVenc(v)}.${venc.length>1?` Y ${venc.length-1} más.`:""}`,
+        detalle: venc.map(x=>`${x.nombre}: ${textoVencimiento(x.dias)} (${montoVenc(x)})`).join(" · "),
+        rows:[]
+      });
+    }
+  }
+
   // 1. Balance del mes
   {
     const val=mesData.balance;

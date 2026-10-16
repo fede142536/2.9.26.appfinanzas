@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v151">
+<meta name="enola-version" content="enola-v152">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -441,6 +441,11 @@
         <span class="opt-text"><span class="opt-title">Gasto frecuente</span><span class="opt-sub">Se repite todos los meses</span></span>
         <input type="checkbox" id="inp-frecuente" class="chk-custom" onchange="onFrecuenteToggle()">
       </label>
+      <div class="opt-amount-wrap" id="frec-vto-wrap" style="display:none">
+        <div class="amount-wrap"><span class="amount-prefix" style="font-size:11px;left:8px">Día</span>
+          <input type="number" id="inp-frec-dia" class="form-input amount-input" style="padding-left:38px;font-size:16px;font-weight:500" aria-label="Día del mes en que vence (opcional)" placeholder="Vence el… (opcional)" inputmode="numeric" min="1" max="31" step="1">
+        </div>
+      </div>
       <label class="opt-row" style="--chk:var(--accent)">
         <span class="opt-icon">🤝</span>
         <span class="opt-text"><span class="opt-title">Monto recuperable</span><span class="opt-sub">Gasto compartido: te devuelven una parte</span></span>

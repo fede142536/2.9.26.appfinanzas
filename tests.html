@@ -4558,6 +4558,182 @@ test("Movimientos, el Dashboard (mes, año, cuentas y detalle) y el PDF usan la 
   cierto(cuerpo(dash,"renderDashYear").includes("d.balance"), "el balance del año no suma los balances de cada mes");
 });
 
+// ═══════════════════════════════════════════
+// VENCIMIENTOS DE TARJETAS Y GASTOS FRECUENTES
+// ═══════════════════════════════════════════
+grupo("Vencimientos");
+
+// Prepara los datos globales y la preferencia del día de vencimiento, y lo deja como estaba.
+async function conVenc({movs:m, tcs:t, venc}, fn){
+  const antes={movs, tcs, v:localStorage.getItem("fvenctc")};
+  movs=m||[]; tcs=t||[];
+  if(venc) localStorage.setItem("fvenctc", JSON.stringify(venc)); else localStorage.removeItem("fvenctc");
+  try{ return await fn(); }
+  finally{ movs=antes.movs; tcs=antes.tcs; if(antes.v===null) localStorage.removeItem("fvenctc"); else localStorage.setItem("fvenctc", antes.v); }
+}
+const FREC_VTO=(id,dia,extra)=>({id, tipo:"Gasto", cat:"Casa", subcat:"Alquiler", moneda:"ARS", importe:300000, importeOrig:null,
+                                 frecuente:true, mesInicio:"2026-01", fecha:"2026-01-01", cambios:[], diaVto:dia, ...(extra||{})});
+
+test("fechaVencimiento: el día del mes, y el último si el mes es más corto", ()=>{
+  igual(fechaVencimiento("2026-09","10"), "2026-09-10");
+  igual(fechaVencimiento("2026-02",31), "2026-02-28", "un 31 en febrero cae el 28");
+  igual(fechaVencimiento("2028-02",31), "2028-02-29", "y el 29 en un año bisiesto");
+  igual(fechaVencimiento("2026-04",31), "2026-04-30");
+});
+
+test("fechaVencimiento: un día o un mes inválidos no dan fecha", ()=>{
+  [0, 32, -1, "x", "", null, undefined, 1.5].forEach(d=>igual(fechaVencimiento("2026-09", d), d===1.5?"2026-09-01":null, "día "+d));
+  igual(fechaVencimiento("2026-9", 10), null); igual(fechaVencimiento("", 10), null);
+});
+
+test("diasEntre cuenta días de calendario, incluso entre meses y años", ()=>{
+  igual(diasEntre("2026-09-10","2026-09-10"), 0);
+  igual(diasEntre("2026-09-10","2026-09-11"), 1);
+  igual(diasEntre("2026-09-10","2026-09-08"), -2);
+  igual(diasEntre("2026-10-31","2026-11-02"), 2);
+  igual(diasEntre("2026-12-30","2027-01-02"), 3);
+});
+
+test("textoVencimiento dice hoy, mañana, en N días, ayer y hace N días", ()=>{
+  igual(textoVencimiento(0), "vence hoy"); igual(textoVencimiento(1), "vence mañana");
+  igual(textoVencimiento(3), "vence en 3 días"); igual(textoVencimiento(-1), "venció ayer");
+  igual(textoVencimiento(-4), "venció hace 4 días");
+});
+
+test("un resumen sin pagar con día cargado aparece con sus días y lo que resta", ()=>conVenc({tcs:TCS_SEPT, venc:{Visa:10}}, ()=>{
+  const v=proximosVencimientos("2026-09-08", [], {Visa:10});
+  igual(v.length, 1, "Mastercard no tiene día cargado: no se avisa");
+  igual([v[0].tipo, v[0].nombre, v[0].fecha, v[0].dias, v[0].monto], ["tarjeta","Visa","2026-09-10",2,160000]);
+}));
+
+test("un resumen ya pagado no aparece; uno pagado a medias aparece por lo que resta", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
+  igual(proximosVencimientos("2026-09-08", [PAGO_VISA(160000)], {Visa:10}).length, 0);
+  const parcial=proximosVencimientos("2026-09-08", [PAGO_VISA(100000)], {Visa:10});
+  igual(parcial.length, 1); igual(parcial[0].monto, 60000);
+}));
+
+test("la ventana: lo que vence en más de 7 días no se avisa, lo vencido hace poco sí", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
+  igual(proximosVencimientos("2026-09-02", [], {Visa:10}).length, 0, "faltan 8 días");
+  igual(proximosVencimientos("2026-09-03", [], {Visa:10}).length, 1, "faltan 7 días");
+  igual(proximosVencimientos("2026-09-13", [], {Visa:10})[0].dias, -3, "venció hace 3 días y sigue sin pagar");
+  igual(proximosVencimientos("2026-09-21", [], {Visa:10}).length, 0, "venció hace 11 días: seguro ya se pagó y nadie lo tildó");
+}));
+
+test("el resumen del mes anterior que sigue sin pagar y venció hace poco aparece", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
+  const v=proximosVencimientos("2026-10-03", [], {Visa:28});
+  igual(v.length, 1); igual(v[0].ym, "2026-09"); igual(v[0].dias, -5);
+}));
+
+test("un gasto frecuente sin pagar y con día aparece; pagado o sin día, no", ()=>conVenc({movs:[FREC_VTO(1,5), FREC_VTO(2,null), FREC_VTO(3,5,{pagos:{"2026-09":true}, subcat:"Internet"})]}, ()=>{
+  const v=proximosVencimientos("2026-09-03", movs, {});
+  igual(v.length, 1);
+  igual([v[0].tipo, v[0].nombre, v[0].fecha, v[0].dias, v[0].monto], ["frecuente","Alquiler","2026-09-05",2,300000]);
+}));
+
+test("a fin de mes avisa de lo que vence a principios del mes siguiente", ()=>conVenc({movs:[FREC_VTO(1,2)]}, ()=>{
+  const v=proximosVencimientos("2026-09-29", movs, {});
+  igual(v.length, 1); igual(v[0].fecha, "2026-10-02"); igual(v[0].dias, 3);
+}));
+
+test("lo más urgente va primero: lo más vencido, después lo que viene", ()=>conVenc({movs:[FREC_VTO(1,12,{subcat:"Gimnasio"}), FREC_VTO(2,8,{subcat:"Internet"})], tcs:TCS_SEPT}, ()=>{
+  const v=proximosVencimientos("2026-09-10", movs, {Visa:9});
+  igual(v.map(x=>x.nombre), ["Internet","Visa","Gimnasio"], "Internet −2, Visa −1, Gimnasio +2");
+  igual(v.map(x=>x.dias), [-2,-1,2]);
+}));
+
+test("la franja muestra nombre, cuándo vence y cuánto, y resume lo que sobra", ()=>{
+  const item=(n,d)=>({tipo:"tarjeta", nombre:n, dias:d, monto:1000, moneda:"ARS"});
+  const html=vencimientosFranjaHTML([item("Visa",1), item("Master",-2), item("Amex",3), item("Cabal",5)]);
+  cierto(html.includes("Visa") && html.includes("vence mañana") && html.includes("venció hace 2 días"), html);
+  cierto(html.includes("y 1 más") && !html.includes("Cabal"), "tope de 3 filas con el resumen del resto: "+html);
+  igual(vencimientosFranjaHTML([]), "");
+});
+
+test("Movimientos muestra la franja de vencimientos en 'Todos' del mes actual", ()=>{
+  const hoy=new Date().getDate();
+  return conVenc({tcs:[{id:1, desc:"Notebook", total:120000, cuotasTotal:12, mesInicio:currentYM(), tarjeta:"Visa", moneda:"ARS"}], venc:{Visa:hoy}}, ()=>{
+    const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list","mov-mes-label"];
+    const els=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+    const prev={filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
+    filtro="Todos"; filtroCategoria=""; mesActual=currentYM(); filtroFecha=null;
+    try{
+      renderMovs();
+      const franja=els[1];
+      cierto(franja.innerText.includes("Visa") && franja.innerText.includes("vence hoy"), "falta la franja: "+franja.innerText);
+      mesActual=addMonths(currentYM(),-1);
+      renderMovs();
+      cierto(!els[1].innerText.includes("vence hoy"), "en un mes que ya pasó no se avisa de vencimientos");
+    } finally { els.forEach(e=>e.remove()); filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff; }
+  });
+});
+
+test("al tildar un frecuente como pagado, sale de la franja de vencimientos", ()=>{
+  const hoy=new Date().getDate();
+  return conVenc({movs:[FREC_VTO(77, hoy, {subcat:"Gimnasio"})]}, ()=>{
+    const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list","mov-mes-label"];
+    const els=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+    const prev={filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
+    filtro="Todos"; filtroCategoria=""; mesActual=currentYM(); filtroFecha=null;
+    try{
+      renderMovs();
+      cierto(els[1].innerText.includes("Gimnasio"), "falta el frecuente en la franja: "+els[1].innerText);
+      toggleFrecPagado(77, currentYM());
+      cierto(!els[1].innerText.includes("Gimnasio"), "sigue en la franja después de marcarlo pagado: "+els[1].innerText);
+    } finally { els.forEach(e=>e.remove()); filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff; }
+  });
+});
+
+test("el editor de un frecuente muestra su día y lo guarda; vacío o inválido lo quita", ()=>{
+  // guardarEdit() cierra el modal: cada caso abre el editor de nuevo.
+  const guardarCon=(previo, valor)=>{
+    const e=abrirEdicion({...GASTO_FREC_EDIT(), ...(previo?{diaVto:previo}:{})});
+    try{
+      const campo=document.querySelector("#edit-frec-dia");
+      cierto(!!campo, "falta el campo del día de vencimiento");
+      igual(campo.value, previo?String(previo):"", "tiene que arrancar con el día que ya tenía");
+      campo.value=valor; guardarEdit();
+      return e.mov.diaVto;
+    } finally { e.cerrar(); }
+  };
+  igual(guardarCon(null,"15"), 15);
+  igual(guardarCon(5,"7"), 7);
+  igual(guardarCon(5,"40"), undefined, "un 40 no es un día: no se guarda ni queda el viejo");
+  igual(guardarCon(5,""), undefined, "vacío lo quita");
+});
+
+test("el alta de un frecuente ofrece el día solo mientras está tildado, y lo guarda", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="frec-vto-wrap"') && html.includes('id="inp-frec-dia"'), "falta el campo en el alta");
+  const cfg=await (await fetch("js/config-ui.js")).text();
+  const i=cfg.indexOf("function onFrecuenteToggle("); const cuerpo=cfg.slice(i, cfg.indexOf("\n}\n", i));
+  cierto(cuerpo.includes("frec-vto-wrap"), "el interruptor no muestra/oculta el campo");
+  const form=await (await fetch("js/form-cargar.js")).text();
+  cierto(form.includes("mov.diaVto=diaVto"), "guardar el gasto no guarda el día");
+});
+
+test("el día de vencimiento de las tarjetas va al backup y se restaura", ()=>conVenc({venc:{Visa:10, "Master Galicia":25}}, ()=>{
+  igual(armarBackup().datos.vencimientosTc, {Visa:10, "Master Galicia":25});
+  const b=armarBackup();
+  localStorage.removeItem("fvenctc");
+  igual(leerVencTc(), {});
+  const m=movs, t=tcs;
+  try{ aplicarBackup(b); } finally { movs=m; tcs=t; }
+  igual(leerVencTc(), {Visa:10, "Master Galicia":25});
+}));
+
+test("renombrar una tarjeta se lleva su día de vencimiento", ()=>conVenc({tcs:[{id:1, desc:"x", total:100, cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa", moneda:"ARS"}], venc:{Visa:10}}, async ()=>{
+  const promptAntes=window.mostrarPrompt, customAntes=tarjetasCustom;
+  window.mostrarPrompt=()=>Promise.resolve("Visa Galicia");
+  try{
+    await renombrarTarjeta("Visa");
+    igual(leerVencTc(), {"Visa Galicia":10}, "el día se perdió al renombrar");
+  } finally { window.mostrarPrompt=promptAntes; tarjetasCustom=customAntes; }
+}));
+
+test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
+  igual(proximosVencimientos("2026-09-08", movs, {}), []);
+}));
+
 grupo("Robustez de datos guardados");
 
 // Guarda y restaura las variables globales de datos, para no ensuciar el resto de los tests

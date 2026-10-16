@@ -131,6 +131,116 @@ function crearPagoTarjeta({ym, tarjeta, moneda, monto, fecha, usaAhorro, cuenta,
 }
 
 // ═══════════════════════════════════════════
+// VENCIMIENTOS
+// ═══════════════════════════════════════════
+// Cuándo hay que pagar cada cosa, para avisar antes en vez de enterarse tarde:
+//  · el resumen de una tarjeta: el usuario guarda UN día del mes por tarjeta (preferencia, no un
+//    dato financiero: va en localStorage llano como la fecha del último backup) y el resumen del
+//    mes M vence ese día de M — igual que la app ya trata las cuotas ("a pagar este mes").
+//  · un gasto frecuente: su `diaVto` opcional.
+// Solo cuenta lo que SIGUE sin pagar: un resumen con lo que resta > 0, un frecuente sin tildar.
+const VENC_TC_KEY="fvenctc";
+const VENC_VENTANA_DIAS=7;     // se avisa de lo que vence dentro de una semana
+const VENC_VENCIDOS_DIAS=10;   // y de lo que venció hace poco; más viejo seguro ya se pagó y nadie lo tildó
+
+function diaValido(d){
+  const n=parseInt(d,10);
+  return Number.isInteger(n) && n>=1 && n<=31 ? n : null;
+}
+
+// El día `dia` del mes `ym`, o el último si el mes es más corto (un 31 en febrero cae el 28).
+function fechaVencimiento(ym, dia){
+  const d=diaValido(dia);
+  if(d===null || !/^\d{4}-\d{2}$/.test(String(ym))) return null;
+  const [y,m]=ym.split("-").map(Number);
+  const ultimo=new Date(y, m, 0).getDate();
+  return ym+"-"+String(Math.min(d,ultimo)).padStart(2,"0");
+}
+
+// Días de `hoyISO` a `fechaISO`: positivo = falta, 0 = hoy, negativo = ya pasó.
+function diasEntre(hoyISO, fechaISO){
+  const t=s=>{ const [y,m,d]=String(s).slice(0,10).split("-").map(Number); return Date.UTC(y,m-1,d); };
+  return Math.round((t(fechaISO)-t(hoyISO))/86400000);
+}
+
+function textoVencimiento(dias){
+  if(dias===0) return "vence hoy";
+  if(dias===1) return "vence mañana";
+  if(dias>1) return `vence en ${dias} días`;
+  if(dias===-1) return "venció ayer";
+  return `venció hace ${-dias} días`;
+}
+
+function leerVencTc(){
+  try{
+    const o=JSON.parse(localStorage.getItem(VENC_TC_KEY)||"{}");
+    return (o && typeof o==="object" && !Array.isArray(o)) ? o : {};
+  }catch(e){ return {}; }
+}
+function guardarVencTc(obj){ return guardarPreferencia(VENC_TC_KEY, JSON.stringify(obj)); }
+
+// Lo que vence pronto o venció hace poco y sigue sin pagar, lo más urgente primero.
+// `lista` es `movs`; `vencTc` {tarjeta: día}. Función pura (salvo getMesMov/getTcMovsEnMes, que
+// leen los datos globales). Cada ítem: {tipo, nombre, fecha, dias, monto, moneda, ym}.
+function proximosVencimientos(hoyISO, lista, vencTc, ventana){
+  const hoyYM=String(hoyISO).slice(0,7);
+  const tope=ventana===undefined ? VENC_VENTANA_DIAS : ventana;
+  const out=[];
+  [addMonths(hoyYM,-1), hoyYM, addMonths(hoyYM,1)].forEach(ym=>{
+    resumenesDelMes(ym, lista).forEach(r=>{
+      const fecha=fechaVencimiento(ym, (vencTc||{})[r.tarjeta]);
+      if(!fecha || r.resta<=0) return;
+      out.push({tipo:"tarjeta", nombre:r.tarjeta||"Tarjeta", ym, fecha, dias:diasEntre(hoyISO,fecha), monto:r.resta, moneda:r.moneda});
+    });
+    getMesMov(ym).forEach(m=>{
+      if(!m._isFrecVirtual || m.pagado) return;
+      const fecha=fechaVencimiento(ym, m.diaVto);
+      if(!fecha) return;
+      const usd=m.moneda==="USD";
+      const nombre=m.subcat && !SUBCAT_SIN_VALOR.includes(m.subcat) ? m.subcat : (m.cat||"Gasto frecuente");
+      out.push({tipo:"frecuente", nombre, ym, fecha, dias:diasEntre(hoyISO,fecha), monto:usd?(m.importeOrig||0):(m.importe||0), moneda:usd?"USD":"ARS"});
+    });
+  });
+  return out.filter(v=>v.dias<=tope && v.dias>=-VENC_VENCIDOS_DIAS).sort((a,b)=>a.dias-b.dias || a.nombre.localeCompare(b.nombre));
+}
+
+function montoVenc(v){ return v.moneda==="USD" ? `USD ${v.monto.toFixed(2)}` : fmtS(v.monto); }
+
+// Las líneas de la franja de Movimientos: "Visa vence mañana · resta $140.000".
+function vencimientosFranjaHTML(items, max){
+  if(!items.length) return "";
+  const lim=max||3;
+  const filas=items.slice(0,lim).map(v=>{
+    const vencido=v.dias<0;
+    const color=vencido ? "var(--danger)" : v.dias<=1 ? "var(--warning)" : "var(--muted)";
+    const accion=v.tipo==="tarjeta" ? "resta" : "";
+    return `<div class="venc-fila"><span class="venc-nombre">${v.tipo==="tarjeta"?"💳":"🔁"} ${escapeHtml(v.nombre)}</span>
+      <span class="venc-txt" style="color:${color}">${textoVencimiento(v.dias)}${accion?` · ${accion}`:" ·"} <strong>${montoVenc(v)}</strong></span></div>`;
+  }).join("");
+  const mas=items.length>lim ? `<div class="venc-mas">y ${items.length-lim} más</div>` : "";
+  return `<div class="venc-franja"><div class="venc-titulo">🗓 Vencimientos</div>${filas}${mas}</div>`;
+}
+
+// Pide el día de vencimiento de una tarjeta. Vacío lo borra.
+async function editarVencTc(tarjeta){
+  const actual=leerVencTc()[tarjeta];
+  const resp=await mostrarPrompt(`¿Qué día del mes vence el resumen de ${tarjeta||"la tarjeta"}? (1 a 31, vacío para quitarlo)`,
+    {titulo:"📅 Vencimiento", placeholder:"Ej: 10", valorInicial:actual?String(actual):"", inputMode:"numeric", textoOk:"Guardar"});
+  if(resp===null) return;
+  const v=leerVencTc();
+  if(String(resp).trim()===""){ delete v[tarjeta]; }
+  else {
+    const d=diaValido(resp);
+    if(d===null){ showToast("Poné un día entre 1 y 31"); return; }
+    v[tarjeta]=d;
+  }
+  guardarVencTc(v);
+  showToast(v[tarjeta]?`Vence el día ${v[tarjeta]} ✓`:"Vencimiento quitado");
+  renderTarjetas();
+  if(typeof renderMovs==="function") renderMovs();
+}
+
+// ═══════════════════════════════════════════
 // CUOTAS PENDIENTES POR MES
 // ═══════════════════════════════════════════
 // Una caja por mes con lo que queda por pagar, desde el mes que estás mirando hacia adelante.
@@ -426,19 +536,33 @@ function resumenesTcHTML(ym){
   const rs=resumenesDelMes(ym, movs);
   if(!rs.length) return "";
   const fmt=(v,mon)=>mon==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
+  const vencTc=leerVencTc(), hoy=hoyLocal();
   return `<div class="tc-res"><div class="tc-res-titulo">Resumen de ${escapeHtml(mesLbl(ym))}</div>`+rs.map(r=>{
     const args=`${attrJS(r.ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)}`;
     const badge=r.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
+    // Lo que falta para que venza (o ya venció), solo si el resumen sigue sin pagar. Sin día
+    // cargado se ofrece cargarlo: es lo que enciende los avisos de Movimientos y el Dashboard.
+    let venc="";
+    if(r.resta>0){
+      const fecha=fechaVencimiento(r.ym, vencTc[r.tarjeta]);
+      if(fecha){
+        const dias=diasEntre(hoy, fecha);
+        const color=dias<0?"var(--danger)":dias<=1?"var(--warning)":"var(--muted)";
+        venc=` <button type="button" class="tc-res-link" style="color:${color}" onclick="editarVencTc(${attrJS(r.tarjeta)})">📅 ${textoVencimiento(dias)} · el ${Number(fecha.slice(8))} ✎</button>`;
+      } else {
+        venc=` <button type="button" class="tc-res-link" onclick="editarVencTc(${attrJS(r.tarjeta)})">📅 Poné el vencimiento</button>`;
+      }
+    }
     let sub, right;
     if(r.total>0 && r.resta===0){
       sub=`<div class="tc-res-sub ok">✓ Pagado ${fmt(r.pagado,r.moneda)}</div>`;
       right=`<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${args})">Deshacer</button>`;
     } else if(r.pagado>0){
-      sub=`<div class="tc-res-sub">Pagaste ${fmt(r.pagado,r.moneda)} · resta <strong>${fmt(r.resta,r.moneda)}</strong></div>`;
+      sub=`<div class="tc-res-sub">Pagaste ${fmt(r.pagado,r.moneda)} · resta <strong>${fmt(r.resta,r.moneda)}</strong>${venc}</div>`;
       right=`<button type="button" class="tc-res-btn" onclick="abrirPagoTc(${args})">Pagar resto</button>
              <button type="button" class="tc-res-link" onclick="deshacerPagoTc(${args})">Deshacer</button>`;
     } else {
-      sub=`<div class="tc-res-sub">Sin pagar</div>`;
+      sub=`<div class="tc-res-sub">Sin pagar${venc}</div>`;
       right=`<button type="button" class="tc-res-btn" onclick="abrirPagoTc(${args})">Pagar</button>`;
     }
     return `<div class="tc-res-row">

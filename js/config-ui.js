@@ -97,10 +97,15 @@ function onUsaAhorroToggle(){
 }
 // Frecuente es excluyente con ahorro/retiro: si activás frecuente, desmarca ambos
 function onFrecuenteToggle(){
-  if(document.getElementById("inp-frecuente").checked){
+  const on=document.getElementById("inp-frecuente").checked;
+  if(on){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
   }
+  // Un frecuente puede traer su día de vencimiento: el campo solo aparece mientras está tildado.
+  const wrap=document.getElementById("frec-vto-wrap");
+  if(wrap) wrap.style.display=on?"flex":"none";
+  if(!on){ const dia=document.getElementById("inp-frec-dia"); if(dia) dia.value=""; }
 }
 
 // Mismo comportamiento en el modal de edición
@@ -610,7 +615,8 @@ function armarBackup(){
       tarjetasCustom,
       presupuestos,
       catOrder,
-      iconsCustom
+      iconsCustom,
+      vencimientosTc: leerVencTc()
     }
   };
 }
@@ -735,6 +741,10 @@ function aplicarBackup(backup){
   if(backup.datos.iconsCustom && typeof backup.datos.iconsCustom==="object"){
     iconsCustom=backup.datos.iconsCustom;
     setSensitiveRaw("ficons", JSON.stringify(iconsCustom));
+  }
+  // Backups viejos no lo traen: en ese caso se conservan los vencimientos actuales.
+  if(backup.datos.vencimientosTc && typeof backup.datos.vencimientosTc==="object" && !Array.isArray(backup.datos.vencimientosTc)){
+    guardarVencTc(backup.datos.vencimientosTc);
   }
   save();
   setSensitiveRaw("fimphist3",JSON.stringify(importHistory));

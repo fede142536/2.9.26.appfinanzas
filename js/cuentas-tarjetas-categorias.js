@@ -135,6 +135,9 @@ async function renombrarTarjeta(nombreActual){
   if(idx>=0) tarjetasCustom[idx]=limpio;
   else if(!TARJETAS_DEFAULT.includes(nombreActual)) tarjetasCustom.push(limpio);
   saveTarjetasCustom();
+  // El día de vencimiento acompaña a la tarjeta: si no se mueve, el aviso se pierde en silencio.
+  const venc=leerVencTc();
+  if(venc[nombreActual]!==undefined){ venc[limpio]=venc[nombreActual]; delete venc[nombreActual]; guardarVencTc(venc); }
   if(cambios>0) save();
   showToast(`Renombrada${cambios>0?` · ${cambios} gasto(s) actualizado(s)`:""} ✓`);
   renderTarjetasManager();
