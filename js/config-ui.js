@@ -743,6 +743,7 @@ function aplicarBackup(backup){
     setSensitiveRaw("ficons", JSON.stringify(iconsCustom));
   }
   marcarMepHeredados(movs);   // un backup de antes del campo `mep` trae las inversiones sin marcar
+  repararImporteUSDDuplicado(movs);   // y un backup viejo puede traer dólares con el monto duplicado en pesos
   // Backups viejos no lo traen: en ese caso se conservan los vencimientos actuales.
   if(backup.datos.vencimientosTc && typeof backup.datos.vencimientosTc==="object" && !Array.isArray(backup.datos.vencimientosTc)){
     guardarVencTc(backup.datos.vencimientosTc);
@@ -886,6 +887,20 @@ async function restaurarCopiaLocal(id){
   const cant=aplicarBackup(backup);
   showToast(`✓ Restaurados ${cant} movimientos`);
   renderCopiasAuto();
+}
+
+// Al arrancar: si hay dólares con el monto duplicado en pesos (ver repararImporteUSDDuplicado), se
+// guarda antes una copia de seguridad y se corrigen. Sin nada para arreglar no hace ni una cosa ni la otra.
+async function repararDatosUSDAlArrancar(){
+  if(!movs.some(m=>m.moneda==="USD" && m.importe>0 && m.importe===m.importeOrig)) return 0;
+  try{ await guardarCopiaLocal("seguridad"); }
+  catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
+  const n=repararImporteUSDDuplicado(movs);
+  if(n){
+    save();
+    showToast(`Corregí ${n} movimiento${n===1?"":"s"} en dólares que tenían el monto repetido en pesos`);
+  }
+  return n;
 }
 
 async function borrarCopiaLocal(id){

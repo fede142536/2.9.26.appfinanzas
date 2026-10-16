@@ -38,12 +38,12 @@ function renderAhorro(){
     depositos.forEach(m=>{
       const ym=String(m.fecha||"").slice(0,7);
       if(!ym||ym.length!==7) return;
-      porMes[ym]=(porMes[ym]||0)+m.importe;
+      porMes[ym]=(porMes[ym]||0)+montoARS(m);
     });
     retiros.forEach(m=>{
       const ym=String(m.fecha||"").slice(0,7);
       if(!ym||ym.length!==7) return;
-      porMes[ym]=(porMes[ym]||0)-m.importe;
+      porMes[ym]=(porMes[ym]||0)-montoARS(m);
     });
     ahorrosArr=Object.entries(porMes)
       .sort((a,b)=>a[0].localeCompare(b[0]))
@@ -67,8 +67,8 @@ function renderAhorro(){
   }
 
   const fondoAcum=ahorrosArr.length?ahorrosArr[ahorrosArr.length-1].acum:0;
-  const totalDepositado=depositos.reduce((s,m)=>s+m.importe,0);
-  const totalRetirado=retiros.reduce((s,m)=>s+m.importe,0);
+  const totalDepositado=depositos.reduce((s,m)=>s+montoARS(m),0);
+  const totalRetirado=retiros.reduce((s,m)=>s+montoARS(m),0);
 
   // Franja de saldo: reemplaza los tres chips (Disponible/Depositado/Retirado) de antes.
   // Depositado y Retirado se cuentan ahora en #fondo-msg si hubo retiros, igual que ya hacía.
