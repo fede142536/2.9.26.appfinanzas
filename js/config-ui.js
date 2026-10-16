@@ -371,26 +371,27 @@ function exportarPDF(){
   const desde=document.getElementById("exp-desde").value;
   const hasta=document.getElementById("exp-hasta").value||desde;
   if(!desde){showToast("Indicá el mes en 'Desde'");return;}
-  // Filtrar movimientos en el rango
-  const inRange=movs.filter(m=>{
-    const ym=String(m.fecha||"").slice(0,7);
-    return ym>=desde && ym<=hasta;
-  }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
+  // Filtrar movimientos en el rango: con los gastos frecuentes expandidos mes a mes, igual que
+  // Movimientos y el Dashboard — si no, el reporte no los veía y el balance no coincidía.
+  const inRange=getMovsEnRango(desde+"-01", hasta+"-31")
+    .sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
 
   if(!inRange.length){showToast("Sin movimientos en ese rango");return;}
 
-  const ing=inRange.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+m.importe,0);
-  const gas=inRange.filter(esGasto).reduce((s,m)=>s+m.importe,0);
-  const aho=inRange.filter(esDepositoAhorro).reduce((s,m)=>s+m.importe,0);
+  // Los totales salen de resumenDePeriodo(): la misma cuenta que el Balance de Movimientos y el
+  // Dashboard. Antes el balance restaba lo ahorrado DOS veces (estaba adentro de "gastos" y
+  // además se descontaba aparte) y no sumaba lo retirado del fondo.
+  const rp=resumenDePeriodo(inRange, gananciaInvEntre(desde, hasta));
+  const ing=rp.ingresos, gas=rp.gastos, aho=rp.ahorrado, balance=rp.disponible;
   const inv=inRange.filter(m=>m.tipo==="Inversion").reduce((s,m)=>s+m.importe,0);
-  const balance=ing-gas-aho;
 
-  // Por categoría (gastos)
+  // Por categoría (solo consumo: lo ahorrado tiene su propio total arriba)
   const porCat={};
-  inRange.filter(esGasto).forEach(m=>{
+  inRange.filter(esConsumo).forEach(m=>{
     porCat[m.cat]=(porCat[m.cat]||0)+m.importe;
   });
   const catSorted=Object.entries(porCat).sort((a,b)=>b[1]-a[1]);
+  const totalCat=catSorted.reduce((s,[,v])=>s+v,0);
 
   const titulo=desde===hasta?mesLbl(desde):`${mesLbl(desde)} – ${mesLbl(hasta)}`;
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte ${titulo}</title>
@@ -420,7 +421,7 @@ function exportarPDF(){
   ${inv>0?`<p style="font-size:12px;color:#534ab7;margin-bottom:20px">◈ Inversiones del período: ${fmtS(inv)}</p>`:""}
   ${catSorted.length?`<h2>Gastos por categoría</h2>
   <table><thead><tr><th>Categoría</th><th class="right">Total</th><th class="right">% del total</th></tr></thead><tbody>
-    ${catSorted.map(([c,v])=>`<tr><td>${escapeHtml(c)}</td><td class="right neg">${fmtS(v)}</td><td class="right">${gas>0?Math.round(v/gas*100):0}%</td></tr>`).join("")}
+    ${catSorted.map(([c,v])=>`<tr><td>${escapeHtml(c)}</td><td class="right neg">${fmtS(v)}</td><td class="right">${totalCat>0?Math.round(v/totalCat*100):0}%</td></tr>`).join("")}
   </tbody></table>`:""}
   <h2>Detalle de movimientos (${inRange.length})</h2>
   <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Nota</th><th class="right">Importe</th></tr></thead><tbody>

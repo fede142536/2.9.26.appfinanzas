@@ -4469,6 +4469,95 @@ test("si compartir falla por otro motivo, también cae a la descarga", ()=>
     igual(descargas(), 1);
   }));
 
+// ═══════════════════════════════════════════
+// UN SOLO BALANCE: MOVIMIENTOS, DASHBOARD Y REPORTE DICEN LO MISMO
+// ═══════════════════════════════════════════
+grupo("Balance unificado");
+
+// Agosto con de todo: un gasto común, un depósito al fondo, una compra pagada con el fondo y una
+// ganancia de inversión (BCAHA: suscribe 900.000 y rescata 1.000.000 → +100.000).
+//   ingresos = 2.000.000 + 200.000 (retiro del fondo) + 100.000 (ganancia) = 2.300.000
+//   gastos   = 500.000 + 200.000 (la compra pagada con el fondo)           =   700.000
+//   ahorrado = 300.000
+//   disponible = 2.300.000 − 700.000 − 300.000                             = 1.300.000
+const MES_PARIDAD=()=>[
+  {id:1, tipo:"Ingreso", cat:"Sueldo",       subcat:"", moneda:"ARS", importe:2000000, fecha:"2026-08-05"},
+  {id:2, tipo:"Gasto",   cat:"Supermercado", subcat:"", moneda:"ARS", importe:500000,  fecha:"2026-08-06"},
+  {id:3, tipo:"Gasto",   cat:"Ahorro",       subcat:"", moneda:"ARS", importe:300000,  fecha:"2026-08-07", esAhorro:true},
+  {id:4, tipo:"Gasto",   cat:"Vacaciones",   subcat:"", moneda:"ARS", importe:200000,  fecha:"2026-08-08", usaAhorro:true},
+  {id:5, tipo:"Inversion", subcat:"FCI Suscripción",     ticker:"BCAHA", cat:"FCI", importe:900000,  fecha:"2026-08-10"},
+  {id:6, tipo:"Inversion", subcat:"FCI Rescate capital", ticker:"BCAHA", cat:"FCI", importe:1000000, fecha:"2026-08-20"}
+];
+
+test("resumenDePeriodo: ingresos con retiros y ganancia, gastos, ahorrado y disponible", ()=>{
+  const lista=MES_PARIDAD();
+  const antes=movs; movs=lista;
+  try{
+    const r=resumenDePeriodo(lista, gananciaInvDelMes("2026-08"));
+    igual(r.ingresos, 2300000); igual(r.gastos, 700000); igual(r.ahorrado, 300000);
+    igual(r.balanceCaja, 1600000); igual(r.disponible, 1300000);
+  } finally { movs=antes; }
+});
+
+test("resumenDePeriodo: una pérdida de inversión suma a gastos, y sin ahorro disponible = ingresos − gastos", ()=>{
+  const lista=[{id:1, tipo:"Ingreso", cat:"Sueldo", importe:1000000, fecha:"2026-08-05", moneda:"ARS"}];
+  const r=resumenDePeriodo(lista, {ars:-50000, usd:0});
+  igual(r.ingresos, 1000000); igual(r.gastos, 50000); igual(r.ahorrado, 0); igual(r.disponible, 950000);
+});
+
+test("resumenDePeriodo: un traspaso no es ingreso, ni gasto, ni ahorro", ()=>{
+  const lista=[{id:1, tipo:"Gasto", cat:"Traspaso", importe:400000, fecha:"2026-08-05", moneda:"ARS", traspaso:true}];
+  const r=resumenDePeriodo(lista, {ars:0, usd:0});
+  igual([r.ingresos, r.gastos, r.ahorrado, r.disponible], [0,0,0,0]);
+});
+
+test("el Dashboard da el mismo balance del mes que Movimientos", async ()=>{
+  const antes=movs; movs=MES_PARIDAD();
+  try{
+    const d=getDashData("2026").monthly.find(x=>x.mes==="2026-08");
+    cierto(!!d, "el Dashboard no tiene agosto");
+    igual(d.ingreso, 2300000, "ingresos del Dashboard");
+    igual(d.gasto, 700000, "gastos del Dashboard");
+    igual(d.ahorrado, 300000, "ahorrado del Dashboard");
+    igual(d.balance, 1300000, "el balance del Dashboard tiene que ser el disponible de Movimientos");
+  } finally { movs=antes; }
+  const txt=await chipsDeMovsAnimados(MES_PARIDAD(), "Todos", "", "2026-08");
+  cierto(txt.includes("1.300.000"), "Movimientos no muestra el mismo balance: "+txt);
+  cierto(txt.includes("2.300.000") && txt.includes("700.000") && txt.includes("300.000"), "no coinciden los ingresos, gastos o ahorrado: "+txt);
+});
+
+test("guardar en el fondo baja el balance del Dashboard, igual que en Movimientos", ()=>{
+  const sinAhorro=MES_PARIDAD().filter(m=>m.id!==3);
+  const antes=movs;
+  try{
+    movs=sinAhorro;
+    const conTodo=getDashData("2026").monthly.find(x=>x.mes==="2026-08").balance;
+    igual(conTodo, 1600000, "sin el depósito el disponible es el balance de caja");
+    movs=MES_PARIDAD();
+    igual(getDashData("2026").monthly.find(x=>x.mes==="2026-08").balance, 1300000, "con el depósito baja 300.000");
+  } finally { movs=antes; }
+});
+
+test("el detalle de un mes muestra lo ahorrado solo si hubo", ()=>{
+  const con=detalleMesHTML({mes:"2026-08", ingreso:2300000, gasto:700000, ahorrado:300000, balance:1300000});
+  cierto(con.includes("Ahorrado"), "falta Ahorrado: "+con);
+  const sin=detalleMesHTML({mes:"2026-08", ingreso:1000, gasto:400, ahorrado:0, balance:600});
+  cierto(!sin.includes("Ahorrado"), "no hay nada ahorrado que mostrar: "+sin);
+});
+
+test("Movimientos, el Dashboard (mes, año, cuentas y detalle) y el PDF usan la misma cuenta", async ()=>{
+  const dash=await (await fetch("js/dashboard.js")).text();
+  const mov=await (await fetch("js/movimientos.js")).text();
+  const cfg=await (await fetch("js/config-ui.js")).text();
+  const cuerpo=(js,n)=>{ const i=js.indexOf("function "+n+"("); return js.slice(i, js.indexOf("\n}\n", i)+3); };
+  cierto(mov.includes("resumenDePeriodo("), "Movimientos no usa resumenDePeriodo");
+  cierto(cuerpo(dash,"getDashData").includes("resumenDePeriodo("), "getDashData (mes a mes) no usa resumenDePeriodo");
+  cierto(cuerpo(dash,"renderDashCuentas").includes("resumenDePeriodo("), "la tarjeta de cuentas no usa resumenDePeriodo");
+  cierto(cuerpo(dash,"showCuentaDetail").includes("resumenDePeriodo("), "el detalle de una cuenta no usa resumenDePeriodo");
+  cierto(cuerpo(cfg,"exportarPDF").includes("resumenDePeriodo("), "el reporte PDF no usa resumenDePeriodo");
+  cierto(cuerpo(dash,"renderDashYear").includes("d.balance"), "el balance del año no suma los balances de cada mes");
+});
+
 grupo("Robustez de datos guardados");
 
 // Guarda y restaura las variables globales de datos, para no ensuciar el resto de los tests
