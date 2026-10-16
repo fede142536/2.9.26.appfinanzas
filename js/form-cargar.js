@@ -743,6 +743,8 @@ async function guardarSinFreno(){
     mov.mesInicio=String(fechaCarga||"").slice(0,7) || currentYM();
     mov.cambios=[]; // historial de aumentos vacío
     mov.mesFin=null;
+    const diaVto=diaValido(document.getElementById("inp-frec-dia")?.value);
+    if(diaVto!==null) mov.diaVto=diaVto;   // opcional: solo si se cargó, para el aviso de vencimientos
   }
   movs.unshift(mov);
   save();
@@ -788,6 +790,10 @@ function resetForm(t){
     if(recupSw) recupSw.checked=false;
     const recupWrap=document.getElementById("recup-monto-wrap");
     if(recupWrap) recupWrap.style.display="none";
+    // Solo se limpia el día: el interruptor de frecuente conserva su estado como siempre, y el
+    // campo del día sigue visible o no según ese interruptor.
+    const frecDia=document.getElementById("inp-frec-dia");
+    if(frecDia) frecDia.value="";
     const sugEl=document.getElementById("sugerencia-cat");
     if(sugEl){sugEl.style.display="none";sugEl._sugerencia=null;}
     document.getElementById("inp-importe-prefix").textContent="$";

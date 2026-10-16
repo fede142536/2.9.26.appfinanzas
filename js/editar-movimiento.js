@@ -232,6 +232,10 @@ function renderEditForm(m){
             <input type="month" id="edit-frec-fin" class="form-input" value="${m.mesFin||''}">
           </div>
         </div>
+        <div class="form-group"><label class="form-label" for="edit-frec-dia">Vence el día (opcional)</label>
+          <input type="number" id="edit-frec-dia" class="form-input" value="${diaValido(m.diaVto)||""}" placeholder="Ej: 10" inputmode="numeric" min="1" max="31" step="1">
+          <p style="font-size:10px;color:var(--muted);margin-top:4px">Con el día cargado, la app te avisa unos días antes si todavía no lo marcaste como pagado.</p>
+        </div>
         <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 Registrar aumento de precio</div>
           <p style="font-size:11px;color:var(--muted);margin-bottom:8px">El nuevo monto se aplicará desde el mes elegido en adelante.</p>
@@ -416,6 +420,12 @@ function guardarEdit(){
       if(fin&&fin<ini){showToast("El mes de fin no puede ser antes del inicio");return;}
       m.mesInicio=ini;
       m.mesFin=fin;
+      // querySelector, no getElementById — ver el comentario de onEditMonedaChange() más arriba.
+      const diaEl=document.querySelector("#edit-frec-dia");
+      if(diaEl){
+        const dv=diaValido(diaEl.value);
+        if(dv!==null) m.diaVto=dv; else delete m.diaVto;
+      }
       const aumMes=document.getElementById("edit-frec-aum-mes").value;
       const aumMonto=parseFloat(document.getElementById("edit-frec-aum-monto").value)||0;
       if(aumMes && aumMonto>0){

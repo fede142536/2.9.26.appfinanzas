@@ -305,6 +305,7 @@ function toggleFrecPagado(id, ym){
   save();
   actualizarFilaFrecPagado(id, ym, g.pagos[ym]);
   actualizarFrecPorPagar();
+  pintarFranjaVencimientos();
 }
 
 // Repinta EN EL LUGAR la fila ya montada de un gasto frecuente, en vez de llamar a
@@ -814,6 +815,18 @@ function listaDelResumenFrec(){
   return (filtro==="Gasto" && filtroCategoria) ? lista.filter(m=>m.cat===filtroCategoria) : lista;
 }
 
+// La franja de próximos vencimientos (tarjetas y frecuentes sin pagar) va en la línea informativa
+// de arriba de la lista, solo en "Todos", mirando el mes actual: avisar de lo que vence en un mes
+// que ya pasó no sirve de nada. Se repinta sola al tildar un frecuente como pagado.
+function pintarFranjaVencimientos(){
+  const el=document.getElementById("mov-arrastre");
+  if(!el) return;
+  const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();
+  const html=aplica ? vencimientosFranjaHTML(proximosVencimientos(hoyLocal(), movs, leerVencTc())) : "";
+  if(html){ el.className="venc-wrap"; el.innerHTML=html; el.style.display="block"; }
+  else if(filtro==="Todos"){ el.className="info-line"; el.innerHTML=""; el.style.display="none"; }   // sin restos de la franja anterior
+}
+
 // Repinta SOLO el mosaico, en el lugar: un renderMovs() completo tira abajo los lotes de la lista
 // ya cargados con el scroll (ver actualizarFilaFrecPagado). Si el mosaico no está, no hace nada.
 function actualizarFrecPorPagar(){
@@ -1244,6 +1257,7 @@ function renderMovs(){
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
     arrastreEl.style.display="none";
+    pintarFranjaVencimientos();
   }
 
   // ── RESUMEN DE PRESUPUESTOS (solo cuando filtro = Gasto) ──
