@@ -2634,6 +2634,182 @@ test("guardar con los dólares vacíos sigue siendo una inversión y no los inve
 }));
 
 // ═══════════════════════════════════════════
+// PAGO DEL RESUMEN DE LA TARJETA
+// ═══════════════════════════════════════════
+grupo("Tarjetas: pagar el resumen");
+
+// Septiembre 2026: Visa = Notebook 100.000 (cuota 5/12) + Zapatillas 60.000 (cuota 2/3) = 160.000;
+// Mastercard = Heladera 140.000 (cuota 3/6).
+const TCS_SEPT=[NOTEBOOK, HELADERA, ZAPATILLAS];
+const PAGO_VISA=(monto, extra)=>crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa", moneda:"ARS", monto,
+                                                  fecha:"2026-10-05", id:8800, ...(extra||{})});
+
+test("hay un resumen por tarjeta con lo que debe cada una", ()=>{
+  const rs=conTarjetas(TCS_SEPT, ()=>resumenesDelMes("2026-09", []));
+  igual(rs.map(r=>r.tarjeta), ["Mastercard","Visa"]);
+  igual(rs.find(r=>r.tarjeta==="Visa").total, 160000);
+  igual(rs.find(r=>r.tarjeta==="Mastercard").total, 140000);
+  cierto(rs.every(r=>r.pagado===0 && r.resta===r.total), "sin pagos, todo está por pagar");
+});
+
+test("pagar el resumen lo deja en cero; un pago parcial deja el resto", ()=>{
+  const total=conTarjetas(TCS_SEPT, ()=>resumenTarjetaMes("2026-09","Visa","ARS",[PAGO_VISA(160000)]));
+  igual(total.pagado, 160000); igual(total.resta, 0);
+  const parcial=conTarjetas(TCS_SEPT, ()=>resumenTarjetaMes("2026-09","Visa","ARS",[PAGO_VISA(100000)]));
+  igual(parcial.resta, 60000, "pagó 100.000 de 160.000");
+  const dos=conTarjetas(TCS_SEPT, ()=>resumenTarjetaMes("2026-09","Visa","ARS",[PAGO_VISA(100000), {...PAGO_VISA(60000), id:8801}]));
+  igual(dos.resta, 0, "dos pagos suman");
+});
+
+test("un pago de otra tarjeta, otro mes u otra moneda no cuenta para este resumen", ()=>{
+  const otros=[
+    crearPagoTarjeta({ym:"2026-09", tarjeta:"Mastercard", moneda:"ARS", monto:140000, fecha:"2026-10-05", id:8810}),
+    crearPagoTarjeta({ym:"2026-08", tarjeta:"Visa",       moneda:"ARS", monto:160000, fecha:"2026-09-05", id:8811}),
+    crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa",       moneda:"USD", monto:50,     fecha:"2026-10-05", id:8812})
+  ];
+  const r=conTarjetas(TCS_SEPT, ()=>resumenTarjetaMes("2026-09","Visa","ARS",otros));
+  igual(r.pagado, 0); igual(r.resta, 160000);
+});
+
+test("el pago es un gasto común: cat de siempre, ligado al resumen", ()=>{
+  const p=PAGO_VISA(160000);
+  igual(p.tipo, "Gasto"); igual(p.cat, "Tarjeta de crédito"); igual(p.subcat, "Pago total");
+  igual(p.moneda, "ARS"); igual(p.importe, 160000); igual(p.importeOrig, null);
+  igual(p.pagoTarjeta, {ym:"2026-09", tarjeta:"Visa", moneda:"ARS"});
+  cierto(esPagoTarjeta(p) && !esPagoTarjeta({tipo:"Gasto"}));
+  cierto(p.nota.includes("Visa"), "la nota dice de qué resumen es: "+p.nota);
+});
+
+test("pagar en dólares lo guarda como un gasto en USD, sin tocar los pesos", ()=>{
+  const p=crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa", moneda:"USD", monto:120.5, fecha:"2026-10-05"});
+  igual(p.moneda, "USD"); igual(p.importe, 0); igual(p.importeOrig, 120.5);
+  igual(totalesDePlata([p], 0).balance, 0, "un gasto en dólares no mueve el balance en pesos");
+});
+
+test("un pago sin monto o sin fecha no se crea", ()=>{
+  igual(crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa", moneda:"ARS", monto:0, fecha:"2026-10-05"}), null);
+  igual(crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa", moneda:"ARS", monto:10, fecha:""}), null);
+});
+
+test("pagar el resumen baja el balance una sola vez, y las compras de tarjeta nunca lo tocaron", ()=>{
+  igual(totalesDePlata([PAGO_VISA(160000)], 0).balance, -160000);
+});
+
+test("con 'sale de mis ahorros' es un retiro del fondo, igual que cualquier gasto pagado con ahorros", ()=>{
+  const p=PAGO_VISA(160000, {usaAhorro:true});
+  cierto(esRetiroAhorro(p), "tendría que restar del fondo");
+  cierto(!esRetiroAhorro(PAGO_VISA(160000)), "sin la casilla sale del cash");
+});
+
+// Dólares del Dashboard: antes se descontaban las cuotas de tarjeta en USD; si además se carga el
+// pago, la misma plata salía dos veces. Ahora de la tarjeta solo se suma lo que resta pagar.
+const VUELO_USD={id:9, desc:"Vuelo", total:300, cuotasTotal:3, mesInicio:"2026-09", tarjeta:"Visa", moneda:"USD"};
+const pagoUsd=(monto,id)=>crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa", moneda:"USD", monto, fecha:"2026-10-05", id:id||8900});
+
+test("sin pagos, las cuotas en USD se descuentan como siempre", ()=>{
+  const r=conTarjetas([VUELO_USD], ()=>resumenUSDdelAnio([], 2026));
+  igual(r.tcUSD, 300); igual(r.neto, -300);
+});
+
+test("pagar el resumen en USD no descuenta dos veces: el pago reemplaza a la cuota de ese mes", ()=>{
+  const r=conTarjetas([VUELO_USD], ()=>resumenUSDdelAnio([pagoUsd(100)], 2026));
+  igual(r.tcUSD, 200, "septiembre ya está pagado: quedan octubre y noviembre");
+  igual(r.gasComun, 100, "lo pagado entra como gasto");
+  igual(r.neto, -300, "100 pagados + 200 por pagar = lo mismo que sin el pago");
+});
+
+test("un pago parcial en USD deja el resto a la vista", ()=>{
+  const r=conTarjetas([VUELO_USD], ()=>resumenUSDdelAnio([pagoUsd(40)], 2026));
+  igual(r.tcUSD, 260, "60 que restan de septiembre + 200");
+  igual(r.neto, -300);
+  cierto(r.movimientos.some(m=>m.etiqueta.includes("resta del resumen") && m.monto===60), "falta la fila del resto");
+});
+
+test("el pago del resumen en USD sale del fondo si se tilda", ()=>{
+  const dep={id:8950, tipo:"Gasto", cat:"Ahorro", moneda:"USD", importe:0, importeOrig:100, esAhorro:true, fecha:"2026-09-01"};
+  const antes=movs;
+  try{
+    movs=[dep, pagoUsd(30)];
+    movs[1].usaAhorro=true;
+    igual(calcularFondoUSD(), 70, "100 al fondo − 30 pagados con el fondo");
+  } finally { movs=antes; }
+});
+
+test("cambiar la moneda de un pago desde el editor mantiene ligado su resumen", async ()=>{
+  const js=await (await fetch("js/editar-movimiento.js")).text();
+  cierto(/m\.pagoTarjeta\.moneda\s*=/.test(js), "guardarEdit no actualiza la moneda del pago ligado");
+});
+
+// ═══════════════════════════════════════════
+// GASTOS FRECUENTES POR PAGAR
+// ═══════════════════════════════════════════
+grupo("Movimientos: frecuentes por pagar");
+
+const FREC=(id,monto,extra)=>({_isFrecVirtual:true, id, importe:monto, moneda:"ARS", pagado:false, ...(extra||{})});
+
+test("suma lo que falta pagar de los frecuentes, sin contar los pagados ni los gastos comunes", ()=>{
+  const r=frecuentesPorPagar([FREC(1,300000), FREC(2,50000,{pagado:true}), FREC(3,20000), {id:4, tipo:"Gasto", importe:999999}]);
+  igual(r.total, 3); igual(r.pendientes, 2); igual(r.ars, 320000);
+});
+
+test("los frecuentes en USD se suman aparte y no se mezclan con los pesos", ()=>{
+  const r=frecuentesPorPagar([FREC(1,300000), FREC(2,0,{moneda:"USD", importeOrig:12.5})]);
+  igual(r.ars, 300000); igual(r.usd, 12.5);
+});
+
+test("sin frecuentes en el período no hay mosaico", ()=>{
+  igual(frecPorPagarMosaicoHTML(frecuentesPorPagar([{id:1, tipo:"Gasto"}])), "");
+});
+
+test("con todo pagado el mosaico lo dice y va en verde", ()=>{
+  const html=frecPorPagarMosaicoHTML(frecuentesPorPagar([FREC(1,300000,{pagado:true})]));
+  cierto(html.includes("Todo pagado"), html);
+  cierto(html.includes("--success"), "todo pagado va en verde: "+html);
+});
+
+const FRECS_MES=()=>[
+  {id:8001, tipo:"Gasto", cat:"Casa", subcat:"Alquiler", moneda:"ARS", importe:300000, importeOrig:null, frecuente:true, mesInicio:"2026-01", fecha:"2026-01-01", cambios:[]},
+  {id:8002, tipo:"Gasto", cat:"Casa", subcat:"Internet", moneda:"ARS", importe:50000,  importeOrig:null, frecuente:true, mesInicio:"2026-01", fecha:"2026-01-01", cambios:[]}
+];
+
+test("'Todos' muestra lo que falta pagar de los frecuentes", ()=>{
+  const txt=chipsDeMovs(FRECS_MES(), "Todos", "", "2026-08");
+  cierto(txt.includes("Frecuentes por pagar") && txt.includes("350.000"), "falta el mosaico o el monto: "+txt);
+  cierto(txt.includes("2 de 2 sin pagar"), "falta la cuenta de pendientes: "+txt);
+});
+
+test("'Gastos' también lo muestra", ()=>{
+  const txt=chipsDeMovs(FRECS_MES(), "Gasto", "", "2026-08");
+  cierto(txt.includes("Frecuentes por pagar") && txt.includes("350.000"), txt);
+});
+
+test("al tildar pagado resta y muestra lo que queda, sin volver a dibujar la lista", ()=>{
+  const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list","mov-mes-label"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const prev={movs, filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha};
+  movs=FRECS_MES(); filtro="Todos"; filtroCategoria=""; mesActual="2026-08"; filtroFecha=null;
+  try{
+    renderMovs();
+    const lista=creados[4], marca=document.createElement("i");
+    lista.appendChild(marca);   // si la lista se vuelve a dibujar, esta marca desaparece
+    // Solo el mosaico: el resumen entero también trae "Gastos $350.000", que no cambia al pagar.
+    const txt=()=>{ const el=creados[0].querySelector('[data-mosaico="frec-por-pagar"]'); return el ? el.innerText||el.textContent : "(sin mosaico)"; };
+    cierto(txt().includes("350.000"), "arranca con todo pendiente: "+txt());
+    toggleFrecPagado(8001, "2026-08");
+    cierto(txt().includes("50.000") && !txt().includes("350.000"), "al pagar el alquiler quedan 50.000: "+txt());
+    cierto(txt().includes("1 de 2 sin pagar"), "falta 1 de 2: "+txt());
+    toggleFrecPagado(8002, "2026-08");
+    cierto(txt().includes("Todo pagado"), "pagados los dos: "+txt());
+    toggleFrecPagado(8001, "2026-08");
+    cierto(txt().includes("300.000"), "al destildar vuelve a sumar: "+txt());
+    cierto(lista.contains(marca), "no tendría que redibujar la lista entera");
+  } finally {
+    creados.forEach(e=>e.remove());
+    movs=prev.movs; filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff;
+  }
+});
+
+// ═══════════════════════════════════════════
 // ORDEN DE LA LISTA DE MOVIMIENTOS
 // ═══════════════════════════════════════════
 grupo("Movimientos: orden cronológico");
@@ -4456,7 +4632,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 8, "esperaba las 8 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente, recuperable, tc-frecuente, cambio-ahorro, cambio-usaahorro): " +
+  igual(cajas.length, 9, "esperaba las 9 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente, recuperable, tc-frecuente, cambio-ahorro, cambio-usaahorro, pago-tc-ahorro): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);

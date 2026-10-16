@@ -670,10 +670,23 @@ function resumenUSDdelAnio(lista, anio){
   const invSalida=invUSD.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+m.importeUSD,0);
 
   // ── Tarjeta en USD (cuotas y gastos fijos, expandidos mes a mes) ──
+  // Un resumen que ya se pagó (ver crearPagoTarjeta) cuenta por lo que se PAGÓ, que ya está en
+  // `gasTotal`; de la tarjeta solo se suma lo que resta pagar. Sin esto, pagar el resumen en
+  // dólares descontaba lo mismo dos veces.
   const tcMovs=[];
   for(let i=1;i<=12;i++){
     const ym=yrStr+"-"+String(i).padStart(2,"0");
-    getTcMovsEnMes(ym).forEach(t=>{ if(t.moneda==="USD") tcMovs.push(t); });
+    const porTarjeta={};
+    getTcMovsEnMes(ym).forEach(t=>{
+      if(t.moneda!=="USD") return;
+      (porTarjeta[t.tarjeta||""]=porTarjeta[t.tarjeta||""]||[]).push(t);
+    });
+    Object.entries(porTarjeta).forEach(([tarjeta, items])=>{
+      const r=resumenTarjetaMes(ym, tarjeta, "USD", lista);
+      if(r.pagado<=0){ items.forEach(t=>tcMovs.push(t)); return; }
+      if(r.resta>0) tcMovs.push({...items[0], _resto:true, frecuente:false,
+        desc:`Resto del resumen ${tarjeta||"de la tarjeta"}`, importe:r.resta});
+    });
   }
   const tcUSD=tcMovs.reduce((s,t)=>s+(t.importe||0),0);
 
@@ -697,7 +710,7 @@ function resumenUSDdelAnio(lista, anio){
                       monto:m.importeUSD});
   });
   tcMovs.forEach(t=>{
-    const tag=t.frecuente?"Tarjeta · mensual fijo":`Tarjeta · cuota ${t.nCuota}/${t.cuotasTotal}`;
+    const tag=t._resto?"Tarjeta · resta del resumen":(t.frecuente?"Tarjeta · mensual fijo":`Tarjeta · cuota ${t.nCuota}/${t.cuotasTotal}`);
     movimientos.push({fecha:t.fecha, desc:t.desc||"(sin descripción)", cat:t.cat,
                       etiqueta:tag, efecto:-1, monto:t.importe||0});
   });

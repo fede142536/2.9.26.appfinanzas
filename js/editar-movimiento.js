@@ -436,6 +436,8 @@ function guardarEdit(){
       if(m.esAhorro && m.usaAhorro) m.usaAhorro=false;
       m.recuperable=parseFloat(document.getElementById("edit-recup").value)||0;
     }
+    // Un pago de resumen sigue ligado a su moneda: si se cambia acá, el resumen lo tiene que saber.
+    if(m.pagoTarjeta) m.pagoTarjeta.moneda=m.moneda==="USD"?"USD":"ARS";
   } else if(m.tipo==="Inversion"){
     // querySelector, no getElementById — ver el comentario de onEditMonedaChange() más arriba.
     // Si está el campo de dólares de una compra MEP, es ese; si no, el "Importe USD" de siempre.

@@ -77,6 +77,60 @@ function getTcMovsEnMes(ym){
 }
 
 // ═══════════════════════════════════════════
+// PAGO DEL RESUMEN DE LA TARJETA
+// ═══════════════════════════════════════════
+// Las compras con tarjeta no tocan el balance (la plata sale cuando pagás el resumen). Pagar el
+// resumen es UN gasto común —el real: es cuando se te fue la plata— que además queda ligado al
+// resumen que cancela (`pagoTarjeta: {ym, tarjeta, moneda}`). Así el resumen figura como pagado y
+// lo que pagaste no se cuenta dos veces: ni en el balance (las compras nunca entraron) ni en los
+// dólares del Dashboard (ver resumenUSDdelAnio, que de la tarjeta solo suma lo que resta pagar).
+// Sale de tu cash o, con `usaAhorro`, del fondo de ahorro — el mismo mecanismo de siempre.
+const CAT_PAGO_TARJETA = "Tarjeta de crédito";   // ya existe: ver estado-categorias.js
+const SUBCAT_PAGO_TARJETA = "Pago total";
+
+function esPagoTarjeta(m){ return !!m && !!m.pagoTarjeta; }
+function monedaTc(x){ return x==="USD" ? "USD" : "ARS"; }
+
+// Lo que debe, lo que ya pagó y lo que resta de UNA tarjeta, en UNA moneda, en un mes.
+function resumenTarjetaMes(ym, tarjeta, moneda, lista){
+  const mon=monedaTc(moneda), nombre=tarjeta||"";
+  const total=getTcMovsEnMes(ym)
+    .filter(t=>(t.tarjeta||"")===nombre && monedaTc(t.moneda)===mon)
+    .reduce((s,t)=>s+(t.importe||0),0);
+  const pagos=(lista||[]).filter(m=>esPagoTarjeta(m) && m.pagoTarjeta.ym===ym
+    && (m.pagoTarjeta.tarjeta||"")===nombre && monedaTc(m.pagoTarjeta.moneda)===mon);
+  const pagado=pagos.reduce((s,m)=>s+(mon==="USD" ? (m.importeOrig||0) : (m.importe||0)),0);
+  const r2=x=>Math.round(x*100)/100;
+  return {ym, tarjeta:nombre, moneda:mon, total:r2(total), pagado:r2(pagado),
+          resta:Math.max(r2(total-pagado),0), pagos};
+}
+
+// Un resumen por cada tarjeta y moneda que tiene compras ese mes (Visa en pesos y Visa en
+// dólares son dos resúmenes: se pagan por separado).
+function resumenesDelMes(ym, lista){
+  const vistos=new Set(), out=[];
+  getTcMovsEnMes(ym).forEach(t=>{
+    const k=`${t.tarjeta||""}|${monedaTc(t.moneda)}`;
+    if(vistos.has(k)) return;
+    vistos.add(k);
+    out.push(resumenTarjetaMes(ym, t.tarjeta||"", t.moneda, lista));
+  });
+  return out.sort((a,b)=>a.tarjeta.localeCompare(b.tarjeta) || a.moneda.localeCompare(b.moneda));
+}
+
+// El gasto que representa pagar el resumen. Función pura: no toca `movs` ni el DOM.
+function crearPagoTarjeta({ym, tarjeta, moneda, monto, fecha, usaAhorro, cuenta, nota, id}){
+  const mon=monedaTc(moneda);
+  const m=Math.round((Number(monto)||0)*100)/100;
+  if(m<=0 || !fecha || !ym) return null;
+  return {id:id||Date.now(), tipo:"Gasto", cat:CAT_PAGO_TARJETA, subcat:SUBCAT_PAGO_TARJETA, fecha,
+          nota: nota || `Resumen ${tarjeta||"de la tarjeta"} · ${mesLbl(ym)}`,
+          moneda:mon, importe: mon==="USD" ? 0 : m, importeOrig: mon==="USD" ? m : null,
+          cuenta:cuenta||"", esAhorro:false, usaAhorro:!!usaAhorro, traspaso:false, recuperable:0,
+          tags:[], pagoTarjeta:{ym, tarjeta:tarjeta||"", moneda:mon}};
+}
+
+// ═══════════════════════════════════════════
 // CUOTAS PENDIENTES POR MES
 // ═══════════════════════════════════════════
 // Una caja por mes con lo que queda por pagar, desde el mes que estás mirando hacia adelante.
@@ -357,6 +411,7 @@ function renderTarjetas(){
         const icono=vistaCategoria?getIcon(nombre,"💳"):"💳";
         return filaBarraTc(`${icono} ${escapeHtml(nombre)}`, moneda, val, maxPorMoneda[moneda]||1);
       }).join("")+`</div>`;
+      html+=resumenesTcHTML(ymSel);
     }
 
     balanceEl.innerHTML=html;
@@ -364,6 +419,91 @@ function renderTarjetas(){
   }
 
   renderTcPendientes();
+}
+
+// ── Resúmenes del mes: estado de cada tarjeta y botón para pagarlo ──
+function resumenesTcHTML(ym){
+  const rs=resumenesDelMes(ym, movs);
+  if(!rs.length) return "";
+  const fmt=(v,mon)=>mon==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
+  return `<div class="tc-res"><div class="tc-res-titulo">Resumen de ${escapeHtml(mesLbl(ym))}</div>`+rs.map(r=>{
+    const args=`${attrJS(r.ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)}`;
+    const badge=r.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
+    let sub, right;
+    if(r.total>0 && r.resta===0){
+      sub=`<div class="tc-res-sub ok">✓ Pagado ${fmt(r.pagado,r.moneda)}</div>`;
+      right=`<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${args})">Deshacer</button>`;
+    } else if(r.pagado>0){
+      sub=`<div class="tc-res-sub">Pagaste ${fmt(r.pagado,r.moneda)} · resta <strong>${fmt(r.resta,r.moneda)}</strong></div>`;
+      right=`<button type="button" class="tc-res-btn" onclick="abrirPagoTc(${args})">Pagar resto</button>
+             <button type="button" class="tc-res-link" onclick="deshacerPagoTc(${args})">Deshacer</button>`;
+    } else {
+      sub=`<div class="tc-res-sub">Sin pagar</div>`;
+      right=`<button type="button" class="tc-res-btn" onclick="abrirPagoTc(${args})">Pagar</button>`;
+    }
+    return `<div class="tc-res-row">
+      <div class="tc-res-mid"><div class="tc-res-name">💳 ${escapeHtml(r.tarjeta||"Sin tarjeta")}${badge}</div>${sub}</div>
+      <div class="tc-res-right"><div class="tc-res-monto">${fmt(r.total,r.moneda)}</div>${right}</div>
+    </div>`;
+  }).join("")+`</div>`;
+}
+
+let pagoTcCtx=null;
+
+function abrirPagoTc(ym, tarjeta, moneda){
+  const r=resumenTarjetaMes(ym, tarjeta, moneda, movs);
+  pagoTcCtx={ym, tarjeta:r.tarjeta, moneda:r.moneda};
+  const usd=r.moneda==="USD";
+  const fmt=v=>usd?`USD ${v.toFixed(2)}`:fmtS(v);
+  document.getElementById("pago-tc-titulo").textContent=`${r.tarjeta||"Tarjeta"}${usd?" · dólares":""} · ${mesLbl(ym)}`;
+  document.getElementById("pago-tc-sub").textContent=`Resumen ${fmt(r.total)}${r.pagado>0?` · ya pagaste ${fmt(r.pagado)}`:""}`;
+  document.getElementById("pago-tc-prefix").textContent=usd?"USD":"$";
+  document.getElementById("pago-tc-monto").value=r.resta>0?r.resta:"";
+  const d=new Date();
+  document.getElementById("pago-tc-fecha").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  document.getElementById("pago-tc-ahorro").checked=false;
+  document.getElementById("pago-tc-cuenta").innerHTML=getCuentas().map(c=>`<option>${escapeHtml(c)}</option>`).join("");
+  document.getElementById("modal-pago-tc").classList.add("open");
+}
+function cerrarPagoTc(){
+  document.getElementById("modal-pago-tc").classList.remove("open");
+  pagoTcCtx=null;
+}
+
+function guardarPagoTc(){
+  const ctx=pagoTcCtx;
+  if(!ctx) return;
+  const monto=parseFloat(document.getElementById("pago-tc-monto").value)||0;
+  const fecha=document.getElementById("pago-tc-fecha").value;
+  if(monto<=0){ showToast("Ingresá cuánto pagaste"); return; }
+  if(!fecha){ showToast("Poné la fecha del pago"); return; }
+  const usaAhorro=document.getElementById("pago-tc-ahorro").checked;
+  const mov=crearPagoTarjeta({...ctx, monto, fecha, usaAhorro, cuenta:document.getElementById("pago-tc-cuenta").value});
+  if(!mov){ showToast("No pude registrar el pago"); return; }
+  movs.unshift(mov);
+  save();
+  vibrar([15,50,15]);
+  cerrarPagoTc();
+  showToast(`Pago del resumen registrado${usaAhorro?" · del fondo de ahorro":""} ✓`);
+  renderTarjetas();
+  renderMovs();
+  if(usaAhorro) renderAhorro();
+}
+
+// Borra los pagos ligados a ese resumen (son gastos comunes: también salen de Movimientos).
+async function deshacerPagoTc(ym, tarjeta, moneda){
+  const r=resumenTarjetaMes(ym, tarjeta, moneda, movs);
+  if(!r.pagos.length) return;
+  const fmt=v=>r.moneda==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
+  if(!await mostrarConfirm(`Se borra${r.pagos.length>1?`n ${r.pagos.length} pagos`:" el pago"} de ${fmt(r.pagado)} de este resumen. El gasto también sale de Movimientos.`,
+    {titulo:"Deshacer pago", textoOk:"Deshacer"})) return;
+  const ids=new Set(r.pagos.map(p=>p.id));
+  movs=movs.filter(m=>!ids.has(m.id));
+  save();
+  showToast("Pago deshecho");
+  renderTarjetas();
+  renderMovs();
+  renderAhorro();
 }
 
 // ═══════════════════════════════════════════
