@@ -215,6 +215,10 @@ function updateInvSubcats(){
   const cat=document.getElementById("inv-cat").value;
   const subList=getCats("Inversion")[cat]||["Otros"];
   document.getElementById("inv-subcat").innerHTML=subList.map(s=>`<option>${escapeHtml(s)}</option>`).join("");
+  // Elegir la categoría "MEP" tilda "Operación MEP" por comodidad; después se puede cambiar a mano
+  // (el tipo lo decide la casilla, no el nombre de la categoría).
+  const mepChk=document.getElementById("inv-mep");
+  if(mepChk) mepChk.checked=/^\s*mep\s*$/i.test(cat);
   autoSeleccionarCuenta();
 }
 function updateSubcats(){
@@ -709,7 +713,9 @@ async function guardarSinFreno(){
       importeUSD: isUSDInv ? importeInv : 0,
       cat,subcat:cat+" "+subcat,ticker,fecha:document.getElementById("inv-fecha").value,
       cuenta:cuentaInvEl?cuentaInvEl.value:"",
-      nota:document.getElementById("inv-nota").value.trim()});
+      nota:document.getElementById("inv-nota").value.trim(),
+      // Siempre explícito (true o false): así un false no se vuelve a marcar por el texto.
+      mep: document.getElementById("inv-mep").checked===true});
     save();vibrar([15,50,15]);showToast("Inversión guardada ✓");
     resetForm("Inversion");
     return;
@@ -814,6 +820,10 @@ function resetForm(t){
     toggleInvMoneda();
     document.getElementById("inv-fecha").value=iso;
     refrescarFechaUI("inv-fecha");
+    // La casilla vuelve a lo que corresponde a la categoría que quedó elegida (sin tocar la
+    // operación: updateInvSubcats() la reiniciaría a la primera).
+    const mepChk=document.getElementById("inv-mep"), catInv=document.getElementById("inv-cat");
+    if(mepChk && catInv) mepChk.checked=/^\s*mep\s*$/i.test(catInv.value);
     buildTickerRecientes();
     enfocarCampoDeArriba("inv-ticker");
   } else if(t==="Tarjeta"){

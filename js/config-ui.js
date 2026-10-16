@@ -742,6 +742,7 @@ function aplicarBackup(backup){
     iconsCustom=backup.datos.iconsCustom;
     setSensitiveRaw("ficons", JSON.stringify(iconsCustom));
   }
+  marcarMepHeredados(movs);   // un backup de antes del campo `mep` trae las inversiones sin marcar
   // Backups viejos no lo traen: en ese caso se conservan los vencimientos actuales.
   if(backup.datos.vencimientosTc && typeof backup.datos.vencimientosTc==="object" && !Array.isArray(backup.datos.vencimientosTc)){
     guardarVencTc(backup.datos.vencimientosTc);
