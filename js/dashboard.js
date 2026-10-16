@@ -163,7 +163,7 @@ function construirInsights(ym, mesData, monthlyAnio){
         a:"", b:v.nombre, bc:v.dias<0?"var(--danger)":"var(--warning)",
         c:` ${textoVencimiento(v.dias)} · ${montoVenc(v)}.${venc.length>1?` Y ${venc.length-1} más.`:""}`,
         detalle: venc.map(x=>`${x.nombre}: ${textoVencimiento(x.dias)} (${montoVenc(x)})`).join(" · "),
-        rows:[]
+        rows:[], action:"Ir a Movimientos para marcar lo pagado", actionFn:irAMovimientos
       });
     }
   }
@@ -686,7 +686,7 @@ function resumenUSDdelAnio(lista, anio){
   const invSalida=invUSD.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+m.importeUSD,0);
 
   // ── Tarjeta en USD (cuotas y gastos fijos, expandidos mes a mes) ──
-  // Un resumen que ya se pagó (ver crearPagoTarjeta) cuenta por lo que se PAGÓ, que ya está en
+  // Un resumen con pagos ligados (cargados con una versión anterior) cuenta por lo que se PAGÓ, que ya está en
   // `gasTotal`; de la tarjeta solo se suma lo que resta pagar. Sin esto, pagar el resumen en
   // dólares descontaba lo mismo dos veces.
   const tcMovs=[];

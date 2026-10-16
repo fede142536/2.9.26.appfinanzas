@@ -2636,7 +2636,18 @@ test("guardar con los dólares vacíos sigue siendo una inversión y no los inve
 // ═══════════════════════════════════════════
 // PAGO DEL RESUMEN DE LA TARJETA
 // ═══════════════════════════════════════════
-grupo("Tarjetas: pagar el resumen");
+grupo("Tarjetas: resumen del mes y pagos ligados (heredados)");
+
+// La app ya no ofrece "Pagar resumen" (el pago se carga a mano como un gasto): estos son los pagos que
+// quedaron ligados a un resumen de la versión anterior, un gasto común con `pagoTarjeta`. Siguen
+// contando como pagados y la plata no se descuenta dos veces en los dólares del Dashboard.
+const crearPagoTarjeta=({ym, tarjeta, moneda, monto, fecha, usaAhorro, id})=>{
+  const usd=moneda==="USD";
+  return {id:id||Date.now(), tipo:"Gasto", cat:"Tarjeta de crédito", subcat:"Pago total", fecha, nota:"",
+          moneda:usd?"USD":"ARS", importe:usd?0:monto, importeOrig:usd?monto:null, cuenta:"",
+          esAhorro:false, usaAhorro:!!usaAhorro, traspaso:false, recuperable:0, tags:[],
+          pagoTarjeta:{ym, tarjeta, moneda:usd?"USD":"ARS"}};
+};
 
 // Septiembre 2026: Visa = Notebook 100.000 (cuota 5/12) + Zapatillas 60.000 (cuota 2/3) = 160.000;
 // Mastercard = Heladera 140.000 (cuota 3/6).
@@ -2669,36 +2680,6 @@ test("un pago de otra tarjeta, otro mes u otra moneda no cuenta para este resume
   ];
   const r=conTarjetas(TCS_SEPT, ()=>resumenTarjetaMes("2026-09","Visa","ARS",otros));
   igual(r.pagado, 0); igual(r.resta, 160000);
-});
-
-test("el pago es un gasto común: cat de siempre, ligado al resumen", ()=>{
-  const p=PAGO_VISA(160000);
-  igual(p.tipo, "Gasto"); igual(p.cat, "Tarjeta de crédito"); igual(p.subcat, "Pago total");
-  igual(p.moneda, "ARS"); igual(p.importe, 160000); igual(p.importeOrig, null);
-  igual(p.pagoTarjeta, {ym:"2026-09", tarjeta:"Visa", moneda:"ARS"});
-  cierto(esPagoTarjeta(p) && !esPagoTarjeta({tipo:"Gasto"}));
-  cierto(p.nota.includes("Visa"), "la nota dice de qué resumen es: "+p.nota);
-});
-
-test("pagar en dólares lo guarda como un gasto en USD, sin tocar los pesos", ()=>{
-  const p=crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa", moneda:"USD", monto:120.5, fecha:"2026-10-05"});
-  igual(p.moneda, "USD"); igual(p.importe, 0); igual(p.importeOrig, 120.5);
-  igual(totalesDePlata([p], 0).balance, 0, "un gasto en dólares no mueve el balance en pesos");
-});
-
-test("un pago sin monto o sin fecha no se crea", ()=>{
-  igual(crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa", moneda:"ARS", monto:0, fecha:"2026-10-05"}), null);
-  igual(crearPagoTarjeta({ym:"2026-09", tarjeta:"Visa", moneda:"ARS", monto:10, fecha:""}), null);
-});
-
-test("pagar el resumen baja el balance una sola vez, y las compras de tarjeta nunca lo tocaron", ()=>{
-  igual(totalesDePlata([PAGO_VISA(160000)], 0).balance, -160000);
-});
-
-test("con 'sale de mis ahorros' es un retiro del fondo, igual que cualquier gasto pagado con ahorros", ()=>{
-  const p=PAGO_VISA(160000, {usaAhorro:true});
-  cierto(esRetiroAhorro(p), "tendría que restar del fondo");
-  cierto(!esRetiroAhorro(PAGO_VISA(160000)), "sin la casilla sale del cash");
 });
 
 // Dólares del Dashboard: antes se descontaban las cuotas de tarjeta en USD; si además se carga el
@@ -4729,6 +4710,158 @@ test("renombrar una tarjeta se lleva su día de vencimiento", ()=>conVenc({tcs:[
     igual(leerVencTc(), {"Visa Galicia":10}, "el día se perdió al renombrar");
   } finally { window.mostrarPrompt=promptAntes; tarjetasCustom=customAntes; }
 }));
+
+// ── Fechas reales de cierre y vencimiento por mes, y "pagado" manual ──
+
+test("fechaValida: solo fechas que existen en el calendario", ()=>{
+  ["2026-09-10","2028-02-29","2026-12-31"].forEach(f=>cierto(fechaValida(f), f));
+  ["2026-02-30","2026-13-01","2026-9-1","","x",null,undefined,"2026-09-10T00:00"].forEach(f=>cierto(!fechaValida(f), String(f)));
+});
+
+test("normalizarTc: el formato viejo (un número) es el día de vencimiento, y la basura no rompe", ()=>{
+  igual(normalizarTc(18), {dia:{cierre:null, vto:18}, meses:{}});
+  igual(normalizarTc("10"), {dia:{cierre:null, vto:10}, meses:{}});
+  igual(normalizarTc({dia:{cierre:5, vto:15}, meses:{"2026-11":{vto:"2026-11-16"}}}), {dia:{cierre:5, vto:15}, meses:{"2026-11":{vto:"2026-11-16"}}});
+  [undefined, null, [], "x", {dia:"x", meses:[]}, {dia:{vto:99}}].forEach(v=>
+    igual(normalizarTc(v), {dia:{cierre:null, vto:null}, meses:{}}, "con "+JSON.stringify(v)));
+});
+
+test("datosResumenTc: la fecha cargada para ese mes gana; si no hay, vale el día habitual", ()=>{
+  const v={Visa:{dia:{cierre:5, vto:15}, meses:{"2026-11":{cierre:"2026-11-06", vto:"2026-11-17"}}}};
+  igual(datosResumenTc(v,"Visa","2026-11"), {cierre:"2026-11-06", vto:"2026-11-17", pagado:{ARS:false, USD:false}, habitual:{cierre:5, vto:15}});
+  const dic=datosResumenTc(v,"Visa","2026-12");
+  igual([dic.cierre, dic.vto], ["2026-12-05","2026-12-15"], "diciembre no tiene carga: usa el día habitual");
+  igual(datosResumenTc(v,"Master","2026-11").vto, null, "otra tarjeta sin nada cargado");
+  igual(datosResumenTc({Visa:18},"Visa","2026-11").vto, "2026-11-18", "el formato viejo sigue andando");
+});
+
+test("conFechasResumen guarda las fechas del mes, no toca el original y limpia lo vacío", ()=>{
+  const original={};
+  const v=conFechasResumen(original,"Visa","2026-11",{cierre:"2026-11-05", vto:"2026-11-15"});
+  igual(original, {}, "no tiene que mutar lo que recibe");
+  igual(v.Visa.meses["2026-11"], {cierre:"2026-11-05", vto:"2026-11-15"});
+  igual(v.Visa.dia, {cierre:null, vto:null}, "sin 'repetir' no se inventa un día habitual");
+  const sin=conFechasResumen(v,"Visa","2026-11",{cierre:"", vto:"no-es-fecha"});
+  igual(sin, {}, "sin fechas ni nada más, la tarjeta desaparece del guardado");
+});
+
+test("con 'repetir', el día de cada fecha pasa a ser el habitual para los meses sin carga", ()=>{
+  const v=conFechasResumen({},"Visa","2026-11",{cierre:"2026-11-05", vto:"2026-11-15", repetir:true});
+  igual(v.Visa.dia, {cierre:5, vto:15});
+  igual(datosResumenTc(v,"Visa","2027-01").vto, "2027-01-15");
+  const solo=conFechasResumen({},"Visa","2026-11",{vto:"2026-11-15", repetir:true});
+  igual(solo.Visa.dia, {cierre:null, vto:15}, "solo repite lo que se cargó");
+});
+
+test("conResumenPagado marca por moneda y desmarca; ARS no oculta USD", ()=>{
+  const original={};
+  let v=conResumenPagado(original,"Visa","2026-11","ARS",true);
+  igual(original, {});
+  igual(datosResumenTc(v,"Visa","2026-11").pagado, {ARS:true, USD:false});
+  v=conResumenPagado(v,"Visa","2026-11","USD",true);
+  igual(datosResumenTc(v,"Visa","2026-11").pagado, {ARS:true, USD:true});
+  v=conResumenPagado(v,"Visa","2026-11","ARS",false);
+  igual(datosResumenTc(v,"Visa","2026-11").pagado, {ARS:false, USD:true});
+  igual(conResumenPagado(conResumenPagado({},"Visa","2026-11","ARS",true),"Visa","2026-11","ARS",false), {}, "al desmarcar todo no queda basura");
+});
+
+test("marcar pagado no pisa las fechas ya cargadas del mes", ()=>{
+  const v=conFechasResumen({},"Visa","2026-11",{cierre:"2026-11-05", vto:"2026-11-15"});
+  const d=datosResumenTc(conResumenPagado(v,"Visa","2026-11","ARS",true),"Visa","2026-11");
+  igual([d.cierre, d.vto, d.pagado.ARS], ["2026-11-05","2026-11-15",true]);
+});
+
+test("el vencimiento avisado es la fecha real cargada para ese mes, no el día habitual", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
+  const v={Visa:{dia:{cierre:null, vto:10}, meses:{"2026-09":{vto:"2026-09-12"}}}};
+  const r=proximosVencimientos("2026-09-08", [], v);
+  igual(r.length, 1); igual(r[0].fecha, "2026-09-12"); igual(r[0].dias, 4);
+}));
+
+test("un resumen marcado como pagado deja de avisar; marcar pesos no oculta los dólares", ()=>conVenc({tcs:[...TCS_SEPT, {...VUELO_USD, id:30}]}, ()=>{
+  const base=conFechasResumen({},"Visa","2026-09",{vto:"2026-09-10"});
+  igual(proximosVencimientos("2026-09-08", [], base).length, 2, "Visa en pesos y en dólares");
+  const pagadoARS=conResumenPagado(base,"Visa","2026-09","ARS",true);
+  const r=proximosVencimientos("2026-09-08", [], pagadoARS);
+  igual(r.length, 1); igual(r[0].moneda, "USD");
+  igual(proximosVencimientos("2026-09-08", [], conResumenPagado(pagadoARS,"Visa","2026-09","USD",true)).length, 0);
+}));
+
+test("la franja trae un botón Pagado por fila: de la tarjeta marca el resumen, del frecuente lo tilda", ()=>{
+  const html=vencimientosFranjaHTML([
+    {tipo:"tarjeta", nombre:"Visa", tarjeta:"Visa", ym:"2026-09", moneda:"ARS", dias:2, monto:1000},
+    {tipo:"frecuente", nombre:"Alquiler", id:77, ym:"2026-09", moneda:"ARS", dias:3, monto:2000}
+  ]);
+  cierto((html.match(/class="venc-ok"/g)||[]).length===2, "falta un botón en alguna fila: "+html);
+  cierto(html.includes("marcarPagadoTc("), "la tarjeta no marca el resumen: "+html);
+  cierto(html.includes("toggleFrecPagado(77,"), "el frecuente no se tilda: "+html);
+});
+
+test("marcar pagado desde la franja saca a la tarjeta de los avisos y guarda la marca", ()=>conVenc({tcs:TCS_SEPT, venc:conFechasResumen({},"Visa","2026-09",{vto:"2026-09-10"})}, ()=>{
+  const renderAntes=renderTarjetas; renderTarjetas=()=>{};
+  try{
+    marcarPagadoTc("Visa","2026-09","ARS",true);
+    igual(datosResumenTc(leerVencTc(),"Visa","2026-09").pagado.ARS, true);
+    igual(proximosVencimientos("2026-09-08", [], leerVencTc()).length, 0);
+    marcarPagadoTc("Visa","2026-09","ARS",false);
+    igual(datosResumenTc(leerVencTc(),"Visa","2026-09").pagado.ARS, false);
+  } finally { renderTarjetas=renderAntes; }
+}));
+
+test("la fila de Tarjetas muestra cierre y vencimiento con los días que faltan, y 'Marcar pagado' en vez de 'Pagar'", ()=>{
+  const hoy=hoyLocal(), ym=currentYM();
+  const sumar=n=>{ const d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+  const venc=conFechasResumen({},"Visa",ym,{cierre:sumar(-3), vto:sumar(2)});
+  return conVenc({tcs:[{id:1, desc:"Notebook", total:120000, cuotasTotal:12, mesInicio:ym, tarjeta:"Visa", moneda:"ARS"}], venc}, ()=>{
+    const html=resumenesTcHTML(ym);
+    cierto(html.includes("Cierre ") && html.includes("Vence ") && html.includes("en 2 días"), "faltan las fechas: "+html);
+    cierto(html.includes("Marcar pagado"), "falta el botón Marcar pagado");
+    cierto(!/>Pagar</.test(html) && !html.includes("abrirPagoTc"), "no tiene que quedar el botón Pagar: "+html);
+  });
+});
+
+test("la fila sin fechas ofrece cargarlas; marcada pagada dice Pagado y deja deshacer", ()=>{
+  const ym=currentYM();
+  const tc=[{id:1, desc:"Notebook", total:120000, cuotasTotal:12, mesInicio:ym, tarjeta:"Visa", moneda:"ARS"}];
+  return conVenc({tcs:tc}, async ()=>{
+    cierto(resumenesTcHTML(ym).includes("Cargar cierre y vencimiento"), "no ofrece cargar las fechas");
+    guardarVencTc(conResumenPagado({}, "Visa", ym, "ARS", true));
+    const html=resumenesTcHTML(ym);
+    cierto(html.includes("✓ Pagado") && html.includes("Deshacer") && !html.includes("Marcar pagado"), html);
+  });
+});
+
+test("la hoja de fechas guarda cierre y vencimiento del mes, y valida que no estén al revés", ()=>{
+  const ids={"modal-fechas-tc":"div","fechas-tc-titulo":"div","fechas-tc-cierre":"input","fechas-tc-vto":"input","fechas-tc-repetir":"input"};
+  const els=Object.entries(ids).map(([id,t])=>{ const e=document.createElement(t); e.id=id; if(id==="fechas-tc-repetir") e.type="checkbox"; document.body.appendChild(e); return e; });
+  const renderAntes=renderTarjetas; renderTarjetas=()=>{};
+  return conVenc({}, ()=>{
+    try{
+      abrirFechasTc("Visa","2026-11");
+      document.getElementById("fechas-tc-cierre").value="2026-11-20";
+      document.getElementById("fechas-tc-vto").value="2026-11-10";
+      guardarFechasTc();
+      igual(leerVencTc(), {}, "un vencimiento antes del cierre no se guarda");
+      document.getElementById("fechas-tc-cierre").value="2026-11-05";
+      document.getElementById("fechas-tc-vto").value="2026-11-15";
+      document.getElementById("fechas-tc-repetir").checked=true;
+      guardarFechasTc();
+      const t=leerVencTc().Visa;
+      igual(t.meses["2026-11"], {cierre:"2026-11-05", vto:"2026-11-15"});
+      igual(t.dia, {cierre:5, vto:15});
+      abrirFechasTc("Visa","2026-11");
+      igual(document.getElementById("fechas-tc-vto").value, "2026-11-15", "al reabrir trae lo guardado");
+    } finally { els.forEach(e=>e.remove()); renderTarjetas=renderAntes; fechasTcCtx=null; }
+  });
+});
+
+test("la hoja de fechas usa el calendario del sistema y ya no existe la de pagar", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(/id="fechas-tc-cierre"[^>]*type="date"|type="date"[^>]*id="fechas-tc-cierre"/.test(html), "el cierre no usa un input de fecha");
+  cierto(/id="fechas-tc-vto"[^>]*type="date"|type="date"[^>]*id="fechas-tc-vto"/.test(html), "el vencimiento no usa un input de fecha");
+  cierto(!html.includes("modal-pago-tc") && !html.includes("pago-tc-"), "quedó la hoja de pagar el resumen");
+  const js=await (await fetch("js/tarjetas-inversiones.js")).text();
+  cierto(!js.includes("abrirPagoTc") && !js.includes("guardarPagoTc") && !js.includes("crearPagoTarjeta"), "quedó código del flujo de pagar");
+});
 
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
   igual(proximosVencimientos("2026-09-08", movs, {}), []);
