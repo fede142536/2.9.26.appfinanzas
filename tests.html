@@ -6237,6 +6237,71 @@ test("actualizarFilaFrecPagado repinta solo la fila del gasto frecuente que se t
   }
 });
 
+// ═══════════════════════════════════════════
+// AHORROS: SOLO PESOS EN LAS SUMAS EN PESOS
+// ═══════════════════════════════════════════
+grupo("Ahorros en pesos y dólares");
+
+// El caso real: depósitos y retiros en pesos, más retiros en dólares que arrastran el mismo número en
+// `importe` (bug viejo del editor). Sin el filtro, el saldo en pesos se descuadraba por el monto en USD.
+const AHORRO_MIXTO=()=>[
+  {id:1, tipo:"Gasto", cat:"Fondo de Retiro", moneda:"ARS", importe:1700000, fecha:"2026-07-05", esAhorro:true},
+  {id:2, tipo:"Gasto", cat:"Fondo de Retiro", moneda:"ARS", importe:1000000, fecha:"2026-08-05", usaAhorro:true},
+  {id:3, tipo:"Gasto", cat:"Vacaciones",      moneda:"USD", importe:901.63, importeOrig:901.63, fecha:"2026-08-09", usaAhorro:true}
+];
+
+test("montoARS: los dólares no cuentan como pesos, aunque traigan importe", ()=>{
+  igual(montoARS({moneda:"ARS", importe:150}), 150);
+  igual(montoARS({importe:150}), 150, "sin moneda se toma como pesos");
+  igual(montoARS({moneda:"USD", importe:901.63, importeOrig:901.63}), 0);
+  igual(montoARS({moneda:"USD", importe:0, importeOrig:50}), 0);
+  igual(montoARS(null), 0);
+});
+
+test("totalesDePlata y resumenDePeriodo ignoran el importe duplicado de un movimiento en USD", ()=>{
+  const lista=AHORRO_MIXTO();
+  const t=totalesDePlata(lista);
+  igual(t.depositos, 1700000); igual(t.retiros, 1000000);
+  igual(t.gastos, 1000000, "solo cuenta el retiro gastado en pesos");
+  const r=resumenDePeriodo(lista);
+  igual(r.ingresos, 1000000); igual(r.gastos, 1000000); igual(r.ahorrado, 1700000);
+});
+
+test("repararImporteUSDDuplicado corrige solo la firma exacta y la segunda vez no hace nada", ()=>{
+  const lista=[
+    ...AHORRO_MIXTO(),
+    {id:4, tipo:"Gasto", cat:"Viaje", moneda:"USD", importe:0, importeOrig:20, fecha:"2026-08-10"},
+    {id:5, tipo:"Gasto", cat:"Viaje", moneda:"USD", importe:35000, importeOrig:20, fecha:"2026-08-11"},
+    {id:6, tipo:"Gasto", cat:"Super", moneda:"ARS", importe:500, importeOrig:500, fecha:"2026-08-12"}
+  ];
+  igual(repararImporteUSDDuplicado(lista), 1);
+  igual(lista[2].importe, 0); igual(lista[2].importeOrig, 901.63, "los dólares no se tocan");
+  igual(lista[4].importe, 35000, "un importe distinto no es la firma: se respeta");
+  igual(lista[5].importe, 500, "los pesos no se tocan");
+  igual(repararImporteUSDDuplicado(lista), 0);
+});
+
+test("el saldo en pesos de Ahorros coincide con el de la categoría (depositado − retirado)", ()=>{
+  const lista=AHORRO_MIXTO();
+  const dep=lista.filter(esDepositoAhorro).reduce((s,m)=>s+montoARS(m),0);
+  const ret=lista.filter(esRetiroAhorro).reduce((s,m)=>s+montoARS(m),0);
+  igual(dep-ret, 700000);
+});
+
+test("Ahorros suma con montoARS, y la reparación corre al arrancar, al restaurar y al importar", async ()=>{
+  const aho=await (await fetch("js/ahorros.js")).text();
+  const ren=aho.slice(aho.indexOf("function renderAhorro("), aho.indexOf("function renderAhorroSaldo("));
+  cierto(!/\+m\.importe\b|-m\.importe\b|s\+m\.importe\b/.test(ren), "renderAhorro todavía suma m.importe sin filtrar la moneda");
+  cierto(ren.includes("montoARS(m)"), "renderAhorro no usa montoARS");
+  const main=await (await fetch("js/main.js")).text();
+  const cfg=await (await fetch("js/config-ui.js")).text();
+  const imp=await (await fetch("js/importar-exportar.js")).text();
+  cierto(main.includes("repararDatosUSDAlArrancar()"), "no se repara al arrancar");
+  cierto(cfg.slice(cfg.indexOf("function aplicarBackup(")).includes("repararImporteUSDDuplicado(movs)"), "no se repara al restaurar");
+  cierto(imp.includes("repararImporteUSDDuplicado(movs)"), "no se repara al importar");
+  cierto(cfg.slice(cfg.indexOf("async function repararDatosUSDAlArrancar")).includes('guardarCopiaLocal("seguridad")'), "no se guarda copia de seguridad antes de reparar");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

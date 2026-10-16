@@ -413,6 +413,24 @@ function esIngreso(m){
 // Totales de plata de un conjunto de movimientos, en un solo lugar y sin tocar el DOM,
 // para que la regla de arriba se pueda probar de verdad y no haya dos versiones dando vueltas.
 // `balance` es cuánto cambió la plata que tenés a mano en ese período.
+// Los pesos de un movimiento. Un movimiento en dólares guarda su monto en `importeOrig` y deja
+// `importe` en 0; si por un dato viejo `importe` trae el mismo número (ver repararImporteUSDDuplicado),
+// sumarlo contaría los dólares como si fueran pesos. Toda suma en pesos pasa por acá.
+function montoARS(m){
+  return m && m.moneda==="USD" ? 0 : ((m && m.importe)||0);
+}
+
+// Arregla el dato que dejaba un bug viejo del editor: un movimiento en USD con el mismo número en
+// `importe` y en `importeOrig`. Solo toca esa firma exacta (los dólares nunca llevan `importe`), así
+// que nada legítimo se modifica. Devuelve cuántos corrigió, para que quien llama sepa si hay que guardar.
+function repararImporteUSDDuplicado(lista){
+  let n=0;
+  (lista||[]).forEach(m=>{
+    if(m && m.moneda==="USD" && m.importe>0 && m.importe===m.importeOrig){ m.importe=0; n++; }
+  });
+  return n;
+}
+
 // EL MODELO DE LA PLATA, en un solo lugar.
 //
 // Ingresos = lo que entró a tu patrimonio.
@@ -428,13 +446,13 @@ function esIngreso(m){
 // totalesDePlata() ve una lista suelta y no puede saberlo. Sin ese parámetro las inversiones
 // son neutras, que es la respuesta correcta cuando no se sabe.
 function totalesDePlata(lista, gananciaInv){
-  const ingresos = lista.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+(m.importe||0),0);
-  const depositos= lista.filter(esDepositoAhorro).reduce((s,m)=>s+(m.importe||0),0);
-  const retiros  = lista.filter(esRetiroAhorro).reduce((s,m)=>s+(m.importe||0),0);
+  const ingresos = lista.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+montoARS(m),0);
+  const depositos= lista.filter(esDepositoAhorro).reduce((s,m)=>s+montoARS(m),0);
+  const retiros  = lista.filter(esRetiroAhorro).reduce((s,m)=>s+montoARS(m),0);
   // Todo lo que tiene tipo "Gasto" menos lo que seguís teniendo: lo que fue a parar al fondo y
   // los traspasos entre tus propios bolsillos.
-  const gastos   = lista.filter(m=>esConsumo(m)).reduce((s,m)=>s+(m.importe||0),0);
-  const traspasos= lista.filter(esTraspaso).reduce((s,m)=>s+(m.importe||0),0);
+  const gastos   = lista.filter(m=>esConsumo(m)).reduce((s,m)=>s+montoARS(m),0);
+  const traspasos= lista.filter(esTraspaso).reduce((s,m)=>s+montoARS(m),0);
   const inversiones = lista.filter(m=>m.tipo==="Inversion");
   // Los flujos brutos quedan para mostrarlos como informativos. NO entran al balance: son la
   // misma plata yendo y viniendo, y contarlos enteros infla los dos totales en cada vuelta.
@@ -467,8 +485,8 @@ function totalesDePlata(lista, gananciaInv){
 function resumenDePeriodo(lista, ganInv){
   const r2=x=>Math.round(x*100)/100;
   const t=totalesDePlata(lista||[], ganInv);
-  const retirosGastados=(lista||[]).filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda!=="USD")
-    .reduce((s,m)=>s+(m.importe||0),0);
+  const retirosGastados=(lista||[]).filter(m=>esRetiroAhorro(m)&&esConsumo(m))
+    .reduce((s,m)=>s+montoARS(m),0);
   const ganancia=(ganInv&&ganInv.ars)||0;
   const ingresos=r2(t.ingresos+retirosGastados+Math.max(ganancia,0));
   const gastos=r2(t.gastos+Math.max(-ganancia,0));
