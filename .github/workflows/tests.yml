@@ -1,0 +1,46 @@
+# Corre la suite de tests (tests.html, en un Chromium sin interfaz) en cada push y en cada pull
+# request, y verifica que se haya subido la versión cuando cambió código que la app sirve.
+# Los mismos pasos se pueden correr en local:  node scripts/correr-tests.js
+name: Tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# Si llegan dos pushes seguidos a la misma rama, solo importa el último.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # hace falta la historia para comparar contra main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar Playwright y Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Correr la suite de tests
+        run: node scripts/correr-tests.js
+
+      - name: Verificar que se subió la versión
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            BASE="HEAD^1"
+          else
+            BASE="origin/main"
+          fi
+          node scripts/verificar-version.js "$BASE"

@@ -66,6 +66,22 @@ function openEditCambioModal(cambioId){
   previsualizarEditCambio();
 }
 
+// Al tildar o destildar "Operación MEP" el formulario cambia de forma (una compra MEP en pesos pide
+// "Dólares que recibiste" en vez del "Importe USD" de siempre): se vuelve a dibujar con lo que ya
+// se había tipeado, para no perderlo.
+function onEditMepToggle(){
+  const m=movs.find(x=>x.id===editingId);
+  if(!m || m.tipo!=="Inversion") return;
+  // querySelector, no getElementById — ver el comentario de onEditMonedaChange().
+  const v=id=>{ const e=document.querySelector("#"+id); return e ? e.value : ""; };
+  const chk=document.querySelector("#edit-mep");
+  const usd=parseFloat(v("edit-mep-usd")||v("edit-usd"))||0;
+  const copia={...m, mep:!!(chk&&chk.checked), ticker:v("edit-ticker"), importe:parseFloat(v("edit-ars"))||0,
+               importeUSD:usd, fecha:v("edit-fecha"), cuenta:v("edit-cuenta")||m.cuenta, nota:v("edit-nota")};
+  document.getElementById("edit-form-content").innerHTML=renderEditForm(copia);
+  previsualizarMepUsd();
+}
+
 // Tipo de cambio en vivo debajo del campo de dólares de una compra MEP.
 function previsualizarMepUsd(){
   const el=document.querySelector("#edit-mep-tc");
@@ -310,6 +326,12 @@ function renderEditForm(m){
       <div class="form-group"><label class="form-label">Ticker / Fondo</label>
         <input type="text" id="edit-ticker" class="form-input" value="${escapeHtml(m.ticker)}">
       </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm)">
+          <input type="checkbox" id="edit-mep" class="chk-custom" style="--chk:var(--accent)" ${m.mep===true?"checked":""} onchange="onEditMepToggle()">
+          <span style="color:var(--accent);font-weight:500">💵 Operación MEP (compra o venta de dólares)</span>
+        </label>
+      </div>
       ${mep?`
       <div class="form-group"><label class="form-label" for="edit-ars">Pesos que pagaste</label>
         <div class="amount-wrap"><span class="amount-prefix">$</span>
@@ -457,6 +479,8 @@ function guardarEdit(){
     if(ars<=0&&usd<=0){showToast("Ingresá al menos un importe");return;}
     m.ticker=document.getElementById("edit-ticker").value.trim();
     m.importe=Math.round(ars*100)/100;
+    const mepChk=document.querySelector("#edit-mep");
+    if(mepChk) m.mep=mepChk.checked;
     m.fecha=document.getElementById("edit-fecha").value;
     const cuentaInvEl=document.getElementById("edit-cuenta");
     if(cuentaInvEl) m.cuenta=cuentaInvEl.value;

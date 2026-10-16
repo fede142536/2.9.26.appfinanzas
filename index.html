@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v153">
+<meta name="enola-version" content="enola-v154">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -478,6 +478,11 @@
         <div class="form-group"><label class="form-label" for="inv-subcat">Operación</label>
           <select id="inv-subcat" class="form-select" onchange="autoSeleccionarCuenta()"></select>
         </div>
+        <label class="opt-row" style="--chk:var(--accent);border-top:none">
+          <span class="opt-icon">💵</span>
+          <span class="opt-text"><span class="opt-title">Operación MEP</span><span class="opt-sub">Compra o venta de dólares con bonos</span></span>
+          <input type="checkbox" id="inv-mep" class="chk-custom">
+        </label>
         <div class="form-group">
           <label class="form-label" for="inv-ticker">Ticker / Fondo</label>
           <input type="text" id="inv-ticker" class="form-input" placeholder="BCMMA, AL30, SPY, IRCFO…" style="font-weight:600;letter-spacing:.3px;text-transform:uppercase" oninput="buildTickerRecientes()">

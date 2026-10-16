@@ -2140,9 +2140,9 @@ test("los pesos salen del balance y los dólares entran, en la misma operación"
 // Una compra de dólares por MEP se pudo cargar como inversión en vez de como gasto. Esas son
 // peores que las cargadas como gasto: el capital queda "puesto" en un ticker (AL30) que nunca se
 // va a vender, así que la cartera muestra esa plata eternamente invertida.
-const MEP_COMO_INVERSION = {id:5000, tipo:"Inversion", importe:39467.53, importeUSD:0,
+const MEP_COMO_INVERSION = {id:5000, tipo:"Inversion", mep:true, importe:39467.53, importeUSD:0,
                             cat:"MEP", subcat:"MEP Compra", ticker:"AL30", fecha:"2026-09-03", cuenta:"Balanz"};
-const MEP_INV_EN_USD     = {id:5002, tipo:"Inversion", importe:0, importeUSD:54.21,
+const MEP_INV_EN_USD     = {id:5002, tipo:"Inversion", mep:true, importe:0, importeUSD:54.21,
                             cat:"MEP", subcat:"MEP Compra", ticker:"AL30", fecha:"2026-05-19", cuenta:"Balanz"};
 
 test("una compra MEP cargada como inversión aparece para migrar", ()=>{
@@ -2504,7 +2504,7 @@ grupo("Compra MEP: dólares desde el editor");
 // Abrir una inversión MEP en pesos, escribir cuántos dólares recibiste y (si querés) mandarlos al
 // fondo de ahorro. Reusa el cambio de moneda de dos patas, así que Dashboard, "Mis dólares" y
 // Fondo USD ya lo entienden. Pagar la tarjeta con esos dólares es un Gasto en USD común.
-const MEP_EDIT = ()=>({id:7100, tipo:"Inversion", importe:39467.53, importeUSD:0, cat:"MEP", subcat:"MEP Compra",
+const MEP_EDIT = ()=>({id:7100, tipo:"Inversion", mep:true, importe:39467.53, importeUSD:0, cat:"MEP", subcat:"MEP Compra",
                        ticker:"AL30", fecha:"2026-09-03", cuenta:"Balanz", nota:""});
 
 test("solo una compra MEP en pesos admite cargarle los dólares", ()=>{
@@ -2515,6 +2515,122 @@ test("solo una compra MEP en pesos admite cargarle los dólares", ()=>{
   cierto(!esCompraMepEditable({id:2, tipo:"Gasto", importe:1000, cat:"MEP", subcat:"MEP Compra"}), "un Gasto tampoco");
   cierto(!esCompraMepEditable(null));
 });
+
+// ── El tipo MEP es explícito (campo `mep`), ya no se adivina por el texto ──
+
+test("MEP es lo que dice el campo, no el texto: sin mep:true no hay conversión aunque diga MEP", ()=>{
+  cierto(esOperacionMep(MEP_EDIT()));
+  [undefined, false].forEach(v=>{
+    const m={...MEP_EDIT(), mep:v};
+    cierto(!esOperacionMep(m), "mep:"+v);
+    cierto(!esCompraMepEditable(m), "mep:"+v+" con el texto 'MEP' no tiene que ofrecer los dólares");
+  });
+  cierto(!esOperacionMep({tipo:"Gasto", mep:true}), "el campo solo vale en una inversión");
+});
+
+test("marcarMepHeredados marca las inversiones viejas que parecen MEP, una sola vez, y respeta lo que se desmarcó", ()=>{
+  const lista=[
+    {id:1, tipo:"Inversion", cat:"MEP", subcat:"MEP Compra", importe:100},                       // vieja, texto MEP → se marca
+    {id:2, tipo:"Inversion", cat:"Bonos USD", subcat:"Compra AL30", nota:"compra dólar MEP", importe:100}, // la nota lo dice → se marca
+    {id:3, tipo:"Inversion", cat:"CEDEARs", subcat:"CEDEARs Compra", ticker:"SPY", importe:100},  // no parece MEP → queda sin campo
+    {id:4, tipo:"Inversion", cat:"MEP", subcat:"MEP Compra", importe:100, mep:false},              // el usuario lo desmarcó → no vuelve
+    {id:5, tipo:"Gasto", cat:"MEP", subcat:"MEP", importe:100}                                     // un gasto no es una inversión
+  ];
+  igual(marcarMepHeredados(lista), 2);
+  igual(lista.map(m=>m.mep), [true, true, undefined, false, undefined]);
+  igual(marcarMepHeredados(lista), 0, "la segunda vez ya no hay nada que marcar");
+});
+
+test("una inversión sin el campo no es candidata a completarse como cambio aunque diga MEP; con el campo sí", ()=>{
+  const sin={...MEP_COMO_INVERSION}; delete sin.mep;
+  igual(candidatosAMigrar([sin]).length, 0);
+  igual(candidatosAMigrar([{...MEP_COMO_INVERSION, mep:false}]).length, 0);
+  igual(candidatosAMigrar([MEP_COMO_INVERSION]).length, 1);
+  igual(candidatosAMigrar([gastoARS("MEP Compra","MEP","AL30",39467.53)]).length, 1, "un gasto suelto sigue por su texto");
+});
+
+test("al completarse como cambio, la pata que sale ya no lleva el campo mep", ()=>{
+  const r=completarCambioDesde(MEP_COMO_INVERSION, 27);
+  cierto(r.sale.mep===undefined && r.entra.mep===undefined, "quedó el campo mep en un gasto");
+});
+
+test("elegir la categoría MEP tilda 'Operación MEP' en el alta, y cambiar de categoría la destilda", ()=>{
+  const cat=document.createElement("select"); cat.id="inv-cat";
+  ["FCI","MEP"].forEach(c=>{ const o=document.createElement("option"); o.textContent=c; cat.appendChild(o); });
+  const sub=document.createElement("select"); sub.id="inv-subcat";
+  const chk=document.createElement("input"); chk.type="checkbox"; chk.id="inv-mep";
+  [cat,sub,chk].forEach(e=>document.body.appendChild(e));
+  try{
+    cat.value="MEP"; updateInvSubcats(); cierto(chk.checked, "no se tildó con la categoría MEP");
+    cat.value="FCI"; updateInvSubcats(); cierto(!chk.checked, "no se destildó con otra categoría");
+    cat.value="MEP"; updateInvSubcats(); chk.checked=false;
+    cierto(!chk.checked, "se puede destildar a mano");
+  } finally { [cat,sub,chk].forEach(e=>e.remove()); }
+});
+
+test("el alta guarda el campo mep siempre explícito, y la casilla existe", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="inv-mep"'), "falta la casilla en el alta de inversiones");
+  const form=await (await fetch("js/form-cargar.js")).text();
+  cierto(form.includes('mep: document.getElementById("inv-mep").checked===true'), "guardar la inversión no guarda mep");
+});
+
+test("el campo mep se completa al arrancar, al restaurar un backup y al importar", async ()=>{
+  const main=await (await fetch("js/main.js")).text();
+  const cfg=await (await fetch("js/config-ui.js")).text();
+  const imp=await (await fetch("js/importar-exportar.js")).text();
+  cierto(main.includes("marcarMepHeredados(movs)"), "no se marca al arrancar");
+  cierto(cfg.slice(cfg.indexOf("function aplicarBackup(")).includes("marcarMepHeredados(movs)"), "no se marca al restaurar");
+  cierto(imp.includes("marcarMepHeredados(movs)"), "no se marca al importar");
+});
+
+test("el editor de una inversión tiene la casilla MEP y refleja el campo", ()=>{
+  const e1=abrirEdicion(MEP_EDIT());
+  try{ cierto(document.querySelector("#edit-mep").checked, "tendría que estar tildada"); } finally { e1.cerrar(); }
+  const e2=abrirEdicion({...MEP_EDIT(), mep:false});
+  try{
+    cierto(!document.querySelector("#edit-mep").checked, "tendría que estar destildada");
+    cierto(!document.querySelector("#edit-mep-usd") && !!document.querySelector("#edit-usd"), "sin MEP muestra el Importe USD de siempre");
+  } finally { e2.cerrar(); }
+});
+
+test("tildar MEP en el editor pide los dólares recibidos sin perder lo que ya se tipeó; destildar vuelve atrás", ()=>{
+  const e=abrirEdicion({...MEP_EDIT(), mep:false});
+  try{
+    document.querySelector("#edit-ticker").value="GD30";
+    document.querySelector("#edit-ars").value="50000";
+    document.querySelector("#edit-nota").value="mi nota";
+    document.querySelector("#edit-mep").checked=true;
+    onEditMepToggle();
+    cierto(!!document.querySelector("#edit-mep-usd") && !document.querySelector("#edit-usd"), "no apareció el campo de dólares recibidos");
+    igual(document.querySelector("#edit-ticker").value, "GD30");
+    igual(document.querySelector("#edit-ars").value, "50000");
+    igual(document.querySelector("#edit-nota").value, "mi nota");
+    cierto(document.querySelector("#edit-mep").checked, "la casilla se destildó sola");
+    document.querySelector("#edit-mep").checked=false;
+    onEditMepToggle();
+    cierto(!document.querySelector("#edit-mep-usd") && !!document.querySelector("#edit-usd"), "no volvió al Importe USD");
+    igual(document.querySelector("#edit-ticker").value, "GD30");
+  } finally { e.cerrar(); }
+});
+
+test("guardar la inversión deja el campo mep como quedó la casilla, sin convertirla", ()=>sinGraficos(()=>{
+  const e=abrirEdicion(MEP_EDIT());
+  try{
+    document.querySelector("#edit-mep").checked=false;
+    onEditMepToggle();
+    guardarEdit();
+    igual(movs.length, 1); igual(movs[0].tipo, "Inversion"); igual(movs[0].mep, false);
+  } finally { e.cerrar(); }
+  const e2=abrirEdicion({...MEP_EDIT(), mep:false});
+  try{
+    document.querySelector("#edit-mep").checked=true;
+    onEditMepToggle();
+    guardarEdit();
+    igual(movs[0].mep, true, "al tildarla queda marcada");
+    igual(movs[0].tipo, "Inversion", "sin dólares cargados sigue siendo una inversión");
+  } finally { e2.cerrar(); }
+}));
 
 test("convertir sin tildar el fondo deja las dos patas y ningún depósito", ()=>{
   const r=convertirMepEnCambio(MEP_EDIT(), 27, {lista:[]});
@@ -5238,7 +5354,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 9, "esperaba las 9 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente, recuperable, tc-frecuente, cambio-ahorro, cambio-usaahorro, pago-tc-ahorro): " +
+  igual(cajas.length, 10, "esperaba las 10 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);

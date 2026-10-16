@@ -97,6 +97,8 @@ function procesarArchivoSoltado(file){
 async function bootApp(){
   await checkLock();
   loadSensitiveIntoMemory();
+  // Las inversiones de antes del campo `mep` que parecen MEP se marcan una vez (ver cambio-moneda.js).
+  if(marcarMepHeredados(movs)) save();
   init();
   // Arranca mostrando Movimientos en vez de Cargar.
   // IMPORTANTE: se llama renderMovs() explícitamente DESPUÉS de showPage(). showPage() tiene

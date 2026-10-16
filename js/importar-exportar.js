@@ -373,6 +373,7 @@ async function confirmarImport(){
   // ID único de esta importación, para poder revertirla luego
   const importId="imp_"+Date.now();
   movs=[...nuevos.map(m=>({...m, _importId:importId})),...movs];
+  marcarMepHeredados(movs);   // un archivo importado no trae el campo `mep`: se marcan las que lo parecen
   const histLabel=duplicados>0?`${nombre} (${duplicados} dup. omitidos)`:nombre;
   importHistory.unshift({id:importId, nombre:histLabel, fecha:new Date().toLocaleDateString("es-AR"), registros:cantidad});
   if(importHistory.length>20)importHistory=importHistory.slice(0,20);

@@ -165,6 +165,9 @@ function candidatosAMigrar(lista){
     if(m.tipo==="Inversion" && isInvSalida(m)) return false;
     // Sin un monto propio no hay mitad desde la cual completar nada.
     if(montoPropioDeCambio(m).monto<=0) return false;
+    // Una inversión es candidata por su TIPO explícito (mep:true), no por lo que diga el texto.
+    if(m.tipo==="Inversion") return m.mep===true;
+    // Un gasto suelto no tiene ese campo: ahí sí queda la pista por texto (dólar, USD, MEP…).
     const texto=`${m.cat||""} ${m.subcat||""} ${m.nota||""}`;
     return CAMBIO_PISTAS.test(texto);
   }).map(m=>{
@@ -214,7 +217,7 @@ function completarCambioDesde(mov, montoFaltante){
     ? {...mov, tipo:"Gasto", moneda:enUSD?"USD":"ARS",
        importe: enUSD ? montoPropio : montoPropio,
        importeOrig: enUSD ? montoPropio : null,
-       importeUSD: undefined, ticker: undefined}
+       importeUSD: undefined, ticker: undefined, mep: undefined}
     : mov;
   const sale={...base, cambioId, cambioPata:"sale",
               // Un cambio no es un depósito al fondo ni una compra pagada con él: los flags
@@ -239,14 +242,37 @@ function completarCambioDesde(mov, montoFaltante){
 // propia inversión: el usuario abre la compra MEP, escribe cuántos dólares recibió y (si quiere)
 // los manda al fondo de ahorro. Reusa completarCambioDesde() y crearDepositoAhorroUSD(), así que
 // el resto de la app (flujo USD del Dashboard, "Mis dólares", Fondo USD) ya lo entiende.
+// El TIPO de operación es explícito: una inversión es MEP si tiene `mep: true`, que se elige con
+// una casilla al cargarla o editarla. La app ya no adivina por el texto de la categoría o la nota.
+//
+// MEP_PISTAS queda SOLO para marcar una vez las inversiones que se cargaron antes de que existiera
+// el campo (ver marcarMepHeredados): después de eso, lo que dice el campo manda, también cuando el
+// usuario lo desmarca a propósito.
 const MEP_PISTAS = /\bmep\b|\bccl\b|contado\s*con\s*liqui/i;
+
+function esOperacionMep(m){ return !!m && m.tipo==="Inversion" && m.mep===true; }
 
 // ¿Es una compra MEP en pesos, a la que todavía se le pueden cargar los dólares? Una venta no
 // (es un cobro, no una compra de dólares) ni una cargada solo en dólares (esa pide los pesos).
 function esCompraMepEditable(m){
-  if(!m || m.tipo!=="Inversion" || isInvSalida(m)) return false;
-  if(!((m.importe||0)>0)) return false;
-  return MEP_PISTAS.test(`${m.cat||""} ${m.subcat||""} ${m.nota||""}`);
+  if(!esOperacionMep(m) || isInvSalida(m)) return false;
+  return (m.importe||0)>0;
+}
+
+// Una inversión de antes del campo `mep` (sin definir) que por su texto parece MEP.
+function pareceMepHeredado(m){
+  return !!m && m.tipo==="Inversion" && m.mep===undefined
+    && MEP_PISTAS.test(`${m.cat||""} ${m.subcat||""} ${m.nota||""}`);
+}
+
+// Marca como MEP las inversiones viejas que lo parecen. Solo toca las que NO tienen el campo: una
+// que el usuario desmarcó (mep:false) no vuelve a marcarse nunca. Se corre al arrancar y después
+// de restaurar un backup o importar un archivo, que pueden traer datos sin el campo. Devuelve
+// cuántas marcó, para que quien llama sepa si hay algo que guardar.
+function marcarMepHeredados(lista){
+  let n=0;
+  (lista||[]).forEach(m=>{ if(pareceMepHeredado(m)){ m.mep=true; n++; } });
+  return n;
 }
 
 // Primer id >= `desde` que no esté tomado en `lista`. completarCambioDesde() le pone a la pata
