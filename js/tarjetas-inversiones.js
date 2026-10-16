@@ -85,9 +85,6 @@ function getTcMovsEnMes(ym){
 // lo que pagaste no se cuenta dos veces: ni en el balance (las compras nunca entraron) ni en los
 // dólares del Dashboard (ver resumenUSDdelAnio, que de la tarjeta solo suma lo que resta pagar).
 // Sale de tu cash o, con `usaAhorro`, del fondo de ahorro — el mismo mecanismo de siempre.
-const CAT_PAGO_TARJETA = "Tarjeta de crédito";   // ya existe: ver estado-categorias.js
-const SUBCAT_PAGO_TARJETA = "Pago total";
-
 function esPagoTarjeta(m){ return !!m && !!m.pagoTarjeta; }
 function monedaTc(x){ return x==="USD" ? "USD" : "ARS"; }
 
@@ -118,27 +115,18 @@ function resumenesDelMes(ym, lista){
   return out.sort((a,b)=>a.tarjeta.localeCompare(b.tarjeta) || a.moneda.localeCompare(b.moneda));
 }
 
-// El gasto que representa pagar el resumen. Función pura: no toca `movs` ni el DOM.
-function crearPagoTarjeta({ym, tarjeta, moneda, monto, fecha, usaAhorro, cuenta, nota, id}){
-  const mon=monedaTc(moneda);
-  const m=Math.round((Number(monto)||0)*100)/100;
-  if(m<=0 || !fecha || !ym) return null;
-  return {id:id||Date.now(), tipo:"Gasto", cat:CAT_PAGO_TARJETA, subcat:SUBCAT_PAGO_TARJETA, fecha,
-          nota: nota || `Resumen ${tarjeta||"de la tarjeta"} · ${mesLbl(ym)}`,
-          moneda:mon, importe: mon==="USD" ? 0 : m, importeOrig: mon==="USD" ? m : null,
-          cuenta:cuenta||"", esAhorro:false, usaAhorro:!!usaAhorro, traspaso:false, recuperable:0,
-          tags:[], pagoTarjeta:{ym, tarjeta:tarjeta||"", moneda:mon}};
-}
-
 // ═══════════════════════════════════════════
 // VENCIMIENTOS
 // ═══════════════════════════════════════════
 // Cuándo hay que pagar cada cosa, para avisar antes en vez de enterarse tarde:
-//  · el resumen de una tarjeta: el usuario guarda UN día del mes por tarjeta (preferencia, no un
-//    dato financiero: va en localStorage llano como la fecha del último backup) y el resumen del
-//    mes M vence ese día de M — igual que la app ya trata las cuotas ("a pagar este mes").
+//  · el resumen de una tarjeta, con las fechas REALES de cierre y de vencimiento de cada mes
+//    (cambian de un mes a otro: se cargan con el calendario). Opcionalmente un día habitual, que
+//    se usa en los meses donde todavía no cargaste nada. Y si ya lo pagaste: es una marca manual
+//    ("Marcar pagado"), porque el pago lo cargás vos como un gasto más y no siempre coincide con
+//    el resumen (gastos de emisión, intereses…).
 //  · un gasto frecuente: su `diaVto` opcional.
-// Solo cuenta lo que SIGUE sin pagar: un resumen con lo que resta > 0, un frecuente sin tildar.
+// Se avisa de lo que SIGUE sin pagar. Todo esto es una preferencia, no un dato financiero: va en
+// localStorage llano, como la fecha del último backup.
 const VENC_TC_KEY="fvenctc";
 const VENC_VENTANA_DIAS=7;     // se avisa de lo que vence dentro de una semana
 const VENC_VENCIDOS_DIAS=10;   // y de lo que venció hace poco; más viejo seguro ya se pagó y nadie lo tildó
@@ -146,6 +134,14 @@ const VENC_VENCIDOS_DIAS=10;   // y de lo que venció hace poco; más viejo segu
 function diaValido(d){
   const n=parseInt(d,10);
   return Number.isInteger(n) && n>=1 && n<=31 ? n : null;
+}
+
+// ¿Es una fecha real "AAAA-MM-DD"? (el 2026-02-30 no lo es)
+function fechaValida(s){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s||""));
+  if(!m) return false;
+  const d=new Date(+m[1], +m[2]-1, +m[3]);
+  return d.getFullYear()===+m[1] && d.getMonth()===+m[2]-1 && d.getDate()===+m[3];
 }
 
 // El día `dia` del mes `ym`, o el último si el mes es más corto (un 31 en febrero cae el 28).
@@ -163,6 +159,13 @@ function diasEntre(hoyISO, fechaISO){
   return Math.round((t(fechaISO)-t(hoyISO))/86400000);
 }
 
+function textoDias(dias){
+  if(dias===0) return "hoy";
+  if(dias===1) return "mañana";
+  if(dias>1) return `en ${dias} días`;
+  if(dias===-1) return "ayer";
+  return `hace ${-dias} días`;
+}
 function textoVencimiento(dias){
   if(dias===0) return "vence hoy";
   if(dias===1) return "vence mañana";
@@ -179,18 +182,82 @@ function leerVencTc(){
 }
 function guardarVencTc(obj){ return guardarPreferencia(VENC_TC_KEY, JSON.stringify(obj)); }
 
+// Lo guardado de UNA tarjeta, venga como venga: un número es el formato viejo (solo el día de
+// vencimiento, de cuando se cargaba con un cuadro de texto). Forma normal:
+//   {dia:{cierre, vto}, meses:{"2026-11":{cierre:"2026-11-05", vto:"2026-11-15", pagado:{ARS,USD}}}}
+function normalizarTc(v){
+  if(typeof v==="number" || typeof v==="string") return {dia:{cierre:null, vto:diaValido(v)}, meses:{}};
+  const o=(v && typeof v==="object" && !Array.isArray(v)) ? v : {};
+  const dia=(o.dia && typeof o.dia==="object") ? o.dia : {};
+  return {dia:{cierre:diaValido(dia.cierre), vto:diaValido(dia.vto)},
+          meses:(o.meses && typeof o.meses==="object" && !Array.isArray(o.meses)) ? o.meses : {}};
+}
+
+// Las fechas y el estado del resumen de UNA tarjeta en UN mes: lo que se cargó para ese mes y, si
+// no hay nada, el día habitual de la tarjeta.
+function datosResumenTc(vencTc, tarjeta, ym){
+  const t=normalizarTc((vencTc||{})[tarjeta]);
+  const mes=t.meses[ym]||{};
+  const pag=(mes.pagado && typeof mes.pagado==="object") ? mes.pagado : {};
+  const elegir=(explicita, dia)=> fechaValida(explicita) ? explicita : fechaVencimiento(ym, dia);
+  return {cierre:elegir(mes.cierre, t.dia.cierre), vto:elegir(mes.vto, t.dia.vto),
+          pagado:{ARS:!!pag.ARS, USD:!!pag.USD}, habitual:t.dia};
+}
+
+// Copia del objeto guardado con lo de una tarjeta ya cambiado y sin restos vacíos. Las dos
+// funciones de abajo no tocan el original (son puras): quien llama decide si lo guarda.
+function _conTarjeta(vencTc, tarjeta, cambiar){
+  const nuevo=JSON.parse(JSON.stringify(vencTc||{}));
+  const t=normalizarTc(nuevo[tarjeta]);
+  cambiar(t);
+  Object.keys(t.meses).forEach(ym=>{ if(!Object.keys(t.meses[ym]||{}).length) delete t.meses[ym]; });
+  if(t.dia.cierre===null && t.dia.vto===null && !Object.keys(t.meses).length) delete nuevo[tarjeta];
+  else nuevo[tarjeta]=t;
+  return nuevo;
+}
+
+// Guarda las fechas de cierre y de vencimiento de UN mes (una fecha vacía o inválida la quita).
+// Con `repetir`, el día de cada una pasa a ser el habitual de la tarjeta para los meses sin carga.
+function conFechasResumen(vencTc, tarjeta, ym, {cierre, vto, repetir}){
+  return _conTarjeta(vencTc, tarjeta, t=>{
+    const mes={...(t.meses[ym]||{})};
+    if(fechaValida(cierre)) mes.cierre=cierre; else delete mes.cierre;
+    if(fechaValida(vto)) mes.vto=vto; else delete mes.vto;
+    t.meses[ym]=mes;
+    if(repetir){
+      if(fechaValida(cierre)) t.dia.cierre=Number(cierre.slice(8));
+      if(fechaValida(vto)) t.dia.vto=Number(vto.slice(8));
+    }
+  });
+}
+
+// Marca (o desmarca) como pagado el resumen de una tarjeta, en una moneda, en un mes.
+function conResumenPagado(vencTc, tarjeta, ym, moneda, valor){
+  return _conTarjeta(vencTc, tarjeta, t=>{
+    const mes={...(t.meses[ym]||{})};
+    const pag={...(mes.pagado||{})};
+    if(valor) pag[monedaTc(moneda)]=true; else delete pag[monedaTc(moneda)];
+    if(Object.keys(pag).length) mes.pagado=pag; else delete mes.pagado;
+    t.meses[ym]=mes;
+  });
+}
+
 // Lo que vence pronto o venció hace poco y sigue sin pagar, lo más urgente primero.
-// `lista` es `movs`; `vencTc` {tarjeta: día}. Función pura (salvo getMesMov/getTcMovsEnMes, que
-// leen los datos globales). Cada ítem: {tipo, nombre, fecha, dias, monto, moneda, ym}.
+// `lista` es `movs`; `vencTc` lo guardado por tarjeta (leerVencTc). Función pura salvo
+// getMesMov/getTcMovsEnMes, que leen los datos globales.
+// Cada ítem: {tipo, nombre, fecha, dias, monto, moneda, ym} + {tarjeta} o {id} según el tipo, para
+// poder marcarlo pagado desde la franja.
 function proximosVencimientos(hoyISO, lista, vencTc, ventana){
   const hoyYM=String(hoyISO).slice(0,7);
   const tope=ventana===undefined ? VENC_VENTANA_DIAS : ventana;
   const out=[];
   [addMonths(hoyYM,-1), hoyYM, addMonths(hoyYM,1)].forEach(ym=>{
     resumenesDelMes(ym, lista).forEach(r=>{
-      const fecha=fechaVencimiento(ym, (vencTc||{})[r.tarjeta]);
-      if(!fecha || r.resta<=0) return;
-      out.push({tipo:"tarjeta", nombre:r.tarjeta||"Tarjeta", ym, fecha, dias:diasEntre(hoyISO,fecha), monto:r.resta, moneda:r.moneda});
+      const d=datosResumenTc(vencTc, r.tarjeta, ym);
+      if(!d.vto) return;
+      if(d.pagado[r.moneda] || r.resta<=0) return;     // lo marcaste pagado, o los pagos ligados lo cubren
+      out.push({tipo:"tarjeta", nombre:r.tarjeta||"Tarjeta", tarjeta:r.tarjeta, ym, fecha:d.vto,
+                dias:diasEntre(hoyISO,d.vto), monto:r.resta, moneda:r.moneda});
     });
     getMesMov(ym).forEach(m=>{
       if(!m._isFrecVirtual || m.pagado) return;
@@ -198,7 +265,8 @@ function proximosVencimientos(hoyISO, lista, vencTc, ventana){
       if(!fecha) return;
       const usd=m.moneda==="USD";
       const nombre=m.subcat && !SUBCAT_SIN_VALOR.includes(m.subcat) ? m.subcat : (m.cat||"Gasto frecuente");
-      out.push({tipo:"frecuente", nombre, ym, fecha, dias:diasEntre(hoyISO,fecha), monto:usd?(m.importeOrig||0):(m.importe||0), moneda:usd?"USD":"ARS"});
+      out.push({tipo:"frecuente", nombre, id:m.id, ym, fecha, dias:diasEntre(hoyISO,fecha),
+                monto:usd?(m.importeOrig||0):(m.importe||0), moneda:usd?"USD":"ARS"});
     });
   });
   return out.filter(v=>v.dias<=tope && v.dias>=-VENC_VENCIDOS_DIAS).sort((a,b)=>a.dias-b.dias || a.nombre.localeCompare(b.nombre));
@@ -206,38 +274,65 @@ function proximosVencimientos(hoyISO, lista, vencTc, ventana){
 
 function montoVenc(v){ return v.moneda==="USD" ? `USD ${v.monto.toFixed(2)}` : fmtS(v.monto); }
 
-// Las líneas de la franja de Movimientos: "Visa vence mañana · resta $140.000".
+// Las líneas de la franja de Movimientos: "Visa vence mañana · resta $140.000", cada una con su
+// botón para marcarla pagada si ya lo hiciste.
 function vencimientosFranjaHTML(items, max){
   if(!items.length) return "";
   const lim=max||3;
   const filas=items.slice(0,lim).map(v=>{
-    const vencido=v.dias<0;
-    const color=vencido ? "var(--danger)" : v.dias<=1 ? "var(--warning)" : "var(--muted)";
-    const accion=v.tipo==="tarjeta" ? "resta" : "";
+    const color=v.dias<0 ? "var(--danger)" : v.dias<=1 ? "var(--warning)" : "var(--muted)";
+    const accion=v.tipo==="tarjeta"
+      ? `marcarPagadoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)},true)`
+      : `toggleFrecPagado(${Number(v.id)},${attrJS(v.ym)})`;
     return `<div class="venc-fila"><span class="venc-nombre">${v.tipo==="tarjeta"?"💳":"🔁"} ${escapeHtml(v.nombre)}</span>
-      <span class="venc-txt" style="color:${color}">${textoVencimiento(v.dias)}${accion?` · ${accion}`:" ·"} <strong>${montoVenc(v)}</strong></span></div>`;
+      <span class="venc-txt" style="color:${color}">${textoVencimiento(v.dias)}${v.tipo==="tarjeta"?" · resta":" ·"} <strong>${montoVenc(v)}</strong></span>
+      <button type="button" class="venc-ok" aria-label="Marcar ${escapeHtml(v.nombre)} como pagado" onclick="${accion}">✓ Pagado</button></div>`;
   }).join("");
   const mas=items.length>lim ? `<div class="venc-mas">y ${items.length-lim} más</div>` : "";
   return `<div class="venc-franja"><div class="venc-titulo">🗓 Vencimientos</div>${filas}${mas}</div>`;
 }
 
-// Pide el día de vencimiento de una tarjeta. Vacío lo borra.
-async function editarVencTc(tarjeta){
-  const actual=leerVencTc()[tarjeta];
-  const resp=await mostrarPrompt(`¿Qué día del mes vence el resumen de ${tarjeta||"la tarjeta"}? (1 a 31, vacío para quitarlo)`,
-    {titulo:"📅 Vencimiento", placeholder:"Ej: 10", valorInicial:actual?String(actual):"", inputMode:"numeric", textoOk:"Guardar"});
-  if(resp===null) return;
-  const v=leerVencTc();
-  if(String(resp).trim()===""){ delete v[tarjeta]; }
-  else {
-    const d=diaValido(resp);
-    if(d===null){ showToast("Poné un día entre 1 y 31"); return; }
-    v[tarjeta]=d;
-  }
-  guardarVencTc(v);
-  showToast(v[tarjeta]?`Vence el día ${v[tarjeta]} ✓`:"Vencimiento quitado");
+// "5 nov": para las fechas de cierre y vencimiento en las filas.
+function fmtDiaMes(iso){ return `${Number(String(iso).slice(8,10))} ${abrevMes3(String(iso).slice(0,7)).toLowerCase()}`; }
+
+// ── Hoja para cargar las fechas del resumen con el calendario ──
+let fechasTcCtx=null;
+
+function abrirFechasTc(tarjeta, ym){
+  fechasTcCtx={tarjeta, ym};
+  const d=datosResumenTc(leerVencTc(), tarjeta, ym);
+  document.getElementById("fechas-tc-titulo").textContent=`${tarjeta||"Tarjeta"} · resumen de ${mesLbl(ym)}`;
+  document.getElementById("fechas-tc-cierre").value=d.cierre||"";
+  document.getElementById("fechas-tc-vto").value=d.vto||"";
+  document.getElementById("fechas-tc-repetir").checked=false;
+  document.getElementById("modal-fechas-tc").classList.add("open");
+}
+function cerrarFechasTc(){
+  document.getElementById("modal-fechas-tc").classList.remove("open");
+  fechasTcCtx=null;
+}
+
+function guardarFechasTc(){
+  const ctx=fechasTcCtx;
+  if(!ctx) return;
+  const cierre=document.getElementById("fechas-tc-cierre").value;
+  const vto=document.getElementById("fechas-tc-vto").value;
+  if(cierre && vto && vto<cierre){ showToast("El vencimiento no puede ser antes del cierre"); return; }
+  const repetir=document.getElementById("fechas-tc-repetir").checked;
+  guardarVencTc(conFechasResumen(leerVencTc(), ctx.tarjeta, ctx.ym, {cierre, vto, repetir}));
+  cerrarFechasTc();
+  showToast(cierre||vto ? `Fechas guardadas${repetir?" · se repiten los meses siguientes":""} ✓` : "Fechas quitadas");
   renderTarjetas();
-  if(typeof renderMovs==="function") renderMovs();
+  if(typeof pintarFranjaVencimientos==="function") pintarFranjaVencimientos();
+}
+
+// Marca el resumen como pagado (o lo desmarca). Es solo una marca: el pago real lo cargás vos
+// como un gasto, porque no siempre coincide con el resumen (gastos de emisión, intereses…).
+function marcarPagadoTc(tarjeta, ym, moneda, valor){
+  guardarVencTc(conResumenPagado(leerVencTc(), tarjeta, ym, moneda, valor!==false));
+  showToast(valor===false ? "Pago desmarcado" : "✓ Marcado como pagado");
+  renderTarjetas();
+  if(typeof pintarFranjaVencimientos==="function") pintarFranjaVencimientos();
 }
 
 // ═══════════════════════════════════════════
@@ -531,90 +626,55 @@ function renderTarjetas(){
   renderTcPendientes();
 }
 
-// ── Resúmenes del mes: estado de cada tarjeta y botón para pagarlo ──
+// ── Resúmenes del mes: fechas de cierre y vencimiento, y si ya lo pagaste ──
+// No hay un "Pagar": el pago lo cargás vos como un gasto común, porque no siempre coincide con el
+// resumen (gastos de emisión, intereses…). Acá solo se marca si ya lo hiciste, y la app avisa antes
+// de que venza.
 function resumenesTcHTML(ym){
   const rs=resumenesDelMes(ym, movs);
   if(!rs.length) return "";
   const fmt=(v,mon)=>mon==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
   const vencTc=leerVencTc(), hoy=hoyLocal();
   return `<div class="tc-res"><div class="tc-res-titulo">Resumen de ${escapeHtml(mesLbl(ym))}</div>`+rs.map(r=>{
-    const args=`${attrJS(r.ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)}`;
+    const d=datosResumenTc(vencTc, r.tarjeta, ym);
     const badge=r.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
-    // Lo que falta para que venza (o ya venció), solo si el resumen sigue sin pagar. Sin día
-    // cargado se ofrece cargarlo: es lo que enciende los avisos de Movimientos y el Dashboard.
-    let venc="";
-    if(r.resta>0){
-      const fecha=fechaVencimiento(r.ym, vencTc[r.tarjeta]);
-      if(fecha){
-        const dias=diasEntre(hoy, fecha);
-        const color=dias<0?"var(--danger)":dias<=1?"var(--warning)":"var(--muted)";
-        venc=` <button type="button" class="tc-res-link" style="color:${color}" onclick="editarVencTc(${attrJS(r.tarjeta)})">📅 ${textoVencimiento(dias)} · el ${Number(fecha.slice(8))} ✎</button>`;
-      } else {
-        venc=` <button type="button" class="tc-res-link" onclick="editarVencTc(${attrJS(r.tarjeta)})">📅 Poné el vencimiento</button>`;
-      }
+    const pagadoManual=d.pagado[r.moneda];
+    const pagadoLigado=r.total>0 && r.resta===0;          // pagos cargados con la versión anterior
+    const pagado=pagadoManual||pagadoLigado;
+
+    // Las fechas, tocables para cambiarlas. Sin ninguna se ofrece cargarlas: es lo que enciende
+    // los avisos de Movimientos y el Dashboard. El color urge solo si todavía falta pagar.
+    const partes=[];
+    if(d.cierre) partes.push(`Cierre ${fmtDiaMes(d.cierre)}`);
+    let color="var(--muted)";
+    if(d.vto){
+      const dias=diasEntre(hoy, d.vto);
+      if(!pagado) color=dias<0?"var(--danger)":dias<=1?"var(--warning)":"var(--muted)";
+      partes.push(`Vence ${fmtDiaMes(d.vto)}${pagado?"":` (${textoDias(dias)})`}`);
     }
+    const fechas=`<button type="button" class="tc-res-link tc-res-fechas" style="color:${color}" onclick="abrirFechasTc(${attrJS(r.tarjeta)},${attrJS(ym)})">📅 ${partes.length?escapeHtml(partes.join(" · "))+" ✎":"Cargar cierre y vencimiento"}</button>`;
+
+    const args=`${attrJS(r.tarjeta)},${attrJS(ym)},${attrJS(r.moneda)}`;
     let sub, right;
-    if(r.total>0 && r.resta===0){
+    if(pagadoManual){
+      sub=`<div class="tc-res-sub ok">✓ Pagado</div>`;
+      right=`<button type="button" class="tc-res-link" onclick="marcarPagadoTc(${args},false)">Deshacer</button>`;
+    } else if(pagadoLigado){
       sub=`<div class="tc-res-sub ok">✓ Pagado ${fmt(r.pagado,r.moneda)}</div>`;
-      right=`<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${args})">Deshacer</button>`;
-    } else if(r.pagado>0){
-      sub=`<div class="tc-res-sub">Pagaste ${fmt(r.pagado,r.moneda)} · resta <strong>${fmt(r.resta,r.moneda)}</strong>${venc}</div>`;
-      right=`<button type="button" class="tc-res-btn" onclick="abrirPagoTc(${args})">Pagar resto</button>
-             <button type="button" class="tc-res-link" onclick="deshacerPagoTc(${args})">Deshacer</button>`;
+      right=`<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${attrJS(ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)})">Deshacer</button>`;
     } else {
-      sub=`<div class="tc-res-sub">Sin pagar${venc}</div>`;
-      right=`<button type="button" class="tc-res-btn" onclick="abrirPagoTc(${args})">Pagar</button>`;
+      sub=`<div class="tc-res-sub">${r.pagado>0?`Pagaste ${fmt(r.pagado,r.moneda)} · resta <strong>${fmt(r.resta,r.moneda)}</strong>`:"Sin pagar"}</div>`;
+      right=`<button type="button" class="tc-res-btn" onclick="marcarPagadoTc(${args},true)">Marcar pagado</button>`;
     }
     return `<div class="tc-res-row">
-      <div class="tc-res-mid"><div class="tc-res-name">💳 ${escapeHtml(r.tarjeta||"Sin tarjeta")}${badge}</div>${sub}</div>
+      <div class="tc-res-mid"><div class="tc-res-name">💳 ${escapeHtml(r.tarjeta||"Sin tarjeta")}${badge}</div>${sub}${fechas}</div>
       <div class="tc-res-right"><div class="tc-res-monto">${fmt(r.total,r.moneda)}</div>${right}</div>
     </div>`;
   }).join("")+`</div>`;
 }
 
-let pagoTcCtx=null;
-
-function abrirPagoTc(ym, tarjeta, moneda){
-  const r=resumenTarjetaMes(ym, tarjeta, moneda, movs);
-  pagoTcCtx={ym, tarjeta:r.tarjeta, moneda:r.moneda};
-  const usd=r.moneda==="USD";
-  const fmt=v=>usd?`USD ${v.toFixed(2)}`:fmtS(v);
-  document.getElementById("pago-tc-titulo").textContent=`${r.tarjeta||"Tarjeta"}${usd?" · dólares":""} · ${mesLbl(ym)}`;
-  document.getElementById("pago-tc-sub").textContent=`Resumen ${fmt(r.total)}${r.pagado>0?` · ya pagaste ${fmt(r.pagado)}`:""}`;
-  document.getElementById("pago-tc-prefix").textContent=usd?"USD":"$";
-  document.getElementById("pago-tc-monto").value=r.resta>0?r.resta:"";
-  const d=new Date();
-  document.getElementById("pago-tc-fecha").value=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-  document.getElementById("pago-tc-ahorro").checked=false;
-  document.getElementById("pago-tc-cuenta").innerHTML=getCuentas().map(c=>`<option>${escapeHtml(c)}</option>`).join("");
-  document.getElementById("modal-pago-tc").classList.add("open");
-}
-function cerrarPagoTc(){
-  document.getElementById("modal-pago-tc").classList.remove("open");
-  pagoTcCtx=null;
-}
-
-function guardarPagoTc(){
-  const ctx=pagoTcCtx;
-  if(!ctx) return;
-  const monto=parseFloat(document.getElementById("pago-tc-monto").value)||0;
-  const fecha=document.getElementById("pago-tc-fecha").value;
-  if(monto<=0){ showToast("Ingresá cuánto pagaste"); return; }
-  if(!fecha){ showToast("Poné la fecha del pago"); return; }
-  const usaAhorro=document.getElementById("pago-tc-ahorro").checked;
-  const mov=crearPagoTarjeta({...ctx, monto, fecha, usaAhorro, cuenta:document.getElementById("pago-tc-cuenta").value});
-  if(!mov){ showToast("No pude registrar el pago"); return; }
-  movs.unshift(mov);
-  save();
-  vibrar([15,50,15]);
-  cerrarPagoTc();
-  showToast(`Pago del resumen registrado${usaAhorro?" · del fondo de ahorro":""} ✓`);
-  renderTarjetas();
-  renderMovs();
-  if(usaAhorro) renderAhorro();
-}
-
-// Borra los pagos ligados a ese resumen (son gastos comunes: también salen de Movimientos).
+// Borra los pagos ligados a un resumen (cargados con una versión anterior, cuando había un botón
+// "Pagar"): eran gastos comunes, así que también salen de Movimientos.
 async function deshacerPagoTc(ym, tarjeta, moneda){
   const r=resumenTarjetaMes(ym, tarjeta, moneda, movs);
   if(!r.pagos.length) return;
