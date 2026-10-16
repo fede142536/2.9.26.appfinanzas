@@ -435,6 +435,8 @@ async function setupPin(){
   }
   showToast("✓ PIN configurado. Se va a pedir al abrir la app.");
   renderPinStatus();
+  // Las copias automáticas viejas quedaron en claro o con la clave anterior: se reemplazan.
+  reiniciarCopiasAuto();
 }
 
 async function changePin(){
@@ -480,6 +482,8 @@ async function removePin(){
     encCache=null;
     showToast("PIN desactivado");
     renderPinStatus();
+    // Las copias automáticas estaban cifradas con la clave del PIN: ya no se podrían abrir.
+    reiniciarCopiasAuto();
   }
 }
 

@@ -600,6 +600,14 @@ canvas{width:100%!important;max-width:100%}
 .tc-res-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
 .tc-res-monto{font-size:14px;font-weight:700}
 .tc-res-btn{padding:7px 14px;border:0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--warning);color:#fff;cursor:pointer}
+/* Copias automáticas (Config): una fila por copia con su fecha y los botones de restaurar/borrar. */
+.copia-row{display:flex;align-items:center;gap:10px;padding:10px 0}
+.copia-row+.copia-row{border-top:1px solid var(--border)}
+.copia-mid{flex:1;min-width:0}
+.copia-fecha{font-size:14px;font-weight:600}
+.copia-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.copia-acciones{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.copia-borrar{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;padding:4px 8px;cursor:pointer}
 .tc-res-link{border:0;background:none;padding:0;font-size:11px;color:var(--muted);text-decoration:underline;cursor:pointer}
 
 /* ── Ahorros (pestaña #page-ahorro) ──
