@@ -451,6 +451,31 @@ function totalesDePlata(lista, gananciaInv){
   };
 }
 
+// EL BALANCE QUE VE EL USUARIO, en un solo lugar. Lo usan "Balance del mes" de Movimientos, el
+// Dashboard (titular, gráficos, año y detalle de cada mes) y el reporte PDF: si dos pantallas
+// dicen "balance", tienen que decir lo mismo. Cambiar el criterio es cambiarlo ACÁ.
+//
+// Sobre totalesDePlata() suma lo que el usuario ve en pantalla:
+//   ingresos   = ingresos puros + lo retirado del fondo que se consumió + la ganancia de inversión.
+//                El retiro entra a la mano y la compra que pagó sale como gasto: se cancelan y el
+//                fondo baja, que es lo que pasó.
+//   gastos     = consumo + la pérdida de inversión (si la hubo).
+//   ahorrado   = lo que se mandó al fondo este período. Sigue siendo tuyo, pero ya no está a mano.
+//   disponible = ingresos − gastos − ahorrado: lo que quedó a mano. ES el "Balance del mes".
+// Las inversiones no se descuentan: de ellas solo cuenta el resultado, como en el balance de siempre.
+// `lista` ya con los gastos frecuentes expandidos por mes (getMesMov / getMovsEnRango).
+function resumenDePeriodo(lista, ganInv){
+  const r2=x=>Math.round(x*100)/100;
+  const t=totalesDePlata(lista||[], ganInv);
+  const retirosGastados=(lista||[]).filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda!=="USD")
+    .reduce((s,m)=>s+(m.importe||0),0);
+  const ganancia=(ganInv&&ganInv.ars)||0;
+  const ingresos=r2(t.ingresos+retirosGastados+Math.max(ganancia,0));
+  const gastos=r2(t.gastos+Math.max(-ganancia,0));
+  const ahorrado=r2(t.depositos);
+  return {ingresos, gastos, ahorrado, balanceCaja:r2(ingresos-gastos), disponible:r2(ingresos-gastos-ahorrado)};
+}
+
 // ── SEGURIDAD ──
 // Devuelve un valor listo para usar como ARGUMENTO dentro de un onclick="...".
 // Hay DOS contextos anidados y hay que respetar los dos: el atributo HTML (delimitado por

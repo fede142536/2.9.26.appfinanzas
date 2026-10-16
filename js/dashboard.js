@@ -340,7 +340,7 @@ function renderDashResumen(){
   if(headlineEl) headlineEl.textContent = bal>=0
     ? `${Mes} ${esActual?"viene":"cerró"} en positivo: te quedaron ${fmtAbbr(bal)}.`
     : `${Mes} ${esActual?"viene":"cerró"} en negativo: gastaste ${fmtAbbr(-bal)} más de lo que entró.`;
-  if(subEl) subEl.textContent=`Entraron ${fmtAbbr(mesData.ingreso)} · salieron ${fmtAbbr(mesData.gasto)}`;
+  if(subEl) subEl.textContent=`Entraron ${fmtAbbr(mesData.ingreso)} · salieron ${fmtAbbr(mesData.gasto)}${mesData.ahorrado>0?` · ahorraste ${fmtAbbr(mesData.ahorrado)}`:""}`;
 
   dashInsightsActuales=construirInsights(ym, mesData, monthly);
   dashInsightAbierto=null;
@@ -430,30 +430,23 @@ function getDashData(year){
     if(ym > hastaYM) return;
     const movsDelMes = getMesMov(ym);
     if(movsDelMes.length) hayDatosLive = true;
-    liveByMes[ym] = {mes:ym, ingreso:0, gasto:0};
-    movsDelMes.forEach(m=>{
-      if(m.moneda==="USD") return; // No mezclar USD con totales ARS
-      if(m.tipo==="Ingreso"){
-        liveByMes[ym].ingreso += (m.importe||0);
-      } else if(esConsumo(m)){
-        // Consumo. Lo que fue a parar al fondo no entra: sigue siendo tuyo.
-        liveByMes[ym].gasto += (m.importe||0);
-      }
-      // Las inversiones no caen en ninguna de las dos: solo su resultado, que se suma abajo.
-    });
-    const g=gananciaInvDelMes(ym).ars;
-    if(g>0) liveByMes[ym].ingreso += g;
-    else if(g<0) liveByMes[ym].gasto += -g;
+    // La cuenta es la de resumenDePeriodo() (estado-categorias.js): exactamente la del "Balance del
+    // mes" de Movimientos. Los dólares no entran (su importe en pesos es 0); las inversiones solo
+    // aportan su resultado.
+    liveByMes[ym] = {mes:ym, ...resumenDePeriodo(movsDelMes, gananciaInvDelMes(ym))};
   });
 
   // Merge with hist: live takes priority si hay datos del año
   let merged;
   if(hayDatosLive){
+    // `balance` es lo DISPONIBLE (ingresos − gastos − ahorrado); `ahorrado` va aparte para que se
+    // siga viendo cuánto se guardó.
     merged = Object.values(liveByMes).map(d=>({
       mes:d.mes,
-      ingreso:Math.round(d.ingreso*100)/100,
-      gasto:Math.round(d.gasto*100)/100,
-      balance:Math.round((d.ingreso-d.gasto)*100)/100
+      ingreso:d.ingresos,
+      gasto:d.gastos,
+      ahorrado:d.ahorrado,
+      balance:d.disponible
     })).sort((a,b)=>a.mes.localeCompare(b.mes));
   } else {
     // Fall back a hardcoded (vacío en versión actual)
@@ -499,14 +492,20 @@ function renderDashYear(){
   const {monthly: yearData, cats: catData} = catData2;
   const totalIng=yearData.reduce((s,d)=>s+d.ingreso,0);
   const totalGas=yearData.reduce((s,d)=>s+d.gasto,0);
-  const bal=totalIng-totalGas;
+  const totalAho=yearData.reduce((s,d)=>s+(d.ahorrado||0),0);
+  // La suma de los balances de cada mes: lo mismo que ves en Movimientos mes a mes, sumado.
+  const bal=yearData.reduce((s,d)=>s+d.balance,0);
 
+  // "Ahorrado" aparece solo si hubo, para que ingresos − gastos − ahorrado = balance se pueda
+  // leer en pantalla sin hacer cuentas aparte.
   document.getElementById("dash-kpis").innerHTML=`
     <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-dash-ing">${fmtTotal(0)}</div></div>
     <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-dash-gas">${fmtTotal(0)}</div></div>
+    ${totalAho>0?`<div class="chip"><div class="chip-label">Ahorrado</div><div class="chip-val save" id="chip-dash-aho">${fmtTotal(0)}</div></div>`:""}
     <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${bal>=0?"positive":"negative"}" id="chip-dash-bal">${fmtTotal(0)}</div></div>`;
   animarNumero(document.getElementById("chip-dash-ing"), totalIng, 700, fmtTotal);
   animarNumero(document.getElementById("chip-dash-gas"), totalGas, 700, fmtTotal);
+  if(totalAho>0) animarNumero(document.getElementById("chip-dash-aho"), totalAho, 700, fmtTotal);
   animarNumero(document.getElementById("chip-dash-bal"), bal, 700, fmtTotal);
 
   // Reset detalles al cambiar de año
@@ -600,18 +599,19 @@ function renderDashCuentas(){
     return;
   }
   // Agrupar por cuenta (excluir USD del cálculo ARS para no mezclar monedas)
-  const porCuenta={};
+  const listaPorCuenta={};
   movsAnio.forEach(m=>{
     if(m.moneda==="USD") return; // los USD se ven en otra card
     const c=m.cuenta||"Sin cuenta";
-    if(!porCuenta[c]) porCuenta[c]={ing:0,gas:0,count:0};
-    // Misma regla que el balance: guardar no es gastar, y una inversión no es ingreso ni gasto.
-    if(m.tipo==="Ingreso") porCuenta[c].ing+=(m.importe||0);
-    else if(esConsumo(m)) porCuenta[c].gas+=(m.importe||0);
-    porCuenta[c].count++;
+    (listaPorCuenta[c]=listaPorCuenta[c]||[]).push(m);
   });
-  const cuentas=Object.entries(porCuenta)
-    .map(([c,d])=>({cuenta:c, ...d, balance: d.ing-d.gas}))
+  // La cuenta de cada una es la de resumenDePeriodo(), la misma del Balance de Movimientos. El
+  // resultado de inversión no se asigna a una cuenta (es del conjunto), por eso va en cero.
+  const cuentas=Object.entries(listaPorCuenta)
+    .map(([c,lista])=>{
+      const rp=resumenDePeriodo(lista, {ars:0});
+      return {cuenta:c, ing:rp.ingresos, gas:rp.gastos, aho:rp.ahorrado, balance:rp.disponible, count:lista.length};
+    })
     .filter(c=>c.count>0)
     .sort((a,b)=>Math.abs(b.balance)-Math.abs(a.balance));
   if(!cuentas.length){
@@ -629,7 +629,7 @@ function renderDashCuentas(){
       </div>
       <div class="txt-xs txt-muted">
         Ingresos: <span style="color:var(--success)">${fmtAbbr(c.ing)}</span>
-        · Gastos: <span style="color:var(--danger)">${fmtAbbr(c.gas)}</span>
+        · Gastos: <span style="color:var(--danger)">${fmtAbbr(c.gas)}</span>${c.aho>0?` · Ahorrado: <span style="color:var(--save)">${fmtAbbr(c.aho)}</span>`:""}
         · ${c.count} movs
       </div>
     </div>`;
@@ -1078,23 +1078,16 @@ function showCuentaDetail(cuentaNombre){
     document.getElementById("modal-cuenta-detail").classList.add("open");
     return;
   }
-  // Totales (misma convención que renderDashCuentas: retiros y rescates suman, compras/depósitos restan o son neutros)
-  let ing=0, gas=0;
-  movsCuenta.forEach(m=>{
-    if(m.tipo==="Ingreso") ing+=(m.importe||0);
-    else if(m.tipo==="Gasto"){
-      gas+=(m.importe||0);                                  // todo gasto resta
-      if(esRetiroAhorro(m)) ing+=(m.importe||0);            // y el retiro además entra
-    } else if(m.tipo==="Inversion"){
-      if(isInvSalida(m)) ing+=(m.importe||0); else gas+=(m.importe||0);
-    }
-  });
-  const balance=ing-gas;
+  // Totales: los mismos de la tarjeta de esta cuenta en renderDashCuentas() y del Balance de
+  // Movimientos (resumenDePeriodo). Antes este detalle contaba además las inversiones como
+  // ingreso/gasto y no coincidía con la tarjeta de la misma cuenta.
+  const rp=resumenDePeriodo(movsCuenta, {ars:0});
+  const ing=rp.ingresos, gas=rp.gastos, aho=rp.ahorrado, balance=rp.disponible;
   const balColor=balance>=0?"var(--success)":"var(--danger)";
   let html=`<div class="inset">
     <div class="seccion-label">Balance ${dashYear}</div>
     <div style="font-size:20px;font-weight:600;color:${balColor};margin-top:3px">${fmtSignoGrande(balance)}</div>
-    <div style="font-size:12px;color:var(--muted);margin-top:3px">Ingresos: <span style="color:var(--success)">${fmtS(ing)}</span> · Gastos: <span style="color:var(--danger)">${fmtS(gas)}</span> · ${movsCuenta.length} ${movsCuenta.length===1?"movimiento":"movimientos"}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px">Ingresos: <span style="color:var(--success)">${fmtS(ing)}</span> · Gastos: <span style="color:var(--danger)">${fmtS(gas)}</span>${aho>0?` · Ahorrado: <span style="color:var(--save)">${fmtS(aho)}</span>`:""} · ${movsCuenta.length} ${movsCuenta.length===1?"movimiento":"movimientos"}</div>
   </div>`;
   html+=movsCuenta.map(m=>{
     let signo, color, badge="";
@@ -1308,6 +1301,7 @@ function detalleMesHTML(d){
       <div><div class="seccion-label txt-micro">${mesLbl(d.mes)}</div></div>
       <div><div class="txt-micro txt-muted">Ingresos</div><div style="font-size:13px;font-weight:600;color:var(--success)">${fmtS(d.ingreso)}</div></div>
       <div><div class="txt-micro txt-muted">Gastos</div><div style="font-size:13px;font-weight:600;color:var(--danger)">${fmtS(d.gasto)}</div></div>
+      ${d.ahorrado>0?`<div><div class="txt-micro txt-muted">Ahorrado</div><div style="font-size:13px;font-weight:600;color:var(--save)">${fmtS(d.ahorrado)}</div></div>`:""}
       <div><div class="txt-micro txt-muted">Balance</div><div style="font-size:13px;font-weight:600;color:${balColor}">${fmtS(d.balance)}</div></div>
     </div>`;
 }

@@ -1135,12 +1135,12 @@ function renderMovs(){
     //           el fondo baja: es lo que pasó. Un traspaso no entra por ningún lado — no lo
     //           gastaste, solo cambió de bolsillo.
     // GASTOS  : consumo (esConsumo) + la pérdida (si la hubo).
-    const retirosGastados=mesMovs.filter(m=>esRetiroAhorro(m)&&esConsumo(m)&&m.moneda!=="USD")
-      .reduce((s,m)=>s+(m.importe||0),0);
-    const gananciaARS=ganInv.ars||0;
+    // La cuenta vive en resumenDePeriodo() (estado-categorias.js): el Dashboard y el reporte PDF
+    // usan la misma, así que el balance no puede dar distinto según dónde lo mires.
+    const rp=resumenDePeriodo(mesMovs, ganInv);
     const gananciaUSD=ganInv.usd||0;
-    const ingTotal=Math.round((totales.ingresos+retirosGastados+Math.max(gananciaARS,0))*100)/100;
-    const gasTotal=Math.round((totales.gastos+Math.max(-gananciaARS,0))*100)/100;
+    const ingTotal=rp.ingresos;
+    const gasTotal=rp.gastos;
 
     // Un chip por ticker: neto = rescates − suscripciones. Negativo significa "hay plata puesta
     // ahí, todavía sin rescatar", no que hayas perdido; por eso va en color de inversión y no en
@@ -1149,7 +1149,6 @@ function renderMovs(){
     // — comprar algo que todavía no vendiste mueve caja pero no es ni ganancia ni pérdida.
     const netosTicker=netoPorTickerDelPeriodo(mesMovs);
     const netoInv=netoInvTotal(mesMovs);
-    const balCaja=Math.round((ingTotal-gasTotal)*100)/100;
 
     // Cuánto se puso a trabajar en el mercado este mes, todos los activos juntos (el chip por
     // ticker ya lo desglosa uno por uno; este suma todo para no tener que sumarlos a mano).
@@ -1180,7 +1179,7 @@ function renderMovs(){
     // El número grande es lo DISPONIBLE: el balance menos lo que se mandó al fondo de ahorro. Lo
     // ahorrado no se pierde de vista (sigue su mosaico "Ahorrado"), pero esa plata ya no está a
     // mano. Las inversiones no se descuentan acá: solo cuenta su resultado, como en el balance.
-    const disponible=Math.round((balCaja-guardado)*100)/100;
+    const disponible=rp.disponible;
     const balLabel=filtroFecha?"Balance del período":"Balance del mes";
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">${balLabel}</span>
