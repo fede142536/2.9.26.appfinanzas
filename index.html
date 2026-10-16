@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v148">
+<meta name="enola-version" content="enola-v149">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -312,6 +312,35 @@
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn-sm u-flex1" onclick="closeEditModal()">Cancelar</button>
       <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:11px" onclick="guardarEdit()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- HOJA: PAGAR EL RESUMEN DE UNA TARJETA -->
+<div class="modal-overlay" id="modal-pago-tc" onclick="if(event.target===this)cerrarPagoTc()">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Pagar resumen</div>
+    <div class="inset mb-10"><div class="txt-md txt-strong" id="pago-tc-titulo"></div><div class="txt-xs txt-muted" id="pago-tc-sub" style="margin-top:3px"></div></div>
+    <div class="form-group"><label class="form-label" for="pago-tc-monto">Monto que pagás</label>
+      <div class="amount-wrap"><span class="amount-prefix" id="pago-tc-prefix">$</span>
+        <input type="number" id="pago-tc-monto" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any">
+      </div>
+      <p class="txt-xs txt-muted" style="margin-top:4px">Viene completo con lo que resta. Si el resumen real es otro, cambialo.</p>
+    </div>
+    <div class="form-group"><label class="form-label" for="pago-tc-fecha">Fecha del pago</label>
+      <input type="date" id="pago-tc-fecha" class="form-input"></div>
+    <div class="form-group">
+      <label style="--chk:var(--save);display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
+        <input type="checkbox" id="pago-tc-ahorro" class="chk-custom">
+        <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (resta del fondo)</span>
+      </label>
+    </div>
+    <div class="form-group"><label class="form-label" for="pago-tc-cuenta">Cuenta</label><select id="pago-tc-cuenta" class="form-select"></select></div>
+    <p class="txt-xs txt-muted" style="margin-bottom:6px;line-height:1.45">Se carga como un gasto común: es cuando se te va la plata. Las compras de este resumen no se vuelven a contar.</p>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn-sm u-flex1" onclick="cerrarPagoTc()">Cancelar</button>
+      <button class="btn-primary" style="flex:2;background:var(--warning);color:#fff;padding:11px" onclick="guardarPagoTc()">Registrar pago</button>
     </div>
   </div>
 </div>

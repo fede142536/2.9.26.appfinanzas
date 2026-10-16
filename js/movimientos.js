@@ -304,6 +304,7 @@ function toggleFrecPagado(id, ym){
   g.pagos[ym]=!g.pagos[ym];
   save();
   actualizarFilaFrecPagado(id, ym, g.pagos[ym]);
+  actualizarFrecPorPagar();
 }
 
 // Repinta EN EL LUGAR la fila ya montada de un gasto frecuente, en vez de llamar a
@@ -764,9 +765,11 @@ function renderTxListaLazy(show){
 // Una card por dato, con el fondo tintado del color del tipo (par --X/--X-light que ya existe
 // en styles.css: nada de colores nuevos). "Cantidad" es la excepción: va en --text sobre
 // --bg, no sobre un tinte de color, porque no es ni un color de tipo ni una de --X-light.
-function mosaicoHTML(glyph, name, color, val, sub){
+// `attr` (opcional): atributos extra para el <div> raíz, p. ej. data-mosaico="…" para poder
+// encontrarlo y repintarlo en el lugar sin armar el resumen entero (ver actualizarFrecPorPagar).
+function mosaicoHTML(glyph, name, color, val, sub, attr){
   const tint = color==="var(--text)" ? "var(--bg)" : color.replace(")", "-light)");
-  return `<div class="mov-mosaic" style="background:${tint}">
+  return `<div class="mov-mosaic" style="background:${tint}"${attr?" "+attr:""}>
     <div class="mov-mosaic-top">
       <span class="mov-mosaic-glyph" style="color:${color}">${glyph}</span>
       <span class="mov-mosaic-name" style="color:${color}">${escapeHtml(name)}</span>
@@ -775,6 +778,56 @@ function mosaicoHTML(glyph, name, color, val, sub){
     ${sub?`<span class="mov-mosaic-sub">${escapeHtml(sub)}</span>`:""}
   </div>`;
 }
+// ═══════════════════════════════════════════
+// GASTOS FRECUENTES POR PAGAR
+// ═══════════════════════════════════════════
+// Lo que falta pagar de los gastos frecuentes del período: los que todavía no se tildaron como
+// pagados. Marcar uno como pagado lo saca de la cuenta (ver toggleFrecPagado). No cambia el
+// balance — el "pagado" es una ayuda memoria — solo esta cifra. Función pura sobre la lista del
+// período (los frecuentes llegan expandidos por mes, con `_isFrecVirtual` y `pagado`).
+function frecuentesPorPagar(lista){
+  const frec=(lista||[]).filter(m=>m._isFrecVirtual);
+  const sin=frec.filter(m=>!m.pagado);
+  const ars=sin.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
+  const usd=sin.filter(m=>m.moneda==="USD").reduce((s,m)=>s+(m.importeOrig||0),0);
+  return {total:frec.length, pendientes:sin.length,
+          ars:Math.round(ars*100)/100, usd:Math.round(usd*100)/100};
+}
+
+// El mosaico, o "" si el período no tiene gastos frecuentes (no hay nada que informar).
+function frecPorPagarMosaicoHTML(r){
+  if(!r.total) return "";
+  const listo=r.pendientes===0;
+  const soloUsd=r.usd>0 && !r.ars;
+  const val=soloUsd ? `USD ${r.usd.toFixed(2)}` : fmtTotal(r.ars);
+  let sub;
+  if(listo) sub="Todo pagado ✓";
+  else sub=`${r.pendientes} de ${r.total} sin pagar${r.usd>0&&!soloUsd?` · + USD ${r.usd.toFixed(2)}`:""}`;
+  return mosaicoHTML("🔁","Frecuentes por pagar", listo?"var(--success)":"var(--warning)", val, sub,
+    'data-mosaico="frec-por-pagar"');
+}
+
+// La lista sobre la que se calcula lo que se ve: el mes (o el período) y, en Gastos con una
+// categoría elegida, solo esa categoría — igual que los demás mosaicos de esa pestaña.
+function listaDelResumenFrec(){
+  const lista=filtroFecha ? getMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getMesMov(mesActual);
+  return (filtro==="Gasto" && filtroCategoria) ? lista.filter(m=>m.cat===filtroCategoria) : lista;
+}
+
+// Repinta SOLO el mosaico, en el lugar: un renderMovs() completo tira abajo los lotes de la lista
+// ya cargados con el scroll (ver actualizarFilaFrecPagado). Si el mosaico no está, no hace nada.
+function actualizarFrecPorPagar(){
+  const el=document.querySelector('#mov-summary [data-mosaico="frec-por-pagar"]');
+  if(!el) return;
+  const html=frecPorPagarMosaicoHTML(frecuentesPorPagar(listaDelResumenFrec()));
+  if(!html) return;
+  const tmp=document.createElement("div");
+  tmp.innerHTML=html;
+  const nuevo=tmp.firstElementChild;
+  if(el.classList.contains("mov-mosaic-wide")) nuevo.classList.add("mov-mosaic-wide");
+  el.replaceWith(nuevo);
+}
+
 // Arma la grilla a partir de una lista de mosaicos ya armados (mosaicoHTML): si la cantidad es
 // impar, el último ocupa las dos columnas en vez de quedar solo en la primera (ver handoff).
 function mosaicosGridHTML(mosaicos){
@@ -964,6 +1017,8 @@ function renderMovs(){
     </div>`;
     const mosGasto=[];
     if(gastosTotalUSD>0) mosGasto.push(mosaicoHTML("$","Gastos USD","var(--text)",`USD ${gastosTotalUSD.toFixed(2)}`,""));
+    const mosFrecG=frecPorPagarMosaicoHTML(frecuentesPorPagar(todoGastos));
+    if(mosFrecG) mosGasto.push(mosFrecG);
     // Mosaicos informativos cuando no hay sub-filtro de categoría (desglose de qué compone el total)
     if(!filtroCategoria){
       if(Math.round(gananciaARS)!==0){
@@ -1136,6 +1191,8 @@ function renderMovs(){
     mosTodos.push(mosaicoHTML("↓","Ingresos","var(--success)",fmtTotal(ingTotal),
       `${nMovsIngreso} ${nMovsIngreso===1?"movimiento":"movimientos"}`));
     mosTodos.push(mosaicoHTML("↑","Gastos","var(--danger)",fmtTotal(gasTotal),pctDeIngreso(gasTotal)));
+    const mosFrec=frecPorPagarMosaicoHTML(frecuentesPorPagar(mesMovs));
+    if(mosFrec) mosTodos.push(mosFrec);
     if(guardado>0){
       mosTodos.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(guardado),pctDeIngreso(guardado)));
     }
