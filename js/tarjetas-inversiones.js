@@ -50,20 +50,63 @@ function getMontoEnMes(tc, ym){
   return Math.round((tc.total/tc.cuotasTotal)*100)/100;
 }
 
+// La tarjeta con la que se paga un gasto en un mes dado. Un gasto frecuente puede cambiar de tarjeta
+// (Visa un mes, Mastercard el siguiente): los cambios viven en `t.tarjetas` como [{desde:"YYYY-MM",
+// tarjeta}], igual que los aumentos de precio en `t.cambios`. Cada mes usa el último cambio cuyo
+// `desde` ya llegó; antes del primero vale la tarjeta original (`t.tarjeta`). Así un cambio nuevo
+// nunca reescribe los meses anteriores.
+function getTarjetaEnMes(t, ym){
+  let nombre=t.tarjeta;
+  if(t.frecuente && Array.isArray(t.tarjetas) && ym){
+    const aplicables=t.tarjetas.filter(c=>c.desde<=ym).sort((a,b)=>a.desde.localeCompare(b.desde));
+    if(aplicables.length) nombre=aplicables[aplicables.length-1].tarjeta;
+  }
+  return nombre;
+}
+
+// Registra que el gasto frecuente `t` pasa a pagarse con `tarjeta` desde el mes `desde` (con
+// `soloEseMes`, solo ese mes: el siguiente vuelve a la tarjeta que tenía). No toca los meses
+// anteriores. Devuelve true si cambió algo.
+function cambiarTarjetaFrecuente(t, desde, tarjeta, soloEseMes){
+  if(!t || !t.frecuente || !desde || !tarjeta) return false;
+  if(t.mesInicio && desde<t.mesInicio) desde=t.mesInicio;   // antes del inicio no hay meses que cambiar
+  const previa=getTarjetaEnMes(t, desde);
+  if(previa===tarjeta) return false;
+  if(!Array.isArray(t.tarjetas)) t.tarjetas=[];
+  const sig=addMonths(desde,1);
+  const hayCambioSig=t.tarjetas.some(c=>c.desde===sig);
+  const sigFueraDeRango=!!(t.mesFin && sig>t.mesFin);
+  if(!soloEseMes && desde===t.mesInicio){
+    // Desde el primer mes no hay historial que preservar: es la tarjeta original.
+    t.tarjeta=tarjeta;
+    t.tarjetas=t.tarjetas.filter(c=>c.desde>desde);
+  } else {
+    t.tarjetas=t.tarjetas.filter(c=>c.desde!==desde);
+    t.tarjetas.push({desde, tarjeta});
+    if(soloEseMes && !hayCambioSig && !sigFueraDeRango) t.tarjetas.push({desde:sig, tarjeta:previa});
+  }
+  // Se descartan los cambios que repiten la tarjeta que ya regía antes de ellos.
+  t.tarjetas.sort((a,b)=>a.desde.localeCompare(b.desde));
+  let vigente=t.tarjeta;
+  t.tarjetas=t.tarjetas.filter(c=>{ if(c.tarjeta===vigente) return false; vigente=c.tarjeta; return true; });
+  return true;
+}
+
 // Devuelve los "movimientos virtuales" de cuotas / frecuentes que caen en el mes ym
 function getTcMovsEnMes(ym){
   return tcs.map(t=>{
     const n = getCuotaEnMes(t, ym);
     if(!n) return null;
     const importeMes=getMontoEnMes(t, ym);
+    const tarjetaMes=getTarjetaEnMes(t, ym);
     return {
       _isTc: true,
       id: t.id,
       tipo: "Tarjeta",
       desc: t.desc,
-      tarjeta: t.tarjeta,
+      tarjeta: tarjetaMes,
       cat: t.cat,
-      subcat: t.tarjeta,
+      subcat: tarjetaMes,
       moneda: t.moneda||"ARS",
       importe: importeMes,
       importeTotal: t.frecuente?null:t.total,
@@ -482,7 +525,7 @@ function renderTcPendientes(){
       const restantes=m.cuotasTotal-m.nCuota;
       const finYm=addMonths(mesTc,restantes);
       const finTxt=m.frecuente?"":(restantes<=0?"última cuota":`termina ${abrevMes3(finYm).toLowerCase()} ${finYm.slice(2,4)}`);
-      return `<div class="tc-row"${i>0?' style="border-top:1px solid var(--border)"':""} onclick="openEditTcModal(${m.id})">
+      return `<div class="tc-row"${i>0?' style="border-top:1px solid var(--border)"':""} onclick="openEditTcModal(${m.id},${attrJS(mesTc)})">
         <div class="tc-row-icon">${icon}</div>
         <div class="tc-row-mid">
           <div class="tc-row-desc">${escapeHtml(m.desc||"")}</div>
@@ -1167,11 +1210,15 @@ function borrarMovInv(id,btn){
 // EDITAR TARJETA
 // ═══════════════════════════════════════════
 let editingTcId=null;
+// Mes que el usuario estaba mirando al abrir la edición: de ahí sale la tarjeta que se muestra y el
+// "desde" de un cambio de tarjeta.
+let editingTcYM=null;
 
-function openEditTcModal(id){
+function openEditTcModal(id, ym){
   const t=tcs.find(x=>x.id===id);
   if(!t) return;
   editingTcId=id;
+  editingTcYM=/^\d{4}-\d{2}$/.test(ym||"") ? ym : currentYM();
   document.getElementById("edit-form-content").innerHTML=renderEditTcForm(t);
   document.getElementById("modal-edit").classList.add("open");
   // Reemplazo el handler del botón de guardar
@@ -1184,6 +1231,11 @@ function renderEditTcForm(t){
   if(t.frecuente){
     const montoActual=getMontoEnMes(t,hoyYM);
     const cambios=Array.isArray(t.cambios)?t.cambios.slice().sort((a,b)=>a.desde.localeCompare(b.desde)):[];
+    // Mes que se estaba mirando (nunca antes del inicio del gasto) y la tarjeta que regía en él.
+    let ymTarj=editingTcYM||hoyYM;
+    if(t.mesInicio && ymTarj<t.mesInicio) ymTarj=t.mesInicio;
+    const tarjetaSel=getTarjetaEnMes(t,ymTarj);
+    const cambiosTarj=Array.isArray(t.tarjetas)?t.tarjetas.slice().sort((a,b)=>a.desde.localeCompare(b.desde)):[];
     return `
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--warning-light);color:var(--warning);margin-bottom:10px">🔁 GASTO FRECUENTE</div>
       <div class="form-group"><label class="form-label">Descripción</label>
@@ -1193,8 +1245,8 @@ function renderEditTcForm(t){
         <div class="form-group"><label class="form-label">Tarjeta</label>
           <div class="u-row-6">
             <select id="edit-tc-tarj" class="form-select u-flex1">
-              ${getTarjetas().map(nm=>`<option ${t.tarjeta===nm?'selected':''}>${escapeHtml(nm)}</option>`).join("")}
-              ${t.tarjeta && !getTarjetas().includes(t.tarjeta)?`<option selected>${escapeHtml(t.tarjeta)}</option>`:""}
+              ${getTarjetas().map(nm=>`<option ${tarjetaSel===nm?'selected':''}>${escapeHtml(nm)}</option>`).join("")}
+              ${tarjetaSel && !getTarjetas().includes(tarjetaSel)?`<option selected>${escapeHtml(tarjetaSel)}</option>`:""}
             </select>
             <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('edit-tc-tarj')" title="Agregar tarjeta nueva">+</button>
           </div>
@@ -1203,6 +1255,32 @@ function renderEditTcForm(t){
           <input type="text" id="edit-tc-cat" class="form-input" value="${escapeHtml(t.cat)}">
         </div>
       </div>
+      <div class="inset" id="edit-tc-tarj-opc">
+        <div class="two-col">
+          <div class="form-group"><label class="form-label">Tarjeta desde el mes</label>
+            <input type="month" id="edit-tc-tarj-mes" class="form-input" value="${ymTarj}" onchange="onEditTcTarjMes()">
+          </div>
+          <div class="form-group"><label class="form-label">&nbsp;</label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;min-height:40px;cursor:pointer">
+              <input type="checkbox" id="edit-tc-tarj-solo" style="width:18px;height:18px;cursor:pointer;accent-color:var(--warning)"> Solo ese mes
+            </label>
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--muted)">Si cambiás la tarjeta, se aplica desde ese mes en adelante (o solo ese mes, y el siguiente vuelve a la anterior). Los meses anteriores conservan la tarjeta que tenían.</p>
+      </div>
+      ${cambiosTarj.length?`
+        <div class="seccion-label mb-6">Historial de tarjeta</div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)">
+            <span>Desde ${mesLbl(t.mesInicio||ymTarj)}: <strong>${escapeHtml(t.tarjeta||"")}</strong></span>
+          </div>
+          ${cambiosTarj.map((c,i)=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 0;${i<cambiosTarj.length-1?'border-bottom:1px solid var(--border)':''}">
+              <span>${mesLbl(c.desde)}: <strong>${escapeHtml(c.tarjeta)}</strong></span>
+              <button class="tx-del" style="color:var(--danger)" onclick="borrarCambioTarjeta(${i})" title="Eliminar este cambio de tarjeta">×</button>
+            </div>
+          `).join("")}
+        </div>`:""}
       <div class="two-col">
         <div class="form-group"><label class="form-label">Mes de inicio</label>
           <input type="month" id="edit-tc-inicio" class="form-input" value="${t.mesInicio||''}">
@@ -1319,6 +1397,31 @@ function renderEditTcForm(t){
   `;
 }
 
+// Al elegir otro mes en "Tarjeta desde el mes", el selector muestra la tarjeta que regía en ese mes.
+function onEditTcTarjMes(){
+  const t=tcs.find(x=>x.id===editingTcId);
+  const mes=document.getElementById("edit-tc-tarj-mes").value;
+  const sel=document.getElementById("edit-tc-tarj");
+  if(!t || !mes || !sel) return;
+  const nombre=getTarjetaEnMes(t, (t.mesInicio && mes<t.mesInicio) ? t.mesInicio : mes);
+  if(nombre && ![...sel.options].some(o=>o.value===nombre)) sel.add(new Option(nombre));
+  if(nombre) sel.value=nombre;
+}
+
+// Elimina un cambio de tarjeta del historial del gasto frecuente en edición (los meses afectados
+// vuelven a la tarjeta que regía antes de ese cambio).
+function borrarCambioTarjeta(idx){
+  const t=tcs.find(x=>x.id===editingTcId);
+  if(!t||!Array.isArray(t.tarjetas)) return;
+  const ord=t.tarjetas.slice().sort((a,b)=>a.desde.localeCompare(b.desde));
+  const quitar=ord[idx];
+  if(!quitar) return;
+  t.tarjetas=t.tarjetas.filter(c=>c!==quitar);
+  save();
+  renderTarjetas();
+  document.getElementById("edit-form-content").innerHTML=renderEditTcForm(t);
+}
+
 function borrarCambio(idx){
   const t=tcs.find(x=>x.id===editingTcId);
   if(!t||!Array.isArray(t.cambios)) return;
@@ -1375,7 +1478,14 @@ function guardarEditTc(){
   const desc=document.getElementById("edit-tc-desc").value.trim();
   if(!desc){showToast("La descripción no puede estar vacía");return;}
   t.desc=desc;
-  t.tarjeta=document.getElementById("edit-tc-tarj").value.trim()||t.tarjeta;
+  const tarjetaElegida=document.getElementById("edit-tc-tarj").value.trim();
+  if(t.frecuente){
+    // Un frecuente no reescribe su tarjeta: el cambio rige desde el mes elegido y los anteriores quedan igual.
+    const desdeTarj=document.getElementById("edit-tc-tarj-mes").value||editingTcYM||currentYM();
+    cambiarTarjetaFrecuente(t, desdeTarj, tarjetaElegida, document.getElementById("edit-tc-tarj-solo").checked);
+  } else {
+    t.tarjeta=tarjetaElegida||t.tarjeta;
+  }
   t.cat=document.getElementById("edit-tc-cat").value.trim()||t.cat;
   t.nota=document.getElementById("edit-tc-nota").value.trim();
   const cuentaEl=document.getElementById("edit-tc-cuenta");

@@ -72,7 +72,10 @@ function saveTarjetasCustom(){ setSensitiveRaw("ftarjetas", JSON.stringify(tarje
 // ya esté en uso en gastos cargados (por si vino de un import viejo con un nombre no listado)
 function getTarjetas(){
   const todas=[...TARJETAS_DEFAULT];
-  tcs.forEach(t=>{ if(t.tarjeta && !todas.includes(t.tarjeta)) todas.push(t.tarjeta); });
+  tcs.forEach(t=>{
+    if(t.tarjeta && !todas.includes(t.tarjeta)) todas.push(t.tarjeta);
+    (t.tarjetas||[]).forEach(c=>{ if(c.tarjeta && !todas.includes(c.tarjeta)) todas.push(c.tarjeta); });
+  });
   tarjetasCustom.forEach(t=>{ if(!todas.includes(t)) todas.push(t); });
   return todas;
 }
@@ -107,7 +110,7 @@ async function agregarTarjetaRapida(selectId){
 // Elimina una tarjeta custom de la lista (no se puede borrar si hay gastos usándola)
 async function borrarTarjetaCustom(nombre){
   if(!tarjetasCustom.includes(nombre)) return;
-  if(tcs.some(t=>t.tarjeta===nombre)){
+  if(tcs.some(t=>t.tarjeta===nombre || (t.tarjetas||[]).some(c=>c.tarjeta===nombre))){
     showToast("No se puede borrar: hay gastos cargados con esa tarjeta. Renombrala en su lugar.");
     return;
   }
@@ -130,7 +133,10 @@ async function renombrarTarjeta(nombreActual){
     return;
   }
   let cambios=0;
-  tcs.forEach(t=>{ if(t.tarjeta===nombreActual){ t.tarjeta=limpio; cambios++; } });
+  tcs.forEach(t=>{
+    if(t.tarjeta===nombreActual){ t.tarjeta=limpio; cambios++; }
+    (t.tarjetas||[]).forEach(c=>{ if(c.tarjeta===nombreActual){ c.tarjeta=limpio; cambios++; } });
+  });
   const idx=tarjetasCustom.indexOf(nombreActual);
   if(idx>=0) tarjetasCustom[idx]=limpio;
   else if(!TARJETAS_DEFAULT.includes(nombreActual)) tarjetasCustom.push(limpio);

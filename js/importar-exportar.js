@@ -517,7 +517,7 @@ function exportarExcel(rangoAbierto){
             Mes: cur,
             Tipo: "Frecuente",
             Descripción: t.desc||"",
-            Tarjeta: t.tarjeta||"",
+            Tarjeta: getTarjetaEnMes(t,cur)||"",
             Categoría: t.cat||"",
             Moneda: t.moneda||"ARS",
             "Cuota": "—",

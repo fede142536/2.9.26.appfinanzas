@@ -548,7 +548,7 @@ class TxItem extends HTMLElement{
     const bgRight=this.querySelector(".tx-swipe-bg-right");
     bgLeft.addEventListener("click", ()=>{
       this._cerrar();
-      if(isTc) openEditTcModal(m.id); else openEditModal(m.id);
+      if(isTc) openEditTcModal(m.id, String(m.fecha||"").slice(0,7)); else openEditModal(m.id);
     });
     bgRight.addEventListener("click", (e)=>{
       if(isTc) confirmarBorrarTc(m.id);
