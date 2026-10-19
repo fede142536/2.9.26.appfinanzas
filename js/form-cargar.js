@@ -692,6 +692,8 @@ async function guardarSinFreno(){
       mesFin,                     // null o "YYYY-MM" (solo frecuentes)
       frecuente:isFrec,
       cambios:[],                 // historial de aumentos: [{desde:"YYYY-MM", monto:N}]
+      ...(isFrec && diaValido(document.getElementById("tc-frec-dia")?.value)!==null
+          ? {diaVto:diaValido(document.getElementById("tc-frec-dia").value)} : {}),   // opcional: para el aviso de vencimientos
       fecha:document.getElementById("tc-fecha").value,
       nota:document.getElementById("tc-nota").value.trim()
     });
@@ -827,7 +829,7 @@ function resetForm(t){
     buildTickerRecientes();
     enfocarCampoDeArriba("inv-ticker");
   } else if(t==="Tarjeta"){
-    ["tc-desc","tc-total","tc-nota","tc-mes-fin"].forEach(id=>document.getElementById(id).value="");
+    ["tc-desc","tc-total","tc-nota","tc-mes-fin","tc-frec-dia"].forEach(id=>{const e=document.getElementById(id); if(e) e.value="";});
     document.getElementById("tc-cuotas").value="1";
     buildCuotasChips();
     document.getElementById("tc-frecuente").checked=false;
