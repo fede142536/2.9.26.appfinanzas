@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v156">
+<meta name="enola-version" content="enola-v157">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -573,6 +573,7 @@
         <div class="two-col" id="tc-frec-row" style="display:none">
           <div class="form-group"><label class="form-label" for="tc-mes-inicio-frec">Mes de inicio</label><input type="month" id="tc-mes-inicio-frec" class="form-input"></div>
           <div class="form-group"><label class="form-label" for="tc-mes-fin">Mes de fin (opcional)</label><input type="month" id="tc-mes-fin" class="form-input"></div>
+          <div class="form-group" style="grid-column:1/-1"><label class="form-label" for="tc-frec-dia">Día de vencimiento (opcional)</label><input type="number" id="tc-frec-dia" class="form-input" placeholder="Ej: 10" inputmode="numeric" min="1" max="31" step="1"></div>
         </div>
       </div>
       <div class="card">
@@ -1088,6 +1089,15 @@
     <div class="card-title">🕑 Copias automáticas en este celular</div>
     <p class="txt-sm txt-muted mb-10">Cada día que abrís la app con cambios se guarda una copia acá mismo (las últimas 14, cifradas si tenés PIN). Sirven para deshacer un error o un borrado. <strong>No te salvan si perdés el celular</strong>: para eso mandá una copia afuera.</p>
     <div id="copias-auto-lista"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🗓 Vencimientos</div>
+    <p class="txt-sm txt-muted mb-10">La app te avisa de lo que vence (gastos frecuentes y tarjetas) arriba en Movimientos y en el Dashboard, mientras la abrís.</p>
+    <div class="form-group"><label class="form-label" for="venc-aviso-sel">Avisarme</label>
+      <select id="venc-aviso-sel" class="form-select" onchange="onVencAvisoCambio(this)"></select>
+    </div>
+    <p class="txt-sm txt-muted mb-10">Para que te avise <strong>también con la app cerrada</strong>, mandá los próximos vencimientos al calendario del celular: cada uno queda como evento con recordatorio a las 9:00. Repetilo cuando cargues vencimientos nuevos (no se duplican).</p>
+    <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%" onclick="agregarVencimientosAlCalendario()">📅 Agregar vencimientos al calendario</button>
   </div>
   <div class="card">
     <div class="card-title">📊 Exportar para BI</div>

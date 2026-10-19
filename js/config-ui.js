@@ -616,7 +616,8 @@ function armarBackup(){
       presupuestos,
       catOrder,
       iconsCustom,
-      vencimientosTc: leerVencTc()
+      vencimientosTc: leerVencTc(),
+      diasAvisoVenc: leerDiasAviso()
     }
   };
 }
@@ -748,6 +749,7 @@ function aplicarBackup(backup){
   if(backup.datos.vencimientosTc && typeof backup.datos.vencimientosTc==="object" && !Array.isArray(backup.datos.vencimientosTc)){
     guardarVencTc(backup.datos.vencimientosTc);
   }
+  if(Number.isInteger(backup.datos.diasAvisoVenc)) guardarDiasAviso(backup.datos.diasAvisoVenc);
   save();
   setSensitiveRaw("fimphist3",JSON.stringify(importHistory));
   // Refrescar vistas
@@ -901,6 +903,50 @@ async function repararDatosUSDAlArrancar(){
     showToast(`Corregí ${n} movimiento${n===1?"":"s"} en dólares que tenían el monto repetido en pesos`);
   }
   return n;
+}
+
+// ── Vencimientos: ajuste de anticipación y envío al calendario ──
+function renderVencConfig(){
+  const sel=document.getElementById("venc-aviso-sel");
+  if(!sel) return;
+  const actual=leerDiasAviso();
+  const opciones=VENC_AVISO_OPCIONES.includes(actual) ? VENC_AVISO_OPCIONES : [...VENC_AVISO_OPCIONES, actual].sort((a,b)=>a-b);
+  sel.innerHTML=opciones.map(n=>`<option value="${n}" ${n===actual?"selected":""}>${textoAnticipacion(n)}</option>`).join("");
+}
+function onVencAvisoCambio(sel){
+  guardarDiasAviso(sel.value);
+  showToast(`Te aviso ${textoAnticipacion(leerDiasAviso())} ✓`);
+  if(typeof renderMovs==="function") renderMovs();
+}
+
+// Agenda los vencimientos de los próximos meses en el calendario del teléfono. Sin ningún await antes
+// de navigator.share(): exige llamarse dentro del toque del usuario (igual que compartirBackup).
+async function agregarVencimientosAlCalendario(){
+  const items=vencimientosParaCalendario(hoyLocal(), movs, leerVencTc());
+  if(!items.length){
+    showToast("No hay vencimientos con fecha para agendar. Cargá el día de vencimiento en un gasto frecuente o las fechas de una tarjeta.");
+    return false;
+  }
+  const nombre=`enola-vencimientos-${hoyLocal()}.ics`;
+  const texto=generarICS(items, leerDiasAviso());
+  let archivo=null;
+  try{ archivo=new File([new Blob([texto],{type:"text/calendar"})], nombre, {type:"text/calendar"}); }catch(e){ archivo=null; }
+  if(archivo && typeof navigator.canShare==="function" && navigator.canShare({files:[archivo]})){
+    try{
+      await navigator.share({files:[archivo], title:"Vencimientos de Enola"});
+      showToast(`✓ ${items.length} vencimiento${items.length===1?"":"s"} enviado${items.length===1?"":"s"} al calendario`);
+      return true;
+    }catch(e){
+      if(e && e.name==="AbortError") return false;
+    }
+  }
+  const url=URL.createObjectURL(new Blob([texto],{type:"text/calendar"}));
+  const a=document.createElement("a");
+  a.href=url; a.download=nombre;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showToast(`✓ Archivo del calendario descargado (${items.length}). Abrilo para agregarlos.`);
+  return true;
 }
 
 async function borrarCopiaLocal(id){

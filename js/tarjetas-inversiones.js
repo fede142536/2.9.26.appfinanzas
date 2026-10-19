@@ -113,6 +113,9 @@ function getTcMovsEnMes(ym){
       cuotasTotal: t.cuotasTotal,
       nCuota: n,
       frecuente: !!t.frecuente,
+      diaVto: t.frecuente ? (diaValido(t.diaVto)||undefined) : undefined,
+      // Pagado es por mes, igual que en los gastos frecuentes: el de octubre puede estar pago y el de noviembre no.
+      pagado: !!(t.frecuente && t.pagos && t.pagos[ym]),
       fecha: ym+"-01",
       nota: t.nota||""
     };
@@ -171,8 +174,25 @@ function resumenesDelMes(ym, lista){
 // Se avisa de lo que SIGUE sin pagar. Todo esto es una preferencia, no un dato financiero: va en
 // localStorage llano, como la fecha del último backup.
 const VENC_TC_KEY="fvenctc";
-const VENC_VENTANA_DIAS=7;     // se avisa de lo que vence dentro de una semana
+const VENC_AVISO_KEY="fvencaviso";
+const VENC_AVISO_DEFECTO=2;    // se avisa de lo que vence en los próximos 2 días (configurable)
+const VENC_AVISO_OPCIONES=[0,1,2,3,5,7];   // "el mismo día" hasta "una semana antes"
 const VENC_VENCIDOS_DIAS=10;   // y de lo que venció hace poco; más viejo seguro ya se pagó y nadie lo tildó
+
+// Cuántos días antes se avisa. Es una preferencia: localStorage llano, como el resto de lo de vencimientos.
+function leerDiasAviso(){
+  try{
+    const n=parseInt(localStorage.getItem(VENC_AVISO_KEY),10);
+    return Number.isInteger(n) && n>=0 && n<=30 ? n : VENC_AVISO_DEFECTO;
+  }catch(e){ return VENC_AVISO_DEFECTO; }
+}
+function guardarDiasAviso(n){
+  const v=parseInt(n,10);
+  if(!Number.isInteger(v) || v<0 || v>30) return false;
+  return guardarPreferencia(VENC_AVISO_KEY, String(v));
+}
+// El texto del aviso en Config: "el mismo día", "1 día antes", "2 días antes".
+function textoAnticipacion(n){ return n===0 ? "el mismo día" : n===1 ? "1 día antes" : `${n} días antes`; }
 
 function diaValido(d){
   const n=parseInt(d,10);
@@ -290,17 +310,27 @@ function conResumenPagado(vencTc, tarjeta, ym, moneda, valor){
 // getMesMov/getTcMovsEnMes, que leen los datos globales.
 // Cada ítem: {tipo, nombre, fecha, dias, monto, moneda, ym} + {tarjeta} o {id} según el tipo, para
 // poder marcarlo pagado desde la franja.
-function proximosVencimientos(hoyISO, lista, vencTc, ventana){
+function proximosVencimientos(hoyISO, lista, vencTc, ventana, mesesAdelante){
   const hoyYM=String(hoyISO).slice(0,7);
-  const tope=ventana===undefined ? VENC_VENTANA_DIAS : ventana;
+  const tope=ventana===undefined ? leerDiasAviso() : ventana;
+  const meses=[addMonths(hoyYM,-1), hoyYM];
+  for(let i=1;i<=(mesesAdelante===undefined?1:mesesAdelante);i++) meses.push(addMonths(hoyYM,i));
   const out=[];
-  [addMonths(hoyYM,-1), hoyYM, addMonths(hoyYM,1)].forEach(ym=>{
+  meses.forEach(ym=>{
     resumenesDelMes(ym, lista).forEach(r=>{
       const d=datosResumenTc(vencTc, r.tarjeta, ym);
       if(!d.vto) return;
       if(d.pagado[r.moneda] || r.resta<=0) return;     // lo marcaste pagado, o los pagos ligados lo cubren
       out.push({tipo:"tarjeta", nombre:r.tarjeta||"Tarjeta", tarjeta:r.tarjeta, ym, fecha:d.vto,
                 dias:diasEntre(hoyISO,d.vto), monto:r.resta, moneda:r.moneda});
+    });
+    // Un gasto frecuente de tarjeta con su propio día de vencimiento (además del resumen de la tarjeta).
+    getTcMovsEnMes(ym).forEach(m=>{
+      if(!m.frecuente || m.pagado) return;
+      const fecha=fechaVencimiento(ym, m.diaVto);
+      if(!fecha) return;
+      out.push({tipo:"frecuenteTc", nombre:`${m.desc||"Gasto frecuente"}${m.tarjeta?` (${m.tarjeta})`:""}`, id:m.id, ym, fecha,
+                dias:diasEntre(hoyISO,fecha), monto:m.importe||0, moneda:monedaTc(m.moneda)});
     });
     getMesMov(ym).forEach(m=>{
       if(!m._isFrecVirtual || m.pagado) return;
@@ -315,6 +345,18 @@ function proximosVencimientos(hoyISO, lista, vencTc, ventana){
   return out.filter(v=>v.dias<=tope && v.dias>=-VENC_VENCIDOS_DIAS).sort((a,b)=>a.dias-b.dias || a.nombre.localeCompare(b.nombre));
 }
 
+// Marca/desmarca como pagado UN mes de un gasto frecuente de tarjeta (solo el aviso de su vencimiento:
+// no toca el resumen de la tarjeta ni el balance).
+function toggleTcFrecPagado(id, ym){
+  const t=tcs.find(x=>x.id===id && x.frecuente);
+  if(!t) return;
+  if(!t.pagos) t.pagos={};
+  t.pagos[ym]=!t.pagos[ym];
+  save();
+  pintarFranjaVencimientos();
+  if(typeof renderTarjetas==="function" && document.getElementById("page-tc")?.classList.contains("active")) renderTarjetas();
+}
+
 function montoVenc(v){ return v.moneda==="USD" ? `USD ${v.monto.toFixed(2)}` : fmtS(v.monto); }
 
 // Las líneas de la franja de Movimientos: "Visa vence mañana · resta $140.000", cada una con su
@@ -324,8 +366,8 @@ function vencimientosFranjaHTML(items, max){
   const lim=max||3;
   const filas=items.slice(0,lim).map(v=>{
     const color=v.dias<0 ? "var(--danger)" : v.dias<=1 ? "var(--warning)" : "var(--muted)";
-    const accion=v.tipo==="tarjeta"
-      ? `marcarPagadoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)},true)`
+    const accion=v.tipo==="tarjeta" ? `marcarPagadoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)},true)`
+      : v.tipo==="frecuenteTc" ? `toggleTcFrecPagado(${Number(v.id)},${attrJS(v.ym)})`
       : `toggleFrecPagado(${Number(v.id)},${attrJS(v.ym)})`;
     return `<div class="venc-fila"><span class="venc-nombre">${v.tipo==="tarjeta"?"💳":"🔁"} ${escapeHtml(v.nombre)}</span>
       <span class="venc-txt" style="color:${color}">${textoVencimiento(v.dias)}${v.tipo==="tarjeta"?" · resta":" ·"} <strong>${montoVenc(v)}</strong></span>
@@ -333,6 +375,63 @@ function vencimientosFranjaHTML(items, max){
   }).join("");
   const mas=items.length>lim ? `<div class="venc-mas">y ${items.length-lim} más</div>` : "";
   return `<div class="venc-franja"><div class="venc-titulo">🗓 Vencimientos</div>${filas}${mas}</div>`;
+}
+
+// ── Vencimientos al calendario del teléfono (.ics) ──
+// Una app web no puede avisar con la app cerrada, pero el calendario sí. Cada vencimiento sale como
+// un evento de día completo con un recordatorio a las 9:00, `diasAviso` días antes. El UID es estable
+// (mismo vencimiento = mismo UID), así que importar el archivo otra vez actualiza en vez de duplicar.
+function icsEscapar(t){
+  return String(t==null?"":t).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n");
+}
+// Las líneas de un .ics no pasan de 75 bytes: las largas se parten con CRLF + un espacio.
+function icsPlegar(linea){
+  const enc=new TextEncoder();
+  let out="", actual="", bytes=0;
+  for(const ch of linea){
+    const n=enc.encode(ch).length;
+    if(bytes+n>73){ out+=actual+"\r\n "; actual=""; bytes=1; }
+    actual+=ch; bytes+=n;
+  }
+  return out+actual;
+}
+function icsDia(iso){ return String(iso).slice(0,10).replace(/-/g,""); }
+function icsDiaSiguiente(iso){
+  const [y,m,d]=String(iso).slice(0,10).split("-").map(Number);
+  return icsDia(new Date(Date.UTC(y,m-1,d+1)).toISOString());
+}
+function icsClave(v){
+  const base=v.tipo==="tarjeta" ? `${v.tarjeta||""}-${v.moneda}` : String(v.id);
+  return `enola-${v.tipo}-${base.replace(/[^A-Za-z0-9_-]+/g,"_")}-${v.fecha}@enola`;
+}
+// `ahora` solo existe para que los tests puedan fijar el sello de tiempo.
+function generarICS(items, diasAviso, ahora){
+  const stamp=(ahora||new Date()).toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const n=Number.isInteger(diasAviso)&&diasAviso>=0 ? diasAviso : VENC_AVISO_DEFECTO;
+  // Recordatorio a las 9:00: el evento empieza a las 0:00 del día, así que "N días antes a las 9"
+  // son N-1 días y 15 horas antes de esa hora; el mismo día es 9 horas después del comienzo.
+  const trigger=n===0 ? "TRIGGER;RELATED=START:PT9H" : `TRIGGER:-P${n-1}DT15H`;
+  const lineas=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Enola//Vencimientos//ES","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:Vencimientos Enola"];
+  (items||[]).forEach(v=>{
+    const resta=v.tipo==="tarjeta" ? "resta" : "";
+    const icono=v.tipo==="tarjeta" ? "💳" : "🔁";
+    const titulo=`${icono} ${v.nombre} vence${resta?` · ${resta} ${montoVenc(v)}`:` · ${montoVenc(v)}`}`;
+    lineas.push("BEGIN:VEVENT",
+      `UID:${icsClave(v)}`, `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${icsDia(v.fecha)}`, `DTEND;VALUE=DATE:${icsDiaSiguiente(v.fecha)}`,
+      `SUMMARY:${icsEscapar(titulo)}`,
+      `DESCRIPTION:${icsEscapar("Vencimiento cargado en Enola. Si ya lo pagaste, ignoralo.")}`,
+      "TRANSP:TRANSPARENT",
+      "BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${icsEscapar(titulo)}`, trigger, "END:VALARM",
+      "END:VEVENT");
+  });
+  lineas.push("END:VCALENDAR");
+  return lineas.map(icsPlegar).join("\r\n")+"\r\n";
+}
+
+// Los vencimientos que siguen por venir (hoy en adelante, los próximos 3 meses), para agendar.
+function vencimientosParaCalendario(hoyISO, lista, vencTc){
+  return proximosVencimientos(hoyISO, lista, vencTc, 120, 3).filter(v=>v.dias>=0);
 }
 
 // "5 nov": para las fechas de cierre y vencimiento en las filas.
@@ -524,7 +623,9 @@ function renderTcPendientes(){
       const monto=m.moneda==="USD"?`USD ${(m.importe||0).toFixed(2)}`:fmtS(m.importe);
       const restantes=m.cuotasTotal-m.nCuota;
       const finYm=addMonths(mesTc,restantes);
-      const finTxt=m.frecuente?"":(restantes<=0?"última cuota":`termina ${abrevMes3(finYm).toLowerCase()} ${finYm.slice(2,4)}`);
+      const fechaVto=m.frecuente ? fechaVencimiento(mesTc, m.diaVto) : null;
+      const finTxt=m.frecuente ? (fechaVto ? (m.pagado?"✓ pagado":`vence ${fmtDiaMes(fechaVto)}`) : "")
+                               : (restantes<=0?"última cuota":`termina ${abrevMes3(finYm).toLowerCase()} ${finYm.slice(2,4)}`);
       return `<div class="tc-row"${i>0?' style="border-top:1px solid var(--border)"':""} onclick="openEditTcModal(${m.id},${attrJS(mesTc)})">
         <div class="tc-row-icon">${icon}</div>
         <div class="tc-row-mid">
@@ -1298,6 +1399,10 @@ function renderEditTcForm(t){
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
+      <div class="form-group"><label class="form-label">Día de vencimiento (opcional)</label>
+        <input type="number" id="edit-tc-frec-dia" class="form-input" value="${diaValido(t.diaVto)||""}" placeholder="Ej: 10" inputmode="numeric" min="1" max="31" step="1">
+        <p style="font-size:10px;color:var(--muted);margin-top:4px">Para que la app te avise antes de que venza este gasto.</p>
+      </div>
       <div class="form-group"><label class="form-label">Moneda</label>
         <select id="edit-tc-moneda-frec" class="form-select" onchange="document.getElementById('edit-tc-aum-prefix').textContent=this.value==='USD'?'USD':'$'">
           <option value="ARS" ${(t.moneda||'ARS')==='ARS'?'selected':''}>🇦🇷 Pesos (ARS)</option>
@@ -1497,6 +1602,8 @@ function guardarEditTc(){
     if(fin&&fin<ini){showToast("El mes de fin no puede ser antes del inicio");return;}
     t.mesInicio=ini;
     t.mesFin=fin;
+    const diaTc=diaValido(document.getElementById("edit-tc-frec-dia")?.value);
+    if(diaTc!==null) t.diaVto=diaTc; else delete t.diaVto;
     // Guardar moneda
     const monedaFrecEl=document.getElementById("edit-tc-moneda-frec");
     if(monedaFrecEl) t.moneda=monedaFrecEl.value;
