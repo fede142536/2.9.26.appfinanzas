@@ -919,25 +919,19 @@ function onVencAvisoCambio(sel){
   if(typeof renderMovs==="function") renderMovs();
 }
 
-// Agenda los vencimientos de los próximos meses en el calendario del teléfono. Sin ningún await antes
-// de navigator.share(): exige llamarse dentro del toque del usuario (igual que compartirBackup).
-async function agregarVencimientosAlCalendario(){
-  const items=vencimientosParaCalendario(hoyLocal(), movs, leerVencTc());
-  if(!items.length){
-    showToast("No hay vencimientos con fecha para agendar. Cargá el día de vencimiento en un gasto frecuente o las fechas de una tarjeta.");
-    return false;
-  }
-  const nombre=`enola-vencimientos-${hoyLocal()}.ics`;
-  const texto=generarICS(items, leerDiasAviso());
+// Manda un .ics al calendario del teléfono: por el menú de compartir si se puede y, si no, descargándolo.
+// Sin ningún await antes de navigator.share(): exige llamarse dentro del toque del usuario (igual que
+// compartirBackup). Devuelve true si el archivo salió, false si el usuario cerró el menú.
+async function enviarArchivoCalendario(texto, nombre, titulo, msgEnviado, msgDescargado){
   let archivo=null;
   try{ archivo=new File([new Blob([texto],{type:"text/calendar"})], nombre, {type:"text/calendar"}); }catch(e){ archivo=null; }
   if(archivo && typeof navigator.canShare==="function" && navigator.canShare({files:[archivo]})){
     try{
-      await navigator.share({files:[archivo], title:"Vencimientos de Enola"});
-      showToast(`✓ ${items.length} vencimiento${items.length===1?"":"s"} enviado${items.length===1?"":"s"} al calendario`);
+      await navigator.share({files:[archivo], title:titulo});
+      showToast(msgEnviado);
       return true;
     }catch(e){
-      if(e && e.name==="AbortError") return false;
+      if(e && e.name==="AbortError") return false;   // cerró el menú a propósito
     }
   }
   const url=URL.createObjectURL(new Blob([texto],{type:"text/calendar"}));
@@ -945,8 +939,28 @@ async function agregarVencimientosAlCalendario(){
   a.href=url; a.download=nombre;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  showToast(`✓ Archivo del calendario descargado (${items.length}). Abrilo para agregarlos.`);
+  showToast(msgDescargado);
   return true;
+}
+
+// Agenda los vencimientos de los próximos meses en el calendario del teléfono.
+async function agregarVencimientosAlCalendario(){
+  const items=vencimientosParaCalendario(hoyLocal(), movs, leerVencTc());
+  if(!items.length){
+    showToast("No hay vencimientos con fecha para agendar. Cargá el día de vencimiento en un gasto frecuente o las fechas de una tarjeta.");
+    return false;
+  }
+  const n=items.length, plural=n===1?"":"s";
+  return enviarArchivoCalendario(generarICS(items, leerDiasAviso()), `enola-vencimientos-${hoyLocal()}.ics`, "Vencimientos de Enola",
+    `✓ ${n} vencimiento${plural} enviado${plural} al calendario`,
+    `✓ Archivo del calendario descargado (${n}). Abrilo para agregarlos.`);
+}
+
+// Un evento de prueba que suena en unos minutos, para ver cómo llega la alerta antes de depender de ella.
+async function probarAvisoCalendario(){
+  return enviarArchivoCalendario(generarICSPrueba(new Date(), 10), "enola-prueba-de-aviso.ics", "Prueba de aviso de Enola",
+    "✓ Prueba enviada: en unos minutos tiene que sonar el aviso",
+    "✓ Archivo de prueba descargado. Abrilo para agregarlo al calendario.");
 }
 
 async function borrarCopiaLocal(id){

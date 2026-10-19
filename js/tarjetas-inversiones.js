@@ -429,6 +429,30 @@ function generarICS(items, diasAviso, ahora){
   return lineas.map(icsPlegar).join("\r\n")+"\r\n";
 }
 
+// Un evento de PRUEBA para ver cómo llega la alerta sin esperar a un vencimiento real: empieza en
+// `enMinutos` minutos y avisa 5 minutos antes (o al empezar, si falta menos). La hora va "flotante"
+// (sin zona): el calendario la toma como hora local del celular. El UID es único cada vez, así que
+// la prueba no pisa a la anterior ni a los vencimientos reales.
+function generarICSPrueba(ahora, enMinutos){
+  const min=enMinutos===undefined ? 10 : Math.max(enMinutos,0);
+  const ini=new Date((ahora||new Date()).getTime() + min*60000);
+  const fin=new Date(ini.getTime() + 15*60000);
+  const p2=n=>String(n).padStart(2,"0");
+  const local=d=>`${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}T${p2(d.getHours())}${p2(d.getMinutes())}00`;
+  const sello=(ahora||new Date()).toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const antes=Math.min(5, min);
+  const titulo="🔔 Prueba de aviso de Enola";
+  const lineas=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Enola//Prueba//ES","CALSCALE:GREGORIAN","METHOD:PUBLISH",
+    "BEGIN:VEVENT", `UID:enola-prueba-${sello}-${ini.getTime()}@enola`, `DTSTAMP:${sello}`,
+    `DTSTART:${local(ini)}`, `DTEND:${local(fin)}`,
+    `SUMMARY:${icsEscapar(titulo)}`,
+    `DESCRIPTION:${icsEscapar("Así te va a llegar el aviso de un vencimiento. Podés borrar este evento.")}`,
+    "BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${icsEscapar(titulo)}`,
+    antes===0 ? "TRIGGER;RELATED=START:PT0S" : `TRIGGER:-PT${antes}M`,
+    "END:VALARM","END:VEVENT","END:VCALENDAR"];
+  return lineas.map(icsPlegar).join("\r\n")+"\r\n";
+}
+
 // Los vencimientos que siguen por venir (hoy en adelante, los próximos 3 meses), para agendar.
 function vencimientosParaCalendario(hoyISO, lista, vencTc){
   return proximosVencimientos(hoyISO, lista, vencTc, 120, 3).filter(v=>v.dias>=0);
