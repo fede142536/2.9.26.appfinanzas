@@ -819,6 +819,7 @@ function listaDelResumenFrec(){
 // de arriba de la lista, solo en "Todos", mirando el mes actual: avisar de lo que vence en un mes
 // que ya pasó no sirve de nada. Se repinta sola al tildar un frecuente como pagado.
 function pintarFranjaVencimientos(){
+  if(typeof pintarAvisoCalendario==="function") pintarAvisoCalendario();
   const el=document.getElementById("mov-arrastre");
   if(!el) return;
   const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();

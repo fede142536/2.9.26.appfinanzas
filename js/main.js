@@ -115,6 +115,7 @@ async function bootApp(){
   setTimeout(avisarSiFaltaBackup, 1300);
   // La copia automática del día va después, para no competir con el primer render.
   setTimeout(copiaAutomaticaSiToca, 2500);
+  setTimeout(programarSyncCalendario, 3500);   // si hay un permiso vigente de Google, se ponen al día los vencimientos
 }
 bootApp();
 

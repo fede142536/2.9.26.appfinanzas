@@ -86,6 +86,7 @@
 <script src="js/importar-exportar.js"></script>
 <script src="js/cuentas-tarjetas-categorias.js"></script>
 <script src="js/config-ui.js"></script>
+<script src="js/calendario-google.js"></script>
 <script src="js/presupuestos.js"></script>
 <script src="js/seguridad-pin.js"></script>
 
@@ -6649,6 +6650,261 @@ test("Config tiene el selector de anticipación y el botón del calendario", asy
   cierto(html.includes("agregarVencimientosAlCalendario()"), "falta el botón del calendario");
   const cfg=await (await fetch("js/config-ui.js")).text();
   cierto(cfg.slice(cfg.indexOf("function aplicarBackup(")).includes("guardarDiasAviso(backup.datos.diasAvisoVenc)"), "no se restaura el aviso");
+});
+
+// ═══════════════════════════════════════════
+// GOOGLE CALENDAR: EVENTOS MENSUALES QUE SE BORRAN CON EL GASTO
+// ═══════════════════════════════════════════
+grupo("Google Calendar");
+
+const CLAVES_GCAL=["fgcalid","fgcalon","fgcalmapa","fgcaltok","fgcalultima","fvencaviso"];
+async function conGcal(fn, {conectado=true, token=true}={}){
+  const antes=CLAVES_GCAL.map(k=>localStorage.getItem(k));
+  CLAVES_GCAL.forEach(k=>localStorage.removeItem(k));
+  if(conectado){ localStorage.setItem("fgcalid","123-abc.apps.googleusercontent.com"); localStorage.setItem("fgcalon","1"); }
+  if(token) localStorage.setItem("fgcaltok", JSON.stringify({t:"tok", exp:Date.now()+3600000}));
+  try{ return await fn(); }
+  finally{ CLAVES_GCAL.forEach((k,i)=>{ if(antes[i]===null) localStorage.removeItem(k); else localStorage.setItem(k, antes[i]); }); }
+}
+// Un Google Calendar de mentira: guarda los eventos, contesta como la API y anota las llamadas.
+function servidorGcal(forzar){
+  const eventos=new Map(); let n=0; const llamadas=[];
+  const resp=(status,json)=>({status, json:async()=>json});
+  const fetchFalso=async (url, init)=>{
+    const m=(init&&init.method)||"GET"; const u=new URL(url);
+    const ruta=u.pathname.replace("/calendar/v3","");
+    llamadas.push(m+" "+ruta);
+    if(forzar) return resp(forzar, {error:{message:"forzado"}});
+    if(m==="GET"){
+      const q=u.searchParams.get("privateExtendedProperty");
+      return resp(200,{items:[...eventos.values()].filter(e=>"enola="+e.extendedProperties.private.enola===q)});
+    }
+    if(m==="POST"){ const id="ev"+(++n); const e={...JSON.parse(init.body), id}; eventos.set(id,e); return resp(200,e); }
+    const id=decodeURIComponent(ruta.split("/").pop());
+    if(m==="PATCH"){ if(!eventos.has(id)) return resp(404,{}); const e={...eventos.get(id), ...JSON.parse(init.body)}; eventos.set(id,e); return resp(200,e); }
+    if(m==="DELETE"){ if(!eventos.has(id)) return resp(410,{}); eventos.delete(id); return resp(204,null); }
+  };
+  return {deps:{token:async()=>"tok", fetch:fetchFalso}, eventos, llamadas, soloEscrituras:()=>llamadas.filter(l=>!l.startsWith("GET"))};
+}
+const HOY_G="2026-10-19";
+
+test("reglaMensual: día fijo, y del 29 al 31 el último día disponible del mes", ()=>{
+  igual(reglaMensual(15), "RRULE:FREQ=MONTHLY;BYMONTHDAY=15");
+  igual(reglaMensual("5"), "RRULE:FREQ=MONTHLY;BYMONTHDAY=5");
+  igual(reglaMensual(31), "RRULE:FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1");
+  igual(reglaMensual(30), "RRULE:FREQ=MONTHLY;BYMONTHDAY=28,29,30;BYSETPOS=-1");
+  igual(reglaMensual(10,"2027-03-10"), "RRULE:FREQ=MONTHLY;BYMONTHDAY=10;UNTIL=20270310");
+  igual(reglaMensual(0), null); igual(reglaMensual(""), null);
+});
+
+test("la regla mensual cae en la misma fecha que fechaVencimiento() en todos los meses", ()=>{
+  // Se simula lo que hace el calendario con BYMONTHDAY + BYSETPOS=-1: de los días de la lista que existen en el mes, el último.
+  for(let d=1; d<=31; d++){
+    const r=reglaMensual(d);
+    const lista=(/BYMONTHDAY=([\d,]+)/.exec(r)[1]).split(",").map(Number);
+    for(let y=2026;y<=2028;y++) for(let m=1;m<=12;m++){
+      const ym=y+"-"+String(m).padStart(2,"0");
+      const ultimo=new Date(y,m,0).getDate();
+      const dia=Math.max(...lista.filter(x=>x<=ultimo));
+      igual(ym+"-"+String(dia).padStart(2,"0"), fechaVencimiento(ym,d), `día ${d} en ${ym}`);
+    }
+  }
+});
+
+test("el recordatorio de Google: N días antes a las 9:00, contado desde las 0:00 del día", ()=>{
+  igual(minutosAvisoGcal(2), 2340); igual(minutosAvisoGcal(1), 900); igual(minutosAvisoGcal(7), 9540);
+  igual(minutosAvisoGcal(0), 0, "el mismo día no se puede a las 9: avisa a las 0:00");
+});
+
+test("entradasCalendario: un evento mensual por gasto frecuente con día, y ninguno sin día o ya dado de baja", ()=>conVenc({movs:[
+    FREC_VTO(1,5), FREC_VTO(2,undefined,{subcat:"Sin día"}), FREC_VTO(3,10,{mesFin:"2026-08"}), FREC_VTO(4,31,{mesFin:"2027-03", subcat:"Fin"}),
+    FREC_VTO(5,12,{mesInicio:"2027-01", subcat:"Futuro"})], tcs:[]}, ()=>{
+  const e=entradasCalendario(HOY_G, movs, tcs, {}, 2);
+  igual(e.map(x=>x.clave).join(","), "g:1,g:4,g:5");
+  const g1=e[0];
+  igual(g1.tipo,"recurrente"); igual(g1.inicio,"2026-10-05"); igual(g1.rrule,"RRULE:FREQ=MONTHLY;BYMONTHDAY=5"); igual(g1.minutos,2340);
+  cierto(g1.titulo.includes("Alquiler") && g1.titulo.includes("vence"), g1.titulo);
+  igual(e[1].rrule, "RRULE:FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1;UNTIL=20270331", "con mes de fin el evento se corta ahí");
+  igual(e[1].inicio, "2026-10-31");
+  igual(e[2].inicio, "2027-01-12", "un gasto que empieza más adelante arranca en su primer mes");
+}));
+
+test("entradasCalendario: los gastos frecuentes de tarjeta también; las cuotas no", ()=>conVenc({movs:[], tcs:[FREC_TC_VTO(), {...NOTEBOOK, diaVto:10}]}, ()=>{
+  const e=entradasCalendario(HOY_G, movs, tcs, {}, 2);
+  igual(e.length, 1); igual(e[0].clave, "t:60");
+  cierto(e[0].descripcion.includes("Mastercard") && e[0].descripcion.includes("USD 20.00"), e[0].descripcion);
+}));
+
+test("entradasCalendario: el resumen de una tarjeta sin pagar es un evento suelto con su fecha real", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
+  // Con un día habitual cargado, los meses siguientes también tienen su resumen (septiembre a diciembre).
+  const e=entradasCalendario("2026-09-08", [], tcs, {Visa:10}, 2);
+  igual(e.map(x=>x.inicio).join(","), "2026-09-10,2026-10-10,2026-11-10,2026-12-10");
+  cierto(e.every(x=>x.tipo==="unico" && x.rrule===null), "los resúmenes son eventos sueltos");
+  igual(e[0].clave, "r:Visa|ARS|2026-09-10");
+}));
+
+test("planSyncGcal: crea lo nuevo, actualiza lo que cambió, borra lo que ya no está y olvida lo vencido", ()=>{
+  const A={clave:"g:1", tipo:"recurrente", titulo:"A", descripcion:"d", inicio:"2026-10-05", rrule:"R", minutos:2340};
+  const B={...A, clave:"g:2", titulo:"B"};
+  const mapa={"g:1":{id:"e1", h:hashEntradaGcal(A)}, "g:3":{id:"e3", h:"x"}, "r:V|ARS|2026-09-10":{id:"e4", h:"x", f:"2026-09-10"}};
+  const p=planSyncGcal([A,B], mapa, "2026-10-19");
+  igual(p.crear.map(e=>e.clave), ["g:2"]);
+  igual(p.actualizar.length, 0);
+  igual(p.borrar.map(b=>b.clave), ["g:3"], "el gasto ya no existe: se borra del calendario");
+  igual(p.olvidar, ["r:V|ARS|2026-09-10"], "un resumen vencido queda en el calendario como historia");
+  const p2=planSyncGcal([{...A, titulo:"A nuevo"}], {"g:1":mapa["g:1"]}, "2026-10-19");
+  igual(p2.actualizar.length, 1); igual(p2.actualizar[0].id, "e1");
+});
+
+test("primera sincronización: crea un evento mensual por gasto frecuente, con su regla y su recordatorio", ()=>conVenc({movs:[FREC_VTO(1,5), FREC_VTO(2,31,{subcat:"Fin de mes"})], tcs:[FREC_TC_VTO()]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  const r=await sincronizarCalendario({deps:g.deps});
+  igual(r.ok, true); igual(r.creados, 3);
+  igual(g.eventos.size, 3);
+  const ev=[...g.eventos.values()].find(e=>e.extendedProperties.private.enola==="g:2");
+  igual(ev.recurrence[0], "RRULE:FREQ=MONTHLY;BYMONTHDAY=28,29,30,31;BYSETPOS=-1");
+  igual(ev.reminders.overrides[0].minutes, 2340);
+  igual(ev.reminders.useDefault, false);
+  cierto(/^\d{4}-\d{2}-\d{2}$/.test(ev.start.date) && ev.end.date>ev.start.date, "evento de día completo");
+  igual(Object.keys(gcalMapa()).sort().join(","), "g:1,g:2,t:60");
+})));
+
+test("sin cambios no se llama a Google, y un cambio manda solo lo que cambió", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  const antes=g.llamadas.length;
+  const r2=await sincronizarCalendario({deps:g.deps});
+  igual(r2.ok, true); igual(g.llamadas.length, antes, "no había nada que mandar y llamó igual");
+  movs[0].diaVto=20;
+  const r3=await sincronizarCalendario({deps:g.deps});
+  igual(r3.actualizados, 1); igual(r3.creados, 0);
+  igual([...g.eventos.values()][0].recurrence[0], "RRULE:FREQ=MONTHLY;BYMONTHDAY=20");
+  igual(g.eventos.size, 1, "se actualiza el mismo evento, no se crea otro");
+})));
+
+test("ELIMINAR el gasto frecuente borra su evento del calendario", ()=>conVenc({movs:[FREC_VTO(1,5), FREC_VTO(2,12,{subcat:"Otro gasto"})], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  igual(g.eventos.size, 2);
+  movs=movs.filter(m=>m.id!==1);               // el usuario elimina el gasto 1
+  igual(calendarioPendientes(), 1, "tiene que avisar que falta quitar un evento");
+  const r=await sincronizarCalendario({deps:g.deps});
+  igual(r.borrados, 1);
+  igual(g.eventos.size, 1);
+  igual([...g.eventos.values()][0].extendedProperties.private.enola, "g:2", "quedó el otro, no el eliminado");
+  igual(Object.keys(gcalMapa()).join(","), "g:2");
+  igual(calendarioPendientes(), 0);
+})));
+
+test("dar de baja un gasto frecuente (mes de fin vencido) o quitarle el día también lo borra", ()=>conVenc({movs:[FREC_VTO(1,5), FREC_VTO(2,12,{subcat:"Otro gasto"})], tcs:[FREC_TC_VTO()]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  igual(g.eventos.size, 3);
+  movs[0].mesFin="2020-01";                      // dado de baja hace tiempo
+  delete movs[1].diaVto;                         // sin día de vencimiento
+  tcs[0].mesFin="2020-01";                       // idem, el de tarjeta
+  const r=await sincronizarCalendario({deps:g.deps});
+  igual(r.borrados, 3); igual(g.eventos.size, 0);
+})));
+
+test("con un mes de fin futuro el evento se corta ahí (UNTIL)", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  igual(g.eventos.size, 1);
+  movs[0].mesFin="2099-06";
+  await sincronizarCalendario({deps:g.deps});
+  igual([...g.eventos.values()][0].recurrence[0], "RRULE:FREQ=MONTHLY;BYMONTHDAY=5;UNTIL=20990605");
+})));
+
+test("si el evento ya existía en Google (el mapa se perdió) se reutiliza en vez de duplicarlo", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  localStorage.removeItem("fgcalmapa");           // otro celular, o se borraron los datos de la app
+  const r=await sincronizarCalendario({deps:g.deps});
+  igual(g.eventos.size, 1, "se duplicó el evento");
+  igual(r.creados, 0); igual(r.actualizados, 1);
+  igual(Object.keys(gcalMapa()).length, 1);
+})));
+
+test("si borraron el evento a mano en el calendario, la app lo vuelve a crear al cambiar", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  g.eventos.clear();
+  movs[0].diaVto=9;
+  const r=await sincronizarCalendario({deps:g.deps});
+  igual(r.ok, true); igual(g.eventos.size, 1);
+})));
+
+test("borrar un evento que ya no existe en Google no es un error", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  g.eventos.clear();
+  movs=[];
+  const r=await sincronizarCalendario({deps:g.deps});
+  igual(r.ok, true); igual(r.borrados, 1); igual(Object.keys(gcalMapa()).length, 0);
+})));
+
+test("sin permiso vigente no pregunta sola, y un rechazo de Google se informa sin romper nada", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, async ()=>{
+  await conGcal(async ()=>{
+    const g=servidorGcal();
+    const r=await sincronizarCalendario({deps:{...g.deps, token:async()=>null}});
+    igual(r.ok, false); igual(r.motivo, "sin-permiso"); igual(g.llamadas.length, 0);
+    igual(calendarioPendientes(), 1, "el cambio sigue pendiente");
+  });
+  await conGcal(async ()=>{
+    const r=await sincronizarCalendario({deps:servidorGcal(401).deps});
+    igual(r.motivo, "sin-permiso");
+    igual(localStorage.getItem("fgcaltok"), null, "un token rechazado se descarta");
+  });
+  await conGcal(async ()=>{
+    const r=await sincronizarCalendario({deps:servidorGcal(403).deps});
+    igual(r.ok, false); igual(r.motivo, "api");
+    igual(Object.keys(gcalMapa()).length, 0, "no se anota como enviado lo que no salió");
+  });
+}));
+
+test("sin conectar no hace nada ni marca pendientes", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, async ()=>{
+  await conGcal(async ()=>{
+    igual(calendarioPendientes(), 0);
+    igual((await sincronizarCalendario({deps:servidorGcal().deps})).motivo, "sin-cliente");
+  }, {conectado:false, token:false});
+}));
+
+test("desconectar borra todos los eventos que mandó la app", ()=>conVenc({movs:[FREC_VTO(1,5), FREC_VTO(2,12,{subcat:"Otro gasto"})], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  const r=await sincronizarCalendario({deps:g.deps, vaciar:true});
+  igual(r.borrados, 2); igual(g.eventos.size, 0);
+})));
+
+test("el aviso de Movimientos cuenta los cambios sin enviar y desaparece cuando no hay", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const div=document.createElement("div"); div.id="gcal-aviso"; document.body.appendChild(div);
+  try{
+    pintarAvisoCalendario();
+    cierto(div.textContent.includes("1 cambio sin enviar"), "no avisa: "+div.textContent);
+    cierto(div.innerHTML.includes("enviarAGoogleCalendar()"), "falta el botón Enviar");
+    await sincronizarCalendario({deps:servidorGcal().deps});
+    pintarAvisoCalendario();
+    igual(div.style.display, "none");
+  } finally { div.remove(); }
+})));
+
+test("cada guardado vuelve a revisar el calendario, y Config trae la conexión y las instrucciones", async ()=>{
+  const rc=await (await fetch("js/render-comun.js")).text();
+  cierto(rc.includes("programarSyncCalendario()"), "save() no dispara la sincronización");
+  const html=await (await fetch("index.html")).text();
+  ["gcal-cliente","gcal-btn-conectar","gcal-btn-desconectar","gcal-estado","gcal-origen","gcal-aviso","js/calendario-google.js"].forEach(id=>cierto(html.includes(id), "falta "+id+" en index.html"));
+  const sw=await (await fetch("sw.js")).text();
+  cierto(sw.slice(sw.indexOf("const ASSETS")).includes("./js/calendario-google.js"), "el service worker no cachea calendario-google.js");
+  const main=await (await fetch("js/main.js")).text();
+  cierto(main.includes("programarSyncCalendario"), "no se revisa el calendario al arrancar");
+});
+
+test("mensajeSyncGcal explica cada resultado", ()=>{
+  cierto(mensajeSyncGcal({ok:true,creados:2,actualizados:1,borrados:0,errores:0}).includes("2 nuevos"));
+  cierto(mensajeSyncGcal({ok:true,creados:0,actualizados:0,borrados:0,errores:0}).includes("ya estaba al día"));
+  cierto(mensajeSyncGcal({ok:false,motivo:"api",detalle:"x"}).includes("API de Google Calendar"));
+  cierto(mensajeSyncGcal({ok:false,motivo:"sin-permiso"}).includes("permiso"));
 });
 
 grupo("Aislamiento de los tests");
