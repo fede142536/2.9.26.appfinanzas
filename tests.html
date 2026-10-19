@@ -6610,6 +6610,34 @@ test("sin vencimientos con fecha no genera nada y lo explica", ()=>{
   return conVenc({movs:[], tcs:[]}, async ()=>{ igual(await agregarVencimientosAlCalendario(), false); });
 });
 
+test("la alerta de prueba es un evento con hora local que avisa 5 minutos antes y no repite UID", ()=>{
+  const ahora=new Date(2026,9,19,16,0,0);      // 19/10/2026 16:00 hora local
+  const ics=generarICSPrueba(ahora, 10);
+  cierto(ics.includes("DTSTART:20261019T161000\r\nDTEND:20261019T162500"), "empieza en 10 minutos y dura 15");
+  cierto(ics.includes("TRIGGER:-PT5M"), "tiene que avisar 5 minutos antes");
+  cierto(!/DTSTART[^:\r\n]*Z/.test(ics) && !ics.includes("DTSTART;"), "la hora tiene que ser local, sin zona");
+  igual((ics.match(/BEGIN:VEVENT/g)||[]).length, 1);
+  cierto(generarICSPrueba(ahora, 10).match(/^UID:.*$/m)[0] !== generarICSPrueba(new Date(2026,9,19,16,5,0), 10).match(/^UID:.*$/m)[0], "dos pruebas no pueden compartir UID");
+  cierto(generarICSPrueba(ahora, 3).includes("TRIGGER:-PT3M"), "si falta menos de 5 minutos, avisa cuando falta lo que quede");
+  cierto(generarICSPrueba(ahora, 0).includes("TRIGGER;RELATED=START:PT0S"), "empezando ya, avisa al empezar");
+});
+
+test("el botón de prueba comparte un .ics y cae a la descarga si no se puede", async ()=>{
+  let recibido=null;
+  await conCalendario({canShare:()=>true, share:async d=>{ recibido=d; }}, async descargas=>{
+    igual(await probarAvisoCalendario(), true);
+    igual(recibido.files[0].name, "enola-prueba-de-aviso.ics");
+    cierto((await recibido.files[0].text()).includes("Prueba de aviso de Enola"));
+    igual(descargas(), 0);
+  });
+  await conCalendario({canShare:undefined, share:undefined}, async descargas=>{
+    igual(await probarAvisoCalendario(), true);
+    igual(descargas(), 1);
+  });
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes("probarAvisoCalendario()"), "falta el botón en Config");
+});
+
 test("la ventana de aviso y el calendario viajan en el backup", ()=>conAviso(null, ()=>{
   guardarDiasAviso(3);
   igual(armarBackup().datos.diasAvisoVenc, 3);

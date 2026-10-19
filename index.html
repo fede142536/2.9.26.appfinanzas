@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v157">
+<meta name="enola-version" content="enola-v158">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -1097,7 +1097,9 @@
       <select id="venc-aviso-sel" class="form-select" onchange="onVencAvisoCambio(this)"></select>
     </div>
     <p class="txt-sm txt-muted mb-10">Para que te avise <strong>también con la app cerrada</strong>, mandá los próximos vencimientos al calendario del celular: cada uno queda como evento con recordatorio a las 9:00. Repetilo cuando cargues vencimientos nuevos (no se duplican).</p>
-    <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%" onclick="agregarVencimientosAlCalendario()">📅 Agregar vencimientos al calendario</button>
+    <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%;margin-bottom:8px" onclick="agregarVencimientosAlCalendario()">📅 Agregar vencimientos al calendario</button>
+    <button class="btn-sm" style="width:100%" onclick="probarAvisoCalendario()">🔔 Mandar una alerta de prueba</button>
+    <p class="txt-xs txt-muted" style="margin-top:6px">Crea un evento que empieza en 10 minutos y te avisa 5 minutos antes, para ver cómo te llega.</p>
   </div>
   <div class="card">
     <div class="card-title">📊 Exportar para BI</div>
