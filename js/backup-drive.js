@@ -181,10 +181,17 @@ async function leerBackupDrive(id, opts){
   }catch(e){ return {ok:false, motivo:"red", detalle:String(e&&e.message||e)}; }
 }
 
+// La página para habilitar la Google Drive API en el proyecto del ID de cliente (su número es el prefijo del ID).
+function urlHabilitarDriveApi(clienteId){
+  const num=((clienteId||"").match(/^(\d+)-/)||[])[1];
+  return num ? `https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=${num}`
+             : "https://console.cloud.google.com/apis/library/drive.googleapis.com";
+}
+
 function mensajeDrive(r){
   if(r.ok) return r.subido ? "✓ Copia subida a tu Drive" : (r.motivo==="vacio" ? "No hay datos para copiar todavía" : "✓ Tu copia de hoy en Drive ya estaba al día");
   if(r.motivo==="sin-permiso") return "No se dio el permiso de Google para Drive. Probá de nuevo.";
-  if(r.motivo==="api") return `Google rechazó el pedido. ¿Habilitaste la Google Drive API en tu proyecto y diste el permiso de Drive?${r.detalle?` (${r.detalle})`:""}`;
+  if(r.motivo==="api") return "Falta habilitar la Google Drive API en tu proyecto de Google (o dar el permiso de Drive).";
   if(r.motivo==="invalida") return "Esa copia no se puede leer";
   if(r.motivo==="en-curso") return "Ya se está subiendo…";
   return `No pude conectar con Drive${r.detalle?`: ${r.detalle}`:""}`;

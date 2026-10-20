@@ -978,6 +978,17 @@ function renderEstadoDrive(){
     : "Activada. Todavía no se subió ninguna copia.";
 }
 
+// Si Google rechazó el pedido (la Drive API no está habilitada o falta el permiso), se explica con un botón que abre la página.
+async function avisarFaltaDriveApi(){
+  if(await mostrarConfirm("Google rechazó el pedido: falta habilitar la Google Drive API en tu proyecto (o dar el permiso de Drive).\n\nAbrí la página, tocá Habilitar y volvé a probar. Si la acabás de habilitar, esperá un par de minutos.",
+    {titulo:"Habilitar Google Drive API", textoOk:"Abrir la página"})) window.open(urlHabilitarDriveApi(gcalClienteId()), "_blank", "noopener");
+}
+// Muestra el resultado de una operación de Drive: el aviso corto y, si hace falta, el diálogo de la API.
+function avisarResultadoDrive(r){
+  if(!r.ok && r.motivo==="api") return avisarFaltaDriveApi();
+  showToast(mensajeDrive(r));
+}
+
 // Activar/desactivar la copia diaria. Al activarla se pide el permiso de Drive (un toque) y se sube la primera.
 async function onDriveBkToggle(chk){
   if(!chk.checked){
@@ -988,16 +999,14 @@ async function onDriveBkToggle(chk){
   }
   guardarPreferencia(DRIVE_ON_KEY, "1");
   const r=await subirBackupDrive({interactivo:true, forzar:true});
-  if(!r.ok){
-    try{ localStorage.removeItem(DRIVE_ON_KEY); }catch(e){}   // sin permiso o sin API: no queda activada a medias
-    showToast(mensajeDrive(r));
-  } else showToast(mensajeDrive(r));
+  if(!r.ok) try{ localStorage.removeItem(DRIVE_ON_KEY); }catch(e){}   // sin permiso o sin API: no queda activada a medias
+  avisarResultadoDrive(r);
   pintarAvisoCalendario(); renderEstadoDrive();
 }
 
 async function subirBackupDriveAhora(){
   const r=await subirBackupDrive({interactivo:true, forzar:true});
-  showToast(mensajeDrive(r));
+  avisarResultadoDrive(r);
   pintarAvisoCalendario(); renderEstadoDrive();
   return r.ok;
 }
@@ -1007,7 +1016,7 @@ async function verBackupsDrive(){
   if(!cont) return;
   cont.innerHTML='<p class="txt-xs txt-muted">Buscando tus copias…</p>';
   const r=await listarBackupsDrive({interactivo:true});
-  if(!r.ok){ cont.innerHTML=""; showToast(mensajeDrive(r)); return; }
+  if(!r.ok){ cont.innerHTML=""; avisarResultadoDrive(r); return; }
   if(!r.copias.length){ cont.innerHTML='<p class="txt-xs txt-muted">Todavía no hay copias en tu Drive.</p>'; return; }
   cont.innerHTML=r.copias.map(c=>`<div class="copia-row"><div class="copia-mid"><div class="copia-fecha">${escapeHtml(fmtDiaCopiaDrive(c.dia))}</div>
     <div class="copia-sub">${escapeHtml(textoTamanio(c.bytes))}</div></div>
