@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v165">
+<meta name="enola-version" content="enola-v166">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -1028,21 +1028,9 @@
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-config" class="page">
   <div class="header"><h1>Configuración</h1></div>
-  <div class="card">
-    <div class="card-title">📈 Inflación</div>
-    <p class="txt-sm txt-muted mb-10">Sirve para comparar un gasto contra el mismo mes del año pasado en plata de hoy. Si falta algún mes del tramo, el porcentaje no se muestra.</p>
-    <div id="inflacion-estado"></div>
-    <button class="btn-sm" style="width:100%;margin:10px 0" id="btn-inflacion-bajar" onclick="actualizarInflacionDesdeInternet()">🌐 Actualizar desde internet</button>
-    <details>
-      <summary class="txt-sm txt-muted" style="cursor:pointer;padding:4px 0">o pegala a mano</summary>
-      <p class="txt-xs txt-muted" style="margin:8px 0">Sirve el JSON tal cual sale de la API, o una línea por mes: <code>2026-07, 2,11</code></p>
-      <textarea id="inflacion-pegar" class="form-textarea" rows="4" aria-label="Serie de inflación para pegar" placeholder='[{"fecha":"2026-07-31","valor":2.11}, ...]'></textarea>
-      <div class="u-row" style="margin-top:8px">
-        <button class="btn-sm u-flex1" onclick="guardarInflacionPegada()">Guardar</button>
-        <button class="btn-sm" style="color:var(--danger)" onclick="borrarInflacion()">Borrar la serie</button>
-      </div>
-    </details>
-  </div>
+  <details class="cfg-seccion" id="cfg-sec-general">
+    <summary><span class="cfg-sec-ico">⚙️</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">General</span><span class="cfg-sec-sub">Apariencia · PIN · Versión de la app</span></span></summary>
+    <div class="cfg-cuerpo">
   <div class="card">
     <div class="card-title">🎨 Apariencia</div>
     <div class="u-row">
@@ -1061,16 +1049,11 @@
     <p style="font-size:12px;margin-bottom:10px">Versión instalada: <strong id="app-version-label">verificando...</strong></p>
     <button class="btn-sm" style="width:100%" onclick="forzarActualizacionApp()">🔄 Forzar actualización</button>
   </div>
-  <div class="card">
-    <div class="card-title">💳 Cuentas</div>
-    <p class="txt-sm txt-muted mb-10">Las cuentas que usás al cargar movimientos. Las marcadas en azul son las que agregaste vos.</p>
-    <div id="cuentas-manager"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">💳 Nombres de tarjetas</div>
-    <p class="txt-sm txt-muted mb-10">Renombralas para identificar cada plástico (ej: "Visa Santander"). Si renombrás una que ya tiene gastos cargados, se actualizan todos.</p>
-    <div id="tarjetas-manager"></div>
-  </div>
+    </div>
+  </details>
+  <details class="cfg-seccion" id="cfg-sec-copias">
+    <summary><span class="cfg-sec-ico">💾</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Copias y Google</span><span class="cfg-sec-sub">Copia en archivo · Copias del celular · Calendario y Drive · Vencimientos</span></span></summary>
+    <div class="cfg-cuerpo">
   <div class="card">
     <div class="card-title">💾 Copia de seguridad (archivo)</div>
     <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Un archivo con todos tus datos (movimientos, tarjetas, categorías, metas), para guardarlo donde quieras o mandarlo por WhatsApp. Si activás la <strong>copia diaria en Drive</strong> (en la tarjeta de Google, más abajo) ya tenés una copia fuera del celular; este archivo es un extra. Si cambiás de celular o se rompe, lo restaurás acá mismo.</p>
@@ -1138,11 +1121,58 @@
       <p class="txt-xs txt-muted" style="margin-top:6px">Crea un evento que empieza en 10 minutos y te avisa 5 minutos antes, para ver cómo te llega.</p>
     </details>
   </div>
+    </div>
+  </details>
+  <details class="cfg-seccion" id="cfg-sec-organizar">
+    <summary><span class="cfg-sec-ico">🗂</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Cuentas, tarjetas y categorías</span><span class="cfg-sec-sub">Cuentas · Tarjetas · Categorías · Presupuestos · Inflación</span></span></summary>
+    <div class="cfg-cuerpo">
   <div class="card">
-    <div class="card-title">📊 Exportar para BI</div>
-    <p class="txt-sm txt-muted mb-10">CSV desnormalizado con todo tu historial (una fila por movimiento y por cada cuota/mes de gasto frecuente), listo para abrir en Power BI, Looker Studio o pandas/Python.</p>
-    <button class="btn-sm" style="width:100%" onclick="exportarDatosBI()">⬇ Exportar CSV para BI</button>
+    <div class="card-title">💳 Cuentas</div>
+    <p class="txt-sm txt-muted mb-10">Las cuentas que usás al cargar movimientos. Las marcadas en azul son las que agregaste vos.</p>
+    <div id="cuentas-manager"></div>
   </div>
+  <div class="card">
+    <div class="card-title">💳 Nombres de tarjetas</div>
+    <p class="txt-sm txt-muted mb-10">Renombralas para identificar cada plástico (ej: "Visa Santander"). Si renombrás una que ya tiene gastos cargados, se actualizan todos.</p>
+    <div id="tarjetas-manager"></div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Categorías personalizadas</span>
+      <div class="u-row-6">
+        <button class="btn-sm" onclick="openRenameModal()">✎ Renombrar</button>
+        <button class="btn-sm" onclick="openCatModal()">+ Nueva</button>
+      </div>
+    </div>
+    <div id="cat-manager"></div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>📊 Presupuestos mensuales</span><button class="btn-sm" onclick="openPresupModal()">+ Nuevo</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Definí topes mensuales por categoría y la app te avisa cuando te acercás al límite.</p>
+    <div id="presup-manager"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📈 Inflación</div>
+    <p class="txt-sm txt-muted mb-10">Sirve para comparar un gasto contra el mismo mes del año pasado en plata de hoy. Si falta algún mes del tramo, el porcentaje no se muestra.</p>
+    <div id="inflacion-estado"></div>
+    <button class="btn-sm" style="width:100%;margin:10px 0" id="btn-inflacion-bajar" onclick="actualizarInflacionDesdeInternet()">🌐 Actualizar desde internet</button>
+    <details>
+      <summary class="txt-sm txt-muted" style="cursor:pointer;padding:4px 0">o pegala a mano</summary>
+      <p class="txt-xs txt-muted" style="margin:8px 0">Sirve el JSON tal cual sale de la API, o una línea por mes: <code>2026-07, 2,11</code></p>
+      <textarea id="inflacion-pegar" class="form-textarea" rows="4" aria-label="Serie de inflación para pegar" placeholder='[{"fecha":"2026-07-31","valor":2.11}, ...]'></textarea>
+      <div class="u-row" style="margin-top:8px">
+        <button class="btn-sm u-flex1" onclick="guardarInflacionPegada()">Guardar</button>
+        <button class="btn-sm" style="color:var(--danger)" onclick="borrarInflacion()">Borrar la serie</button>
+      </div>
+    </details>
+  </div>
+    </div>
+  </details>
+  <details class="cfg-seccion" id="cfg-sec-exportar">
+    <summary><span class="cfg-sec-ico">📤</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Exportar y mis datos</span><span class="cfg-sec-sub">Excel y PDF · CSV para BI · Cantidad de datos</span></span></summary>
+    <div class="cfg-cuerpo">
   <div class="card">
     <div class="card-title">Exportar a Excel</div>
     <div class="two-col">
@@ -1155,7 +1185,17 @@
     </div>
     <button class="btn-sm" style="width:100%" onclick="exportarExcel(true)">📦 Exportar todo (sin filtro de fechas)</button>
   </div>
-  <div class="card"><div class="card-title">Resumen total</div><div id="export-stats"></div></div>
+  <div class="card">
+    <div class="card-title">📊 Exportar para BI</div>
+    <p class="txt-sm txt-muted mb-10">CSV desnormalizado con todo tu historial (una fila por movimiento y por cada cuota/mes de gasto frecuente), listo para abrir en Power BI, Looker Studio o pandas/Python.</p>
+    <button class="btn-sm" style="width:100%" onclick="exportarDatosBI()">⬇ Exportar CSV para BI</button>
+  </div>
+  <div class="card"><div class="card-title">Tus datos</div><div id="export-stats"></div></div>
+    </div>
+  </details>
+  <details class="cfg-seccion" id="cfg-sec-peligro">
+    <summary><span class="cfg-sec-ico">⚠️</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Zona de peligro</span><span class="cfg-sec-sub">Borrar todos los movimientos</span></span></summary>
+    <div class="cfg-cuerpo">
   <div class="card" style="border-color:var(--danger-light)">
     <div class="card-title" style="color:var(--danger)">⚠ Zona de peligro</div>
     <div class="form-group">
@@ -1163,23 +1203,8 @@
       <button class="btn-primary" style="background:var(--surface);color:var(--danger);border:1px solid var(--danger)" onclick="confirmarBorrarTodo()">🗑 Borrar todos los movimientos</button>
     </div>
   </div>
-  <div class="card">
-    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-      <span>📊 Presupuestos mensuales</span><button class="btn-sm" onclick="openPresupModal()">+ Nuevo</button>
     </div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Definí topes mensuales por categoría y la app te avisa cuando te acercás al límite.</p>
-    <div id="presup-manager"></div>
-  </div>
-  <div class="card">
-    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-      <span>Categorías personalizadas</span>
-      <div class="u-row-6">
-        <button class="btn-sm" onclick="openRenameModal()">✎ Renombrar</button>
-        <button class="btn-sm" onclick="openCatModal()">+ Nueva</button>
-      </div>
-    </div>
-    <div id="cat-manager"></div>
-  </div>
+  </details>
 </div>
 
 <!-- MENÚ LATERAL (reemplaza el tab bar inferior) -->
