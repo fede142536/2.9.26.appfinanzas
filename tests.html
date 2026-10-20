@@ -6901,7 +6901,7 @@ test("cada guardado vuelve a revisar el calendario, y Config trae la conexión y
   const rc=await (await fetch("js/render-comun.js")).text();
   cierto(rc.includes("programarSyncCalendario()"), "save() no dispara la sincronización");
   const html=await (await fetch("index.html")).text();
-  ["gcal-cliente","gcal-btn-conectar","gcal-btn-desconectar","gcal-estado","gcal-origen","gcal-aviso","js/calendario-google.js","Nunca borra nada"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
+  ["gcal-cliente","gcal-btn-conectar","gcal-btn-desconectar","gcal-estado","gcal-origen","gcal-aviso","js/calendario-google.js","nunca borra"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
   const sw=await (await fetch("sw.js")).text();
   cierto(sw.slice(sw.indexOf("const ASSETS")).includes("./js/calendario-google.js"), "el service worker no cachea calendario-google.js");
   const main=await (await fetch("js/main.js")).text();
@@ -7100,6 +7100,48 @@ test("si la Drive API no está habilitada, la app lo explica y ofrece abrir la p
   cierto(dialogo && dialogo.m.includes("Google Drive API"), "no abrió el diálogo explicando qué falta");
   igual(abierta, "https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=384194614856");
 })));
+
+test("una copia subida a Drive cuenta como backup hecho para el recordatorio", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  const antes=localStorage.getItem("fultimobackup");
+  localStorage.removeItem("fultimobackup");
+  try{
+    igual(diasDesde(localStorage.getItem("fultimobackup")), Infinity);
+    await subirBackupDrive({deps:servidorDrive().deps});
+    igual(diasDesde(localStorage.getItem("fultimobackup")), 0, "subir a Drive no marcó el backup como hecho");
+  } finally { if(antes===null) localStorage.removeItem("fultimobackup"); else localStorage.setItem("fultimobackup", antes); }
+})));
+
+test("restaurar desde Drive también cuenta como backup hecho", async ()=>{
+  const js=await (await fetch("js/config-ui.js")).text();
+  const f=js.slice(js.indexOf("async function restaurarDesdeDrive"));
+  cierto(f.slice(0,f.indexOf("\n}\n")).includes("marcarBackupHecho()"), "restaurarDesdeDrive no marca el backup");
+});
+
+test("con Google conectado el archivo de calendario se oculta; sin conectar queda plegado como alternativa", ()=>conDrive(async ()=>{
+  const ids=["gcal-estado","drive-bk-bloque","ics-alternativa"];
+  const creados=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  try{
+    renderEstadoGcal();
+    igual(document.querySelector("#ics-alternativa").style.display, "none", "conectado: tiene que ocultarse");
+    localStorage.removeItem("fgcalon");
+    renderEstadoGcal();
+    igual(document.querySelector("#ics-alternativa").style.display, "", "sin conectar: tiene que verse");
+  } finally { creados.forEach(e=>e.remove()); }
+}));
+
+test("Config: la copia manual ya no se vende como la única copia, y el calendario por archivo es una alternativa plegada", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const copia=html.slice(html.indexOf("💾 Copia de seguridad (archivo)"), html.indexOf("🕑 Copias automáticas"));
+  cierto(copia.length>200, "no encontré la tarjeta de copia manual");
+  cierto(!/es la única copia/.test(copia), "el texto todavía dice que es la única copia");
+  cierto(!/hacé backup cada vez/.test(copia), "quedó el consejo viejo");
+  cierto(copia.includes("copia diaria en Drive"), "no remite a la copia de Drive");
+  const i=html.indexOf('<details id="ics-alternativa"');
+  cierto(i>0, "falta el bloque plegado del archivo de calendario");
+  const alt=html.slice(i, html.indexOf("</details>", i));
+  cierto(alt.includes("agregarVencimientosAlCalendario()") && alt.includes("probarAvisoCalendario()"), "los botones .ics tienen que estar dentro del bloque plegado");
+  cierto(html.indexOf("☁️ Google: calendario y copia en Drive") < html.indexOf("🗓 Vencimientos"), "la conexión con Google va antes de Vencimientos");
+});
 
 test("lista las copias de Drive, la más nueva primero, y ignora lo que no es una copia", ()=>conDrive(async ()=>{
   const d=servidorDrive();

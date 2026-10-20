@@ -947,6 +947,9 @@ function renderEstadoGcal(){
   const bConectar=document.getElementById("gcal-btn-conectar"), bDes=document.getElementById("gcal-btn-desconectar");
   if(bConectar) bConectar.textContent=activo ? "🔄 Sincronizar ahora" : "🔗 Conectar y sincronizar";
   if(bDes) bDes.style.display=activo ? "block" : "none";
+  // Con Google conectado el archivo de calendario sobra: queda solo como alternativa para quien no se conecta.
+  const ics=document.getElementById("ics-alternativa");
+  if(ics) ics.style.display=activo ? "none" : "";
   const orig=document.getElementById("gcal-origen");
   if(orig) orig.textContent=location.origin;
   if(gcalClienteId()) gcalCargarGIS().catch(()=>{});   // se precarga: el permiso tiene que abrirse dentro del toque
@@ -1032,6 +1035,8 @@ async function restaurarDesdeDrive(id, dia){
   try{ await guardarCopiaLocal("seguridad"); }
   catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
   const cant=aplicarBackup(backup);
+  marcarBackupHecho();     // los datos quedan idénticos a una copia que ya existe afuera
+  renderEstadoBackup();
   showToast(`✓ Restaurados ${cant} movimientos desde Drive`);
   renderEstadoDrive();
   return true;

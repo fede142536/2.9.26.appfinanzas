@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v164">
+<meta name="enola-version" content="enola-v165">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -1072,9 +1072,9 @@
     <div id="tarjetas-manager"></div>
   </div>
   <div class="card">
-    <div class="card-title">💾 Copia de seguridad</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Un archivo con todos tus datos (movimientos, tarjetas, categorías, metas). Mandalo a tu Drive o a donde quieras: es la única copia que te salva si perdés o formateás el celular. Si cambiás de celular o se rompe, lo restaurás acá mismo.</p>
-    <button class="btn-primary" style="background:var(--save);color:#fff;width:100%;margin-bottom:8px" onclick="compartirBackup()">☁️ Enviar copia a mi Drive / WhatsApp</button>
+    <div class="card-title">💾 Copia de seguridad (archivo)</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Un archivo con todos tus datos (movimientos, tarjetas, categorías, metas), para guardarlo donde quieras o mandarlo por WhatsApp. Si activás la <strong>copia diaria en Drive</strong> (en la tarjeta de Google, más abajo) ya tenés una copia fuera del celular; este archivo es un extra. Si cambiás de celular o se rompe, lo restaurás acá mismo.</p>
+    <button class="btn-primary" style="background:var(--save);color:#fff;width:100%;margin-bottom:8px" onclick="compartirBackup()">📤 Enviar copia (WhatsApp, Drive u otra app)</button>
     <div style="display:flex;gap:8px;margin-bottom:8px">
       <button class="btn-primary" style="background:var(--accent);color:#fff;flex:1" onclick="exportarBackup()">📥 Descargar backup</button>
       <label class="btn-primary" style="background:var(--surface);color:var(--accent);border:1px solid var(--accent);flex:1;text-align:center;cursor:pointer">
@@ -1082,28 +1082,17 @@
         <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restaurarBackup(this)">
       </label>
     </div>
-    <p style="font-size:11px;color:var(--muted);margin-top:6px">💡 Tip: hacé backup cada vez que cargues movimientos importantes. El archivo es chico (suele pesar menos de 1 MB).</p>
-    <p style="font-size:11px;color:var(--muted);margin-top:4px">El archivo va sin cifrar, aunque tengas PIN: guardalo en un lugar tuyo.</p>
+    <p style="font-size:11px;color:var(--muted);margin-top:6px">El archivo es chico (suele pesar menos de 1 MB) y va sin cifrar, aunque tengas PIN: guardalo en un lugar tuyo.</p>
     <p id="backup-estado" class="txt-xs" style="margin-top:8px;font-weight:600"></p>
   </div>
   <div class="card">
     <div class="card-title">🕑 Copias automáticas en este celular</div>
-    <p class="txt-sm txt-muted mb-10">Cada día que abrís la app con cambios se guarda una copia acá mismo (las últimas 14, cifradas si tenés PIN). Sirven para deshacer un error o un borrado. <strong>No te salvan si perdés el celular</strong>: para eso mandá una copia afuera.</p>
+    <p class="txt-sm txt-muted mb-10">Cada día que abrís la app con cambios se guarda una copia acá mismo (las últimas 14, cifradas si tenés PIN). Sirven para deshacer un error o un borrado. <strong>No te salvan si perdés el celular</strong>: para eso, la copia en Drive o un archivo de afuera.</p>
     <div id="copias-auto-lista"></div>
   </div>
   <div class="card">
-    <div class="card-title">🗓 Vencimientos</div>
-    <p class="txt-sm txt-muted mb-10">La app te avisa de lo que vence (gastos frecuentes y tarjetas) arriba en Movimientos y en el Dashboard, mientras la abrís.</p>
-    <div class="form-group"><label class="form-label" for="venc-aviso-sel">Avisarme</label>
-      <select id="venc-aviso-sel" class="form-select" onchange="onVencAvisoCambio(this)"></select>
-    </div>
-    <p class="txt-sm txt-muted mb-10">Para que te avise <strong>también con la app cerrada</strong>, mandá tus vencimientos al calendario del celular. Cada gasto frecuente con día de vencimiento queda como <strong>un evento mensual que se repite sin fin</strong>, con recordatorio a las 9:00. Para dejar de recibirlo, borralo vos en el calendario. Si cambiás un día o cargás gastos nuevos, volvé a mandarlo: los eventos se actualizan, no se duplican.</p>
-    <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%;margin-bottom:8px" onclick="agregarVencimientosAlCalendario()">📅 Agregar vencimientos al calendario</button>
-    <button class="btn-sm" style="width:100%" onclick="probarAvisoCalendario()">🔔 Mandar una alerta de prueba</button>
-    <p class="txt-xs txt-muted" style="margin-top:6px">Crea un evento que empieza en 10 minutos y te avisa 5 minutos antes, para ver cómo te llega.</p>
-    <div class="inset" style="margin-top:14px">
-      <div class="seccion-label mb-6">Sincronizar con Google Calendar</div>
-      <p class="txt-sm txt-muted mb-10">Cuando <strong>creás o cambiás</strong> un gasto frecuente con día de vencimiento, la app agrega o actualiza <strong>solo ese evento</strong> en tu calendario: queda como un evento mensual que se repite sin fin. <strong>Nunca borra nada</strong>: si eliminás un gasto, su evento se queda hasta que lo borres vos. Si ya importaste el archivo de arriba, borrá esos eventos para no tenerlos duplicados.</p>
+    <div class="card-title">☁️ Google: calendario y copia en Drive</div>
+    <p class="txt-sm txt-muted mb-10">Conectá tu cuenta de Google, con un solo permiso, para dos cosas: <strong>(1)</strong> que tus vencimientos se agreguen y actualicen solos en tu calendario, como eventos mensuales que se repiten sin fin (la app <strong>nunca borra</strong> eventos: si eliminás un gasto, su evento queda hasta que lo borres vos), y <strong>(2)</strong> una <strong>copia de seguridad diaria en tu Drive</strong>. Si ya importaste archivos de calendario antes, borrá esos eventos para no tenerlos duplicados.</p>
       <div class="form-group"><label class="form-label" for="gcal-cliente">ID de cliente de Google</label>
         <input type="text" id="gcal-cliente" class="form-input" placeholder="1234-abc.apps.googleusercontent.com" autocomplete="off" autocapitalize="off" spellcheck="false">
       </div>
@@ -1134,7 +1123,20 @@
           <li>Copiá el <strong>ID de cliente</strong> (termina en <em>.apps.googleusercontent.com</em>), pegalo arriba y tocá <strong>Conectar</strong>. Google te avisa que la app “no está verificada”: es la tuya, tocá <strong>Avanzado → Ir a Enola → Continuar</strong> y aceptá el permiso del calendario.</li>
         </ol>
       </details>
+  </div>
+  <div class="card">
+    <div class="card-title">🗓 Vencimientos</div>
+    <p class="txt-sm txt-muted mb-10">La app te avisa de lo que vence (gastos frecuentes y tarjetas) arriba en Movimientos y en el Dashboard, mientras la abrís. Con Google conectado (tarjeta de arriba) además queda en tu calendario y te avisa con la app cerrada.</p>
+    <div class="form-group"><label class="form-label" for="venc-aviso-sel">Avisarme</label>
+      <select id="venc-aviso-sel" class="form-select" onchange="onVencAvisoCambio(this)"></select>
     </div>
+    <details id="ics-alternativa" style="margin-top:6px">
+      <summary class="txt-sm" style="cursor:pointer;font-weight:600">📎 Sin conectar Google: usar un archivo de calendario</summary>
+      <p class="txt-sm txt-muted" style="margin:8px 0 10px">Mandá tus vencimientos al calendario del celular como archivo. Cada gasto frecuente con día de vencimiento queda como <strong>un evento mensual que se repite sin fin</strong>, con recordatorio a las 9:00. Para dejar de recibirlo, borralo vos en el calendario. Si cambiás un día o cargás gastos nuevos, volvé a mandarlo: los eventos se actualizan, no se duplican.</p>
+      <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%;margin-bottom:8px" onclick="agregarVencimientosAlCalendario()">📅 Agregar vencimientos al calendario</button>
+      <button class="btn-sm" style="width:100%" onclick="probarAvisoCalendario()">🔔 Mandar una alerta de prueba</button>
+      <p class="txt-xs txt-muted" style="margin-top:6px">Crea un evento que empieza en 10 minutos y te avisa 5 minutos antes, para ver cómo te llega.</p>
+    </details>
   </div>
   <div class="card">
     <div class="card-title">📊 Exportar para BI</div>
