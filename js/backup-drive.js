@@ -130,6 +130,8 @@ async function subirBackupDrive(opts){
     }
     if(!driveOk(r)) return {...res, ok:false, motivo:driveMotivo(r), detalle:driveDetalle(r)};
     guardarPreferencia(DRIVE_ULT_KEY, JSON.stringify({dia:hoy, hash, ts:Date.now(), nombre, bytes:texto.length}));
+    // Una copia en Drive es una copia afuera del celular: cuenta para el recordatorio de "hace cuánto no hacés backup".
+    if(typeof marcarBackupHecho==="function"){ marcarBackupHecho(); if(typeof renderEstadoBackup==="function") renderEstadoBackup(); }
     await podarBackupsDrive(deps, token, carpeta.id);
     return {...res, subido:true, nombre};
   }catch(e){
