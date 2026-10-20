@@ -7086,6 +7086,21 @@ test("sin permiso no pregunta sola; un rechazo de Google se informa y no se anot
   });
 }));
 
+test("si la Drive API no está habilitada, la app lo explica y ofrece abrir la página de SU proyecto", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  igual(urlHabilitarDriveApi("384194614856-abc.apps.googleusercontent.com"), "https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=384194614856");
+  cierto(urlHabilitarDriveApi("raro").includes("console.cloud.google.com"), "sin número de proyecto cae a la biblioteca");
+  localStorage.setItem("fgcalid","384194614856-abc.apps.googleusercontent.com");
+  const r=await subirBackupDrive({deps:servidorDrive(403).deps});
+  igual(r.motivo, "api");
+  cierto(!/[a-z]{4,} is disabled/.test(mensajeDrive(r)), "el mensaje tiene que estar en español, no el texto crudo de Google");
+  let dialogo=null, abierta=null;
+  const confirmReal=window.mostrarConfirm, openReal=window.open;
+  window.mostrarConfirm=async(m,o)=>{ dialogo={m,o}; return true; }; window.open=(u)=>{ abierta=u; };
+  try{ await avisarResultadoDrive(r); } finally { window.mostrarConfirm=confirmReal; window.open=openReal; }
+  cierto(dialogo && dialogo.m.includes("Google Drive API"), "no abrió el diálogo explicando qué falta");
+  igual(abierta, "https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=384194614856");
+})));
+
 test("lista las copias de Drive, la más nueva primero, y ignora lo que no es una copia", ()=>conDrive(async ()=>{
   const d=servidorDrive();
   const carp=d.agregar({name:"Enola backups", mimeType:"application/vnd.google-apps.folder"});
