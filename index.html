@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v161">
+<meta name="enola-version" content="enola-v162">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -709,6 +709,7 @@
   <div id="mov-tarjeta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
   <div id="mov-cat-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
   <div id="mov-arrastre" class="info-line" style="display:none"></div>
+  <div id="gcal-aviso" class="venc-wrap" style="display:none"></div>
   <div id="mov-presup-resumen" style="padding:0 16px 8px;display:none"></div>
   <div class="tx-list" id="tx-list"></div>
 </div>
@@ -1100,6 +1101,27 @@
     <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%;margin-bottom:8px" onclick="agregarVencimientosAlCalendario()">📅 Agregar vencimientos al calendario</button>
     <button class="btn-sm" style="width:100%" onclick="probarAvisoCalendario()">🔔 Mandar una alerta de prueba</button>
     <p class="txt-xs txt-muted" style="margin-top:6px">Crea un evento que empieza en 10 minutos y te avisa 5 minutos antes, para ver cómo te llega.</p>
+    <div class="inset" style="margin-top:14px">
+      <div class="seccion-label mb-6">Sincronizar con Google Calendar</div>
+      <p class="txt-sm txt-muted mb-10">Cuando <strong>creás o cambiás</strong> un gasto frecuente con día de vencimiento, la app agrega o actualiza <strong>solo ese evento</strong> en tu calendario: queda como un evento mensual que se repite sin fin. <strong>Nunca borra nada</strong>: si eliminás un gasto, su evento se queda hasta que lo borres vos. Si ya importaste el archivo de arriba, borrá esos eventos para no tenerlos duplicados.</p>
+      <div class="form-group"><label class="form-label" for="gcal-cliente">ID de cliente de Google</label>
+        <input type="text" id="gcal-cliente" class="form-input" placeholder="1234-abc.apps.googleusercontent.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <button class="btn-primary" id="gcal-btn-conectar" style="background:var(--save);color:#fff;width:100%;margin-bottom:8px" onclick="conectarGoogleCalendar()">🔗 Conectar y sincronizar</button>
+      <button class="btn-sm" id="gcal-btn-desconectar" style="width:100%;color:var(--danger);display:none" onclick="desconectarGoogleCalendar()">Desconectar (los eventos quedan)</button>
+      <p id="gcal-estado" class="txt-xs" style="margin-top:8px;font-weight:600"></p>
+      <details style="margin-top:10px">
+        <summary class="txt-sm" style="cursor:pointer;font-weight:600">¿Cómo consigo el ID de cliente?</summary>
+        <ol class="txt-sm txt-muted" style="padding-left:18px;margin-top:8px;line-height:1.5">
+          <li>Entrá a <strong>console.cloud.google.com</strong> con tu cuenta de Google. Arriba tocá el selector de proyecto → <strong>Proyecto nuevo</strong>, ponele de nombre “Enola” y <strong>Crear</strong>.</li>
+          <li>Menú ☰ → <strong>APIs y servicios → Biblioteca</strong>. Buscá <strong>Google Calendar API</strong> y tocá <strong>Habilitar</strong>.</li>
+          <li>Menú ☰ → <strong>APIs y servicios → Pantalla de consentimiento de OAuth</strong> (en versiones nuevas se llama <strong>Google Auth Platform</strong>) → <strong>Comenzar</strong>. Nombre: “Enola”. Correo de asistencia: el tuyo. Público: <strong>Externo</strong>. Correo de contacto: el tuyo. Aceptá y <strong>Crear</strong>.</li>
+          <li>En <strong>Público</strong> (o “Usuarios de prueba”) tocá <strong>Add users</strong> y agregá tu mail. Dejá la app en estado <strong>Prueba</strong>: no hace falta publicarla.</li>
+          <li>En <strong>Clientes</strong> (o <strong>Credenciales → Crear credenciales → ID de cliente de OAuth</strong>) elegí tipo <strong>Aplicación web</strong>. En <strong>Orígenes autorizados de JavaScript</strong> agregá <strong id="gcal-origen"></strong> (exacto, sin barra al final) y <strong>Crear</strong>.</li>
+          <li>Copiá el <strong>ID de cliente</strong> (termina en <em>.apps.googleusercontent.com</em>), pegalo arriba y tocá <strong>Conectar</strong>. Google te avisa que la app “no está verificada”: es la tuya, tocá <strong>Avanzado → Ir a Enola → Continuar</strong> y aceptá el permiso del calendario.</li>
+        </ol>
+      </details>
+    </div>
   </div>
   <div class="card">
     <div class="card-title">📊 Exportar para BI</div>
@@ -1193,6 +1215,7 @@
 <script src="js/importar-exportar.js"></script>
 <script src="js/cuentas-tarjetas-categorias.js"></script>
 <script src="js/config-ui.js"></script>
+<script src="js/calendario-google.js"></script>
 <script src="js/presupuestos.js"></script>
 <script src="js/seguridad-pin.js"></script>
 <script src="js/main.js"></script>
