@@ -388,17 +388,24 @@ async function confirmarImport(){
 // ═══════════════════════════════════════════
 // EXPORT
 // ═══════════════════════════════════════════
+// "Tus datos" en Configuración: cuánto hay cargado y de qué período. A propósito NO muestra ingresos, gastos ni
+// balance: sumar todo sin la regla única de la app (ahorros, retiros, frecuentes mes a mes, inversiones) daba números
+// que contradecían a Movimientos y al Dashboard. Esos totales viven ahí, calculados con resumenDePeriodo().
 function renderExportStats(){
-  const ing=movs.filter(m=>m.tipo==="Ingreso").reduce((s,m)=>s+m.importe,0);
-  const gas=movs.filter(m=>m.tipo==="Gasto").reduce((s,m)=>s+m.importe,0);
-  document.getElementById("export-stats").innerHTML=`
+  const el=document.getElementById("export-stats");
+  if(!el) return;
+  const fechas=movs.map(m=>String(m.fecha||"").slice(0,10)).filter(f=>/^\d{4}-\d{2}-\d{2}$/.test(f)).sort();
+  const periodo=fechas.length ? `${mesLbl(fechas[0].slice(0,7))} → ${mesLbl(fechas[fechas.length-1].slice(0,7))}` : "—";
+  const frecuentes=movs.filter(m=>m.frecuente).length + tcs.filter(t=>t.frecuente).length;
+  const fila=(k,v)=>`<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:var(--muted)">${k}</span><strong style="text-align:right">${v}</strong></div>`;
+  el.innerHTML=`
     <div style="display:flex;flex-direction:column;gap:9px;font-size:14px">
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Movimientos</span><strong>${movs.length}</strong></div>
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Registros tarjeta</span><strong>${tcs.length}</strong></div>
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Total ingresos</span><strong style="color:var(--success)">${fmt(ing)}</strong></div>
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Total gastos</span><strong style="color:var(--danger)">${fmt(gas)}</strong></div>
-      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:9px"><span style="color:var(--muted)">Balance neto</span><strong style="color:${ing-gas>=0?"var(--success)":"var(--danger)"}">${fmt(ing-gas)}</strong></div>
-    </div>`;
+      ${fila("Movimientos", movs.length)}
+      ${fila("Registros de tarjeta", tcs.length)}
+      ${fila("Gastos frecuentes", frecuentes)}
+      ${fila("Período cargado", escapeHtml(periodo))}
+    </div>
+    <p class="txt-xs txt-muted" style="margin-top:10px">Para ver ingresos, gastos y balance usá el Dashboard o Movimientos: ahí se calculan siempre con la misma regla.</p>`;
 }
 function exportarExcel(rangoAbierto){
   if(!xlsxDisponible()) return;

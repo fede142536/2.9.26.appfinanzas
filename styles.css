@@ -751,3 +751,20 @@ canvas{width:100%!important;max-width:100%}
     scroll-behavior:auto !important;
   }
 }
+
+/* Configuración: las tarjetas van agrupadas en secciones plegables (recuerdan cuáles quedaron abiertas). */
+.cfg-seccion{margin:10px 16px}
+.cfg-seccion>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:14px 16px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);transition:transform .12s ease}
+.cfg-seccion>summary::-webkit-details-marker{display:none}
+.cfg-seccion>summary::after{content:"▸";margin-left:auto;color:var(--muted);font-size:14px;transition:transform .15s ease}
+.cfg-seccion[open]>summary::after{transform:rotate(90deg)}
+.cfg-seccion>summary:active{transform:scale(.985)}
+.cfg-sec-ico{font-size:22px;flex-shrink:0;width:30px;text-align:center}
+.cfg-sec-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cfg-sec-titulo{font-size:15px;font-weight:600;color:var(--text)}
+.cfg-sec-sub{font-size:12px;color:var(--muted);line-height:1.35}
+.cfg-seccion[open]>summary{margin-bottom:2px}
+.cfg-cuerpo .card{margin-left:0;margin-right:0}
+#cfg-sec-peligro>summary{border-color:var(--danger-light)}
+#cfg-sec-peligro .cfg-sec-titulo{color:var(--danger)}

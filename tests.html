@@ -7229,6 +7229,109 @@ test("Config trae la copia en Drive con su switch, el botón de restaurar y el p
 });
 
 // ═══════════════════════════════════════════
+// CONFIGURACIÓN: SECCIONES PLEGABLES Y "TUS DATOS"
+// ═══════════════════════════════════════════
+grupo("Configuración plegable");
+
+// Las 16 tarjetas que había antes de agrupar: ninguna puede haberse perdido ni duplicado.
+const TARJETAS_CONFIG=["📈 Inflación","🎨 Apariencia","🔐 Seguridad","📲 Versión de la app","💳 Cuentas","💳 Nombres de tarjetas",
+  "💾 Copia de seguridad (archivo)","🕑 Copias automáticas en este celular","☁️ Google: calendario y copia en Drive","🗓 Vencimientos",
+  "📊 Exportar para BI","Exportar a Excel","Tus datos","⚠ Zona de peligro","Presupuestos mensuales","Categorías personalizadas"];
+
+async function configHTML(){
+  const html=await (await fetch("index.html")).text();
+  const a=html.indexOf('<div id="page-config"');
+  return html.slice(a, html.indexOf('<button id="hamburger-btn"', a));
+}
+
+test("la configuración está en 5 secciones plegables, cerradas al empezar", async ()=>{
+  const cfg=await configHTML();
+  const secciones=[...cfg.matchAll(/<details class="cfg-seccion" id="([\w-]+)"([^>]*)>/g)];
+  igual(secciones.map(m=>m[1]).join(","), "cfg-sec-general,cfg-sec-copias,cfg-sec-organizar,cfg-sec-exportar,cfg-sec-peligro");
+  secciones.forEach(m=>cierto(!/\bopen\b/.test(m[2]), `${m[1]} no debería venir abierta`));
+  igual((cfg.match(/<summary>/g)||[]).length, 5);
+});
+
+test("ninguna tarjeta de Configuración se perdió ni quedó fuera de una sección", async ()=>{
+  const cfg=await configHTML();
+  TARJETAS_CONFIG.forEach(t=>cierto(cfg.includes(t), "falta la tarjeta: "+t));
+  igual((cfg.match(/<div class="card"/g)||[]).length, 16, "tienen que seguir siendo 16 tarjetas");
+  // toda tarjeta está adentro de alguna sección: antes del primer <details> no hay ninguna
+  cierto(!cfg.slice(0, cfg.indexOf('<details class="cfg-seccion"')).includes('<div class="card"'), "quedó una tarjeta suelta antes de las secciones");
+  // el contenido sigue bien cerrado: tantas aperturas como cierres
+  igual((cfg.match(/<details/g)||[]).length, (cfg.match(/<\/details>/g)||[]).length, "un <details> quedó sin cerrar");
+});
+
+test("cada tarjeta quedó en la sección que dice su resumen", async ()=>{
+  const cfg=await configHTML();
+  const en=(id, titulos)=>{ const sec=cfg.slice(cfg.indexOf(`id="${id}"`)); const fin=sec.indexOf('<details class="cfg-seccion"', 20); const cuerpo=fin>0 ? sec.slice(0,fin) : sec; titulos.forEach(t=>cierto(cuerpo.includes(t), `${t} debería estar en ${id}`)); };
+  en("cfg-sec-general", ["🎨 Apariencia","🔐 Seguridad","📲 Versión de la app"]);
+  en("cfg-sec-copias", ["💾 Copia de seguridad (archivo)","🕑 Copias automáticas","☁️ Google: calendario","🗓 Vencimientos"]);
+  en("cfg-sec-organizar", ["💳 Cuentas","💳 Nombres de tarjetas","Categorías personalizadas","Presupuestos mensuales","📈 Inflación"]);
+  en("cfg-sec-exportar", ["Exportar a Excel","📊 Exportar para BI","Tus datos"]);
+  en("cfg-sec-peligro", ["⚠ Zona de peligro","confirmarBorrarTodo()"]);
+  cierto(cfg.indexOf("☁️ Google: calendario") < cfg.indexOf("🗓 Vencimientos"), "Google va antes de Vencimientos");
+});
+
+test("las secciones recuerdan cuáles quedaron abiertas", ()=>{
+  const antes=localStorage.getItem("fcfgabiertas");
+  const page=document.createElement("div"); page.id="page-config";
+  page.innerHTML='<details class="cfg-seccion" id="s1"></details><details class="cfg-seccion" id="s2"></details><details class="cfg-seccion" id="s3"></details>';
+  document.body.appendChild(page);
+  try{
+    localStorage.removeItem("fcfgabiertas");
+    initSeccionesConfig();
+    igual([...page.querySelectorAll("details")].filter(d=>d.open).length, 0, "al empezar tienen que estar todas cerradas");
+    page.querySelector("#s2").open=true; guardarSeccionesConfig();
+    igual(JSON.parse(localStorage.getItem("fcfgabiertas")).join(","), "s2");
+    page.querySelectorAll("details").forEach(d=>d.open=false);
+    initSeccionesConfig();
+    igual([...page.querySelectorAll("details")].filter(d=>d.open).map(d=>d.id).join(","), "s2", "no recordó la abierta");
+    abrirSeccionConfig("s3");
+    igual(JSON.parse(localStorage.getItem("fcfgabiertas")).sort().join(","), "s2,s3");
+    localStorage.setItem("fcfgabiertas", "basura{");
+    igual(leerSeccionesConfigAbiertas().length, 0, "un valor roto no tiene que romper nada");
+    initSeccionesConfig();     // no tira error
+  } finally { page.remove(); if(antes===null) localStorage.removeItem("fcfgabiertas"); else localStorage.setItem("fcfgabiertas", antes); }
+});
+
+test("entrar a Configuración restaura las secciones, y las tarjetas siguen siendo accesibles por su id", async ()=>{
+  const mov=await (await fetch("js/movimientos.js")).text();
+  cierto(/if\(id==="config"\)\{initSeccionesConfig\(\)/.test(mov), "showPage('config') no restaura las secciones");
+  const cfg=await configHTML();
+  ["backup-estado","copias-auto-lista","gcal-cliente","drive-bk-on","venc-aviso-sel","export-stats","cuentas-manager","tarjetas-manager","ics-alternativa"].forEach(id=>
+    cierto(cfg.includes(`id="${id}"`), "el elemento #"+id+" desapareció de Configuración"));
+});
+
+test("'Tus datos' cuenta lo cargado y NO muestra totales de plata (esos viven en Dashboard y Movimientos)", ()=>conVenc({movs:[
+    {id:1,tipo:"Gasto",cat:"A",moneda:"ARS",importe:100,fecha:"2025-03-02"},
+    {id:2,tipo:"Ingreso",cat:"B",moneda:"ARS",importe:900,fecha:"2026-10-05"},
+    {id:3,tipo:"Gasto",cat:"Ahorro",moneda:"ARS",importe:50,fecha:"2026-01-10",esAhorro:true,frecuente:true,mesInicio:"2026-01"}], tcs:[FREC_TC_VTO(), NOTEBOOK]}, async ()=>{
+  const el=document.createElement("div"); el.id="export-stats"; document.body.appendChild(el);
+  try{
+    renderExportStats();
+    const t=el.textContent;
+    cierto(/Movimientos\s*3/.test(t), "no cuenta los movimientos: "+t);
+    cierto(/Registros de tarjeta\s*2/.test(t), "no cuenta las tarjetas: "+t);
+    cierto(/Gastos frecuentes\s*2/.test(t), "no cuenta los gastos frecuentes (1 de gastos + 1 de tarjeta): "+t);
+    cierto(t.includes("→"), "no muestra el período: "+t);
+    cierto(!/Total ingresos|Total gastos|Balance neto/.test(t), "volvió a mostrar totales de plata sin la regla única: "+t);
+    cierto(t.includes("Dashboard"), "no remite a dónde están los totales");
+  } finally { el.remove(); }
+}));
+
+test("'Tus datos' no se rompe con la app vacía ni con fechas raras", ()=>conVenc({movs:[], tcs:[]}, async ()=>{
+  const el=document.createElement("div"); el.id="export-stats"; document.body.appendChild(el);
+  try{
+    renderExportStats();
+    cierto(el.textContent.includes("—"), "con la app vacía el período tiene que ser '—'");
+    movs=[{id:1,tipo:"Gasto",moneda:"ARS",importe:1,fecha:"basura"}];
+    renderExportStats();
+    cierto(el.textContent.includes("—"));
+  } finally { el.remove(); }
+}));
+
+// ═══════════════════════════════════════════
 // IDS REPETIDOS
 // ═══════════════════════════════════════════
 grupo("IDs repetidos");

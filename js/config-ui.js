@@ -913,6 +913,30 @@ async function repararDatosAlArrancar(){
   return usd+ids;
 }
 
+// ── Configuración: secciones plegables que recuerdan cuáles quedaron abiertas ──
+const CFG_SEC_KEY="fcfgabiertas";
+function leerSeccionesConfigAbiertas(){
+  try{ const v=JSON.parse(localStorage.getItem(CFG_SEC_KEY)); return Array.isArray(v) ? v.filter(x=>typeof x==="string") : []; }
+  catch(e){ return []; }
+}
+function guardarSeccionesConfig(){
+  const abiertas=[...document.querySelectorAll("#page-config details.cfg-seccion")].filter(d=>d.open).map(d=>d.id);
+  guardarPreferencia(CFG_SEC_KEY, JSON.stringify(abiertas));
+}
+// Deja abiertas las secciones que estaban abiertas la última vez (al principio, todas cerradas).
+function initSeccionesConfig(){
+  const abiertas=new Set(leerSeccionesConfigAbiertas());
+  document.querySelectorAll("#page-config details.cfg-seccion").forEach(d=>{
+    d.open=abiertas.has(d.id);
+    if(!d._cfgListo){ d._cfgListo=true; d.addEventListener("toggle", guardarSeccionesConfig); }
+  });
+}
+// Abre una sección (para llevar al usuario a algo que está adentro de una cerrada).
+function abrirSeccionConfig(id){
+  const d=document.getElementById(id);
+  if(d && !d.open){ d.open=true; guardarSeccionesConfig(); }
+}
+
 // ── Vencimientos: ajuste de anticipación y envío al calendario ──
 function renderVencConfig(){
   const sel=document.getElementById("venc-aviso-sel");
