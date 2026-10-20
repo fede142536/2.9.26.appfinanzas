@@ -431,6 +431,37 @@ function repararImporteUSDDuplicado(lista){
   return n;
 }
 
+// Dos movimientos con el MISMO id (una importación vieja los dejó así): editar, borrar o marcar uno
+// toca siempre el primero que aparece, y el otro queda inalcanzable. Se renumera cada repetido con
+// el primer id libre. El id lo conserva, en cada grupo, el que forma parte de un cambio de moneda
+// (cambioId): sus patas se ubican por cambioId, pero así quedan numeradas como siempre (id, id+1). Si
+// ninguno es de un cambio, lo conserva el primero. Devuelve cuántos renumeró.
+function repararIdsDuplicados(lista){
+  const grupos=new Map();
+  (lista||[]).forEach(m=>{
+    if(!m || m.id===undefined || m.id===null) return;
+    if(!grupos.has(m.id)) grupos.set(m.id, []);
+    grupos.get(m.id).push(m);
+  });
+  const usados=new Set((lista||[]).filter(m=>m && m.id!==undefined && m.id!==null).map(m=>m.id));
+  let n=0;
+  grupos.forEach((grupo, id)=>{
+    if(grupo.length<2) return;
+    const duenio=grupo.find(m=>m.cambioId!==undefined && m.cambioId!==null) || grupo[0];
+    grupo.forEach(m=>{
+      if(m===duenio) return;
+      let nuevo=Number(id)+1;
+      while(usados.has(nuevo)) nuevo++;
+      usados.add(nuevo); m.id=nuevo; n++;
+    });
+  });
+  return n;
+}
+function hayIdsDuplicados(lista){
+  const vistos=new Set();
+  return (lista||[]).some(m=>{ if(!m || m.id===undefined) return false; if(vistos.has(m.id)) return true; vistos.add(m.id); return false; });
+}
+
 // EL MODELO DE LA PLATA, en un solo lugar.
 //
 // Ingresos = lo que entró a tu patrimonio.

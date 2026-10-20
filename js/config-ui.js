@@ -745,6 +745,7 @@ function aplicarBackup(backup){
   }
   marcarMepHeredados(movs);   // un backup de antes del campo `mep` trae las inversiones sin marcar
   repararImporteUSDDuplicado(movs);   // y un backup viejo puede traer dólares con el monto duplicado en pesos
+  repararIdsDuplicados(movs); repararIdsDuplicados(tcs);   // y movimientos con el mismo id
   // Backups viejos no lo traen: en ese caso se conservan los vencimientos actuales.
   if(backup.datos.vencimientosTc && typeof backup.datos.vencimientosTc==="object" && !Array.isArray(backup.datos.vencimientosTc)){
     guardarVencTc(backup.datos.vencimientosTc);
@@ -891,18 +892,25 @@ async function restaurarCopiaLocal(id){
   renderCopiasAuto();
 }
 
-// Al arrancar: si hay dólares con el monto duplicado en pesos (ver repararImporteUSDDuplicado), se
-// guarda antes una copia de seguridad y se corrigen. Sin nada para arreglar no hace ni una cosa ni la otra.
-async function repararDatosUSDAlArrancar(){
-  if(!movs.some(m=>m.moneda==="USD" && m.importe>0 && m.importe===m.importeOrig)) return 0;
+// Al arrancar: si hay datos con un defecto conocido (dólares con el monto repetido en pesos, ver
+// repararImporteUSDDuplicado, o movimientos con el mismo id, ver repararIdsDuplicados), se guarda antes
+// una copia de seguridad y se corrigen. Sin nada para arreglar no hace ni una cosa ni la otra.
+async function repararDatosAlArrancar(){
+  const hayUSD=movs.some(m=>m.moneda==="USD" && m.importe>0 && m.importe===m.importeOrig);
+  const hayIds=hayIdsDuplicados(movs) || hayIdsDuplicados(tcs);
+  if(!hayUSD && !hayIds) return 0;
   try{ await guardarCopiaLocal("seguridad"); }
   catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
-  const n=repararImporteUSDDuplicado(movs);
-  if(n){
+  const usd=repararImporteUSDDuplicado(movs);
+  const ids=repararIdsDuplicados(movs)+repararIdsDuplicados(tcs);
+  if(usd||ids){
     save();
-    showToast(`Corregí ${n} movimiento${n===1?"":"s"} en dólares que tenían el monto repetido en pesos`);
+    const partes=[];
+    if(usd) partes.push(`${usd} en dólares que tenían el monto repetido en pesos`);
+    if(ids) partes.push(`${ids} con el número repetido`);
+    showToast(`Corregí ${partes.join(" y ")}`);
   }
-  return n;
+  return usd+ids;
 }
 
 // ── Vencimientos: ajuste de anticipación y envío al calendario ──
