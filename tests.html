@@ -6296,10 +6296,10 @@ test("Ahorros suma con montoARS, y la reparación corre al arrancar, al restaura
   const main=await (await fetch("js/main.js")).text();
   const cfg=await (await fetch("js/config-ui.js")).text();
   const imp=await (await fetch("js/importar-exportar.js")).text();
-  cierto(main.includes("repararDatosUSDAlArrancar()"), "no se repara al arrancar");
+  cierto(main.includes("repararDatosAlArrancar()"), "no se repara al arrancar");
   cierto(cfg.slice(cfg.indexOf("function aplicarBackup(")).includes("repararImporteUSDDuplicado(movs)"), "no se repara al restaurar");
   cierto(imp.includes("repararImporteUSDDuplicado(movs)"), "no se repara al importar");
-  cierto(cfg.slice(cfg.indexOf("async function repararDatosUSDAlArrancar")).includes('guardarCopiaLocal("seguridad")'), "no se guarda copia de seguridad antes de reparar");
+  cierto(cfg.slice(cfg.indexOf("async function repararDatosAlArrancar")).includes('guardarCopiaLocal("seguridad")'), "no se guarda copia de seguridad antes de reparar");
 });
 
 // ═══════════════════════════════════════════
@@ -6701,6 +6701,89 @@ test("Config tiene el selector de anticipación y el botón del calendario", asy
   cierto(html.includes("agregarVencimientosAlCalendario()"), "falta el botón del calendario");
   const cfg=await (await fetch("js/config-ui.js")).text();
   cierto(cfg.slice(cfg.indexOf("function aplicarBackup(")).includes("guardarDiasAviso(backup.datos.diasAvisoVenc)"), "no se restaura el aviso");
+});
+
+// ═══════════════════════════════════════════
+// IDS REPETIDOS
+// ═══════════════════════════════════════════
+grupo("IDs repetidos");
+
+// El caso real del backup: la pata en dólares de un cambio de moneda comparte id con un gasto cualquiera.
+const CON_IDS_REPETIDOS=()=>[
+  {id:100, tipo:"Gasto", cat:"Super", moneda:"ARS", importe:500, fecha:"2026-01-02"},
+  {id:101, tipo:"Ingreso", cat:"Inversiones", subcat:"MEP", moneda:"USD", importe:0, importeOrig:20, fecha:"2026-01-03", cambioId:100, nota:"MEP"},
+  {id:101, tipo:"Gasto", cat:"Auto", subcat:"Transferencia", moneda:"ARS", importe:30635, fecha:"2026-01-04"},
+  {id:200, tipo:"Gasto", cat:"A", moneda:"ARS", importe:1, fecha:"2026-02-01"},
+  {id:200, tipo:"Gasto", cat:"B", moneda:"ARS", importe:2, fecha:"2026-02-02"},
+  {id:200, tipo:"Gasto", cat:"C", moneda:"ARS", importe:3, fecha:"2026-02-03"},
+  {id:201, tipo:"Gasto", cat:"D", moneda:"ARS", importe:4, fecha:"2026-02-04"}
+];
+
+test("hayIdsDuplicados distingue una lista limpia de una con repetidos", ()=>{
+  igual(hayIdsDuplicados(CON_IDS_REPETIDOS()), true);
+  igual(hayIdsDuplicados([{id:1},{id:2}]), false);
+  igual(hayIdsDuplicados([]), false);
+});
+
+test("repararIdsDuplicados deja todos los ids distintos y no pierde ningún movimiento ni dato", ()=>{
+  const lista=CON_IDS_REPETIDOS();
+  const antes=lista.map(m=>({...m}));
+  igual(repararIdsDuplicados(lista), 3, "1 repetido del 101 y 2 del 200");
+  igual(new Set(lista.map(m=>m.id)).size, lista.length, "siguen habiendo ids repetidos");
+  igual(lista.length, antes.length);
+  lista.forEach((m,i)=>{ const o={...antes[i]}; delete o.id; const q={...m}; delete q.id; igual(JSON.stringify(q), JSON.stringify(o), "se tocó algo más que el id en el movimiento "+i); });
+});
+
+test("el id lo conserva la pata del cambio de moneda; si ninguno lo es, el primero", ()=>{
+  const lista=CON_IDS_REPETIDOS();
+  repararIdsDuplicados(lista);
+  igual(lista[1].id, 101, "la pata del cambio conserva su id");
+  cierto(lista[2].id!==101, "el gasto con el mismo id se renumera");
+  igual(lista[3].id, 200, "sin cambio de moneda, queda con el id el primero");
+  cierto(lista[4].id!==200 && lista[5].id!==200);
+});
+
+test("los ids nuevos no chocan con ningún otro, ni con uno que ya existía justo al lado", ()=>{
+  const lista=CON_IDS_REPETIDOS();      // existe el 201: el repetido del 200 no puede tomarlo
+  repararIdsDuplicados(lista);
+  cierto(!lista.slice(4).some(m=>m.id===201 && m.cat!=="D"), "tomó un id que ya era de otro");
+  igual(lista.find(m=>m.cat==="D").id, 201, "el que ya tenía 201 lo conserva");
+});
+
+test("repararIdsDuplicados es idempotente y no toca una lista sin repetidos", ()=>{
+  const lista=CON_IDS_REPETIDOS();
+  repararIdsDuplicados(lista);
+  const foto=JSON.stringify(lista);
+  igual(repararIdsDuplicados(lista), 0);
+  igual(JSON.stringify(lista), foto);
+  const limpia=[{id:1,x:1},{id:2,x:2}];
+  igual(repararIdsDuplicados(limpia), 0);
+  igual(repararIdsDuplicados([]), 0); igual(repararIdsDuplicados(null), 0);
+});
+
+test("después de reparar, editar o borrar un movimiento toca el correcto", ()=>{
+  const lista=CON_IDS_REPETIDOS();
+  repararIdsDuplicados(lista);
+  const auto=lista.find(m=>m.cat==="Auto");
+  const encontrado=lista.find(m=>m.id===auto.id);
+  igual(encontrado.cat, "Auto", "buscar por id tiene que dar el gasto, no la pata del cambio");
+  igual(lista.find(m=>m.id===101).cambioId, 100, "la pata del cambio sigue siendo alcanzable");
+});
+
+test("los gastos frecuentes de tarjeta también se reparan", ()=>{
+  const lista=[{id:5,desc:"A"},{id:5,desc:"B"}];
+  igual(repararIdsDuplicados(lista), 1);
+  igual(lista[0].id, 5); cierto(lista[1].id!==5);
+});
+
+test("la reparación de ids corre al arrancar (con copia de seguridad), al restaurar y al importar", async ()=>{
+  const cfg=await (await fetch("js/config-ui.js")).text();
+  const imp=await (await fetch("js/importar-exportar.js")).text();
+  const arr=cfg.slice(cfg.indexOf("async function repararDatosAlArrancar"));
+  cierto(arr.slice(0,arr.indexOf("\n}\n")).includes("repararIdsDuplicados"), "no repara ids al arrancar");
+  cierto(arr.indexOf('guardarCopiaLocal("seguridad")') < arr.indexOf("repararIdsDuplicados"), "la copia de seguridad tiene que ir antes de reparar");
+  cierto(cfg.slice(cfg.indexOf("function aplicarBackup(")).includes("repararIdsDuplicados(movs)"), "no repara al restaurar");
+  cierto(imp.includes("repararIdsDuplicados(movs)"), "no repara al importar");
 });
 
 grupo("Aislamiento de los tests");
