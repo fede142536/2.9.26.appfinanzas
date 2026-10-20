@@ -912,95 +912,11 @@ function renderVencConfig(){
   const actual=leerDiasAviso();
   const opciones=VENC_AVISO_OPCIONES.includes(actual) ? VENC_AVISO_OPCIONES : [...VENC_AVISO_OPCIONES, actual].sort((a,b)=>a-b);
   sel.innerHTML=opciones.map(n=>`<option value="${n}" ${n===actual?"selected":""}>${textoAnticipacion(n)}</option>`).join("");
-  renderEstadoGcal();
 }
-// ── Google Calendar: conexión y estado ──
-function textoHaceGcal(ms){
-  const min=Math.round((Date.now()-ms)/60000);
-  if(min<1) return "recién";
-  if(min<60) return `hace ${min} min`;
-  if(min<48*60) return `hace ${Math.round(min/60)} h`;
-  return `el ${new Date(ms).toLocaleDateString("es-AR")}`;
-}
-function renderEstadoGcal(){
-  const el=document.getElementById("gcal-estado");
-  if(!el) return;
-  const inp=document.getElementById("gcal-cliente");
-  if(inp && document.activeElement!==inp) inp.value=gcalClienteId();
-  const activo=gcalActivo();
-  const n=calendarioPendientes();
-  const eventos=Object.keys(gcalMapa()).length;
-  const ult=Number(localStorage.getItem(GCAL_ULTIMA_KEY))||0;
-  let t;
-  if(!gcalClienteId()) t="Sin conectar.";
-  else if(!activo) t="ID guardado. Tocá “Conectar y sincronizar” para dar el permiso.";
-  else t=`✓ Conectado · ${eventos} evento${eventos===1?"":"s"} en tu calendario${ult?` · última sincronización ${textoHaceGcal(ult)}`:""}${n?` · ${n} cambio${n===1?"":"s"} sin enviar`:""}`;
-  el.textContent=t;
-  const bConectar=document.getElementById("gcal-btn-conectar"), bDes=document.getElementById("gcal-btn-desconectar");
-  if(bConectar) bConectar.textContent=activo ? "🔄 Sincronizar ahora" : "🔗 Conectar y sincronizar";
-  if(bDes) bDes.style.display=activo ? "block" : "none";
-  const orig=document.getElementById("gcal-origen");
-  if(orig) orig.textContent=location.origin;
-  if(gcalClienteId()) gcalCargarGIS().catch(()=>{});   // se precarga: el permiso tiene que abrirse dentro del toque
-}
-
-function mensajeSyncGcal(r){
-  if(r.ok){
-    const cambios=r.creados+r.actualizados+r.borrados;
-    return cambios ? `✓ Calendario al día (${r.creados} nuevo${r.creados===1?"":"s"}, ${r.actualizados} actualizado${r.actualizados===1?"":"s"}, ${r.borrados} borrado${r.borrados===1?"":"s"})` : "✓ El calendario ya estaba al día";
-  }
-  if(r.motivo==="sin-permiso") return "No se dio el permiso de Google. Probá de nuevo.";
-  if(r.motivo==="api") return `Google rechazó el pedido. ¿Habilitaste la API de Google Calendar y agregaste tu mail como usuario de prueba?${r.detalle?` (${r.detalle})`:""}`;
-  if(r.motivo==="en-curso") return "Ya se está sincronizando…";
-  if(r.motivo==="red") return `No pude conectar con Google${r.detalle?`: ${r.detalle}`:""}`;
-  return `Quedaron ${r.errores} cambios sin enviar. Probá de nuevo.`;
-}
-
-// Manda al calendario lo que falta. Se llama desde un botón: puede abrir el permiso de Google.
-async function enviarAGoogleCalendar(){
-  if(!gcalActivo()){ showToast("Primero conectá Google Calendar en Config"); return false; }
-  const r=await sincronizarCalendario({interactivo:true});
-  showToast(mensajeSyncGcal(r));
-  pintarAvisoCalendario(); renderEstadoGcal();
-  return r.ok;
-}
-
-async function conectarGoogleCalendar(){
-  if(gcalActivo()) return enviarAGoogleCalendar();
-  const id=(document.getElementById("gcal-cliente").value||"").trim();
-  if(!/\.apps\.googleusercontent\.com$/.test(id)){
-    showToast("Ese no parece un ID de cliente de Google: termina en .apps.googleusercontent.com");
-    return false;
-  }
-  guardarPreferencia(GCAL_ID_KEY, id);
-  const token=await gcalPedirToken(true);
-  if(!token){ showToast("No se dio el permiso de Google. Probá de nuevo."); renderEstadoGcal(); return false; }
-  guardarPreferencia(GCAL_ON_KEY, "1");
-  const r=await sincronizarCalendario({interactivo:true});
-  showToast(mensajeSyncGcal(r));
-  pintarAvisoCalendario(); renderEstadoGcal();
-  return r.ok;
-}
-
-async function desconectarGoogleCalendar(){
-  if(!await mostrarConfirm("Se desconecta Google Calendar y se borran de tu calendario los eventos que creó Enola. Tus gastos no se tocan.", {titulo:"Desconectar", textoOk:"Desconectar", peligroso:true})) return false;
-  const r=await sincronizarCalendario({interactivo:true, vaciar:true});
-  if(!r.ok && r.motivo!=="sin-cliente"){
-    showToast(`No pude borrar los eventos del calendario (${mensajeSyncGcal(r)}). Sigue conectado.`);
-    renderEstadoGcal();
-    return false;
-  }
-  try{ [GCAL_ON_KEY, GCAL_MAPA_KEY, GCAL_TOKEN_KEY, GCAL_ULTIMA_KEY].forEach(k=>localStorage.removeItem(k)); }catch(e){}
-  showToast("Google Calendar desconectado");
-  pintarAvisoCalendario(); renderEstadoGcal();
-  return true;
-}
-
 function onVencAvisoCambio(sel){
   guardarDiasAviso(sel.value);
   showToast(`Te aviso ${textoAnticipacion(leerDiasAviso())} ✓`);
   if(typeof renderMovs==="function") renderMovs();
-  programarSyncCalendario();
 }
 
 // Manda un .ics al calendario del teléfono: por el menú de compartir si se puede y, si no, descargándolo.
@@ -1029,7 +945,7 @@ async function enviarArchivoCalendario(texto, nombre, titulo, msgEnviado, msgDes
 
 // Agenda los vencimientos de los próximos meses en el calendario del teléfono.
 async function agregarVencimientosAlCalendario(){
-  const items=vencimientosParaCalendario(hoyLocal(), movs, leerVencTc());
+  const items=eventosParaCalendario(hoyLocal(), movs, tcs, leerVencTc());
   if(!items.length){
     showToast("No hay vencimientos con fecha para agendar. Cargá el día de vencimiento en un gasto frecuente o las fechas de una tarjeta.");
     return false;

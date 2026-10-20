@@ -400,29 +400,88 @@ function icsDiaSiguiente(iso){
   const [y,m,d]=String(iso).slice(0,10).split("-").map(Number);
   return icsDia(new Date(Date.UTC(y,m-1,d+1)).toISOString());
 }
-function icsClave(v){
-  const base=v.tipo==="tarjeta" ? `${v.tarjeta||""}-${v.moneda}` : String(v.id);
-  return `enola-${v.tipo}-${base.replace(/[^A-Za-z0-9_-]+/g,"_")}-${v.fecha}@enola`;
+function nombreGastoFrecuente(m){
+  return m.subcat && !SUBCAT_SIN_VALOR.includes(m.subcat) ? m.subcat : (m.cat||"Gasto frecuente");
 }
+function icsSlug(t){ return String(t==null?"":t).replace(/[^A-Za-z0-9_-]+/g,"_"); }
+
+// "Todos los meses el día `dia`". Del 29 al 31 hay meses que no lo tienen: la regla toma el último día
+// entre el 28 y el `dia`, que es lo mismo que hace fechaVencimiento() (un 31 en febrero cae el 28).
+// Sin fecha de fin: se repite hasta que el usuario borre el evento de su calendario.
+function reglaMensual(dia){
+  const d=diaValido(dia);
+  if(d===null) return null;
+  if(d<=28) return `RRULE:FREQ=MONTHLY;BYMONTHDAY=${d}`;
+  const dias=[]; for(let i=28;i<=d;i++) dias.push(i);
+  return `RRULE:FREQ=MONTHLY;BYMONTHDAY=${dias.join(",")};BYSETPOS=-1`;
+}
+
+// Qué se manda al calendario. Cada elemento: {uid, titulo, descripcion, inicio, rrule}:
+//  · cada gasto frecuente con día de vencimiento (de gastos o de tarjeta): UN evento mensual que se
+//    repite sin fin;
+//  · cada tarjeta con día de vencimiento habitual: también un evento mensual;
+//  · los resúmenes con una fecha cargada distinta de la habitual (o de una tarjeta sin día habitual),
+//    que sin pagar y de los próximos 3 meses: eventos sueltos.
+// Un gasto que ya se dio de baja (mes de fin pasado) no se agrega. El UID no cambia nunca, así que
+// volver a mandar el archivo actualiza los eventos en vez de duplicarlos.
+function eventosParaCalendario(hoyISO, lista, listaTcs, vencTc){
+  const hoyYM=String(hoyISO).slice(0,7);
+  const out=[];
+  const mensual=(uid, titulo, descripcion, mesInicio, dia)=>{
+    const ym0=mesInicio && mesInicio>hoyYM ? mesInicio : hoyYM;
+    out.push({uid, titulo, descripcion, inicio:fechaVencimiento(ym0, dia), rrule:reglaMensual(dia)});
+  };
+  (lista||[]).forEach(m=>{
+    if(m.tipo!=="Gasto" || !m.frecuente || !m.mesInicio) return;
+    const dia=diaValido(m.diaVto);
+    if(dia===null || (m.mesFin && m.mesFin<hoyYM)) return;
+    const monto=getGastoFrecMontoEnMes(m, hoyYM);
+    mensual(`enola-gasto-${icsSlug(m.id)}@enola`, `🔁 ${nombreGastoFrecuente(m)} vence`,
+      `Gasto frecuente · ${m.moneda==="USD" ? `USD ${monto.toFixed(2)}` : fmtS(monto)} este mes. Cargado en Enola; si ya lo pagaste, ignoralo.`,
+      m.mesInicio, dia);
+  });
+  (listaTcs||[]).forEach(t=>{
+    if(!t.frecuente || !t.mesInicio) return;
+    const dia=diaValido(t.diaVto);
+    if(dia===null || (t.mesFin && t.mesFin<hoyYM)) return;
+    const monto=getMontoEnMes(t, hoyYM);
+    mensual(`enola-tc-${icsSlug(t.id)}@enola`, `🔁 ${t.desc||"Gasto frecuente"} vence`,
+      `Con ${getTarjetaEnMes(t,hoyYM)||"tarjeta"} · ${t.moneda==="USD" ? `USD ${monto.toFixed(2)}` : fmtS(monto)} este mes. Cargado en Enola; si ya lo pagaste, ignoralo.`,
+      t.mesInicio, dia);
+  });
+  Object.keys(vencTc||{}).forEach(nombre=>{
+    const dia=normalizarTc(vencTc[nombre]).dia.vto;
+    if(dia===null) return;
+    mensual(`enola-tarjeta-${icsSlug(nombre)}@enola`, `💳 ${nombre||"Tarjeta"} vence`,
+      "Vencimiento del resumen de la tarjeta, cargado en Enola. Si ya lo pagaste, ignoralo.", hoyYM, dia);
+  });
+  proximosVencimientos(hoyISO, lista, vencTc, 120, 3).filter(v=>v.tipo==="tarjeta" && v.dias>=0).forEach(v=>{
+    const habitual=normalizarTc((vencTc||{})[v.tarjeta]).dia.vto;
+    if(habitual!==null && fechaVencimiento(v.ym, habitual)===v.fecha) return;   // ya lo cubre el evento mensual
+    out.push({uid:`enola-resumen-${icsSlug(v.tarjeta)}-${v.moneda}-${v.fecha}@enola`, titulo:`💳 ${v.nombre} vence`,
+      descripcion:`Resumen de la tarjeta · resta ${montoVenc(v)}. Cargado en Enola; si ya lo pagaste, ignoralo.`,
+      inicio:v.fecha, rrule:null});
+  });
+  return out;
+}
+
 // `ahora` solo existe para que los tests puedan fijar el sello de tiempo.
-function generarICS(items, diasAviso, ahora){
+function generarICS(eventos, diasAviso, ahora){
   const stamp=(ahora||new Date()).toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
   const n=Number.isInteger(diasAviso)&&diasAviso>=0 ? diasAviso : VENC_AVISO_DEFECTO;
   // Recordatorio a las 9:00: el evento empieza a las 0:00 del día, así que "N días antes a las 9"
   // son N-1 días y 15 horas antes de esa hora; el mismo día es 9 horas después del comienzo.
   const trigger=n===0 ? "TRIGGER;RELATED=START:PT9H" : `TRIGGER:-P${n-1}DT15H`;
   const lineas=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Enola//Vencimientos//ES","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:Vencimientos Enola"];
-  (items||[]).forEach(v=>{
-    const resta=v.tipo==="tarjeta" ? "resta" : "";
-    const icono=v.tipo==="tarjeta" ? "💳" : "🔁";
-    const titulo=`${icono} ${v.nombre} vence${resta?` · ${resta} ${montoVenc(v)}`:` · ${montoVenc(v)}`}`;
+  (eventos||[]).forEach(e=>{
     lineas.push("BEGIN:VEVENT",
-      `UID:${icsClave(v)}`, `DTSTAMP:${stamp}`,
-      `DTSTART;VALUE=DATE:${icsDia(v.fecha)}`, `DTEND;VALUE=DATE:${icsDiaSiguiente(v.fecha)}`,
-      `SUMMARY:${icsEscapar(titulo)}`,
-      `DESCRIPTION:${icsEscapar("Vencimiento cargado en Enola. Si ya lo pagaste, ignoralo.")}`,
+      `UID:${e.uid}`, `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${icsDia(e.inicio)}`, `DTEND;VALUE=DATE:${icsDiaSiguiente(e.inicio)}`);
+    if(e.rrule) lineas.push(e.rrule);
+    lineas.push(`SUMMARY:${icsEscapar(e.titulo)}`,
+      `DESCRIPTION:${icsEscapar(e.descripcion)}`,
       "TRANSP:TRANSPARENT",
-      "BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${icsEscapar(titulo)}`, trigger, "END:VALARM",
+      "BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${icsEscapar(e.titulo)}`, trigger, "END:VALARM",
       "END:VEVENT");
   });
   lineas.push("END:VCALENDAR");
@@ -451,11 +510,6 @@ function generarICSPrueba(ahora, enMinutos){
     antes===0 ? "TRIGGER;RELATED=START:PT0S" : `TRIGGER:-PT${antes}M`,
     "END:VALARM","END:VEVENT","END:VCALENDAR"];
   return lineas.map(icsPlegar).join("\r\n")+"\r\n";
-}
-
-// Los vencimientos que siguen por venir (hoy en adelante, los próximos 3 meses), para agendar.
-function vencimientosParaCalendario(hoyISO, lista, vencTc){
-  return proximosVencimientos(hoyISO, lista, vencTc, 120, 3).filter(v=>v.dias>=0);
 }
 
 // "5 nov": para las fechas de cierre y vencimiento en las filas.
