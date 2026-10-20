@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v162">
+<meta name="enola-version" content="enola-v163">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -1110,11 +1110,24 @@
       <button class="btn-primary" id="gcal-btn-conectar" style="background:var(--save);color:#fff;width:100%;margin-bottom:8px" onclick="conectarGoogleCalendar()">🔗 Conectar y sincronizar</button>
       <button class="btn-sm" id="gcal-btn-desconectar" style="width:100%;color:var(--danger);display:none" onclick="desconectarGoogleCalendar()">Desconectar (los eventos quedan)</button>
       <p id="gcal-estado" class="txt-xs" style="margin-top:8px;font-weight:600"></p>
+      <div id="drive-bk-bloque" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div class="seccion-label mb-6">☁️ Copia de seguridad en tu Drive</div>
+        <p class="txt-sm txt-muted mb-10">Una copia por día (si hubo cambios) en una carpeta <strong>“Enola backups”</strong> de tu Drive; se guardan las últimas 14. Es la que te salva si perdés el celular, y desde uno nuevo la restaurás acá mismo. La app solo ve lo que ella crea, no el resto de tu Drive. <strong>La copia va sin cifrar</strong>, como el archivo de backup.</p>
+        <label class="opt-row" style="--chk:var(--save);margin-bottom:10px">
+          <span class="opt-icon">☁️</span>
+          <span class="opt-text"><span class="opt-title">Subir una copia por día</span><span class="opt-sub">A la carpeta “Enola backups” de tu Drive</span></span>
+          <input type="checkbox" id="drive-bk-on" class="chk-custom" onchange="onDriveBkToggle(this)">
+        </label>
+        <button class="btn-sm" id="drive-bk-ahora" style="width:100%;margin-bottom:8px;display:none" onclick="subirBackupDriveAhora()">⬆️ Subir una copia ahora</button>
+        <button class="btn-sm" id="drive-bk-ver" style="width:100%;display:none" onclick="verBackupsDrive()">📂 Ver copias en Drive y restaurar</button>
+        <div id="drive-bk-lista" style="margin-top:8px"></div>
+        <p id="drive-bk-estado" class="txt-xs" style="margin-top:8px;font-weight:600"></p>
+      </div>
       <details style="margin-top:10px">
         <summary class="txt-sm" style="cursor:pointer;font-weight:600">¿Cómo consigo el ID de cliente?</summary>
         <ol class="txt-sm txt-muted" style="padding-left:18px;margin-top:8px;line-height:1.5">
           <li>Entrá a <strong>console.cloud.google.com</strong> con tu cuenta de Google. Arriba tocá el selector de proyecto → <strong>Proyecto nuevo</strong>, ponele de nombre “Enola” y <strong>Crear</strong>.</li>
-          <li>Menú ☰ → <strong>APIs y servicios → Biblioteca</strong>. Buscá <strong>Google Calendar API</strong> y tocá <strong>Habilitar</strong>.</li>
+          <li>Menú ☰ → <strong>APIs y servicios → Biblioteca</strong>. Buscá <strong>Google Calendar API</strong> y tocá <strong>Habilitar</strong>. Hacé lo mismo con <strong>Google Drive API</strong> (la necesita la copia de seguridad).</li>
           <li>Menú ☰ → <strong>APIs y servicios → Pantalla de consentimiento de OAuth</strong> (en versiones nuevas se llama <strong>Google Auth Platform</strong>) → <strong>Comenzar</strong>. Nombre: “Enola”. Correo de asistencia: el tuyo. Público: <strong>Externo</strong>. Correo de contacto: el tuyo. Aceptá y <strong>Crear</strong>.</li>
           <li>En <strong>Público</strong> (o “Usuarios de prueba”) tocá <strong>Add users</strong> y agregá tu mail. Dejá la app en estado <strong>Prueba</strong>: no hace falta publicarla.</li>
           <li>En <strong>Clientes</strong> (o <strong>Credenciales → Crear credenciales → ID de cliente de OAuth</strong>) elegí tipo <strong>Aplicación web</strong>. En <strong>Orígenes autorizados de JavaScript</strong> agregá <strong id="gcal-origen"></strong> (exacto, sin barra al final) y <strong>Crear</strong>.</li>
@@ -1216,6 +1229,7 @@
 <script src="js/cuentas-tarjetas-categorias.js"></script>
 <script src="js/config-ui.js"></script>
 <script src="js/calendario-google.js"></script>
+<script src="js/backup-drive.js"></script>
 <script src="js/presupuestos.js"></script>
 <script src="js/seguridad-pin.js"></script>
 <script src="js/main.js"></script>
