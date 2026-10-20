@@ -9,7 +9,14 @@
 // ESTE archivo cambia. Si tocás un .js y no subís este número, los celulares que ya
 // tienen la app instalada siguen sirviendo para siempre la versión vieja desde su caché
 // (la estrategia para los assets es "cache-first") y tu cambio NO LLEGA NUNCA.
-const CACHE_VERSION = "enola-v166";
+const CACHE_VERSION = "enola-v167";
+// index.html pide el CSS y los .js con ?v=<versión> (ver scripts/subir-version.js). Así el HTML nuevo y sus
+// estilos y scripts son SIEMPRE los de la misma versión: con el nombre pelado, el service worker viejo seguía
+// sirviendo el styles.css/.js de su caché (cache-first) debajo de un HTML ya nuevo y la pantalla quedaba sin
+// estilos o con código viejo hasta el próximo arranque. Con la versión en la URL, un archivo nuevo es otra
+// entrada de la caché y se baja de la red sí o sí.
+const VERSION_NUM = CACHE_VERSION.replace(/^enola-v/, "");
+const conVersion = (url) => /\.(js|css)$/.test(url) ? `${url}?v=${VERSION_NUM}` : url;
 const ASSETS = [
   "./",
   "./index.html",
@@ -48,7 +55,7 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION).then(async (cache) => {
       await Promise.all(
-        ASSETS.map((url) =>
+        ASSETS.map(conVersion).map((url) =>
           fetch(url, { cache: "no-store" }).then((res) => cache.put(url, res))
         )
       );

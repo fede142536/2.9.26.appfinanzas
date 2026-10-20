@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Sube el número de versión de la app en los DOS lugares a la vez: <meta name="enola-version"> de
-// index.html y CACHE_VERSION de sw.js. Si se toca solo uno, los celulares con la app instalada siguen
+// Sube el número de versión de la app a la vez en: <meta name="enola-version"> de index.html, CACHE_VERSION de sw.js
+// y los ?v= de los archivos que index.html pide (styles.css y js/*.js). Si se toca solo uno, los celulares con la app instalada siguen
 // mostrando la versión vieja desde su caché (ver el comentario de sw.js).
 //
 //     node scripts/subir-version.js        → enola-v154 pasa a enola-v155
@@ -28,6 +28,8 @@ if (enSw[2] !== enHtml[2]) {
 const nueva = process.argv[2] ? Number(process.argv[2]) : Number(enSw[2]) + 1;
 if (!Number.isInteger(nueva) || nueva < 1) { console.error("La versión tiene que ser un entero positivo."); process.exit(1); }
 
+// index.html pide styles.css y cada js/*.js con ?v=<versión>: se suben juntos (ver el comentario de sw.js).
+const reAssets = /((?:styles\.css|js\/[\w-]+\.js)\?v=)\d+/g;
 fs.writeFileSync(SW, sw.replace(reSw, `$1${nueva}$3`));
-fs.writeFileSync(HTML, html.replace(reHtml, `$1${nueva}$3`));
+fs.writeFileSync(HTML, html.replace(reHtml, `$1${nueva}$3`).replace(reAssets, `$1${nueva}`));
 console.log(`enola-v${enSw[2]} → enola-v${nueva}`);
