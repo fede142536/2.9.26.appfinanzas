@@ -87,6 +87,7 @@
 <script src="js/cuentas-tarjetas-categorias.js"></script>
 <script src="js/config-ui.js"></script>
 <script src="js/calendario-google.js"></script>
+<script src="js/backup-drive.js"></script>
 <script src="js/presupuestos.js"></script>
 <script src="js/seguridad-pin.js"></script>
 
@@ -5355,7 +5356,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 10, "esperaba las 10 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir): " +
+  igual(cajas.length, 11, "esperaba las 11 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);
@@ -6914,6 +6915,260 @@ test("mensajeSyncGcal explica cada resultado", ()=>{
   cierto(mensajeSyncGcal({ok:true,creados:0,actualizados:0,errores:0}).includes("ya estaba al día"));
   cierto(mensajeSyncGcal({ok:false,motivo:"api",detalle:"x"}).includes("API de Google Calendar"));
   cierto(mensajeSyncGcal({ok:false,motivo:"sin-permiso"}).includes("permiso"));
+});
+
+// ═══════════════════════════════════════════
+// COPIA DE SEGURIDAD EN GOOGLE DRIVE
+// ═══════════════════════════════════════════
+grupo("Copia en Drive");
+
+const CLAVES_DRIVE=["fdrivebk","fdrivecarpeta","fdriveult"];
+async function conDrive(fn, {activo=true, token=true}={}){
+  const antes=[...CLAVES_GCAL, ...CLAVES_DRIVE].map(k=>localStorage.getItem(k));
+  [...CLAVES_GCAL, ...CLAVES_DRIVE].forEach(k=>localStorage.removeItem(k));
+  localStorage.setItem("fgcalid","123-abc.apps.googleusercontent.com"); localStorage.setItem("fgcalon","1");
+  if(activo) localStorage.setItem("fdrivebk","1");
+  if(token) localStorage.setItem("fgcaltok", JSON.stringify({t:"tok", exp:Date.now()+3600000, s:GCAL_SCOPE+" "+DRIVE_SCOPE}));
+  try{ return await fn(); }
+  finally{ [...CLAVES_GCAL, ...CLAVES_DRIVE].forEach((k,i)=>{ if(antes[i]===null) localStorage.removeItem(k); else localStorage.setItem(k, antes[i]); }); }
+}
+const MOVS_DRIVE=()=>[{id:1,tipo:"Gasto",cat:"Super",moneda:"ARS",importe:100,fecha:"2026-10-01"},{id:2,tipo:"Ingreso",cat:"Sueldo",moneda:"ARS",importe:900,fecha:"2026-10-02"}];
+
+// Un Google Drive de mentira: carpetas y archivos en memoria, con las mismas rutas y respuestas que la API real.
+function servidorDrive(forzar){
+  const archivos=new Map(); let n=0; const llamadas=[];
+  const resp=(status,obj)=>({status, text:async()=>obj===undefined ? "" : (typeof obj==="string" ? obj : JSON.stringify(obj))});
+  const fetchFalso=async (url, init)=>{
+    const m=(init&&init.method)||"GET"; const u=new URL(url); const ruta=u.pathname;
+    llamadas.push(m+" "+ruta.replace("/upload/drive/v3","UP").replace("/drive/v3",""));
+    if(forzar) return resp(forzar,{error:{message:"forzado"}});
+    const q=u.searchParams.get("q")||"";
+    if(ruta==="/drive/v3/files" && m==="GET"){
+      let lista=[...archivos.values()].filter(f=>!f.trashed);
+      if(q.includes("mimeType='application/vnd.google-apps.folder'")) lista=lista.filter(f=>f.mimeType==="application/vnd.google-apps.folder" && q.includes("name='"+f.name+"'"));
+      else{
+        const mp=/'([^']+)' in parents/.exec(q); if(mp) lista=lista.filter(f=>f.parents && f.parents.includes(mp[1]));
+        const mn=/name='([^']+)'/.exec(q); if(mn) lista=lista.filter(f=>f.name===mn[1]);
+      }
+      return resp(200,{files:lista.map(f=>({id:f.id, name:f.name, size:String((f.contenido||"").length)}))});
+    }
+    if(ruta==="/drive/v3/files" && m==="POST"){ const b=JSON.parse(init.body); const id="d"+(++n); archivos.set(id,{id, ...b}); return resp(200,{id}); }
+    if(ruta==="/upload/drive/v3/files" && m==="POST"){
+      const lim=/boundary=(\S+)/.exec(init.headers["Content-Type"])[1];
+      const partes=init.body.split("--"+lim).filter(p=>p.trim() && p.trim()!=="--");
+      const cuerpo=p=>p.slice(p.indexOf("\r\n\r\n")+4).replace(/\r\n$/,"");
+      const id="d"+(++n); archivos.set(id,{id, ...JSON.parse(cuerpo(partes[0])), contenido:cuerpo(partes[1])});
+      return resp(200,{id});
+    }
+    const mid=/\/files\/([^/?]+)$/.exec(ruta); const id=mid && decodeURIComponent(mid[1]);
+    if(id){
+      const f=archivos.get(id);
+      if(!f) return resp(404,{});
+      if(m==="GET") return u.searchParams.get("alt")==="media" ? resp(200,f.contenido) : resp(200,{id, trashed:!!f.trashed});
+      if(m==="PATCH"){ f.contenido=init.body; return resp(200,{id}); }
+      if(m==="DELETE"){ archivos.delete(id); return resp(204); }
+    }
+    return resp(400,{});
+  };
+  const carpeta=()=>[...archivos.values()].find(f=>f.mimeType==="application/vnd.google-apps.folder");
+  const backups=()=>[...archivos.values()].filter(f=>RE_BACKUP_DRIVE.test(f.name||""));
+  return {deps:{token:async()=>"tok", fetch:fetchFalso}, archivos, llamadas, carpeta, backups, agregar:(f)=>{ const id="d"+(++n); archivos.set(id,{id, ...f}); return id; }};
+}
+
+test("tocaBackupDrive: una por día y solo si cambiaron los datos", ()=>{
+  igual(tocaBackupDrive(null, "h1", "2026-10-20"), true, "nunca se subió");
+  igual(tocaBackupDrive({dia:"2026-10-20", hash:"h0"}, "h1", "2026-10-20"), false, "ya hay una de hoy");
+  igual(tocaBackupDrive({dia:"2026-10-19", hash:"h1"}, "h1", "2026-10-20"), false, "sin cambios desde la última");
+  igual(tocaBackupDrive({dia:"2026-10-19", hash:"h0"}, "h1", "2026-10-20"), true, "cambió algo");
+  igual(tocaBackupDrive(null, "", "2026-10-20"), false);
+});
+
+test("el nombre del archivo lleva el día y el multipart trae los datos del archivo y su contenido", ()=>{
+  igual(nombreBackupDrive("2026-10-20"), "enola-backup-2026-10-20.json");
+  const b=cuerpoMultipartDrive({name:"a.json"}, '{"x":1}', "LIM");
+  cierto(b.startsWith("--LIM\r\n") && b.endsWith("\r\n--LIM--"), b);
+  cierto(b.includes('{"name":"a.json"}') && b.includes('{"x":1}'));
+});
+
+test("los permisos: Drive solo se pide si la copia está activada, y un token viejo solo cubre el calendario", ()=>conDrive(async ()=>{
+  igual(gcalAlcancesNecesarios().join(","), GCAL_SCOPE+","+DRIVE_SCOPE);
+  localStorage.removeItem("fdrivebk");
+  igual(gcalAlcancesNecesarios().join(","), GCAL_SCOPE, "sin copia en Drive no se pide el permiso de Drive");
+  localStorage.setItem("fgcaltok", JSON.stringify({t:"viejo", exp:Date.now()+3600000}));       // token de antes de Drive: sin `s`
+  igual(gcalTokenGuardado([GCAL_SCOPE]), "viejo");
+  igual(gcalTokenGuardado([GCAL_SCOPE, DRIVE_SCOPE]), null, "no cubre Drive: hay que pedir el permiso");
+  localStorage.setItem("fgcaltok", JSON.stringify({t:"vencido", exp:Date.now()-1000, s:GCAL_SCOPE+" "+DRIVE_SCOPE}));
+  igual(gcalTokenGuardado(), null, "un token vencido no sirve");
+}));
+
+test("sube la copia de hoy a una carpeta 'Enola backups' con todos los datos", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  const d=servidorDrive();
+  const r=await subirBackupDrive({deps:d.deps});
+  igual(r.ok, true); igual(r.subido, true);
+  igual(d.carpeta().name, "Enola backups");
+  const copia=d.backups();
+  igual(copia.length, 1);
+  igual(copia[0].name, nombreBackupDrive(hoyLocal()));
+  igual(copia[0].parents[0], d.carpeta().id, "tiene que ir dentro de la carpeta");
+  igual(JSON.parse(copia[0].contenido).datos.movs.length, 2, "el contenido es el backup completo");
+  igual(localStorage.getItem("fdrivecarpeta"), d.carpeta().id, "se guarda la carpeta para no buscarla cada vez");
+  igual(gcalLeer("fdriveult",null).dia, hoyLocal());
+})));
+
+test("una vez por día: la segunda vez no llama a Drive; forzar actualiza la de hoy sin duplicarla", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  const d=servidorDrive();
+  await subirBackupDrive({deps:d.deps});
+  const antes=d.llamadas.length;
+  const r=await subirBackupDrive({deps:d.deps});
+  igual(r.ok, true); igual(r.subido, false); igual(d.llamadas.length, antes, "no había nada que subir y llamó igual");
+  movs.push({id:3,tipo:"Gasto",cat:"X",moneda:"ARS",importe:5,fecha:"2026-10-03"});
+  const f=await subirBackupDrive({deps:d.deps, forzar:true});
+  igual(f.subido, true); igual(d.backups().length, 1, "se duplicó el archivo de hoy");
+  igual(JSON.parse(d.backups()[0].contenido).datos.movs.length, 3, "no se actualizó el contenido");
+  cierto(d.llamadas.some(l=>l.startsWith("PATCH")), "tenía que actualizar el archivo existente");
+})));
+
+test("un día nuevo sin cambios no sube nada; con cambios, sí", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  const d=servidorDrive();
+  await subirBackupDrive({deps:d.deps});
+  const u=gcalLeer("fdriveult",null);
+  localStorage.setItem("fdriveult", JSON.stringify({...u, dia:"2020-01-01"}));
+  igual((await subirBackupDrive({deps:d.deps})).subido, false, "mismos datos que la última copia");
+  localStorage.setItem("fdriveult", JSON.stringify({...u, dia:"2020-01-01", hash:"otro"}));
+  igual((await subirBackupDrive({deps:d.deps})).subido, true, "los datos cambiaron");
+})));
+
+test("se conservan las últimas 14 copias y no se toca lo que no es de las copias", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  const d=servidorDrive();
+  const carp=d.agregar({name:"Enola backups", mimeType:"application/vnd.google-apps.folder"});
+  localStorage.setItem("fdrivecarpeta", carp);
+  for(let i=1;i<=20;i++) d.agregar({name:`enola-backup-2026-01-${String(i).padStart(2,"0")}.json`, parents:[carp], contenido:"{}"});
+  const ajeno=d.agregar({name:"mis-notas.txt", parents:[carp], contenido:"hola"});
+  const r=await subirBackupDrive({deps:d.deps});
+  igual(r.subido, true);
+  igual(d.backups().length, 14, "tienen que quedar 14 copias");
+  cierto(d.backups().some(f=>f.name===nombreBackupDrive(hoyLocal())), "la de hoy tiene que quedar");
+  cierto(d.backups().every(f=>f.name>="enola-backup-2026-01-08" || f.name===nombreBackupDrive(hoyLocal())), "se borraron las más nuevas en vez de las viejas");
+  cierto(d.archivos.has(ajeno), "se borró un archivo que no era una copia");
+  cierto(d.archivos.has(carp), "se borró la carpeta");
+})));
+
+test("nunca sube una app vacía (un celular nuevo) y no hace nada si la copia está desactivada", ()=>conVenc({movs:[], tcs:[]}, async ()=>{
+  await conDrive(async ()=>{
+    const d=servidorDrive();
+    const r=await subirBackupDrive({deps:d.deps, forzar:true});
+    igual(r.ok, true); igual(r.subido, false); igual(r.motivo, "vacio"); igual(d.llamadas.length, 0);
+  });
+  movs=MOVS_DRIVE();
+  await conDrive(async ()=>{
+    const d=servidorDrive();
+    const r=await subirBackupDrive({deps:d.deps, forzar:true});
+    igual(r.ok, false); igual(r.motivo, "inactivo"); igual(d.llamadas.length, 0);
+  }, {activo:false});
+}));
+
+test("sin permiso no pregunta sola; un rechazo de Google se informa y no se anota como subido", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, async ()=>{
+  await conDrive(async ()=>{
+    const d=servidorDrive();
+    const r=await subirBackupDrive({deps:{...d.deps, token:async()=>null}});
+    igual(r.ok, false); igual(r.motivo, "sin-permiso"); igual(d.llamadas.length, 0);
+    igual(backupDrivePendiente(), true, "tiene que seguir pendiente");
+  });
+  await conDrive(async ()=>{
+    const r=await subirBackupDrive({deps:servidorDrive(401).deps});
+    igual(r.motivo, "sin-permiso"); igual(localStorage.getItem("fgcaltok"), null, "un token rechazado se descarta");
+  });
+  await conDrive(async ()=>{
+    const r=await subirBackupDrive({deps:servidorDrive(403).deps});
+    igual(r.ok, false); igual(r.motivo, "api");
+    igual(localStorage.getItem("fdriveult"), null, "no se anota como subido lo que no salió");
+    cierto(mensajeDrive(r).includes("Google Drive API"));
+  });
+}));
+
+test("lista las copias de Drive, la más nueva primero, y ignora lo que no es una copia", ()=>conDrive(async ()=>{
+  const d=servidorDrive();
+  const carp=d.agregar({name:"Enola backups", mimeType:"application/vnd.google-apps.folder"});
+  d.agregar({name:"enola-backup-2026-10-18.json", parents:[carp], contenido:"{}"});
+  d.agregar({name:"enola-backup-2026-10-20.json", parents:[carp], contenido:"{}"});
+  d.agregar({name:"otra-cosa.json", parents:[carp], contenido:"{}"});
+  const r=await listarBackupsDrive({deps:d.deps});
+  igual(r.ok, true);
+  igual(r.copias.map(c=>c.dia).join(","), "2026-10-20,2026-10-18");
+}));
+
+test("en un celular nuevo, la carpeta de las copias se encuentra por su nombre", ()=>conDrive(async ()=>{
+  const d=servidorDrive();
+  const carp=d.agregar({name:"Enola backups", mimeType:"application/vnd.google-apps.folder"});
+  d.agregar({name:"enola-backup-2026-10-20.json", parents:[carp], contenido:"{}"});
+  igual(localStorage.getItem("fdrivecarpeta"), null, "el celular nuevo no sabe cuál es");
+  igual((await listarBackupsDrive({deps:d.deps})).copias.length, 1);
+  igual(localStorage.getItem("fdrivecarpeta"), carp);
+  igual(d.archivos.size, 2, "no tiene que crear una carpeta nueva si ya existe");
+}));
+
+test("leerBackupDrive baja una copia válida y rechaza una rota", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  const d=servidorDrive();
+  await subirBackupDrive({deps:d.deps});
+  const buena=d.backups()[0].id;
+  const r=await leerBackupDrive(buena, {deps:d.deps});
+  igual(r.ok, true); igual(r.backup.datos.movs.length, 2);
+  const rota=d.agregar({name:"enola-backup-2026-01-01.json", contenido:"no es json"});
+  igual((await leerBackupDrive(rota, {deps:d.deps})).motivo, "invalida");
+  igual((await leerBackupDrive("noexiste", {deps:d.deps})).ok, false);
+})));
+
+test("restaurar desde Drive reemplaza los datos, con copia de seguridad antes y confirmación", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  const d=servidorDrive();
+  await subirBackupDrive({deps:d.deps});
+  const id=d.backups()[0].id;
+  movs=[{id:99,tipo:"Gasto",cat:"Otro",moneda:"ARS",importe:1,fecha:"2026-10-05"}];   // datos "de otro celular"
+  const confirmReal=window.mostrarConfirm, copiaReal=window.guardarCopiaLocal, tokenReal=GCAL_DEPS.token, fetchReal=GCAL_DEPS.fetch;
+  let copiaAntes=false, pregunto=false;
+  window.mostrarConfirm=async()=>{ pregunto=true; return true; };
+  window.guardarCopiaLocal=async()=>{ copiaAntes=movs.length===1; };      // la copia se guarda ANTES de reemplazar
+  GCAL_DEPS.token=d.deps.token; GCAL_DEPS.fetch=d.deps.fetch;
+  try{
+    igual(await restaurarDesdeDrive(id, "2026-10-20"), true);
+  } finally { window.mostrarConfirm=confirmReal; window.guardarCopiaLocal=copiaReal; GCAL_DEPS.token=tokenReal; GCAL_DEPS.fetch=fetchReal; }
+  cierto(pregunto, "no pidió confirmación"); cierto(copiaAntes, "no guardó la copia de seguridad antes de reemplazar");
+  igual(movs.length, 2); igual(movs[0].id, 1);
+})));
+
+test("el aviso de Movimientos avisa de la copia pendiente y desaparece al subirla", ()=>conVenc({movs:MOVS_DRIVE(), tcs:[]}, ()=>conDrive(async ()=>{
+  const div=document.createElement("div"); div.id="gcal-aviso"; document.body.appendChild(div);
+  try{
+    pintarAvisoCalendario();
+    cierto(div.textContent.includes("copia en Drive pendiente"), "no avisa: "+div.textContent);
+    cierto(div.innerHTML.includes("enviarAGoogleCalendar()"), "falta el botón Enviar");
+    await subirBackupDrive({deps:servidorDrive().deps});
+    pintarAvisoCalendario();
+    igual(div.style.display, "none");
+  } finally { div.remove(); }
+})));
+
+test("'Enviar' manda el calendario y la copia de Drive juntos, con un solo permiso", ()=>conVenc({movs:[...MOVS_DRIVE(), FREC_VTO(7,5)], tcs:[]}, ()=>conDrive(async ()=>{
+  const g=servidorGcal(), d=servidorDrive();
+  const tokenReal=GCAL_DEPS.token, fetchReal=GCAL_DEPS.fetch;
+  let pedidos=0, avisos=[];
+  const toastReal=window.showToast; window.showToast=m=>{ avisos.push(m); };
+  GCAL_DEPS.token=async()=>{ pedidos++; return "tok"; };
+  GCAL_DEPS.fetch=(url, init)=>String(url).includes("/calendar/v3") ? g.deps.fetch(url, init) : d.deps.fetch(url, init);
+  try{ igual(await enviarAGoogleCalendar(), true); }
+  finally{ GCAL_DEPS.token=tokenReal; GCAL_DEPS.fetch=fetchReal; window.showToast=toastReal; }
+  igual(g.eventos.size, 1, "no mandó el evento al calendario");
+  igual(d.backups().length, 1, "no subió la copia a Drive");
+  cierto(avisos.join(" ").includes("copia subida a Drive"), "el aviso no menciona la copia: "+avisos.join(" | "));
+})));
+
+test("Config trae la copia en Drive con su switch, el botón de restaurar y el paso de la API de Drive", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  ["drive-bk-bloque","drive-bk-on","drive-bk-ahora","drive-bk-ver","drive-bk-lista","drive-bk-estado","js/backup-drive.js","Google Drive API"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
+  const sw=await (await fetch("sw.js")).text();
+  cierto(sw.slice(sw.indexOf("const ASSETS")).includes("./js/backup-drive.js"), "el service worker no cachea backup-drive.js");
+  const cal=await (await fetch("js/calendario-google.js")).text();
+  cierto(cal.includes('"https://www.googleapis.com/auth/drive.file"'), "el permiso tiene que ser drive.file (solo lo que crea la app)");
+  cierto(!/auth\/drive["'\s]/.test(cal), "no puede pedir el permiso de todo el Drive");
 });
 
 // ═══════════════════════════════════════════

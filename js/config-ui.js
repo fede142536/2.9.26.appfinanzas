@@ -950,6 +950,82 @@ function renderEstadoGcal(){
   const orig=document.getElementById("gcal-origen");
   if(orig) orig.textContent=location.origin;
   if(gcalClienteId()) gcalCargarGIS().catch(()=>{});   // se precarga: el permiso tiene que abrirse dentro del toque
+  renderEstadoDrive();
+}
+
+// ── Copia de seguridad en Drive ──
+function textoTamanio(bytes){
+  if(!bytes) return "";
+  return bytes>=1048576 ? `${(bytes/1048576).toFixed(1).replace(".",",")} MB` : `${Math.max(1,Math.round(bytes/1024))} KB`;
+}
+function fmtDiaCopiaDrive(iso){
+  const [y,m,d]=String(iso).split("-").map(Number);
+  return `${d} ${abrevMes3(`${y}-${String(m).padStart(2,"0")}`).toLowerCase()} ${y}`;
+}
+function renderEstadoDrive(){
+  const bloque=document.getElementById("drive-bk-bloque");
+  if(!bloque) return;
+  bloque.style.display=gcalActivo() ? "block" : "none";
+  const chk=document.getElementById("drive-bk-on");
+  if(chk) chk.checked=driveBackupActivo();
+  const activo=driveActivo();
+  ["drive-bk-ahora","drive-bk-ver"].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=activo ? "block" : "none"; });
+  const est=document.getElementById("drive-bk-estado");
+  if(!est) return;
+  const ult=gcalLeer(DRIVE_ULT_KEY,null);
+  est.textContent=!activo ? "Desactivada."
+    : ult ? `✓ Última copia en Drive: ${fmtDiaCopiaDrive(ult.dia)}${ult.bytes?` · ${textoTamanio(ult.bytes)}`:""}${backupDrivePendiente()?" · hay cambios sin subir":""}`
+    : "Activada. Todavía no se subió ninguna copia.";
+}
+
+// Activar/desactivar la copia diaria. Al activarla se pide el permiso de Drive (un toque) y se sube la primera.
+async function onDriveBkToggle(chk){
+  if(!chk.checked){
+    try{ localStorage.removeItem(DRIVE_ON_KEY); }catch(e){}
+    showToast("Copia en Drive desactivada. Lo que ya subiste queda en tu Drive.");
+    pintarAvisoCalendario(); renderEstadoDrive();
+    return;
+  }
+  guardarPreferencia(DRIVE_ON_KEY, "1");
+  const r=await subirBackupDrive({interactivo:true, forzar:true});
+  if(!r.ok){
+    try{ localStorage.removeItem(DRIVE_ON_KEY); }catch(e){}   // sin permiso o sin API: no queda activada a medias
+    showToast(mensajeDrive(r));
+  } else showToast(mensajeDrive(r));
+  pintarAvisoCalendario(); renderEstadoDrive();
+}
+
+async function subirBackupDriveAhora(){
+  const r=await subirBackupDrive({interactivo:true, forzar:true});
+  showToast(mensajeDrive(r));
+  pintarAvisoCalendario(); renderEstadoDrive();
+  return r.ok;
+}
+
+async function verBackupsDrive(){
+  const cont=document.getElementById("drive-bk-lista");
+  if(!cont) return;
+  cont.innerHTML='<p class="txt-xs txt-muted">Buscando tus copias…</p>';
+  const r=await listarBackupsDrive({interactivo:true});
+  if(!r.ok){ cont.innerHTML=""; showToast(mensajeDrive(r)); return; }
+  if(!r.copias.length){ cont.innerHTML='<p class="txt-xs txt-muted">Todavía no hay copias en tu Drive.</p>'; return; }
+  cont.innerHTML=r.copias.map(c=>`<div class="copia-row"><div class="copia-mid"><div class="copia-fecha">${escapeHtml(fmtDiaCopiaDrive(c.dia))}</div>
+    <div class="copia-sub">${escapeHtml(textoTamanio(c.bytes))}</div></div>
+    <div class="copia-acciones"><button type="button" class="btn-sm" onclick="restaurarDesdeDrive(${attrJS(c.id)},${attrJS(c.dia)})">Restaurar</button></div></div>`).join("");
+}
+
+async function restaurarDesdeDrive(id, dia){
+  const r=await leerBackupDrive(id, {interactivo:true});
+  if(!r.ok){ showToast(mensajeDrive(r)); return false; }
+  const backup=r.backup;
+  if(!await mostrarConfirm(`Volver a la copia de Drive del ${fmtDiaCopiaDrive(dia)}?\n\n• ${backup.datos.movs.length} movimientos\n• ${(backup.datos.tcs||[]).length} tarjetas\n\nReemplaza TODOS los datos actuales. Antes te guardo una copia de cómo están ahora, por si querés deshacerlo.`,
+    {titulo:"Restaurar desde Drive", textoOk:"Restaurar", peligroso:true})) return false;
+  try{ await guardarCopiaLocal("seguridad"); }
+  catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
+  const cant=aplicarBackup(backup);
+  showToast(`✓ Restaurados ${cant} movimientos desde Drive`);
+  renderEstadoDrive();
+  return true;
 }
 
 function mensajeSyncGcal(r){
@@ -968,7 +1044,14 @@ function mensajeSyncGcal(r){
 async function enviarAGoogleCalendar(){
   if(!gcalActivo()){ showToast("Primero conectá Google Calendar en Config"); return false; }
   const r=await sincronizarCalendario({interactivo:true});
-  showToast(mensajeSyncGcal(r));
+  let msg=mensajeSyncGcal(r);
+  // Con la copia en Drive activada, "Enviar" también sube la de hoy (el permiso ya está dado).
+  if(driveActivo() && r.motivo!=="sin-permiso" && r.motivo!=="en-curso"){
+    const d=await subirBackupDrive({interactivo:true});
+    if(d.subido) msg+=" · ☁️ copia subida a Drive";
+    else if(!d.ok) msg+=" · "+mensajeDrive(d);
+  }
+  showToast(msg);
   pintarAvisoCalendario(); renderEstadoGcal();
   return r.ok;
 }
@@ -993,7 +1076,7 @@ async function conectarGoogleCalendar(){
 // Desconectar solo corta la conexión: los eventos que ya están en tu calendario se quedan (la app no borra nada).
 async function desconectarGoogleCalendar(){
   if(!await mostrarConfirm("Se desconecta Google Calendar. Los eventos que ya están en tu calendario se quedan: borralos desde el calendario si no los querés.", {titulo:"Desconectar", textoOk:"Desconectar"})) return false;
-  try{ [GCAL_ON_KEY, GCAL_MAPA_KEY, GCAL_TOKEN_KEY, GCAL_ULTIMA_KEY].forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  try{ [GCAL_ON_KEY, GCAL_MAPA_KEY, GCAL_TOKEN_KEY, GCAL_ULTIMA_KEY, DRIVE_ON_KEY].forEach(k=>localStorage.removeItem(k)); }catch(e){}
   showToast("Google Calendar desconectado");
   pintarAvisoCalendario(); renderEstadoGcal();
   return true;

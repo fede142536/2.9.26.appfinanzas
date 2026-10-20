@@ -20,6 +20,7 @@ const GCAL_MAPA_KEY="fgcalmapa";    // {clave: {id, h, f}}: qué evento de Googl
 const GCAL_TOKEN_KEY="fgcaltok";    // {t, exp}
 const GCAL_ULTIMA_KEY="fgcalultima";
 const GCAL_SCOPE="https://www.googleapis.com/auth/calendar.events";
+const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.file";   // solo los archivos que crea esta app
 const GCAL_API="https://www.googleapis.com/calendar/v3";
 
 function gcalLeer(clave, defecto){
@@ -100,27 +101,38 @@ function gcalCargarGIS(){
   });
   return gcalGisPromesa;
 }
-function gcalTokenGuardado(){
+// Los permisos que hacen falta ahora: el calendario siempre y, si el usuario activó la copia de
+// seguridad en Drive, también ese (un solo permiso de Google para las dos cosas).
+function gcalAlcancesNecesarios(){
+  return [GCAL_SCOPE, ...(typeof driveBackupActivo==="function" && driveBackupActivo() ? [DRIVE_SCOPE] : [])];
+}
+// Un token sirve si no venció y cubre todos los permisos que hacen falta (uno viejo, sin `s`, solo cubre el calendario).
+function gcalTokenGuardado(alcances){
   const o=gcalLeer(GCAL_TOKEN_KEY,null);
-  return o && o.t && o.exp>Date.now()+60000 ? o.t : null;
+  if(!o || !o.t || !(o.exp>Date.now()+60000)) return null;
+  const tiene=String(o.s||GCAL_SCOPE).split(/\s+/);
+  return (alcances||gcalAlcancesNecesarios()).every(a=>tiene.includes(a)) ? o.t : null;
 }
 function gcalOlvidarToken(){ try{ localStorage.removeItem(GCAL_TOKEN_KEY); }catch(e){} }
 
 // Devuelve un token vigente. Sin uno guardado y con `interactivo`, abre el permiso de Google (solo
 // puede abrirse dentro de un toque del usuario).
-async function gcalPedirToken(interactivo){
-  const guardado=gcalTokenGuardado();
+// `minimos`: los permisos que tiene que cubrir el token para esta tarea (por defecto, todos los necesarios). Al
+// pedir uno nuevo se piden todos juntos, para que Google muestre un solo cartel.
+async function gcalPedirToken(interactivo, minimos){
+  const guardado=gcalTokenGuardado(minimos);
   if(guardado) return guardado;
   if(!interactivo) return null;
   await gcalCargarGIS();
   return new Promise(resolve=>{
     let listo=false;
     const fin=v=>{ if(!listo){ listo=true; resolve(v); } };
+    const alcances=gcalAlcancesNecesarios();
     const cliente=google.accounts.oauth2.initTokenClient({
-      client_id:gcalClienteId(), scope:GCAL_SCOPE,
+      client_id:gcalClienteId(), scope:alcances.join(" "),
       callback:r=>{
         if(r && r.access_token){
-          guardarPreferencia(GCAL_TOKEN_KEY, JSON.stringify({t:r.access_token, exp:Date.now()+(Number(r.expires_in)||3600)*1000}));
+          guardarPreferencia(GCAL_TOKEN_KEY, JSON.stringify({t:r.access_token, exp:Date.now()+(Number(r.expires_in)||3600)*1000, s:r.scope||alcances.join(" ")}));
           fin(r.access_token);
         } else fin(null);
       },
@@ -164,7 +176,7 @@ async function sincronizarCalendario(opts){
 
   gcalEnCurso=true;
   try{
-    const token=await deps.token(!!opts.interactivo);
+    const token=await deps.token(!!opts.interactivo, [GCAL_SCOPE]);
     if(!token) return {...res, ok:false, motivo:"sin-permiso"};
     let abortar=null;
     const revisar=r=>{
@@ -217,22 +229,28 @@ let gcalTimer=null;
 function programarSyncCalendario(){
   if(!gcalActivo()) return;
   clearTimeout(gcalTimer);
-  if(!gcalTokenGuardado()){ gcalTimer=setTimeout(pintarAvisoCalendario, 400); return; }
+  if(!gcalTokenGuardado([GCAL_SCOPE])){ gcalTimer=setTimeout(pintarAvisoCalendario, 400); return; }
   gcalTimer=setTimeout(async ()=>{
     await sincronizarCalendario({});
+    // La copia de Drive es una por día: solo se sube si falta la de hoy y el permiso de Drive está vigente.
+    if(typeof subirBackupDrive==="function" && gcalTokenGuardado([GCAL_SCOPE, DRIVE_SCOPE])) await subirBackupDrive({});
     pintarAvisoCalendario();
     if(typeof renderEstadoGcal==="function") renderEstadoGcal();
   }, 2500);
 }
 
-// La línea de Movimientos: "📅 3 cambios sin enviar a Google Calendar · Enviar".
+// La línea de Movimientos: "☁️ 3 cambios sin enviar · copia de hoy en Drive pendiente · Enviar".
 function pintarAvisoCalendario(){
   const el=document.getElementById("gcal-aviso");
   if(!el) return;
   const n=calendarioPendientes();
-  if(!n){ el.style.display="none"; el.innerHTML=""; return; }
+  const bk=typeof backupDrivePendiente==="function" && backupDrivePendiente();
+  if(!n && !bk){ el.style.display="none"; el.innerHTML=""; return; }
+  const partes=[];
+  if(n) partes.push(`${n} cambio${n===1?"":"s"} sin enviar`);
+  if(bk) partes.push("copia en Drive pendiente");
   el.style.display="block";
-  el.innerHTML=`<div class="venc-franja"><div class="venc-fila"><span class="venc-nombre">📅 Google Calendar</span>
-    <span class="venc-txt">${n} cambio${n===1?"":"s"} sin enviar</span>
+  el.innerHTML=`<div class="venc-franja"><div class="venc-fila"><span class="venc-nombre">☁️ Google</span>
+    <span class="venc-txt">${partes.join(" · ")}</span>
     <button type="button" class="venc-ok" onclick="enviarAGoogleCalendar()">Enviar</button></div></div>`;
 }
