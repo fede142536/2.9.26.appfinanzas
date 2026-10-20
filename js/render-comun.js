@@ -83,8 +83,6 @@ function save(){
   }
   ultimoGuardadoOk = nuevo;
   marcarDatosSucios();
-  // Los vencimientos viven también en Google Calendar: tras cada guardado se corrige lo que haya cambiado.
-  if(typeof programarSyncCalendario==="function") programarSyncCalendario();
   return true;
 }
 
