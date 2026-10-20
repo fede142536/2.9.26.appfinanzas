@@ -3314,6 +3314,41 @@ test("la versión del HTML y la del service worker coinciden", async ()=>{
   igual(enHtml, enSw, "subiste una y te olvidaste de la otra");
 });
 
+// El HTML se baja siempre fresco pero el CSS y los .js salen de la caché (cache-first): con un service worker viejo
+// activo, podían quedar debajo de un HTML ya nuevo y la pantalla se veía sin estilos o con código viejo. Ahora el HTML
+// pide cada archivo con ?v=<versión>: un archivo nuevo es otra URL y no puede salir de la caché vieja.
+async function archivosDelHTML(){
+  const html=await (await fetch("index.html")).text();
+  const css=[...html.matchAll(/<link rel="stylesheet" href="(styles\.css[^"]*)"/g)].map(m=>m[1]);
+  const js=[...html.matchAll(/<script src="(js\/[^"]+)"/g)].map(m=>m[1]);
+  return {html, css, js, version:(html.match(/<meta name="enola-version" content="enola-v(\d+)"/)||[])[1]};
+}
+
+test("index.html pide el CSS y cada .js con la versión actual en la URL", async ()=>{
+  const {css, js, version}=await archivosDelHTML();
+  cierto(!!version, "no encontré la versión en el meta");
+  igual(css.length, 1, "tiene que haber un solo stylesheet");
+  cierto(js.length>=20, "esperaba todos los scripts de la app, hay "+js.length);
+  [...css, ...js].forEach(u=>igual((u.match(/\?v=(\d+)$/)||[])[1], version, `${u} no lleva ?v=${version}: puede salir de una caché vieja`));
+});
+
+test("el service worker precachea exactamente las URLs con versión que pide el HTML", async ()=>{
+  const {css, js, version}=await archivosDelHTML();
+  const sw=await (await fetch("sw.js")).text();
+  const cabecera=sw.slice(sw.indexOf("const VERSION_NUM"), sw.indexOf("];", sw.indexOf("const ASSETS"))+2);
+  const lista=new Function("CACHE_VERSION", cabecera+"; return ASSETS.map(conVersion);")("enola-v"+version);
+  const norm=u=>u.replace(/^\.\//,"");
+  [...css, ...js].forEach(u=>cierto(lista.map(norm).includes(u), `el service worker no precachea ${u}`));
+  cierto(lista.some(u=>norm(u)==="index.html"), "index.html se cachea sin versión (se pide siempre fresco)");
+  cierto(lista.filter(u=>/\.(js|css)\?v=/.test(u)).length===css.length+js.length, "el service worker precachea archivos de más o de menos");
+  cierto(sw.includes("ASSETS.map(conVersion)"), "el install no usa las URLs con versión");
+});
+
+test("subir-version.js sube también los ?v= del HTML", async ()=>{
+  const src=await (await fetch("scripts/subir-version.js")).text();
+  cierto(/reAssets/.test(src) && src.includes("styles\\.css") && src.includes(".replace(reAssets"), "el script no actualiza las URLs con versión");
+});
+
 test("el chequeo vive inline en el HTML, no en un archivo .js", async ()=>{
   // Si se mudara a un .js, ese archivo se serviría desde caché: una versión vieja no tendría
   // el chequeo y no avisaría nada, que es exactamente el caso que tiene que detectar.
