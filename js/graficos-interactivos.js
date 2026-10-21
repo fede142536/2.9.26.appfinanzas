@@ -273,6 +273,35 @@ function llenarSelectFondoMeta(valor, valorSub){
     +(subs.length?`<optgroup label="Solo una parte de un ahorro">${subs.map(x=>opt(x.cat,x.sub,x.saldo)).join("")}</optgroup>`:"")
     +(otras.length?`<optgroup label="Otra categoría (arranca en $0)">${otras.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")}</optgroup>`:"");
   sel.value=valor ? valor+(valorSub?SEP_FONDO+valorSub:"") : "";
+  avisoFondoMeta();
+}
+
+// Una meta atada solo cuenta lo marcado como ahorro. Si en la categoría elegida hay gastos cargados sin marcar, no suman:
+// se avisa y se ofrece marcarlos (con confirmación).
+function avisoFondoMeta(){
+  const el=document.getElementById("meta-fondo-aviso");
+  if(!el) return;
+  const [cat, sub]=(((document.getElementById("meta-fondo")||{}).value)||"").split(SEP_FONDO);
+  const lista=cat ? gastosSinMarcarComoAhorro(movs, cat, sub) : [];
+  if(!lista.length){ el.style.display="none"; el.innerHTML=""; return; }
+  const total=lista.reduce((s,m)=>s+montoARS(m),0);
+  el.style.display="";
+  el.innerHTML=`Hay <strong>${lista.length} gasto${lista.length===1?"":"s"}</strong> de "${escapeHtml(cat)}" (${fmtTotal(total)}) cargado${lista.length===1?"":"s"} sin marcar como ahorro, por eso no suma${lista.length===1?"":"n"} a la meta.
+    <button type="button" class="field-link" style="margin-top:4px;display:block" onclick="marcarGastosComoAhorroMeta()">Marcar como ahorro</button>`;
+}
+async function marcarGastosComoAhorroMeta(){
+  const [cat, sub]=(((document.getElementById("meta-fondo")||{}).value)||"").split(SEP_FONDO);
+  if(!cat) return;
+  const lista=gastosSinMarcarComoAhorro(movs, cat, sub);
+  if(!lista.length) return;
+  const total=lista.reduce((s,m)=>s+montoARS(m),0);
+  if(!await mostrarConfirm(`¿Marcar ${lista.length} gasto${lista.length===1?"":"s"} de "${cat}" (${fmtTotal(total)}) como ahorro? Pasan a sumar al fondo y a la meta, y dejan de contar como gasto.`, {textoOk:"Marcar como ahorro"})) return;
+  try{ await guardarCopiaLocal("seguridad"); }catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
+  lista.forEach(m=>{ m.esAhorro=true; });
+  save();
+  showToast(`${lista.length} ${lista.length===1?"gasto marcado":"gastos marcados"} como ahorro ✓`);
+  llenarSelectFondoMeta(cat, sub||"");
+  renderMetas();
 }
 function openMetaModal(){
   editingMetaId=null;

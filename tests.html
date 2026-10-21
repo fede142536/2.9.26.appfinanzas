@@ -7504,6 +7504,62 @@ test("el editor ofrece ahorros, partes de un ahorro y otras categorías; y guard
   igual(metas[0].fondoCat, undefined); igual(metas[0].fondoSub, undefined);
 }));
 
+// ── Una meta atada a una categoría tiene que sumar lo que cargás en ella ──
+const MUDANZA_MOVS=()=>[
+  {id:1,tipo:"Gasto",cat:"Mudanza",subcat:"Otros",moneda:"ARS",importe:5000,fecha:"2026-10-20"},                      // cargado SIN marcar como ahorro
+  {id:2,tipo:"Gasto",cat:"Mudanza",subcat:"Otros",moneda:"ARS",importe:1000,fecha:"2026-10-21",esAhorro:true},
+  {id:3,tipo:"Gasto",cat:"Mudanza",subcat:"Otros",moneda:"ARS",importe:700,fecha:"2026-10-21",traspaso:true},          // traspaso: no
+  {id:4,tipo:"Gasto",cat:"Mudanza",subcat:"Otros",moneda:"USD",importe:0,importeOrig:20,fecha:"2026-10-21"},          // dólares: no
+  {id:5,tipo:"Ingreso",cat:"Mudanza",importe:900,fecha:"2026-10-21"}];
+
+test("metaDeCategoria y gastosSinMarcarComoAhorro", ()=>{
+  const ms=[{id:1,nombre:"Mudanza",fondoCat:"Mudanza"},{id:2,nombre:"Cedears",fondoCat:"Fondo de Retiro",fondoSub:"Cedears"}];
+  igual(metaDeCategoria(ms,"Mudanza","Otros").id, 1);
+  igual(metaDeCategoria(ms,"Fondo de Retiro","Cedears").id, 2);
+  igual(metaDeCategoria(ms,"Fondo de Retiro","Plazo fijo"), null, "una meta de una subcategoría no agarra las otras");
+  igual(metaDeCategoria(ms,"Casa","x"), null); igual(metaDeCategoria([],"Mudanza"), null);
+  igual(gastosSinMarcarComoAhorro(MUDANZA_MOVS(),"Mudanza").map(m=>m.id).join(","), "1", "solo el gasto común en pesos");
+  igual(montoDeMeta({fondoCat:"Mudanza"}, MUDANZA_MOVS()), 1000, "la meta solo cuenta lo marcado como ahorro");
+});
+
+test("al elegir una categoría atada a una meta, 'Es un ahorro' se tilda sola y avisa a qué meta suma", ()=>{
+  const mk=(tag,id,extra)=>{ const e=document.createElement(tag); e.id=id; Object.assign(e,extra||{}); document.body.appendChild(e); return e; };
+  const els=[mk("select","inp-cat"), mk("select","inp-subcat"), mk("input","inp-ahorro",{type:"checkbox"}), mk("input","inp-usa-ahorro",{type:"checkbox"}),
+             mk("input","inp-traspaso",{type:"checkbox"}), mk("input","inp-frecuente",{type:"checkbox"}), mk("p","ahorro-meta-hint")];
+  const antes={metas, tipo, tocado:ahorroTocado};
+  const elegir=(c)=>{ els[0].innerHTML=`<option>${c}</option>`; els[0].value=c; els[1].innerHTML="<option>Otros</option>"; sugerirAhorroDeMeta(); };
+  try{
+    metas=[{id:1,nombre:"Mudanza",objetivo:4000000,actual:0,fondoCat:"Mudanza"}]; tipo="Gasto"; ahorroTocado=false;
+    elegir("Casa"); igual(els[2].checked, false, "otra categoría no se toca"); igual(els[6].style.display, "none");
+    elegir("Mudanza"); igual(els[2].checked, true, "tendría que tildarse sola"); cierto(els[6].textContent.includes("Mudanza") && els[6].textContent.includes("suma a la meta"), els[6].textContent);
+    els[2].checked=false; ahorroTocado=true; elegir("Mudanza"); igual(els[2].checked, false, "si lo destildó a mano, se respeta");
+    cierto(els[6].textContent.includes("Solo suma"), els[6].textContent);
+    ahorroTocado=false; els[3].checked=true; elegir("Mudanza"); igual(els[2].checked, false, "un retiro de ahorros no se convierte en ahorro");
+    els[3].checked=false; els[4].checked=true; elegir("Mudanza"); igual(els[2].checked, false, "un traspaso tampoco");
+    els[4].checked=false; tipo="Ingreso"; elegir("Mudanza"); igual(els[2].checked, false, "un ingreso no es ahorro");
+  } finally { metas=antes.metas; tipo=antes.tipo; ahorroTocado=antes.tocado; els.forEach(e=>e.remove()); }
+});
+
+test("el editor de metas avisa de los gastos sin marcar y los marca como ahorro con confirmación", async ()=>{
+  const mk=(tag,id)=>{ const e=document.createElement(tag); e.id=id; document.body.appendChild(e); return e; };
+  const els=[mk("select","meta-fondo"), mk("div","meta-fondo-aviso"), mk("div","metas-list"), mk("select","dep-meta"), mk("div","depositar-card"), mk("div","metas-sum")];
+  const antes={movs, metas, confirm:window.mostrarConfirm, save:window.save, toast:window.showToast};
+  let guardado=0, pregunto=0, respuesta=false;
+  try{
+    movs=MUDANZA_MOVS(); metas=[{id:1,nombre:"Mudanza",objetivo:4000000,actual:0,fondoCat:"Mudanza"}];
+    window.save=()=>{ guardado++; return true; }; window.showToast=()=>{}; window.mostrarConfirm=async()=>{ pregunto++; return respuesta; };
+    llenarSelectFondoMeta("Mudanza","");
+    cierto(els[1].style.display!=="none" && els[1].textContent.includes("1 gasto") && els[1].textContent.includes("5.000"), "tendría que avisar: "+els[1].textContent);
+    await marcarGastosComoAhorroMeta();
+    igual(pregunto, 1); igual(movs[0].esAhorro, undefined, "si dice que no, no se toca nada"); igual(guardado, 0);
+    respuesta=true; await marcarGastosComoAhorroMeta();
+    igual(movs[0].esAhorro, true); igual(guardado, 1);
+    igual(montoDeMeta(metas[0],movs), 6000, "ahora la meta suma lo marcado: 5000 + 1000");
+    igual(movs[2].esAhorro, undefined, "el traspaso no se toca"); igual(movs[3].esAhorro, undefined, "los dólares no se tocan"); igual(movs[4].esAhorro, undefined, "el ingreso no se toca");
+    igual(els[1].style.display, "none", "sin pendientes no hay aviso");
+  } finally { movs=antes.movs; metas=antes.metas; window.mostrarConfirm=antes.confirm; window.save=antes.save; window.showToast=antes.toast; els.forEach(e=>e.remove()); }
+});
+
 test("las tarjetas de metas muestran el monto del fondo, un 🔗, y tocar una atada lleva a cargar un ahorro", ()=>{
   const ids=["metas-list","dep-meta","metas-sum","depositar-card"];
   const els=ids.map(id=>{ const e=document.createElement(id==="dep-meta"?"select":"div"); e.id=id; document.body.appendChild(e); return e; });

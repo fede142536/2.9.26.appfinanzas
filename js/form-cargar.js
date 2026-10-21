@@ -225,6 +225,23 @@ function updateSubcats(){
   const cat=document.getElementById("inp-cat").value;
   document.getElementById("inp-subcat").innerHTML=(getCats(tipo)[cat]||["Otros"]).map(s=>`<option>${escapeHtml(s)}</option>`).join("");
   autoSeleccionarCuenta();
+  sugerirAhorroDeMeta();
+}
+
+// Una meta atada a una categoría solo cuenta lo que se marca como ahorro. Al elegir esa categoría en un gasto se tilda
+// "Es un ahorro" sola (y se avisa a qué meta suma), salvo que ya hayas decidido a mano (ahorroTocado) o sea otra cosa
+// (retiro, traspaso, frecuente).
+let ahorroTocado=false;
+function sugerirAhorroDeMeta(){
+  const val=id=>{ const e=document.getElementById(id); return e ? e.value : ""; };
+  const chk=id=>{ const e=document.getElementById(id); return !!(e && e.checked); };
+  const meta=tipo==="Gasto" && typeof metas!=="undefined" ? metaDeCategoria(metas, val("inp-cat"), val("inp-subcat")) : null;
+  const ahorro=document.getElementById("inp-ahorro");
+  if(meta && ahorro && !ahorroTocado && !ahorro.checked && !chk("inp-usa-ahorro") && !chk("inp-traspaso") && !chk("inp-frecuente")) ahorro.checked=true;
+  const hint=document.getElementById("ahorro-meta-hint");
+  if(!hint) return;
+  hint.style.display=meta?"":"none";
+  hint.textContent=meta ? `🔗 "${val("inp-cat")}" está atada a la meta "${meta.nombre}". ${chk("inp-ahorro") ? "Este ahorro suma a la meta." : "Solo suma a la meta si lo marcás como ahorro."}` : "";
 }
 
 // ═══════════════════════════════════════════
@@ -793,6 +810,7 @@ function resetForm(t){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
     document.getElementById("inp-traspaso").checked=false;
+    ahorroTocado=false;
     document.getElementById("inp-recup").value="";
     const recupSw=document.getElementById("inp-recup-switch");
     if(recupSw) recupSw.checked=false;

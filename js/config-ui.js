@@ -81,6 +81,7 @@ function updateImporteCalc(){
 
 // Toggles "Es ahorro" y "Sale de ahorros" son mutuamente excluyentes
 function onAhorroToggle(){
+  ahorroTocado=true; sugerirAhorroDeMeta();   // lo que decide el usuario manda sobre la sugerencia de la meta
   if(document.getElementById("inp-ahorro").checked){
     document.getElementById("inp-usa-ahorro").checked=false;
     // Frecuente y ahorro tampoco se mezclan: si activás ahorro, desactiva frecuente
@@ -89,6 +90,7 @@ function onAhorroToggle(){
   }
 }
 function onUsaAhorroToggle(){
+  ahorroTocado=true;
   if(document.getElementById("inp-usa-ahorro").checked){
     document.getElementById("inp-ahorro").checked=false;
     const frec=document.getElementById("inp-frecuente");
