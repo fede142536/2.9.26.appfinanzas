@@ -608,6 +608,10 @@ canvas{width:100%!important;max-width:100%}
 .venc-nombre{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .venc-txt{text-align:right;flex:1;min-width:0}
 .venc-ok{flex-shrink:0;border:0;border-radius:var(--radius-sm);background:var(--warning);color:#fff;font-size:11px;font-weight:600;padding:5px 9px;cursor:pointer}
+.venc-franja.venc-con-vencidos{background:var(--danger-light,var(--warning-light));border:1px solid var(--danger)}
+.venc-con-vencidos .venc-titulo{color:var(--danger)}
+.venc-vencida .venc-nombre{color:var(--danger)}
+.venc-vencida .venc-ok{background:var(--danger)}
 .venc-mas{font-size:12px;color:var(--muted);margin-top:2px}
 /* Copias automáticas (Config): una fila por copia con su fecha y los botones de restaurar/borrar. */
 .copia-row{display:flex;align-items:center;gap:10px;padding:10px 0}
@@ -652,6 +656,7 @@ canvas{width:100%!important;max-width:100%}
 .meta-nombre{font-size:13px;font-weight:600;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta-pct{font-size:15px;font-weight:700;color:var(--save)}
 .meta-falta{font-size:11px;color:var(--muted)}
+.meta-plan{font-size:11px;font-weight:600}
 .meta-card-nueva{background:transparent;border:1.5px dashed var(--border);border-radius:14px;min-height:172px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);cursor:pointer}
 .meta-card-nueva:active{transform:scale(.97)}

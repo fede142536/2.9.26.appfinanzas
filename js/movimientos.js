@@ -823,7 +823,7 @@ function pintarFranjaVencimientos(){
   const el=document.getElementById("mov-arrastre");
   if(!el) return;
   const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();
-  const html=aplica ? vencimientosFranjaHTML(proximosVencimientos(hoyLocal(), movs, leerVencTc())) : "";
+  const html=aplica ? vencimientosFranjaHTML(proximosVencimientos(hoyLocal(), movs, leerVencTc(), undefined, undefined, VENC_VENCIDOS_LARGO)) : "";
   if(html){ el.className="venc-wrap"; el.innerHTML=html; el.style.display="block"; }
   else if(filtro==="Todos"){ el.className="info-line"; el.innerHTML=""; el.style.display="none"; }   // sin restos de la franja anterior
 }

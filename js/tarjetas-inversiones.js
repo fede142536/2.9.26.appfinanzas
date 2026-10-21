@@ -178,6 +178,8 @@ const VENC_AVISO_KEY="fvencaviso";
 const VENC_AVISO_DEFECTO=2;    // se avisa de lo que vence en los próximos 2 días (configurable)
 const VENC_AVISO_OPCIONES=[0,1,2,3,5,7];   // "el mismo día" hasta "una semana antes"
 const VENC_VENCIDOS_DIAS=10;   // y de lo que venció hace poco; más viejo seguro ya se pagó y nadie lo tildó
+const VENC_VENCIDOS_LARGO=45;  // en el aviso de "vencidos sin pagar" se mira más atrás: hasta 45 días
+const VENC_AVISO_HOY_KEY="fvencavisohoy";   // el día en que ya se mostró el aviso de vencidos al abrir la app
 
 // Cuántos días antes se avisa. Es una preferencia: localStorage llano, como el resto de lo de vencimientos.
 function leerDiasAviso(){
@@ -310,39 +312,78 @@ function conResumenPagado(vencTc, tarjeta, ym, moneda, valor){
 // getMesMov/getTcMovsEnMes, que leen los datos globales.
 // Cada ítem: {tipo, nombre, fecha, dias, monto, moneda, ym} + {tarjeta} o {id} según el tipo, para
 // poder marcarlo pagado desde la franja.
-function proximosVencimientos(hoyISO, lista, vencTc, ventana, mesesAdelante){
+function proximosVencimientos(hoyISO, lista, vencTc, ventana, mesesAdelante, vencidosDias){
   const hoyYM=String(hoyISO).slice(0,7);
   const tope=ventana===undefined ? leerDiasAviso() : ventana;
   const meses=[addMonths(hoyYM,-1), hoyYM];
   for(let i=1;i<=(mesesAdelante===undefined?1:mesesAdelante);i++) meses.push(addMonths(hoyYM,i));
-  const out=[];
+  // `todos` trae también lo ya pagado: sirve para saber cuál es el último mes vencido de cada ítem.
+  const todos=[];
+  const agregar=(v, pagado)=>{ v.pagado=pagado; todos.push(v); };
   meses.forEach(ym=>{
     resumenesDelMes(ym, lista).forEach(r=>{
       const d=datosResumenTc(vencTc, r.tarjeta, ym);
       if(!d.vto) return;
-      if(d.pagado[r.moneda] || r.resta<=0) return;     // lo marcaste pagado, o los pagos ligados lo cubren
-      out.push({tipo:"tarjeta", nombre:r.tarjeta||"Tarjeta", tarjeta:r.tarjeta, ym, fecha:d.vto,
-                dias:diasEntre(hoyISO,d.vto), monto:r.resta, moneda:r.moneda});
+      // pagado: lo marcaste, o los pagos ligados lo cubren
+      agregar({tipo:"tarjeta", nombre:r.tarjeta||"Tarjeta", tarjeta:r.tarjeta, ym, fecha:d.vto,
+               dias:diasEntre(hoyISO,d.vto), monto:r.resta, moneda:r.moneda}, !!d.pagado[r.moneda] || r.resta<=0);
     });
     // Un gasto frecuente de tarjeta con su propio día de vencimiento (además del resumen de la tarjeta).
     getTcMovsEnMes(ym).forEach(m=>{
-      if(!m.frecuente || m.pagado) return;
+      if(!m.frecuente) return;
       const fecha=fechaVencimiento(ym, m.diaVto);
       if(!fecha) return;
-      out.push({tipo:"frecuenteTc", nombre:`${m.desc||"Gasto frecuente"}${m.tarjeta?` (${m.tarjeta})`:""}`, id:m.id, ym, fecha,
-                dias:diasEntre(hoyISO,fecha), monto:m.importe||0, moneda:monedaTc(m.moneda)});
+      agregar({tipo:"frecuenteTc", nombre:`${m.desc||"Gasto frecuente"}${m.tarjeta?` (${m.tarjeta})`:""}`, id:m.id, ym, fecha,
+               dias:diasEntre(hoyISO,fecha), monto:m.importe||0, moneda:monedaTc(m.moneda)}, !!m.pagado);
     });
     getMesMov(ym).forEach(m=>{
-      if(!m._isFrecVirtual || m.pagado) return;
+      if(!m._isFrecVirtual) return;
       const fecha=fechaVencimiento(ym, m.diaVto);
       if(!fecha) return;
       const usd=m.moneda==="USD";
       const nombre=m.subcat && !SUBCAT_SIN_VALOR.includes(m.subcat) ? m.subcat : (m.cat||"Gasto frecuente");
-      out.push({tipo:"frecuente", nombre, id:m.id, ym, fecha, dias:diasEntre(hoyISO,fecha),
-                monto:usd?(m.importeOrig||0):(m.importe||0), moneda:usd?"USD":"ARS"});
+      agregar({tipo:"frecuente", nombre, id:m.id, ym, fecha, dias:diasEntre(hoyISO,fecha),
+               monto:usd?(m.importeOrig||0):(m.importe||0), moneda:usd?"USD":"ARS"}, !!m.pagado);
     });
   });
-  return out.filter(v=>v.dias<=tope && v.dias>=-VENC_VENCIDOS_DIAS).sort((a,b)=>a.dias-b.dias || a.nombre.localeCompare(b.nombre));
+  const largo=vencidosDias>VENC_VENCIDOS_DIAS;
+  // En la vista larga, de un mismo ítem solo cuenta su mes más reciente que ya llegó a su fecha: si ese ya está pagado (o es más nuevo), los
+  // anteriores sin tildar seguro se pagaron y nadie los marcó. Un frecuente sin tildar no puede dar un aviso por cada mes.
+  const llave=v=>v.tipo+"|"+(v.tarjeta!==undefined?v.tarjeta+"|"+v.moneda:v.id);
+  const ultimo={};
+  if(largo) todos.forEach(v=>{ if(v.dias<=0){ const k=llave(v); if(!ultimo[k]||v.ym>ultimo[k]) ultimo[k]=v.ym; } });
+  const maxVencido=vencidosDias||VENC_VENCIDOS_DIAS;
+  return todos
+    .filter(v=>!v.pagado && v.dias<=tope && v.dias>=-maxVencido && !(largo && v.dias<0 && ultimo[llave(v)]!==v.ym))
+    .map(v=>{ const {pagado, ...resto}=v; return resto; })
+    .sort((a,b)=>a.dias-b.dias || a.nombre.localeCompare(b.nombre));
+}
+
+// Lo que ya venció y sigue sin marcarse como pagado (hasta VENC_VENCIDOS_DIAS), el más atrasado primero.
+const vencidosSinPagar=(hoyISO, lista, vencTc)=>proximosVencimientos(hoyISO, lista, vencTc, -1, 0, VENC_VENCIDOS_LARGO);
+
+// "Visa (venció hace 3 días), Alquiler (venció ayer)": para el aviso de vencidos.
+const textoVencidos=(items, max)=>{
+  const lim=max||4;
+  const t=items.slice(0,lim).map(v=>`${v.nombre} (${textoVencimiento(v.dias)})`).join(", ");
+  return items.length>lim ? `${t} y ${items.length-lim} más` : t;
+};
+
+// Al abrir la app: si hay vencimientos que pasaron sin marcarse como pagados, avisa (una vez por día).
+// Devuelve cuántos avisó (0 si no había, ya avisó hoy, o hay otro diálogo abierto).
+async function avisarVencidosSinPagar(){
+  const hoy=hoyLocal();
+  if(localStorage.getItem(VENC_AVISO_HOY_KEY)===hoy) return 0;
+  const dlg=document.getElementById("modal-dialogo");
+  if(dlg && dlg.classList.contains("open")) return 0;
+  const venc=vencidosSinPagar(hoy, movs, leerVencTc());
+  if(!venc.length) return 0;
+  guardarPreferencia(VENC_AVISO_HOY_KEY, hoy);
+  const ver=await mostrarConfirm(
+    `${venc.length===1?"Hay 1 vencimiento":`Hay ${venc.length} vencimientos`} que ya pasó y sigue sin marcarse como pagado: ${textoVencidos(venc)}. Si ya lo pagaste, marcalo como pagado y deja de avisar.`,
+    {titulo:"⚠️ Vencimientos sin pagar", textoOk:"Ver y marcar", textoCancelar:"Más tarde"});
+  if(ver && typeof irAMovimientos==="function") irAMovimientos();
+  return venc.length;
 }
 
 // Marca/desmarca como pagado UN mes de un gasto frecuente de tarjeta (solo el aviso de su vencimiento:
@@ -363,18 +404,20 @@ function montoVenc(v){ return v.moneda==="USD" ? `USD ${v.monto.toFixed(2)}` : f
 // botón para marcarla pagada si ya lo hiciste.
 function vencimientosFranjaHTML(items, max){
   if(!items.length) return "";
-  const lim=max||3;
+  const vencidos=items.filter(v=>v.dias<0).length;
+  const lim=Math.max(max||3, vencidos);   // los vencidos sin pagar se muestran todos, no se esconden en "y N más"
   const filas=items.slice(0,lim).map(v=>{
     const color=v.dias<0 ? "var(--danger)" : v.dias<=1 ? "var(--warning)" : "var(--muted)";
     const accion=v.tipo==="tarjeta" ? `marcarPagadoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)},true)`
       : v.tipo==="frecuenteTc" ? `toggleTcFrecPagado(${Number(v.id)},${attrJS(v.ym)})`
       : `toggleFrecPagado(${Number(v.id)},${attrJS(v.ym)})`;
-    return `<div class="venc-fila"><span class="venc-nombre">${v.tipo==="tarjeta"?"💳":"🔁"} ${escapeHtml(v.nombre)}</span>
+    return `<div class="venc-fila${v.dias<0?" venc-vencida":""}"><span class="venc-nombre">${v.tipo==="tarjeta"?"💳":"🔁"} ${escapeHtml(v.nombre)}</span>
       <span class="venc-txt" style="color:${color}">${textoVencimiento(v.dias)}${v.tipo==="tarjeta"?" · resta":" ·"} <strong>${montoVenc(v)}</strong></span>
       <button type="button" class="venc-ok" aria-label="Marcar ${escapeHtml(v.nombre)} como pagado" onclick="${accion}">✓ Pagado</button></div>`;
   }).join("");
   const mas=items.length>lim ? `<div class="venc-mas">y ${items.length-lim} más</div>` : "";
-  return `<div class="venc-franja"><div class="venc-titulo">🗓 Vencimientos</div>${filas}${mas}</div>`;
+  const titulo=vencidos ? `⚠️ ${vencidos===1?"1 vencimiento sin pagar":`${vencidos} vencimientos sin pagar`}` : "🗓 Vencimientos";
+  return `<div class="venc-franja${vencidos?" venc-con-vencidos":""}"><div class="venc-titulo">${titulo}</div>${filas}${mas}</div>`;
 }
 
 // ── Vencimientos al calendario del teléfono (.ics) ──

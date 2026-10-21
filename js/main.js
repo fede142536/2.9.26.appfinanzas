@@ -115,6 +115,7 @@ async function bootApp(){
   // apenas abre la app. avisarSiFaltaBackup() decide adentro si corresponde mostrar algo.
   setTimeout(avisarSiFaltaBackup, 1300);
   // La copia automática del día va después, para no competir con el primer render.
+  setTimeout(avisarVencidosSinPagar, 2000);   // vencimientos que pasaron sin marcarse como pagados (una vez por día)
   setTimeout(copiaAutomaticaSiToca, 2500);
   setTimeout(programarSyncCalendario, 3500);   // si hay un permiso vigente de Google, se ponen al día los vencimientos
 }

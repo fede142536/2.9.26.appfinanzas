@@ -274,6 +274,7 @@ function llenarSelectFondoMeta(valor, valorSub){
     +(otras.length?`<optgroup label="Otra categoría (arranca en $0)">${otras.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")}</optgroup>`:"");
   sel.value=valor ? valor+(valorSub?SEP_FONDO+valorSub:"") : "";
   avisoFondoMeta();
+  avisoPlanMeta();
 }
 
 // Una meta atada solo cuenta lo marcado como ahorro. Si en la categoría elegida hay gastos cargados sin marcar, no suman:
@@ -303,12 +304,48 @@ async function marcarGastosComoAhorroMeta(){
   llenarSelectFondoMeta(cat, sub||"");
   renderMetas();
 }
+// "mar 2027" para la fecha objetivo.
+const mesCortoMeta=iso=>{ const [y,m]=String(iso).split("-"); return MESES[parseInt(m,10)-1].slice(0,3).toLowerCase()+" "+y; };
+const fechaCortaMeta=iso=>{ const [y,m,d]=String(iso).split("-"); return `${d}/${m}/${y}`; };
+
+// La línea chica de la tarjeta de una meta con fecha: "📅 mar 2027 · $333.000/mes". null si no aplica.
+function planMetaTarjeta(plan){
+  if(!plan.fecha || plan.estado==="cumplida" || plan.estado==="sinFecha") return null;
+  if(plan.estado==="vencida") return {txt:`📅 Venció el ${fechaCortaMeta(plan.fecha)}`, color:"var(--danger)"};
+  const color=plan.estado==="atrasada" ? "var(--danger)" : plan.estado==="aTiempo" ? "var(--save)" : "var(--muted)";
+  return {txt:`📅 ${mesCortoMeta(plan.fecha)} · ${fmtTotal(Math.ceil(plan.porMes))}/mes`, color};
+}
+// El detalle para el editor: lo que necesitás ahorrar y cómo venís.
+function planMetaDetalle(plan){
+  if(plan.estado==="cumplida") return "🎉 Esta meta ya está cumplida.";
+  const ritmo=plan.ritmo!==null && plan.ritmo>0 ? `A tu ritmo de los últimos 3 meses (${fmtTotal(Math.round(plan.ritmo))}/mes) llegarías en ${mesCortoMeta(plan.llegaEn)}.`
+    : plan.ritmo===0 ? "En los últimos 3 meses no sumaste ahorros netos en este fondo (lo retirado compensa lo depositado), así que no puedo estimar cuándo llegarías." : "";
+  if(plan.estado==="sinFecha") return ritmo ? `Sin fecha objetivo. ${ritmo}` : "";
+  if(plan.estado==="vencida") return `Esa fecha ya pasó y todavía faltan ${fmtTotal(plan.falta)}. ${ritmo}`.trim();
+  const base=`Para llegar a ${mesCortoMeta(plan.fecha)} necesitás ahorrar ${fmtTotal(Math.ceil(plan.porMes))} por mes (faltan ${fmtTotal(plan.falta)}).`;
+  const veredicto=plan.estado==="aTiempo" ? " ✅ Vas a tiempo." : plan.estado==="atrasada" ? " ⚠️ Vas atrasado: tendrías que ahorrar más por mes." : "";
+  return `${base} ${ritmo}${veredicto}`.trim();
+}
+// Vista previa en el editor, con lo que está escrito en el formulario (todavía sin guardar).
+function avisoPlanMeta(){
+  const el=document.getElementById("meta-plan");
+  if(!el) return;
+  const objetivo=parseFloat((document.getElementById("meta-objetivo")||{}).value)||0;
+  const fecha=(document.getElementById("meta-fecha")||{}).value||"";
+  const [fondoCat, fondoSub]=(((document.getElementById("meta-fondo")||{}).value)||"").split(SEP_FONDO);
+  const actual=(metas.find(x=>x.id===editingMetaId)||{}).actual||0;
+  if(objetivo<=0 || (!fecha && !fondoCat)){ el.style.display="none"; el.textContent=""; return; }
+  const txt=planMetaDetalle(planDeMeta({objetivo, actual, fondoCat:fondoCat||undefined, fondoSub:fondoSub||undefined, fechaObjetivo:fecha||undefined}, movs, hoyLocal()));
+  el.style.display=txt?"":"none"; el.textContent=txt;
+}
+
 function openMetaModal(){
   editingMetaId=null;
   document.getElementById("meta-modal-title").textContent="Nueva meta de ahorro";
   document.getElementById("meta-nombre").value="";
   document.getElementById("meta-objetivo").value="";
   document.getElementById("meta-emoji").value="🎯";
+  const fe=document.getElementById("meta-fecha"); if(fe) fe.value="";
   llenarSelectFondoMeta("");
   document.getElementById("btn-guardar-meta").textContent="Crear meta";
   document.getElementById("modal-meta").classList.add("open");
@@ -325,6 +362,7 @@ function openEditMetaModal(id){
   document.getElementById("meta-nombre").value=m.nombre;
   document.getElementById("meta-objetivo").value=m.objetivo;
   document.getElementById("meta-emoji").value=iconoSeguro(m.emoji)||"🎯";
+  const fe=document.getElementById("meta-fecha"); if(fe) fe.value=m.fechaObjetivo||"";
   llenarSelectFondoMeta(m.fondoCat||"", m.fondoSub||"");
   document.getElementById("btn-guardar-meta").textContent="Guardar cambios";
   document.getElementById("modal-meta").classList.add("open");
@@ -336,11 +374,13 @@ function guardarMeta(){
   const emoji=iconoSeguro(document.getElementById("meta-emoji").value) || "🎯";
   if(!nombre||objetivo<=0){showToast("Completá nombre y objetivo");return;}
   const editando=editingMetaId;
+  const fechaObjetivo=((document.getElementById("meta-fecha")||{}).value)||"";
   const [fondoCat, fondoSub]=(((document.getElementById("meta-fondo")||{}).value)||"").split(SEP_FONDO);
   if(editando){
     const m=metas.find(x=>x.id===editando);
     if(m){
       m.nombre=nombre; m.objetivo=objetivo; m.emoji=emoji;
+      if(fechaObjetivo) m.fechaObjetivo=fechaObjetivo; else delete m.fechaObjetivo;
       if(fondoCat){ m.fondoCat=fondoCat; if(fondoSub) m.fondoSub=fondoSub; else delete m.fondoSub; delete m.fondoManual; m.actual=montoDeMeta(m,movs); }
       else{
         // Al pasar de "atada" a "a mano" el monto cargado queda como estaba el saldo, y no se vuelve a atar sola.
@@ -349,7 +389,7 @@ function guardarMeta(){
       }
     }
   } else {
-    metas.push({id:Date.now(),nombre,objetivo,actual:0,emoji, ...(fondoCat?{fondoCat, ...(fondoSub?{fondoSub}:{})}:{fondoManual:true})});
+    metas.push({id:Date.now(),nombre,objetivo,actual:0,emoji, ...(fechaObjetivo?{fechaObjetivo}:{}), ...(fondoCat?{fondoCat, ...(fondoSub?{fondoSub}:{})}:{fondoManual:true})});
   }
   editingMetaId=null;
   save();closeMetaModal();
@@ -403,7 +443,8 @@ function renderMetas(){
     const emoji=iconoSeguro(m.emoji)||"🎯";
     const falta=Math.max(0,m.objetivo-monto);
     const atada=!!m.fondoCat;
-    const aria=`${m.nombre}, ${pct}%, ${cumplida?"meta cumplida":"faltan "+fmtTotal(falta)}. ${atada?"Toma su monto de "+nombreFondoMeta(m)+". Cargar un ahorro":"Depositar"}`;
+    const plan=planMetaTarjeta(planDeMeta(m,movs,hoyLocal()));
+    const aria=`${m.nombre}, ${pct}%, ${cumplida?"meta cumplida":"faltan "+fmtTotal(falta)}${plan?", "+plan.txt.replace("📅 ",""):""}. ${atada?"Toma su monto de "+nombreFondoMeta(m)+". Cargar un ahorro":"Depositar"}`;
     return `<div class="meta-wrap"><button type="button" class="meta-card" aria-label="${escapeHtml(aria)}"
         onpointerdown="metaCardDown(${m.id})" onpointerup="metaCardUp()" onpointerleave="metaCardUp()"
         oncontextmenu="metaCardContextMenu(event,${m.id})" onclick="metaCardClick(${m.id})">
@@ -413,6 +454,7 @@ function renderMetas(){
       <span class="meta-nombre">${escapeHtml(m.nombre)}${atada?` <span title="Toma su monto de ${escapeHtml(nombreFondoMeta(m))}" aria-hidden="true">🔗</span>`:""}</span>
       <span class="meta-pct">${pct}%</span>
       <span class="meta-falta">${cumplida?"¡Meta cumplida!":"Faltan "+fmtTotal(falta)}</span>
+      ${plan?`<span class="meta-plan" style="color:${plan.color}">${escapeHtml(plan.txt)}</span>`:""}
     </button><button type="button" class="meta-edit" aria-label="Editar la meta ${escapeHtml(m.nombre)}" onclick="openEditMetaModal(${m.id})">✎</button></div>`;
   }).join("")+nueva;
 }
