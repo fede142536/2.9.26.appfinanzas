@@ -777,5 +777,10 @@ canvas{width:100%!important;max-width:100%}
 .concil-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:14px}
 .concil-delta{font-weight:600;white-space:nowrap;font-size:13px}
 .concil-det{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+.concil-tick{display:inline-block;padding:1px 7px;margin-right:6px;border-radius:999px;background:var(--tema-light,var(--bg));color:var(--tema-color,var(--text));font-size:11px;font-weight:700;letter-spacing:.03em}
+.concil-tick-vacio{background:var(--border);color:var(--muted)}
+.concil-chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+.concil-chip{border:1px solid var(--border);background:var(--card,transparent);color:var(--text);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.concil-chip.activo{background:var(--tema-light,var(--bg));color:var(--tema-color,var(--text));border-color:var(--tema-color,var(--border))}
 .concil-plegable{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}
 .concil-plegable>summary{cursor:pointer;font-size:13px;font-weight:600}
