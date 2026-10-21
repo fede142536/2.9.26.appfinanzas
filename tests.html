@@ -83,6 +83,7 @@
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
 <script src="js/conciliacion.js"></script>
+<script src="js/cuentas-sugeridas.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
 <script src="js/cuentas-tarjetas-categorias.js"></script>
@@ -5134,7 +5135,7 @@ test("la fila de Tarjetas muestra con qué gasto se pagó y cuánto difiere de l
     try{
       const html=resumenesTcHTML(ym);
       cierto(html.includes("✓ Pagado con tu gasto del 12"), "falta con qué gasto se pagó: "+html);
-      cierto(html.includes("más que las compras cargadas") && html.includes("sin cargar"), "falta la diferencia: "+html);
+      cierto(html.includes("Gastos administrativos de la tarjeta") && !html.includes("sin cargar"), "falta la diferencia como gasto administrativo: "+html);
       cierto(html.includes("Deshacer"));
       igual(diferenciaPagoTcHTML({total:150000, moneda:"ARS"}, pago), "", "sin diferencia no dice nada");
       cierto(diferenciaPagoTcHTML({total:200000, moneda:"ARS"}, pago).includes("menos"));
@@ -5246,6 +5247,134 @@ test("el backup incluye los bancos de las tarjetas y al restaurarlo vuelven", ()
   igual(b.datos.bancosTarjeta, {Visa:"BPat"});
   cierto(aplicarBackup.toString().includes("bancosTarjeta"), "aplicarBackup no restaura los bancos");
 }));
+
+// ── Gastos administrativos de la tarjeta ──
+const TC_CARGOS=()=>[{id:1,desc:"Notebook",total:1000000,cuotasTotal:1,mesInicio:"2026-09",tarjeta:"Visa",moneda:"ARS"},
+                     {id:2,desc:"Compra",total:500000,cuotasTotal:1,mesInicio:"2026-10",tarjeta:"Visa",moneda:"ARS"},
+                     {id:3,desc:"Claude",total:20,cuotasTotal:1,mesInicio:"2026-10",tarjeta:"Visa",moneda:"USD"}];
+const VENC_CARGOS=()=>conResumenPagado(conResumenPagado(conResumenPagado({}, "Visa","2026-09","ARS",true,901), "Visa","2026-10","ARS",true,902), "Visa","2026-10","USD",true,903);
+const PAGOS_CARGOS=()=>[PAGO_GASTO(901,"2026-10-05",1042000), PAGO_GASTO(902,"2026-11-05",495000), PAGO_GASTO(903,"2026-11-05",0,{moneda:"USD",importe:0,importeOrig:23.5})];
+
+test("cargosDeTarjetaMes: lo pagado menos las compras cargadas, solo de resúmenes con el pago vinculado", ()=>conVenc({tcs:TC_CARGOS()}, ()=>{
+  const sep=cargosDeTarjetaMes("2026-09", PAGOS_CARGOS(), VENC_CARGOS());
+  igual(sep.length, 1); igual(sep[0].compras, 1000000); igual(sep[0].pagado, 1042000); igual(sep[0].cargo, 42000); igual(sep[0].pct, 4.2);
+  const oct=cargosDeTarjetaMes("2026-10", PAGOS_CARGOS(), VENC_CARGOS());
+  igual(oct.length, 2); const ars=oct.find(x=>x.moneda==="ARS"), usd=oct.find(x=>x.moneda==="USD");
+  igual(ars.cargo, -5000, "pagó menos: bonificación o pago parcial"); igual(usd.cargo, 3.5, "en dólares usa importeOrig");
+  igual(cargosDeTarjetaMes("2026-10", PAGOS_CARGOS(), conResumenPagado({}, "Visa","2026-10","ARS",true)).length, 0, "marcado a mano, sin gasto vinculado: no se sabe cuánto pagó");
+  igual(cargosDeTarjetaMes("2026-10", [], VENC_CARGOS()).length, 0, "si se borró el gasto vinculado no hay dato");
+}));
+
+test("cargosDeTarjetaAnio suma por mes y moneda, solo los meses con datos y hasta el mes pedido", ()=>conVenc({tcs:TC_CARGOS()}, ()=>{
+  const a=cargosDeTarjetaAnio("2026", "2026-12", PAGOS_CARGOS(), VENC_CARGOS());
+  igual(a.map(x=>x.ym), ["2026-09","2026-10"]); igual(a[0].ARS, 42000); igual(a[1].ARS, -5000); igual(a[1].USD, 3.5);
+  igual(cargosDeTarjetaAnio("2026", "2026-09", PAGOS_CARGOS(), VENC_CARGOS()).map(x=>x.ym), ["2026-09"], "no mira meses futuros");
+  igual(cargosDeTarjetaAnio("2025", "2025-12", PAGOS_CARGOS(), VENC_CARGOS()), []);
+}));
+
+test("la sección de Tarjetas explica los gastos administrativos y, con datos, los lista por mes", ()=>conVenc({tcs:TC_CARGOS(), venc:VENC_CARGOS()}, ()=>{
+  const antes=movs;
+  try{
+    movs=[];
+    const vacio=cargosTarjetaHTML("2026-10");
+    cierto(vacio.includes("Gastos administrativos") && vacio.includes("vincular"), "sin datos tiene que explicar cómo se calcula: "+vacio);
+    movs=PAGOS_CARGOS();
+    const h=cargosTarjetaHTML("2026-10");
+    cierto(h.includes("En 2026") && h.includes("42.000"), h);
+    cierto(h.includes("Septiembre 2026") && h.includes("Octubre 2026") && h.includes("+4,2%"), "falta el detalle por mes: "+h);
+    cierto(h.includes("ya están dentro") || h.includes("Ya están dentro"), "tiene que aclarar que no suma al balance");
+    cierto(h.includes("USD 3.50"));
+  } finally { movs=antes; }
+}));
+
+test("los gastos administrativos no cambian el balance: ya están en el pago cargado", ()=>conVenc({tcs:TC_CARGOS(), venc:VENC_CARGOS()}, ()=>{
+  const antes=movs; movs=PAGOS_CARGOS();
+  try{ const b=JSON.stringify(totalesDePlata(movs)); cargosTarjetaHTML("2026-10"); cargosDeTarjetaAnio("2026","2026-12",movs,leerVencTc()); igual(JSON.stringify(totalesDePlata(movs)), b); }
+  finally{ movs=antes; }
+}));
+
+// ── Movimientos sin cuenta: sugerir y asignar en lote ──
+const MOV_C=(id,cat,sub,cuenta,extra)=>({id,tipo:"Gasto",cat,subcat:sub,importe:1000,fecha:"2026-10-10",cuenta,...(extra||{})});
+const SIN_CUENTA_DATOS=()=>[
+  // Supermercado › Verdulería: 4 de 4 en Mercado Libre → sugerencia a nivel subcategoría
+  ...[1,2,3,4].map(i=>MOV_C(i,"Supermercado","Verdulería","Mercado Libre")),
+  // Supermercado › Almacén: solo 1 con cuenta, pero la categoría tiene 10 de 11 (91%) en Mercado Libre
+  MOV_C(5,"Supermercado","Almacén","Mercado Libre"), ...[6,7,8].map(i=>MOV_C(i,"Supermercado","Carnicería","Mercado Libre")), MOV_C(9,"Supermercado","Fiambrería","Mercado Libre"), MOV_C(10,"Supermercado","Pastas","Mercado Libre"), MOV_C(11,"Supermercado","Pastas","Efectivo"),
+  // Salud: repartida 50/50 → no hay sugerencia
+  ...[20,21,22].map(i=>MOV_C(i,"Salud","Farmacia","Galicia")), ...[23,24,25].map(i=>MOV_C(i,"Salud","Farmacia","Efectivo")),
+  // sin cuenta
+  MOV_C(100,"Supermercado","Verdulería","Cuentas"), MOV_C(101,"Supermercado","Verdulería",""), MOV_C(102,"Supermercado","Verdulería",undefined),
+  MOV_C(103,"Supermercado","Almacén","Cuentas"), MOV_C(104,"Supermercado","Almacén","Cuentas"),
+  MOV_C(105,"Salud","Farmacia","Cuentas"),
+  // lo que NO se mira
+  {...MOV_C(200,"Cambio","x","Cuentas"), cambioId:"c1"}, {id:201,tipo:"Tarjeta",cat:"x",cuenta:"Cuentas"}, MOV_C(202,"Super","x","  ")];
+
+test("sugerirCuentas: aprende de lo que ya tiene cuenta, por subcategoría y si no alcanza por categoría", ()=>{
+  const r=sugerirCuentas(SIN_CUENTA_DATOS());
+  igual(r.total, 7, "3 verdulería + 2 almacén + 1 salud + 1 'Super' con espacios");
+  const g=(cat,sub)=>r.grupos.find(x=>x.cat===cat && x.sub===sub);
+  igual(g("Supermercado","Verdulería").cuenta, "Mercado Libre"); igual(g("Supermercado","Verdulería").ids.length, 3); igual(g("Supermercado","Verdulería").confianza, 1);
+  const alm=r.grupos.find(x=>x.cat==="Supermercado" && x.sub===null);
+  igual(alm.cuenta, "Mercado Libre", "Almacén no tiene muestras propias: usa la categoría"); igual(alm.ids.length, 2); cierto(alm.confianza>0.9 && alm.confianza<0.92, alm.confianza); igual(alm.muestras, 11, "10 de 11 en Mercado Libre");
+  const salud=r.grupos.find(x=>x.cat==="Salud");
+  igual(salud.cuenta, null, "repartido 50/50: no se inventa una sugerencia"); igual(salud.ids.length, 1);
+  igual(r.conSugerencia, 5); igual(r.sinSugerencia, 2);
+});
+
+test("sugerirCuentas: no mira cambios, tarjetas ni lo que ya tiene cuenta; no modifica la lista; con poca muestra no sugiere", ()=>{
+  const l=SIN_CUENTA_DATOS(), foto=JSON.stringify(l);
+  const r=sugerirCuentas(l); igual(JSON.stringify(l), foto, "no puede modificar los datos");
+  cierto(!r.grupos.some(g=>g.ids.includes(200)||g.ids.includes(201)), "patas de cambio y tarjetas no entran");
+  const poco=sugerirCuentas([MOV_C(1,"Auto","Nafta","Galicia"), MOV_C(2,"Auto","Nafta","Galicia"), MOV_C(3,"Auto","Nafta","Cuentas")]);
+  igual(poco.grupos[0].cuenta, null, "2 muestras no alcanzan");
+  igual(sugerirCuentas([]).total, 0); igual(sugerirCuentas(null).total, 0);
+});
+
+test("asignarCuentaAMovimientos solo toca los que siguen sin cuenta y nunca pone 'Cuentas'", ()=>{
+  const l=[MOV_C(1,"A","a","Cuentas"), MOV_C(2,"A","a","Galicia"), MOV_C(3,"A","a",""), MOV_C(4,"A","a","Cuentas")];
+  igual(asignarCuentaAMovimientos(l, [1,2,3], "BPat"), 2, "el 2 ya tenía Galicia y no se pisa");
+  igual(l.map(m=>m.cuenta), ["BPat","Galicia","BPat","Cuentas"]);
+  igual(asignarCuentaAMovimientos(l, [4], "Cuentas"), 0); igual(asignarCuentaAMovimientos(l, [4], ""), 0);
+});
+
+test("la hoja de movimientos sin cuenta: lista los grupos, asigna uno o todos, pide confirmación y copia de seguridad", async ()=>{
+  const mk=id=>{ const e=document.createElement("div"); e.id=id; document.body.appendChild(e); return e; };
+  const els=["sin-cuenta-card","sin-cuenta-resumen","modal-sin-cuenta","sin-cuenta-detalle"].map(mk);
+  const antes={movs, save:window.save, toast:window.showToast, confirm:window.mostrarConfirm, copia:window.guardarCopiaLocal};
+  let guardados=0, copias=0, confirmaciones=0, respuesta=true;
+  try{
+    movs=SIN_CUENTA_DATOS();
+    window.save=()=>{ guardados++; return true; }; window.showToast=()=>{}; window.guardarCopiaLocal=async()=>{ copias++; };
+    window.mostrarConfirm=async()=>{ confirmaciones++; return respuesta; };
+    renderSinCuentaCard();
+    cierto(document.getElementById("sin-cuenta-resumen").textContent.includes("7 movimientos") && document.getElementById("sin-cuenta-card").style.display==="", "falta el resumen");
+    abrirSinCuenta();
+    const h=document.getElementById("sin-cuenta-detalle").innerHTML;
+    cierto(h.includes("7 movimientos sin cuenta") && h.includes("Verdulería") && h.includes("Sugerida:") && h.includes("Mercado Libre") && h.includes("Sin sugerencia"), h.slice(0,400));
+    cierto(h.includes("no se cambia nada hasta que tocás"), "tiene que aclarar que no cambia nada solo");
+    igual(movs.filter(m=>m.cuenta==="Mercado Libre").length, 10, "abrir la hoja no cambia nada");
+    // un grupo sin elegir cuenta: no hace nada
+    const iSalud=sinCuentaGrupos.findIndex(g=>g.cat==="Salud");
+    await aplicarGrupoSinCuenta(iSalud); igual(guardados, 0, "sin cuenta elegida no se guarda nada");
+    document.getElementById("sc-sel-"+iSalud).value="Galicia"; await aplicarGrupoSinCuenta(iSalud);
+    igual(movs.find(m=>m.id===105).cuenta, "Galicia"); igual(guardados, 1); igual(copias, 1, "copia de seguridad antes del primer cambio");
+    // aplicar todas las sugerencias: confirma, no repite la copia
+    respuesta=false; await aplicarSugerenciasSinCuenta(); igual(confirmaciones, 1); igual(movs.find(m=>m.id===100).cuenta, "Cuentas", "si dice que no, no cambia");
+    respuesta=true; await aplicarSugerenciasSinCuenta(); igual(movs.find(m=>m.id===100).cuenta, "Mercado Libre"); igual(movs.find(m=>m.id===104).cuenta, "Mercado Libre");
+    igual(copias, 1, "una copia por apertura de la hoja");
+    igual(sugerirCuentas(movs).total, 1, "queda solo el que no era un movimiento común ('Super' con espacios)");
+  } finally { movs=antes.movs; window.save=antes.save; window.showToast=antes.toast; window.mostrarConfirm=antes.confirm; window.guardarCopiaLocal=antes.copia; els.forEach(e=>e.remove()); sinCuentaGrupos=[]; }
+});
+
+test("la tarjeta de Configuración se oculta cuando todo tiene cuenta, y la hoja está en index.html y en el service worker", async ()=>{
+  const card=document.createElement("div"); card.id="sin-cuenta-card"; document.body.appendChild(card);
+  const antes=movs;
+  try{ movs=[MOV_C(1,"A","a","Galicia")]; renderSinCuentaCard(); igual(card.style.display, "none"); }
+  finally{ movs=antes; card.remove(); }
+  const html=await (await fetch("index.html")).text();
+  ["sin-cuenta-card","modal-sin-cuenta","sin-cuenta-detalle","js/cuentas-sugeridas.js"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
+  cierto((await (await fetch("sw.js")).text()).includes("./js/cuentas-sugeridas.js"), "el service worker no cachea cuentas-sugeridas.js");
+});
 
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
   igual(proximosVencimientos("2026-09-08", movs, {}), []);
@@ -7521,7 +7650,7 @@ test("la configuración está en 5 secciones plegables, cerradas al empezar", as
 test("ninguna tarjeta de Configuración se perdió ni quedó fuera de una sección", async ()=>{
   const cfg=await configHTML();
   TARJETAS_CONFIG.forEach(t=>cierto(cfg.includes(t), "falta la tarjeta: "+t));
-  igual((cfg.match(/<div class="card"/g)||[]).length, 16, "tienen que seguir siendo 16 tarjetas");
+  igual((cfg.match(/<div class="card"/g)||[]).length, 17, "tienen que ser 17 tarjetas (16 + la de movimientos sin cuenta)");
   // toda tarjeta está adentro de alguna sección: antes del primer <details> no hay ninguna
   cierto(!cfg.slice(0, cfg.indexOf('<details class="cfg-seccion"')).includes('<div class="card"'), "quedó una tarjeta suelta antes de las secciones");
   // el contenido sigue bien cerrado: tantas aperturas como cierres

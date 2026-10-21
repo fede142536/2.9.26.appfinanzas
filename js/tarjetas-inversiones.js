@@ -954,7 +954,7 @@ function renderTarjetas(){
         const icono=vistaCategoria?getIcon(nombre,"💳"):"💳";
         return filaBarraTc(`${icono} ${vistaCategoria?escapeHtml(nombre):tarjetaConBancoHTML(nombre)}`, moneda, val, maxPorMoneda[moneda]||1);
       }).join("")+`</div>`;
-      html+=resumenesTcHTML(ymSel);
+      html+=resumenesTcHTML(ymSel)+cargosTarjetaHTML(ymSel);
     }
 
     balanceEl.innerHTML=html;
@@ -1012,13 +1012,58 @@ function resumenesTcHTML(ym){
   }).join("")+`</div>`;
 }
 
-// Si lo que pagaste no es lo que suman las compras cargadas, lo dice: típico de una tarjeta que agrega gastos que todavía
-// no cargaste. Con menos de $1 de diferencia no dice nada.
+// Lo que pagaste de más (o de menos) respecto de las compras cargadas del resumen son los GASTOS ADMINISTRATIVOS de la
+// tarjeta (intereses, comisiones, impuestos, seguros). Ya están dentro del pago que cargaste como gasto, así que el balance
+// los cuenta: acá solo se muestran. Con menos de $1 de diferencia no dice nada.
 function diferenciaPagoTcHTML(r, movPago){
   const pagado=r.moneda==="USD" ? (movPago.importeOrig||0) : (movPago.importe||0);
   const dif=Math.round((pagado-r.total)*100)/100;
   if(Math.abs(dif)<1) return "";
-  return `<div class="tc-res-sub">${dif>0 ? `Pagaste ${fmt(dif,r.moneda)} más que las compras cargadas: puede haber gastos de la tarjeta sin cargar.` : `Pagaste ${fmt(-dif,r.moneda)} menos que las compras cargadas.`}</div>`;
+  return `<div class="tc-res-sub">${dif>0 ? `Gastos administrativos de la tarjeta: <strong>${fmt(dif,r.moneda)}</strong>` : `Pagaste ${fmt(-dif,r.moneda)} menos que las compras cargadas (bonificación o pago parcial).`}</div>`;
+}
+
+// ── Gastos administrativos de la tarjeta, mes a mes ──
+// Solo de los resúmenes cuyo pago vinculaste (ver "Marcar pagado"): ahí se sabe cuánto pagaste de verdad.
+// cargo = pagado − compras cargadas; pct = cargo sobre las compras.
+function cargosDeTarjetaMes(ym, lista, vencTc){
+  const r2=x=>Math.round(x*100)/100;
+  return resumenesDelMes(ym, lista).map(r=>{
+    const d=datosResumenTc(vencTc, r.tarjeta, ym);
+    const id=d.pagadoCon[r.moneda];
+    const mov=id && d.pagado[r.moneda] ? (lista||[]).find(m=>m.id===id) : null;
+    if(!mov) return null;
+    const pagado=r.moneda==="USD" ? (mov.importeOrig||0) : (mov.importe||0);
+    return {ym, tarjeta:r.tarjeta, moneda:r.moneda, compras:r.total, pagado:r2(pagado), cargo:r2(pagado-r.total),
+            pct:r.total>0 ? r2((pagado-r.total)/r.total*100) : 0};
+  }).filter(Boolean);
+}
+// Los meses de `anio` ("2026") hasta `hastaYM`, solo los que tienen algún resumen vinculado:
+// [{ym, items, ARS, USD}] con el total de cargos por moneda.
+function cargosDeTarjetaAnio(anio, hastaYM, lista, vencTc){
+  const out=[];
+  for(let i=1;i<=12;i++){
+    const ym=`${anio}-${String(i).padStart(2,"0")}`;
+    if(ym>hastaYM) break;
+    const items=cargosDeTarjetaMes(ym, lista, vencTc);
+    if(!items.length) continue;
+    const tot={ARS:0, USD:0};
+    items.forEach(x=>{ tot[x.moneda]=Math.round((tot[x.moneda]+x.cargo)*100)/100; });
+    out.push({ym, items, ARS:tot.ARS, USD:tot.USD});
+  }
+  return out;
+}
+function cargosTarjetaHTML(ymSel){
+  const lista=cargosDeTarjetaAnio(String(ymSel).slice(0,4), ymSel, movs, leerVencTc());
+  const bancos=leerBancosTc();
+  const fmtC=(v,mon)=>mon==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
+  const titulo=`<div class="tc-res-titulo">Gastos administrativos de las tarjetas</div>`;
+  if(!lista.length) return `<div class="tc-res">${titulo}<p class="tc-res-sub" style="padding:0 14px 12px;line-height:1.45">Intereses, comisiones e impuestos que la tarjeta suma a tus compras. Se calculan al marcar un resumen como pagado y vincular el gasto con el que lo pagaste: la diferencia entre lo que pagaste y las compras cargadas.</p></div>`;
+  const totARS=lista.reduce((s,x)=>s+x.ARS,0), totUSD=lista.reduce((s,x)=>s+x.USD,0);
+  const totTxt=[totARS?fmtC(totARS,"ARS"):"", totUSD?fmtC(totUSD,"USD"):""].filter(Boolean).join(" + ") || fmtC(0,"ARS");
+  const filas=lista.slice().reverse().map(x=>`<div class="tc-cargo-mes"><div class="tc-cargo-cab"><span>${escapeHtml(mesLbl(x.ym))}</span><strong>${[x.ARS?fmtC(x.ARS,"ARS"):"", x.USD?fmtC(x.USD,"USD"):""].filter(Boolean).join(" + ")||fmtC(0,"ARS")}</strong></div>`
+    +x.items.map(i=>`<div class="tc-cargo-det"><span>${tarjetaConBancoHTML(i.tarjeta, bancos)}${i.moneda==="USD"?" (USD)":""}</span><span>${i.cargo>=0?fmtC(i.cargo,i.moneda):`−${fmtC(-i.cargo,i.moneda)}`}${i.compras>0?` · ${i.pct>0?"+":""}${String(i.pct).replace(".",",")}%`:""}</span></div>`).join("")+`</div>`).join("");
+  return `<div class="tc-res">${titulo}<div class="tc-cargo-total">En ${escapeHtml(String(ymSel).slice(0,4))}: <strong>${totTxt}</strong></div>${filas}
+    <p class="tc-res-sub" style="padding:4px 14px 12px;line-height:1.45">Ya están dentro de los pagos de tarjeta que cargaste como gasto: acá solo se muestran. Solo cuentan los resúmenes con el pago vinculado.</p></div>`;
 }
 
 // Borra los pagos ligados a un resumen (cargados con una versión anterior, cuando había un botón

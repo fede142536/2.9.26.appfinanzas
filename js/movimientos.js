@@ -85,7 +85,7 @@ function showPage(id,btn){
   if(id==="inv" && !yaAlDia) renderInv();
   if(id==="ahorro" && !yaAlDia) renderAhorro();
   if(id==="import"){ renderImportHistory(); renderMigrarCambios(); renderTraspasos(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
-  if(id==="config"){initSeccionesConfig();renderExportStats();renderCatManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderTarjetasManager();renderEstadoBackup();renderVencConfig();renderInflacion();} // liviano
+  if(id==="config"){initSeccionesConfig();renderExportStats();renderCatManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderSinCuentaCard();renderTarjetasManager();renderEstadoBackup();renderVencConfig();renderInflacion();} // liviano
   if(["mov","dash","tc","inv","ahorro"].includes(id)) paginaVersionRenderizada[id]=datosVersion;
   // Reponer el scroll AL FINAL, no antes: los render de arriba cambian el alto de la página y
   // si se hace primero el navegador recorta la posición al alto viejo (más corto) y quedás

@@ -611,6 +611,17 @@ canvas{width:100%!important;max-width:100%}
 .vinc-pago-m{font-weight:700}
 .vinc-pago-c{flex-basis:100%;font-size:11px;color:var(--muted)}
 .vinc-pago-solo{justify-content:center;font-weight:600;background:var(--warning-light);border-color:transparent;color:var(--warning)}
+.tc-cargo-total{padding:0 14px 6px;font-size:13px}
+.tc-cargo-mes{padding:8px 14px;border-top:1px solid var(--border)}
+.tc-cargo-cab{display:flex;justify-content:space-between;font-size:13px}
+.tc-cargo-det{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:2px}
+.sc-grupo{padding:10px 0;border-bottom:1px solid var(--border)}
+.sc-grupo:last-child{border-bottom:none}
+.sc-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:14px}
+.sc-n{font-size:12px;color:var(--muted);white-space:nowrap}
+.sc-det{font-size:12px;color:var(--muted);margin:2px 0 6px;line-height:1.35}
+.sc-acc{display:flex;gap:8px;align-items:center}
+.sc-acc .form-select{flex:1;height:36px;padding:0 10px;font-size:13px}
 .tc-res-btn{padding:7px 14px;border:0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--warning);color:#fff;cursor:pointer}
 /* Franja de próximos vencimientos (Movimientos, arriba de la lista). */
 .venc-wrap{margin:10px 16px 0}
