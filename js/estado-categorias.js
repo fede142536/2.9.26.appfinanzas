@@ -449,6 +449,16 @@ function subcategoriasDeAhorroARS(lista){
   Object.entries(por).forEach(([cat,subs])=>{ if(subs.size>1) subs.forEach(sub=>{ const saldo=saldoAhorroCategoria(lista,cat,sub); if(saldo) out.push({cat,sub,saldo}); }); });
   return out.sort((a,b)=>Math.abs(b.saldo)-Math.abs(a.saldo));
 }
+// La meta atada a esa categoría (y subcategoría, si la meta es solo de una): la primera que encuentra, o null.
+function metaDeCategoria(listaMetas, cat, sub){
+  return (listaMetas||[]).find(m=>m && m.fondoCat===cat && (!m.fondoSub || m.fondoSub===sub)) || null;
+}
+// Gastos en pesos de esa categoría (y subcategoría) que NO están marcados como ahorro ni son traspasos ni frecuentes:
+// no suman a una meta atada porque la meta solo cuenta lo que se marcó como ahorro.
+function gastosSinMarcarComoAhorro(lista, cat, sub){
+  return (lista||[]).filter(m=>esGasto(m) && !m.esAhorro && !m.usaAhorro && !esTraspaso(m) && !m.frecuente
+    && (m.cat||"Sin categoría")===cat && (!sub || m.subcat===sub) && montoARS(m)>0);
+}
 // "Fondo de Retiro" o "Fondo de Retiro › Cedears": de dónde toma su monto una meta atada.
 const nombreFondoMeta=m=>m && m.fondoCat ? (m.fondoCat+(m.fondoSub?" › "+m.fondoSub:"")) : "";
 function montoDeMeta(m, lista){
