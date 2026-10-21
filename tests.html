@@ -5142,6 +5142,33 @@ test("la fila de Tarjetas muestra con qué gasto se pagó y cuánto difiere de l
   });
 });
 
+// ── La cuenta (banco) en cada fila de Movimientos ──
+test("cada fila muestra la cuenta del movimiento; 'Cuentas' (sin elegir) y vacío no muestran nada", ()=>{
+  const fila=m=>construirCuerpoTxItem(m);
+  const pago={id:1,tipo:"Gasto",cat:"Tarjeta de crédito",subcat:"Pago total",importe:1082421.66,fecha:"2026-10-10",cuenta:"BPat"};
+  const h=fila(pago);
+  cierto(h.includes('class="tx-cuenta"') && h.includes("BPat"), "falta la cuenta en el pago de la tarjeta: "+h);
+  cierto(h.includes("Tarjeta de crédito") && h.includes("Pago total"), "no puede perder lo que ya mostraba");
+  ["Cuentas","", "  ", undefined].forEach(c=>cierto(!fila({...pago,cuenta:c}).includes("tx-cuenta"), "no tendría que mostrar la cuenta "+JSON.stringify(c)));
+  cierto(fila({...pago,cuenta:"Mercado Libre"}).includes("Mercado Libre"));
+  cierto(fila({id:2,tipo:"Ingreso",cat:"Sueldo",importe:100,fecha:"2026-10-01",cuenta:"Galicia"}).includes("Galicia"), "los ingresos también");
+  cierto(fila({id:3,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:100,fecha:"2026-10-01",cuenta:"Balanz"}).includes("Balanz"), "y las inversiones");
+});
+
+test("la cuenta se escapa y no rompe la fila", ()=>{
+  const h=construirCuerpoTxItem({id:1,tipo:"Gasto",cat:"Super",importe:1,fecha:"2026-10-10",cuenta:'<img src=x onerror="window.__cta=1">'});
+  cierto(!h.includes("<img"), "se coló una etiqueta: "+h); igual(window.__cta, undefined);
+});
+
+test("en una compra con tarjeta no repite la tarjeta si el subtítulo ya la dice, y suma la cuenta si hay", ()=>{
+  const base={_isTc:true, id:1, desc:"Nafta", importe:1000, importeTotal:1000, nCuota:1, cuotasTotal:1, moneda:"ARS", fecha:"2026-10-10", tarjeta:"Visa", subcat:"Visa"};
+  cierto(!construirCuerpoTxItem(base).includes("tx-cuenta"), "Visa ya está en el subtítulo");
+  const conBanco=construirCuerpoTxItem({...base, cuenta:"Galicia"});
+  cierto(conBanco.includes("tx-cuenta") && conBanco.includes("Galicia"), conBanco);
+  const otra=construirCuerpoTxItem({...base, subcat:"Combustible"});
+  cierto(otra.includes("tx-cuenta") && otra.includes("Visa"), "con otra subcategoría sí tiene que decir qué tarjeta es");
+});
+
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
   igual(proximosVencimientos("2026-09-08", movs, {}), []);
 }));

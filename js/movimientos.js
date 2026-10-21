@@ -366,6 +366,21 @@ const SUBCAT_SIN_VALOR=["Otros","Otro","Sin subcategoría",""];
 function subtituloFila(partes){
   return partes.filter(x=>x!==null && x!==undefined && String(x).trim()!=="").join(" · ");
 }
+// La cuenta (banco o billetera) de un movimiento, para mostrarla en la fila. "Cuentas" es la opción por defecto del
+// selector, o sea "sin cuenta elegida": no dice nada, así que no se muestra.
+const CUENTA_SIN_ELEGIR="Cuentas";
+function cuentaVisible(m){
+  const c=String((m&&m.cuenta)||"").trim();
+  return c && c!==CUENTA_SIN_ELEGIR ? c : "";
+}
+// La etiqueta que va al final del subtítulo de la fila: la cuenta (banco o billetera). En una compra con tarjeta se agrega
+// el nombre de la tarjeta solo si el subtítulo todavía no lo dice, y la cuenta solo si la cargaste y es otra cosa.
+function etiquetaCuentaFila(m){
+  const cuenta=cuentaVisible(m);
+  const partes=m._isTc ? [m.tarjeta && m.tarjeta!==m.subcat ? m.tarjeta : "", cuenta && cuenta!==m.tarjeta && cuenta!==m.subcat ? cuenta : ""] : [cuenta];
+  const txt=partes.filter(x=>x && String(x).trim()).map(x=>escapeHtml(String(x).trim())).join(" · ");
+  return txt ? ` <span class="tx-cuenta" title="Cuenta">${m._isTc?"💳":"🏦"} ${txt}</span>` : "";
+}
 function subcatVisible(subcat){
   const s=String(subcat||"").trim();
   return SUBCAT_SIN_VALOR.includes(s) ? "" : escapeHtml(s);
@@ -502,7 +517,7 @@ function construirCuerpoTxItem(m){
     return `<div class="tx-icon ${iconClass}">${icon}</div>
       <div class="tx-info">
         <div class="tx-cat">${cat}</div>
-        <div class="tx-sub">${subtituloFila([sub, !isTc&&m.nota?escapeHtml(m.nota.slice(0,24)):""])}</div>
+        <div class="tx-sub">${subtituloFila([sub, !isTc&&m.nota?escapeHtml(m.nota.slice(0,24)):""])}${etiquetaCuentaFila(m)}</div>
         ${!isTc?renderTagsChips(m):""}
       </div>
       <div class="tx-amount-wrap">
