@@ -5169,6 +5169,84 @@ test("en una compra con tarjeta no repite la tarjeta si el subtítulo ya la dice
   cierto(otra.includes("tx-cuenta") && otra.includes("Visa"), "con otra subcategoría sí tiene que decir qué tarjeta es");
 });
 
+// ── Banco de cada tarjeta ──
+async function conBancosTc(mapa, fn){
+  const antes=localStorage.getItem(BANCOS_TC_KEY);
+  if(mapa) localStorage.setItem(BANCOS_TC_KEY, JSON.stringify(mapa)); else localStorage.removeItem(BANCOS_TC_KEY);
+  try{ return await fn(); }
+  finally{ if(antes===null) localStorage.removeItem(BANCOS_TC_KEY); else localStorage.setItem(BANCOS_TC_KEY, antes); }
+}
+
+test("el banco de una tarjeta: se guarda, se cambia y se quita sin tocar el original", ()=>{
+  const m0={Visa:"BPat"};
+  const m1=conBancoDeTarjeta(m0, "Mastercard", "Galicia");
+  igual(m1, {Visa:"BPat", Mastercard:"Galicia"}); igual(m0, {Visa:"BPat"}, "no puede tocar el original");
+  igual(conBancoDeTarjeta(m1, "Visa", ""), {Mastercard:"Galicia"}, "vacío lo quita");
+  igual(conBancoDeTarjeta(m1, "Visa", "  Santander "), {Visa:"Santander", Mastercard:"Galicia"}, "recorta espacios");
+  igual(normalizarBancosTc({a:"x", b:5, c:"", d:null, e:["y"]}), {a:"x"}, "descarta lo que no es un nombre");
+  igual(normalizarBancosTc("roto"), {}); igual(normalizarBancosTc([1,2]), {}); igual(normalizarBancosTc(null), {});
+  igual(bancoDeTarjeta("Visa", m0), "BPat"); igual(bancoDeTarjeta("Otra", m0), "");
+});
+
+test("leer y guardar los bancos usa localStorage y aguanta datos rotos", ()=>conBancosTc(null, ()=>{
+  igual(leerBancosTc(), {});
+  guardarBancosTc({Visa:"BPat", Roto:5}); igual(leerBancosTc(), {Visa:"BPat"});
+  localStorage.setItem(BANCOS_TC_KEY, "{no es json"); igual(leerBancosTc(), {}, "un valor roto no tiene que tirar error");
+}));
+
+test("las compras con tarjeta muestran el banco de su tarjeta; el de la compra gana, y sin banco no muestra nada", ()=>conBancosTc({Visa:"BPat", Mastercard:"Galicia"}, ()=>{
+  const base={_isTc:true, id:1, desc:"Nafta", importe:1000, importeTotal:1000, nCuota:1, cuotasTotal:1, moneda:"ARS", fecha:"2026-10-10", subcat:"Combustible"};
+  const visa=construirCuerpoTxItem({...base, tarjeta:"Visa"});
+  cierto(visa.includes("tx-cuenta") && visa.includes("BPat") && visa.includes("Visa"), visa);
+  cierto(construirCuerpoTxItem({...base, tarjeta:"Mastercard"}).includes("Galicia"));
+  const propia=construirCuerpoTxItem({...base, tarjeta:"Visa", cuenta:"Mercado Libre"});
+  cierto(propia.includes("Mercado Libre") && !propia.includes("BPat"), "la cuenta cargada en la compra gana");
+  cierto(!construirCuerpoTxItem({...base, tarjeta:"Amex", subcat:"Amex"}).includes("tx-cuenta"), "sin banco asociado ni cuenta no hay etiqueta");
+  cierto(construirCuerpoTxItem({...base, tarjeta:"Visa", cuenta:"Cuentas"}).includes("BPat"), "'Cuentas' (sin elegir) cae al banco de la tarjeta");
+}));
+
+test("Tarjetas muestra el banco en las barras, en los resúmenes y en las compras del mes", ()=>{
+  const ym=currentYM();
+  return conBancosTc({Visa:"BPat"}, ()=>conVenc({tcs:[{id:1, desc:"Notebook", total:120000, cuotasTotal:12, mesInicio:ym, tarjeta:"Visa", moneda:"ARS"}]}, ()=>{
+    const res=resumenesTcHTML(ym);
+    cierto(res.includes("Visa") && res.includes("tc-banco") && res.includes("BPat"), "falta el banco en el resumen: "+res);
+    cierto(tarjetaConBancoHTML("Visa").includes("· BPat"));
+    igual(tarjetaConBancoHTML("Amex"), "Amex", "sin banco queda como antes");
+    cierto(tarjetaConBancoHTML('<b>x</b>').includes("&lt;b&gt;"), "se escapa");
+  }));
+});
+
+test("el administrador de tarjetas tiene un selector de banco por tarjeta, con las cuentas menos 'Cuentas'", ()=>conBancosTc({Visa:"BPat"}, ()=>{
+  const el=document.createElement("div"); el.id="tarjetas-manager"; document.body.appendChild(el);
+  try{
+    renderTarjetasManager();
+    const selects=el.querySelectorAll(".tc-banco-fila select");
+    igual(selects.length, getTarjetas().length, "uno por tarjeta");
+    const visa=[...selects].find(x=>x.getAttribute("aria-label")==="Banco de Visa");
+    igual(visa.value, "BPat", "tiene que arrancar en el banco guardado");
+    const ops=[...visa.options].map(o=>o.value);
+    cierto(ops[0]==="" && ops.includes("Galicia") && ops.includes("BPat") && !ops.includes("Cuentas"), ops.join("|"));
+  } finally { el.remove(); }
+}));
+
+test("elegir el banco lo guarda y quitarlo lo borra; renombrar la tarjeta se lleva el banco", async ()=>conBancosTc({Visa:"BPat"}, async ()=>{
+  const antes={toast:window.showToast, render:renderTarjetas, prompt:window.mostrarPrompt, tcs, custom:[...tarjetasCustom]};
+  window.showToast=()=>{}; renderTarjetas=()=>{};
+  try{
+    setBancoTarjeta("Mastercard", "Galicia"); igual(leerBancosTc(), {Visa:"BPat", Mastercard:"Galicia"});
+    setBancoTarjeta("Mastercard", ""); igual(leerBancosTc(), {Visa:"BPat"});
+    window.mostrarPrompt=async()=>"Visa Santander"; tcs=[];
+    await renombrarTarjeta("Visa");
+    igual(leerBancosTc(), {"Visa Santander":"BPat"}, "el banco acompaña al nuevo nombre");
+  } finally { window.showToast=antes.toast; renderTarjetas=antes.render; window.mostrarPrompt=antes.prompt; tcs=antes.tcs; tarjetasCustom=antes.custom; saveTarjetasCustom(); }
+}));
+
+test("el backup incluye los bancos de las tarjetas y al restaurarlo vuelven", ()=>conBancosTc({Visa:"BPat"}, ()=>{
+  const b=armarBackup();
+  igual(b.datos.bancosTarjeta, {Visa:"BPat"});
+  cierto(aplicarBackup.toString().includes("bancosTarjeta"), "aplicarBackup no restaura los bancos");
+}));
+
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
   igual(proximosVencimientos("2026-09-08", movs, {}), []);
 }));

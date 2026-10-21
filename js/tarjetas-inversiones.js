@@ -802,6 +802,7 @@ function renderTcPendientes(){
   const ars=movsMes.filter(m=>m.moneda!=="USD").sort((a,b)=>b.importe-a.importe);
   const usd=movsMes.filter(m=>m.moneda==="USD").sort((a,b)=>b.importe-a.importe);
   const ordenado=[...ars, ...usd];
+  const bancosTc=leerBancosTc();
 
   let html=`<div class="seccion-label" style="padding:14px 20px 6px;font-size:12px;font-weight:600">Compras de este mes</div>`;
   if(!ordenado.length){
@@ -823,7 +824,7 @@ function renderTcPendientes(){
         <div class="tc-row-icon">${icon}</div>
         <div class="tc-row-mid">
           <div class="tc-row-desc">${escapeHtml(m.desc||"")}</div>
-          <div class="tc-row-sub"><span>${escapeHtml(m.tarjeta||"Sin tarjeta")} · ${tag}</span>${barra}</div>
+          <div class="tc-row-sub"><span>${tarjetaConBancoHTML(m.tarjeta, bancosTc)} · ${tag}</span>${barra}</div>
         </div>
         <div class="tc-row-right">
           <div class="tc-row-monto">${monto}</div>
@@ -951,7 +952,7 @@ function renderTarjetas(){
         const sep=key.lastIndexOf("|");
         const nombre=key.slice(0,sep), moneda=key.slice(sep+1);
         const icono=vistaCategoria?getIcon(nombre,"💳"):"💳";
-        return filaBarraTc(`${icono} ${escapeHtml(nombre)}`, moneda, val, maxPorMoneda[moneda]||1);
+        return filaBarraTc(`${icono} ${vistaCategoria?escapeHtml(nombre):tarjetaConBancoHTML(nombre)}`, moneda, val, maxPorMoneda[moneda]||1);
       }).join("")+`</div>`;
       html+=resumenesTcHTML(ymSel);
     }
@@ -971,7 +972,7 @@ function resumenesTcHTML(ym){
   const rs=resumenesDelMes(ym, movs);
   if(!rs.length) return "";
   const fmt=(v,mon)=>mon==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
-  const vencTc=leerVencTc(), hoy=hoyLocal();
+  const vencTc=leerVencTc(), hoy=hoyLocal(), bancosTc=leerBancosTc();
   return `<div class="tc-res"><div class="tc-res-titulo">Resumen de ${escapeHtml(mesLbl(ym))}</div>`+rs.map(r=>{
     const d=datosResumenTc(vencTc, r.tarjeta, ym);
     const badge=r.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
@@ -1005,7 +1006,7 @@ function resumenesTcHTML(ym){
       right=`<button type="button" class="tc-res-btn" onclick="abrirVincularPagoTc(${args})">Marcar pagado</button>`;
     }
     return `<div class="tc-res-row">
-      <div class="tc-res-mid"><div class="tc-res-name">💳 ${escapeHtml(r.tarjeta||"Sin tarjeta")}${badge}</div>${sub}${fechas}</div>
+      <div class="tc-res-mid"><div class="tc-res-name">💳 ${tarjetaConBancoHTML(r.tarjeta, bancosTc)}${badge}</div>${sub}${fechas}</div>
       <div class="tc-res-right"><div class="tc-res-monto">${fmt(r.total,r.moneda)}</div>${right}</div>
     </div>`;
   }).join("")+`</div>`;

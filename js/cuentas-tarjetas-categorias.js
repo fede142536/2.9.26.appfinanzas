@@ -79,6 +79,38 @@ function getTarjetas(){
   tarjetasCustom.forEach(t=>{ if(!todas.includes(t)) todas.push(t); });
   return todas;
 }
+// ── Banco de cada tarjeta ──
+// Cada tarjeta puede asociarse a una cuenta (su banco o billetera): {"Visa":"BPat","Mastercard":"Galicia"}. Sirve para que
+// las compras con tarjeta digan de qué banco son sin tener que cargarlo en cada una. Es una preferencia: localStorage llano.
+const BANCOS_TC_KEY="fbancotc";
+function normalizarBancosTc(o){
+  const out={};
+  if(o && typeof o==="object" && !Array.isArray(o)) Object.entries(o).forEach(([t,b])=>{ if(typeof b==="string" && b.trim() && t) out[t]=b.trim(); });
+  return out;
+}
+function leerBancosTc(){
+  try{ return normalizarBancosTc(JSON.parse(localStorage.getItem(BANCOS_TC_KEY)||"{}")); }catch(e){ return {}; }
+}
+function guardarBancosTc(mapa){ return guardarPreferencia(BANCOS_TC_KEY, JSON.stringify(normalizarBancosTc(mapa))); }
+// Copia del mapa con el banco de UNA tarjeta cambiado (vacío lo quita). Pura.
+function conBancoDeTarjeta(mapa, tarjeta, banco){
+  const nuevo=normalizarBancosTc(mapa), b=String(banco||"").trim();
+  if(b) nuevo[tarjeta]=b; else delete nuevo[tarjeta];
+  return nuevo;
+}
+const bancoDeTarjeta=(tarjeta, mapa)=>(mapa||leerBancosTc())[tarjeta]||"";
+// "Visa · BPat" (con el banco en gris) o solo "Visa".
+function tarjetaConBancoHTML(tarjeta, mapa){
+  const b=bancoDeTarjeta(tarjeta, mapa);
+  return escapeHtml(tarjeta||"Sin tarjeta")+(b?` <span class="tc-banco">· ${escapeHtml(b)}</span>`:"");
+}
+function setBancoTarjeta(tarjeta, banco){
+  guardarBancosTc(conBancoDeTarjeta(leerBancosTc(), tarjeta, banco));
+  showToast(banco ? `${tarjeta}: banco ${banco} ✓` : `${tarjeta}: sin banco`);
+  if(typeof renderTarjetas==="function") renderTarjetas();
+  if(typeof renderMovs==="function" && document.getElementById("tx-list")) renderMovs();
+}
+
 // Llena un <select> de tarjetas, preservando el valor actual si se pasa
 function buildTarjetaSelect(selectId, valorActual){
   const sel=document.getElementById(selectId);
@@ -117,6 +149,7 @@ async function borrarTarjetaCustom(nombre){
   if(!await mostrarConfirm(`¿Eliminar "${nombre}" de la lista de tarjetas?`, {textoOk:"Eliminar", peligroso:true})) return;
   tarjetasCustom=tarjetasCustom.filter(t=>t!==nombre);
   saveTarjetasCustom();
+  guardarBancosTc(conBancoDeTarjeta(leerBancosTc(), nombre, ""));
   showToast("Tarjeta eliminada de la lista");
   renderTarjetasManager();
   buildTarjetaSelect("tc-tarjeta");
@@ -144,6 +177,8 @@ async function renombrarTarjeta(nombreActual){
   // El día de vencimiento acompaña a la tarjeta: si no se mueve, el aviso se pierde en silencio.
   const venc=leerVencTc();
   if(venc[nombreActual]!==undefined){ venc[limpio]=venc[nombreActual]; delete venc[nombreActual]; guardarVencTc(venc); }
+  const bancos=leerBancosTc();   // y el banco también
+  if(bancos[nombreActual]){ guardarBancosTc(conBancoDeTarjeta(conBancoDeTarjeta(bancos, limpio, bancos[nombreActual]), nombreActual, "")); }
   if(cambios>0) save();
   showToast(`Renombrada${cambios>0?` · ${cambios} gasto(s) actualizado(s)`:""} ✓`);
   renderTarjetasManager();
@@ -154,16 +189,23 @@ async function renombrarTarjeta(nombreActual){
 function renderTarjetasManager(){
   const el=document.getElementById("tarjetas-manager");
   if(!el) return;
+  const bancos=leerBancosTc();
+  const cuentas=getCuentas().filter(c=>c!=="Cuentas");
   const html=getTarjetas().map(t=>{
     const esCustom=tarjetasCustom.includes(t);
     const esDefault=TARJETAS_DEFAULT.includes(t);
     const tEsc=attrJS(t);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:13px">💳 ${escapeHtml(t)}${esDefault?"":' <span class="badge badge-accent">custom</span>'}</span>
-      <div style="display:flex;gap:10px">
-        <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0" onclick="renombrarTarjeta(${tEsc})" title="Renombrar">✎</button>
-        ${esCustom?`<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:0" onclick="borrarTarjetaCustom(${tEsc})" title="Eliminar">×</button>`:""}
+    const actual=bancos[t]||"";
+    const opciones=[`<option value="">Sin banco</option>`, ...(actual && !cuentas.includes(actual)?[actual]:[]).concat(cuentas).map(c=>`<option value="${escapeHtml(c)}"${c===actual?" selected":""}>${escapeHtml(c)}</option>`)].join("");
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px">💳 ${escapeHtml(t)}${esDefault?"":' <span class="badge badge-accent">custom</span>'}</span>
+        <div style="display:flex;gap:10px">
+          <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0" onclick="renombrarTarjeta(${tEsc})" title="Renombrar">✎</button>
+          ${esCustom?`<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:0" onclick="borrarTarjetaCustom(${tEsc})" title="Eliminar">×</button>`:""}
+        </div>
       </div>
+      <label class="tc-banco-fila"><span>Banco</span><select class="form-select" aria-label="Banco de ${escapeHtml(t)}" onchange="setBancoTarjeta(${tEsc}, this.value)">${opciones}</select></label>
     </div>`;
   }).join("");
   el.innerHTML=html+`<div style="margin-top:10px"><button class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')">+ Agregar tarjeta</button></div>`;
