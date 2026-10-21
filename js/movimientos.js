@@ -374,12 +374,13 @@ function cuentaVisible(m){
   return c && c!==CUENTA_SIN_ELEGIR ? c : "";
 }
 // La etiqueta que va al final del subtítulo de la fila: la cuenta (banco o billetera). En una compra con tarjeta se agrega
-// el nombre de la tarjeta solo si el subtítulo todavía no lo dice, y la cuenta solo si la cargaste y es otra cosa.
+// el nombre de la tarjeta solo si el subtítulo todavía no lo dice, y el banco: el de la cuenta que cargaste en esa compra o,
+// si no hay, el que le asociaste a la tarjeta en Configuración.
 function etiquetaCuentaFila(m){
-  const cuenta=cuentaVisible(m);
+  const cuenta=cuentaVisible(m) || (m._isTc ? bancoDeTarjeta(m.tarjeta) : "");
   const partes=m._isTc ? [m.tarjeta && m.tarjeta!==m.subcat ? m.tarjeta : "", cuenta && cuenta!==m.tarjeta && cuenta!==m.subcat ? cuenta : ""] : [cuenta];
   const txt=partes.filter(x=>x && String(x).trim()).map(x=>escapeHtml(String(x).trim())).join(" · ");
-  return txt ? ` <span class="tx-cuenta" title="Cuenta">${m._isTc?"💳":"🏦"} ${txt}</span>` : "";
+  return txt ? ` <span class="tx-cuenta" title="Cuenta">${m._isTc?"":"🏦 "}${txt}</span>` : "";
 }
 function subcatVisible(subcat){
   const s=String(subcat||"").trim();
@@ -517,7 +518,7 @@ function construirCuerpoTxItem(m){
     return `<div class="tx-icon ${iconClass}">${icon}</div>
       <div class="tx-info">
         <div class="tx-cat">${cat}</div>
-        <div class="tx-sub">${subtituloFila([sub, !isTc&&m.nota?escapeHtml(m.nota.slice(0,24)):""])}${etiquetaCuentaFila(m)}</div>
+        <div class="tx-sub"><span class="tx-sub-txt">${subtituloFila([sub, !isTc&&m.nota?escapeHtml(m.nota.slice(0,24)):""])}</span>${etiquetaCuentaFila(m)}</div>
         ${!isTc?renderTagsChips(m):""}
       </div>
       <div class="tx-amount-wrap">
