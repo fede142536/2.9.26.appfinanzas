@@ -7482,6 +7482,8 @@ test("las tarjetas de metas muestran el monto del fondo, un 🔗, y tocar una at
     cierto(html.includes("25%"), "la manual sigue con su monto");
     igual((html.match(/🔗/g)||[]).length, 1, "solo la atada lleva el 🔗");
     cierto(document.getElementById("metas-sum").textContent.includes("950"), "el total tiene que sumar 700 + 250: "+document.getElementById("metas-sum").textContent);
+    igual((html.match(/class="meta-edit"/g)||[]).length, 2, "cada meta tiene su lápiz visible para editarla");
+    cierto(html.includes('onclick="openEditMetaModal(1)"') && html.includes('onclick="openEditMetaModal(2)"'), "el lápiz tiene que abrir el editor de esa meta");
     metaCardClick(1); igual(llamado, "ahorro:Fondo de Retiro", "tocar una meta atada tiene que llevar a cargar un ahorro");
     metaCardClick(2); igual(llamado, "deposito2", "una manual sigue abriendo la hoja de depósito");
   } finally { metas=antes.metas; movs=antes.movs; openDepositoSheet=antes.dep; irACargarAhorroDeMeta=antes.ir; els.forEach(e=>e.remove()); }
