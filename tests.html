@@ -4752,7 +4752,61 @@ test("la ventana: lo que vence en más de 2 días no se avisa, lo vencido hace p
   igual(proximosVencimientos("2026-09-08", [], {Visa:10}).length, 1, "faltan 2 días");
   igual(proximosVencimientos("2026-09-13", [], {Visa:10})[0].dias, -3, "venció hace 3 días y sigue sin pagar");
   igual(proximosVencimientos("2026-09-21", [], {Visa:10}).length, 0, "venció hace 11 días: seguro ya se pagó y nadie lo tildó");
+  igual(proximosVencimientos("2026-09-21", [], {Visa:10}, undefined, undefined, VENC_VENCIDOS_LARGO).length, 1, "con la vista larga (la del aviso de vencidos) sí aparece");
+  igual(proximosVencimientos("2026-10-26", [], {Visa:10}, undefined, undefined, VENC_VENCIDOS_LARGO).filter(x=>x.ym==="2026-09").length, 0, "más de 45 días: seguro ya se pagó");
 }));
+
+test("en la vista larga, de un frecuente sin tildar solo cuenta el último mes vencido", ()=>conVenc({movs:[FREC_VTO(1,10)]}, ()=>{
+  // 25/09: agosto (venció hace 46 d: afuera por edad) y septiembre (hace 15 d). 20/09: agosto hace 41 d + septiembre hace 10 d.
+  const v=proximosVencimientos("2026-09-20", [FREC_VTO(1,10)], {}, -1, 0, VENC_VENCIDOS_LARGO);
+  igual(v.length, 1, "un aviso por frecuente, no uno por mes"); igual(v[0].ym, "2026-09");
+  const solo=proximosVencimientos("2026-09-20", [FREC_VTO(1,10)], {}, -1, 0);
+  igual(solo.length, 1);
+}));
+
+test("vencidosSinPagar: solo lo que ya pasó, sin la ventana corta de antes", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
+  igual(vencidosSinPagar("2026-09-08", [], {Visa:10}).filter(x=>x.ym==="2026-09").length, 0, "todavía no venció");
+  igual(vencidosSinPagar("2026-09-10", [], {Visa:10}).filter(x=>x.dias===0).length, 0, "vence hoy: todavía no está vencido");
+  const v=vencidosSinPagar("2026-09-25", [], {Visa:10}).filter(x=>x.ym==="2026-09");
+  igual(v.length, 1); igual(v[0].dias, -15);
+  igual(vencidosSinPagar("2026-09-25", [PAGO_VISA(160000)], {Visa:10}).filter(x=>x.ym==="2026-09").length, 0, "pagado: no se avisa");
+  igual(textoVencidos(v), "Visa (venció hace 15 días)");
+}));
+
+test("la franja marca en rojo los vencidos sin pagar, los muestra todos y deja de marcarlos al pagarse", ()=>{
+  const mk=(n,dias)=>({tipo:"frecuente",nombre:n,id:n.length,ym:"2026-09",fecha:"2026-09-01",dias,monto:1000,moneda:"ARS"});
+  const h=vencimientosFranjaHTML([mk("Alquiler",-9), mk("Luz",-3), mk("Gas",-2), mk("Internet",-1), mk("Agua",1)]);
+  cierto(h.includes("4 vencimientos sin pagar") && h.includes("venc-con-vencidos"), "tendría que avisar de los 4 vencidos");
+  ["Alquiler","Luz","Gas","Internet"].forEach(n=>cierto(h.includes(n), "falta el vencido: "+n));
+  cierto(h.includes("y 1 más") && !h.includes("Agua"), "se muestran todos los vencidos y el límite solo recorta lo que viene");
+  igual((h.match(/venc-vencida/g)||[]).length, 4);
+  const ok=vencimientosFranjaHTML([mk("Agua",1)]);
+  cierto(ok.includes("🗓 Vencimientos") && !ok.includes("venc-con-vencidos"), "sin vencidos queda como siempre");
+  cierto(vencimientosFranjaHTML([mk("Uno",-2)]).includes("1 vencimiento sin pagar"));
+});
+
+test("al abrir la app avisa de lo vencido sin pagar, una sola vez por día", async ()=>{
+  const antes={confirm:window.mostrarConfirm, ir:window.irAMovimientos, hoy:window.hoyLocal, k:localStorage.getItem(VENC_AVISO_HOY_KEY), tc:localStorage.getItem(VENC_TC_KEY)};
+  let preguntas=0, texto="", fue=0, respuesta=true;
+  window.mostrarConfirm=async(m)=>{ preguntas++; texto=m; return respuesta; }; window.irAMovimientos=()=>{ fue++; };
+  try{
+    localStorage.removeItem(VENC_AVISO_HOY_KEY);
+    await conVenc({tcs:TCS_SEPT, venc:{Visa:10}}, async()=>{
+      const hoyAntes=window.hoyLocal; window.hoyLocal=()=>"2026-09-25";
+      try{
+        igual(await avisarVencidosSinPagar(), 1); igual(preguntas, 1); igual(fue, 1, "'Ver y marcar' lleva a Movimientos");
+        cierto(texto.includes("Visa") && texto.includes("venció hace 15 días"), texto);
+        igual(await avisarVencidosSinPagar(), 0); igual(preguntas, 1, "hoy ya avisó");
+        localStorage.removeItem(VENC_AVISO_HOY_KEY); respuesta=false; await avisarVencidosSinPagar(); igual(fue, 1, "'Más tarde' no navega");
+        window.hoyLocal=()=>"2025-01-05"; localStorage.removeItem(VENC_AVISO_HOY_KEY); preguntas=0;
+        igual(await avisarVencidosSinPagar(), 0); igual(preguntas, 0, "si no hay vencidos no molesta");
+      } finally { window.hoyLocal=hoyAntes; }
+    });
+  } finally {
+    window.mostrarConfirm=antes.confirm; window.irAMovimientos=antes.ir;
+    if(antes.k===null) localStorage.removeItem(VENC_AVISO_HOY_KEY); else localStorage.setItem(VENC_AVISO_HOY_KEY, antes.k);
+  }
+});
 
 test("el resumen del mes anterior que sigue sin pagar y venció hace poco aparece", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
   const v=proximosVencimientos("2026-10-03", [], {Visa:28});
@@ -7559,6 +7613,76 @@ test("el editor de metas avisa de los gastos sin marcar y los marca como ahorro 
     igual(els[1].style.display, "none", "sin pendientes no hay aviso");
   } finally { movs=antes.movs; metas=antes.metas; window.mostrarConfirm=antes.confirm; window.save=antes.save; window.showToast=antes.toast; els.forEach(e=>e.remove()); }
 });
+
+// ── Plan de una meta: fecha objetivo, ahorro por mes y ritmo ──
+const RITMO_MOVS=()=>[   // hoy = 2026-10-21; ventana de ritmo: desde el 23/07 (90 días)
+  {id:1,tipo:"Gasto",cat:"Mudanza",moneda:"ARS",importe:100000,fecha:"2026-06-01",esAhorro:true},    // fuera de la ventana: cuenta para el saldo pero no para el ritmo
+  {id:2,tipo:"Gasto",cat:"Mudanza",moneda:"ARS",importe:60000,fecha:"2026-08-10",esAhorro:true},
+  {id:3,tipo:"Gasto",cat:"Mudanza",moneda:"ARS",importe:60000,fecha:"2026-09-10",esAhorro:true},
+  {id:4,tipo:"Gasto",cat:"Mudanza",moneda:"ARS",importe:30000,fecha:"2026-10-01",esAhorro:true},
+  {id:5,tipo:"Gasto",cat:"Mudanza",moneda:"ARS",importe:30000,fecha:"2026-10-05",usaAhorro:true},         // un retiro resta
+  {id:6,tipo:"Gasto",cat:"Otra",moneda:"ARS",importe:999999,fecha:"2026-10-05",esAhorro:true}];
+
+test("planDeMeta: cuánto ahorrar por mes para llegar a la fecha", ()=>{
+  const m={objetivo:1200000, actual:600000, fechaObjetivo:"2027-04-21"};   // 6 meses justos
+  const p=planDeMeta(m, [], "2026-10-21");
+  igual(p.estado, "conFecha", "una meta a mano no tiene ritmo para comparar"); igual(p.ritmo, null);
+  igual(p.falta, 600000); cierto(Math.abs(p.mesesRestantes-6)<0.05, p.mesesRestantes); cierto(Math.abs(p.porMes-100000)<2000, p.porMes);
+  igual(planDeMeta({objetivo:1000,actual:1000,fechaObjetivo:"2027-01-01"}, [], "2026-10-21").estado, "cumplida");
+  igual(planDeMeta({objetivo:1000,actual:10}, [], "2026-10-21").estado, "sinFecha");
+  igual(planDeMeta({objetivo:1000,actual:10,fechaObjetivo:"2026-10-21"}, [], "2026-10-21").estado, "vencida", "vence hoy y falta: ya no hay tiempo");
+  igual(planDeMeta({objetivo:1000,actual:10,fechaObjetivo:"2026-09-01"}, [], "2026-10-21").estado, "vencida");
+  const poco=planDeMeta({objetivo:1000,actual:0,fechaObjetivo:"2026-11-01"}, [], "2026-10-21");
+  igual(poco.porMes, 1000, "con menos de un mes por delante hay que ahorrar todo lo que falta");
+});
+
+test("ritmoMensualDeMeta: depósitos menos retiros de los últimos 90 días, por mes", ()=>{
+  const m={fondoCat:"Mudanza"};
+  const r=ritmoMensualDeMeta(m, RITMO_MOVS(), "2026-10-21");
+  cierto(Math.abs(r-(60000+60000+30000-30000)/(90/30.4375))<0.01, "ritmo: "+r);   // 120.000 netos en ~2,96 meses
+  igual(ritmoMensualDeMeta({objetivo:1}, RITMO_MOVS(), "2026-10-21"), null, "una meta a mano no tiene ritmo");
+  igual(ritmoMensualDeMeta({fondoCat:"Mudanza"}, [{...RITMO_MOVS()[1], usaAhorro:true, esAhorro:false}], "2026-10-21"), 0, "si retiraste más de lo que ahorraste, el ritmo es 0, no negativo");
+  igual(ritmoMensualDeMeta({fondoCat:"Mudanza",fondoSub:"Cedears"}, RITMO_MOVS(), "2026-10-21"), 0, "una meta de una subcategoría solo mira la suya");
+});
+
+test("una meta atada se compara con su ritmo: a tiempo, atrasada y fecha estimada", ()=>{
+  const l=RITMO_MOVS(), ritmo=ritmoMensualDeMeta({fondoCat:"Mudanza"}, l, "2026-10-21");   // ≈ 40.500/mes; saldo = 220.000
+  const facil=planDeMeta({fondoCat:"Mudanza", objetivo:300000, fechaObjetivo:"2027-10-21"}, l, "2026-10-21");   // faltan 80.000 en 12 meses
+  igual(facil.estado, "aTiempo"); cierto(facil.llegaEn && facil.llegaEn<"2027-01-01", "debería llegar en ~2 meses: "+facil.llegaEn);
+  const dificil=planDeMeta({fondoCat:"Mudanza", objetivo:2000000, fechaObjetivo:"2027-04-21"}, l, "2026-10-21");   // faltan 1.780.000 en 6 meses
+  igual(dificil.estado, "atrasada"); cierto(dificil.porMes>ritmo*3);
+  igual(planDeMeta({fondoCat:"Mudanza", objetivo:300000}, [], "2026-10-21").llegaEn, null, "sin ritmo no hay fecha estimada");
+});
+
+test("el texto del plan: la tarjeta, el editor y los casos sin datos", ()=>{
+  const t=planMetaTarjeta(planDeMeta({objetivo:1200000, actual:600000, fechaObjetivo:"2027-04-21"}, [], "2026-10-21"));
+  cierto(t.txt.includes("abr 2027") && t.txt.includes("/mes"), t.txt);
+  igual(planMetaTarjeta(planDeMeta({objetivo:1000,actual:0}, [], "2026-10-21")), null, "sin fecha no hay línea");
+  igual(planMetaTarjeta(planDeMeta({objetivo:1000,actual:1000,fechaObjetivo:"2027-01-01"}, [], "2026-10-21")), null, "cumplida tampoco");
+  cierto(planMetaTarjeta(planDeMeta({objetivo:1000,actual:0,fechaObjetivo:"2026-09-01"}, [], "2026-10-21")).txt.includes("Venció el 01/09/2026"));
+  const d=planMetaDetalle(planDeMeta({fondoCat:"Mudanza", objetivo:2000000, fechaObjetivo:"2027-04-21"}, RITMO_MOVS(), "2026-10-21"));
+  cierto(d.includes("por mes") && d.includes("Vas atrasado") && d.includes("últimos 3 meses"), d);
+  cierto(planMetaDetalle(planDeMeta({fondoCat:"Mudanza", objetivo:300000, fechaObjetivo:"2027-10-21"}, RITMO_MOVS(), "2026-10-21")).includes("Vas a tiempo"));
+  cierto(planMetaDetalle(planDeMeta({fondoCat:"Mudanza", objetivo:2000000}, [], "2026-10-21")).includes("no sumaste ahorros netos"), "ritmo 0 se explica");
+  igual(planMetaDetalle(planDeMeta({objetivo:2000000, actual:0}, [], "2026-10-21")), "", "manual y sin fecha: nada que decir");
+});
+
+test("el editor guarda, reabre y quita la fecha objetivo; las tarjetas la muestran", ()=>conEditorMeta(()=>{
+  const fe=document.createElement("input"); fe.type="date"; fe.id="meta-fecha"; document.body.appendChild(fe);
+  const plan=document.createElement("p"); plan.id="meta-plan"; document.body.appendChild(plan);
+  try{
+    movs=[]; metas=[{id:7,nombre:"Viaje",objetivo:1200000,actual:600000,emoji:"✈️",fondoManual:true}];
+    openEditMetaModal(7); igual(fe.value, "");
+    fe.value="2099-04-21"; guardarMeta();
+    igual(metas[0].fechaObjetivo, "2099-04-21");
+    openEditMetaModal(7); igual(fe.value, "2099-04-21", "al reabrir tiene que estar la fecha");
+    cierto(plan.textContent.includes("por mes"), "el editor tiene que mostrar el plan: "+plan.textContent);
+    fe.value=""; guardarMeta(); igual(metas[0].fechaObjetivo, undefined, "vaciarla la quita");
+    openMetaModal(); igual(fe.value, "", "una meta nueva arranca sin fecha");
+    document.getElementById("meta-nombre").value="Auto"; document.getElementById("meta-objetivo").value="500"; fe.value="2099-01-01"; guardarMeta();
+    igual(metas[metas.length-1].fechaObjetivo, "2099-01-01");
+  } finally { fe.remove(); plan.remove(); }
+}));
 
 test("las tarjetas de metas muestran el monto del fondo, un 🔗, y tocar una atada lleva a cargar un ahorro", ()=>{
   const ids=["metas-list","dep-meta","metas-sum","depositar-card"];

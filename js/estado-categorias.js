@@ -465,6 +465,41 @@ function montoDeMeta(m, lista){
   if(m && m.fondoCat) return Math.max(saldoAhorroCategoria(lista, m.fondoCat, m.fondoSub), 0);
   return (m && m.actual) || 0;
 }
+// ── PLAN DE UNA META: fecha objetivo, cuánto ahorrar por mes y a qué ritmo vas ──
+// `meta.fechaObjetivo` ("YYYY-MM-DD") es opcional. De ahí sale cuánto hay que ahorrar por mes para llegar. Si la meta está atada a
+// un ahorro, el ritmo real son los depósitos netos de los últimos 90 días (depósitos − retiros, por mes) y con eso se estima cuándo
+// llegaría; una meta cargada a mano no tiene historia, así que no tiene ritmo. Función pura: recibe `hoyISO`.
+//   estado: "cumplida" · "sinFecha" · "vencida" (pasó la fecha y falta) · "aTiempo" · "atrasada" · "conFecha" (sin ritmo para comparar)
+const DIAS_POR_MES=30.4375;
+const RITMO_DIAS=90;
+const sumarDiasISO=(iso, dias)=>{ const [y,m,d]=String(iso).slice(0,10).split("-").map(Number); return new Date(Date.UTC(y,m-1,d+Math.round(dias))).toISOString().slice(0,10); };
+function ritmoMensualDeMeta(m, lista, hoyISO){
+  if(!m || !m.fondoCat) return null;
+  const desde=sumarDiasISO(hoyISO, -RITMO_DIAS);
+  let neto=0;
+  (lista||[]).forEach(x=>{
+    if((x.cat||"Sin categoría")!==m.fondoCat || (m.fondoSub && x.subcat!==m.fondoSub)) return;
+    const f=String(x.fecha||"").slice(0,10);
+    if(!f || f<=desde || f>hoyISO) return;
+    if(esDepositoAhorro(x)) neto+=montoARS(x); else if(esRetiroAhorro(x)) neto-=montoARS(x);
+  });
+  return Math.max(neto,0)/(RITMO_DIAS/DIAS_POR_MES);
+}
+function planDeMeta(m, lista, hoyISO){
+  const monto=montoDeMeta(m,lista), objetivo=(m&&m.objetivo)||0, falta=Math.max(objetivo-monto,0);
+  const ritmo=ritmoMensualDeMeta(m,lista,hoyISO);
+  const out={monto, falta, fecha:(m&&m.fechaObjetivo)||null, mesesRestantes:null, porMes:null, ritmo, llegaEn:null, estado:"sinFecha"};
+  if(objetivo>0 && falta<=0){ out.estado="cumplida"; return out; }
+  if(ritmo>0) out.llegaEn=sumarDiasISO(hoyISO, falta/ritmo*DIAS_POR_MES);
+  if(!out.fecha) return out;
+  const dias=diasEntre(hoyISO, out.fecha);
+  if(dias<=0){ out.estado="vencida"; return out; }
+  out.mesesRestantes=dias/DIAS_POR_MES;
+  out.porMes=falta/Math.max(out.mesesRestantes,1);
+  out.estado = ritmo===null ? "conFecha" : (ritmo>=out.porMes*0.95 ? "aTiempo" : "atrasada");
+  return out;
+}
+
 // Ata solas las metas cuyo monto cargado a mano coincide (±$1) con el saldo de UNA sola categoría de ahorro: es lo
 // que pasa cuando el usuario ya venía igualándolas a mano. Una meta que el usuario dejó en "manual" no se toca.
 // Devuelve [{meta, cat}] de lo que ató, para avisarle.

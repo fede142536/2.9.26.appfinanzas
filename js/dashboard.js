@@ -155,13 +155,14 @@ function construirInsights(ym, mesData, monthlyAnio){
   // 0. Vencimientos: lo más accionable va primero. Solo mirando el mes actual (avisar de lo que
   // vence en un mes que ya pasó no sirve) y solo si el usuario cargó algún día de vencimiento.
   if(ym===currentYM()){
-    const venc=proximosVencimientos(hoyLocal(), movs, leerVencTc());
+    const venc=proximosVencimientos(hoyLocal(), movs, leerVencTc(), undefined, undefined, VENC_VENCIDOS_LARGO);
     if(venc.length){
       const v=venc[0];
+      const vencidos=venc.filter(x=>x.dias<0).length;
       out.push({
-        icon:"🗓", bg:"var(--warning-light)",
+        icon:vencidos?"⚠️":"🗓", bg:vencidos?"var(--danger-light,var(--warning-light))":"var(--warning-light)",
         a:"", b:v.nombre, bc:v.dias<0?"var(--danger)":"var(--warning)",
-        c:` ${textoVencimiento(v.dias)} · ${montoVenc(v)}.${venc.length>1?` Y ${venc.length-1} más.`:""}`,
+        c:` ${textoVencimiento(v.dias)} · ${montoVenc(v)}.${venc.length>1?` Y ${venc.length-1} más.`:""}${vencidos?` ${vencidos===1?"Hay 1 vencido":`Hay ${vencidos} vencidos`} sin marcar como pagado.`:""}`,
         detalle: venc.map(x=>`${x.nombre}: ${textoVencimiento(x.dias)} (${montoVenc(x)})`).join(" · "),
         rows:[], action:"Ir a Movimientos para marcar lo pagado", actionFn:irAMovimientos
       });
