@@ -292,7 +292,8 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 #tx-list tx-item:not(:first-child) .tx-item-content{border-top:1px solid var(--border)}
 #tx-list .tx-icon{width:36px;height:36px;font-size:16px}
 #tx-list .tx-cat{font-size:14px}
-#tx-list .tx-sub{font-size:12px}
+#tx-list .tx-cuenta{display:inline-block;padding:0 7px;margin-left:2px;border-radius:999px;background:var(--border);color:var(--muted);font-size:10.5px;font-weight:600;line-height:1.5;white-space:nowrap}
+.tx-sub{font-size:12px}
 #tx-list .tx-amount{font-size:14px}
 /* Antes todo gasto era rojo: con 20-30 filas la lista se volvía una pared roja. El color de
    tipo ya lo dice el ícono; acá el monto vuelve al texto normal y el "−" alcanza para leerlo
