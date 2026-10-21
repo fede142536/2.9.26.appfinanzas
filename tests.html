@@ -7615,12 +7615,101 @@ test("sin CEDEARs, lista vacía o datos raros no se rompe y no hay datos que mos
 test("el detalle muestra cada sección con sus números y es solo de lectura", ()=>{
   const h=conciliacionHTML(conciliarCedears(CONCIL_DATOS()));
   cierto(h.includes("Versión de prueba"), "no avisa que es una prueba");
-  ["Montos o fechas distintas (5)","Faltan en tu fondo (2)","Posibles duplicados (1)","Coinciden con el broker (4)","Anteriores a tu primera inversión cargada (1)"].forEach(t=>cierto(h.includes(t), "falta: "+t));
+  ["Montos, fechas o cantidades distintas (5)","Faltan en tu fondo (2)","Posibles duplicados (1)","Coinciden (4)","Anteriores a tu primera inversión cargada (1)"].forEach(t=>cierto(h.includes(t), "falta: "+t));
   cierto(!h.includes("Sobran en tu fondo"), "no tiene que mostrar una sección vacía");
   cierto(h.includes("8 diferencias") && h.includes("160.025,31"), "falta el resumen con el ajuste total");
   cierto(h.includes("Inversión (") && h.includes("Balanz") && h.includes("Tu fondo"), "tiene que mostrar los dos lados de cada diferencia");
-  cierto(!/<button/.test(h), "la versión de prueba no puede tener botones que cambien datos");
-  cierto(!h.includes("onclick"), "sin acciones en el detalle");
+  const sinFiltros=h.replace(/<div class="concil-chips">.*?<\/div>/s,"");
+  cierto(!/<button/.test(sinFiltros), "la versión de prueba no puede tener botones que cambien datos (solo los filtros)");
+  cierto(!sinFiltros.includes("onclick"), "sin acciones en el detalle");
+  cierto(h.includes("setFiltroConcil"), "faltan los filtros por CEDEAR");
+});
+
+// ── Cada movimiento dice a qué CEDEAR pertenece ──
+const FON_N=(id,fecha,imp,nota,retiro)=>FON_B(id,fecha,imp,retiro,{nota});
+const INV_T=(id,fecha,sub,imp,ticker,extra)=>({...INV_B(id,fecha,sub,imp,{refBalanz:String(id)}),ticker,...(extra||{})});
+
+test("leerTickerYCantidad entiende las notas del fondo", ()=>{
+  const l=(n,c)=>leerTickerYCantidad(n,c);
+  igual(l("Spy x 4").ticker,"SPY"); igual(l("Spy x 4").cantidad,4);
+  igual(l("MCD X 3").ticker,"MCD"); igual(l("xlk × 12,5").cantidad,12.5);
+  igual(l("SPY x 30 (para el mes)").cantidad,30);
+  igual(l("compra de spy",["SPY"]).ticker,"SPY"); igual(l("compra de spy",["SPY"]).cantidad,null);
+  igual(l("compra de spying",["SPY"]).ticker,null, "SPY tiene que ser una palabra suelta");
+  igual(l("").ticker,null); igual(l(undefined).ticker,null); igual(l(null).cantidad,null);
+});
+
+test("una compra de un CEDEAR nunca se empareja con un depósito de otro, aunque el monto y la fecha coincidan", ()=>{
+  const l=[INV_T(1,"2026-07-01","CEDEARs Compra",1000,"MCD"), FON_N(2,"2026-07-01",1000,"Spy x 4")];
+  const c=conciliarCedears(l);
+  igual(c.ok.length+c.diferencias.length, 0, "MCD y SPY no son lo mismo");
+  igual(c.faltanEnFondo.length, 1); igual(c.faltanEnFondo[0].ticker, "MCD");
+  igual(c.sobranEnFondo.length, 1); igual(c.sobranEnFondo[0].ticker, "SPY");
+});
+
+test("con dos CEDEARs el mismo día, cada depósito va con el suyo", ()=>{
+  const l=[INV_T(1,"2026-07-01","CEDEARs Compra",1000,"SPY"), INV_T(2,"2026-07-01","CEDEARs Compra",1010,"MCD"),
+           FON_N(3,"2026-07-01",1010,"Spy x 2"), FON_N(4,"2026-07-01",1000,"MCD x 3")];
+  const c=conciliarCedears(l);
+  igual(c.ok.length, 0); igual(c.diferencias.length, 2);
+  igual(c.diferencias.find(d=>d.inv.id===1).fondo.id, 3, "SPY ↔ el depósito que dice Spy");
+  igual(c.diferencias.find(d=>d.inv.id===2).fondo.id, 4, "MCD ↔ el depósito que dice MCD");
+});
+
+test("si la cantidad no coincide se marca; si coincide y el resto también, está ok", ()=>{
+  const ok=conciliarCedears([INV_T(1,"2026-07-01","CEDEARs Compra",1000,"SPY",{cantidad:4}), FON_N(2,"2026-07-01",1000,"Spy x 4")]);
+  igual(ok.ok.length, 1); igual(ok.ok[0].cantFondo, 4); igual(ok.ok[0].ticker, "SPY");
+  const mal=conciliarCedears([INV_T(1,"2026-07-01","CEDEARs Compra",1000,"SPY",{cantidad:4}), FON_N(2,"2026-07-01",1000,"Spy x 5")]);
+  igual(mal.ok.length, 0); igual(mal.diferencias.length, 1);
+  igual(mal.diferencias[0].tipo, "cantidad"); igual(mal.diferencias[0].dCant, 1);
+});
+
+test("un movimiento del fondo sin descripción se empareja por monto y fecha y se dice que no tiene descripción", ()=>{
+  const l=[INV_T(1,"2026-07-01","CEDEARs Compra",1000,"SPY"), FON_B(2,"2026-07-01",1000)];
+  const c=conciliarCedears(l);
+  igual(c.ok.length, 1); igual(c.ok[0].ticker, "SPY");
+  cierto(conciliacionHTML(c).includes("sin descripción"));
+});
+
+test("el detalle muestra el CEDEAR y la descripción de cada movimiento", ()=>{
+  const l=[INV_T(1,"2026-07-01","CEDEARs Compra",1000,"SPY"), FON_N(2,"2026-07-01",1000,"Spy x 30"),
+           INV_T(3,"2026-08-01","CEDEARs Compra",2000,"MCD"), FON_N(4,"2026-08-02",1990,"MCD x 3"),
+           INV_T(5,"2026-09-01","CEDEARs Venta",500,"XLK")];
+  const h=conciliacionHTML(conciliarCedears(l));
+  cierto(h.includes('class="concil-tick">SPY<') && h.includes('class="concil-tick">MCD<') && h.includes('class="concil-tick">XLK<'), "falta el CEDEAR en cada fila");
+  cierto(h.includes("“Spy x 30”") && h.includes("“MCD x 3”"), "falta la descripción de cada movimiento");
+  cierto(h.includes("No hay un retiro de XLK en tu fondo"), "tiene que decir de qué CEDEAR falta");
+});
+
+test("filtrar por CEDEAR deja solo lo de ese CEDEAR y recalcula el resumen", ()=>{
+  const l=[INV_T(1,"2026-07-01","CEDEARs Compra",1000,"SPY"), FON_N(2,"2026-07-01",1000,"Spy x 30"),
+           INV_T(3,"2026-08-01","CEDEARs Compra",2000,"MCD"), FON_N(4,"2026-08-02",1990,"MCD x 3"),
+           INV_T(5,"2026-09-01","CEDEARs Venta",500,"XLK"), FON_B(6,"2026-09-20",77)];
+  const c=conciliarCedears(l);
+  igual(c.tickers.join(","), "MCD,SPY,XLK");
+  const spy=filtrarConciliacion(c,"SPY");
+  igual(spy.ok.length, 1); igual(spy.diferencias.length+spy.faltanEnFondo.length, 0);
+  const mcd=resumenConciliacion(filtrarConciliacion(c,"MCD"));
+  igual(mcd.pendientes, 1); igual(mcd.coinciden, 0);
+  igual(filtrarConciliacion(c,"").diferencias.length, c.diferencias.length, "sin filtro devuelve todo");
+  igual(filtrarConciliacion(c,"—").sobranEnFondo.length, 1, "el depósito sin descripción");
+  const h=conciliacionHTML(c,"MCD");
+  cierto(h.includes("MCD") && !h.includes("XLK en tu fondo"), "el detalle filtrado mezcla otros CEDEARs");
+  cierto(h.includes("concil-chip activo"));
+});
+
+test("los botones de filtro cambian la vista y no tocan los datos", ()=>{
+  const el=document.createElement("div"); el.id="concil-detalle"; document.body.appendChild(el);
+  const antes=movs;
+  try{
+    movs=[INV_T(1,"2026-07-01","CEDEARs Compra",1000,"SPY"), INV_T(3,"2026-08-01","CEDEARs Compra",2000,"MCD")];
+    const foto=JSON.stringify(movs);
+    setFiltroConcil("MCD");
+    cierto(el.innerHTML.includes("MCD") && !el.innerHTML.includes(">SPY<</span> <strong>"), "no filtró");
+    setFiltroConcil("");
+    cierto(el.innerHTML.includes("SPY"));
+    igual(JSON.stringify(movs), foto);
+  } finally { movs=antes; concilFiltro=""; el.remove(); }
 });
 
 test("el detalle de un fondo que coincide dice que todo está bien", ()=>{
