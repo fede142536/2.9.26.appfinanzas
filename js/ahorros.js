@@ -103,6 +103,7 @@ function renderAhorro(){
   renderAhorroChart();
   renderAhorroRanking();
   renderUSD();
+  if(typeof renderConciliacionCard==="function") renderConciliacionCard();
 }
 
 // Fondo USD = lo ahorrado al fondo en dólares menos lo retirado de él. Misma fórmula que usa

@@ -420,6 +420,42 @@ function montoARS(m){
   return m && m.moneda==="USD" ? 0 : ((m && m.importe)||0);
 }
 
+// ── METAS ATADAS AL FONDO ──
+// Una meta puede tomar su monto de una categoría de ahorro (`meta.fondoCat`): el saldo en pesos de esa
+// categoría (lo depositado menos lo retirado), el mismo que muestra Ahorros. Así el monto de la meta nunca
+// se desfasa del fondo ni hace falta cargarlo a mano. Sin `fondoCat`, el monto es el `actual` que se carga a mano.
+function saldoAhorroCategoria(lista, cat){
+  let s=0;
+  (lista||[]).forEach(m=>{
+    if((m.cat||"Sin categoría")!==cat) return;
+    if(esDepositoAhorro(m)) s+=montoARS(m); else if(esRetiroAhorro(m)) s-=montoARS(m);
+  });
+  return Math.round(s*100)/100;
+}
+// Las categorías de ahorro con saldo en pesos distinto de cero, la más grande primero: [{cat, saldo}].
+function categoriasDeAhorroARS(lista){
+  const cats=new Set();
+  (lista||[]).forEach(m=>{ if((esDepositoAhorro(m)||esRetiroAhorro(m)) && montoARS(m)) cats.add(m.cat||"Sin categoría"); });
+  return [...cats].map(cat=>({cat, saldo:saldoAhorroCategoria(lista,cat)})).filter(x=>x.saldo!==0).sort((a,b)=>Math.abs(b.saldo)-Math.abs(a.saldo));
+}
+function montoDeMeta(m, lista){
+  if(m && m.fondoCat) return Math.max(saldoAhorroCategoria(lista, m.fondoCat), 0);
+  return (m && m.actual) || 0;
+}
+// Ata solas las metas cuyo monto cargado a mano coincide (±$1) con el saldo de UNA sola categoría de ahorro: es lo
+// que pasa cuando el usuario ya venía igualándolas a mano. Una meta que el usuario dejó en "manual" no se toca.
+// Devuelve [{meta, cat}] de lo que ató, para avisarle.
+function vincularMetasAlFondo(listaMetas, lista){
+  const atadas=[];
+  const cats=categoriasDeAhorroARS(lista).filter(c=>c.saldo>0);
+  (listaMetas||[]).forEach(m=>{
+    if(m.fondoCat || m.fondoManual) return;
+    const coinciden=cats.filter(c=>Math.abs(c.saldo-(m.actual||0))<1);
+    if(coinciden.length===1){ m.fondoCat=coinciden[0].cat; atadas.push({meta:m.nombre, cat:m.fondoCat}); }
+  });
+  return atadas;
+}
+
 // Arregla el dato que dejaba un bug viejo del editor: un movimiento en USD con el mismo número en
 // `importe` y en `importeOrig`. Solo toca esa firma exacta (los dólares nunca llevan `importe`), así
 // que nada legítimo se modifica. Devuelve cuántos corrigió, para que quien llama sepa si hay que guardar.
