@@ -364,7 +364,7 @@ function renderMetas(){
     const falta=Math.max(0,m.objetivo-monto);
     const atada=!!m.fondoCat;
     const aria=`${m.nombre}, ${pct}%, ${cumplida?"meta cumplida":"faltan "+fmtTotal(falta)}. ${atada?"Toma su monto de "+m.fondoCat+". Cargar un ahorro":"Depositar"}`;
-    return `<button type="button" class="meta-card" aria-label="${escapeHtml(aria)}"
+    return `<div class="meta-wrap"><button type="button" class="meta-card" aria-label="${escapeHtml(aria)}"
         onpointerdown="metaCardDown(${m.id})" onpointerup="metaCardUp()" onpointerleave="metaCardUp()"
         oncontextmenu="metaCardContextMenu(event,${m.id})" onclick="metaCardClick(${m.id})">
       <span class="meta-ring" style="background:conic-gradient(var(--save) ${pct*3.6}deg,var(--border) 0)">
@@ -373,7 +373,7 @@ function renderMetas(){
       <span class="meta-nombre">${escapeHtml(m.nombre)}${atada?` <span title="Toma su monto de ${escapeHtml(m.fondoCat)}" aria-hidden="true">🔗</span>`:""}</span>
       <span class="meta-pct">${pct}%</span>
       <span class="meta-falta">${cumplida?"¡Meta cumplida!":"Faltan "+fmtTotal(falta)}</span>
-    </button>`;
+    </button><button type="button" class="meta-edit" aria-label="Editar la meta ${escapeHtml(m.nombre)}" onclick="openEditMetaModal(${m.id})">✎</button></div>`;
   }).join("")+nueva;
 }
 
