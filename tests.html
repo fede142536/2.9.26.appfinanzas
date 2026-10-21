@@ -7440,7 +7440,9 @@ test("el editor ofrece las categorías de ahorro con su saldo y guarda la meta a
   movs=AHORROS_META(); metas=[];
   openMetaModal();
   const opts=[...document.getElementById("meta-fondo").options].map(o=>o.value);
-  igual(opts.join("|"), "|Fondo de Retiro|Mudanza", "tiene que ofrecer 'a mano' y cada categoría con saldo");
+  cierto(opts.join("|").startsWith("|Fondo de Retiro|Mudanza|"), "tiene que ofrecer 'a mano' y cada categoría con saldo primero: "+opts.slice(0,4));
+  cierto(opts.includes("Super")||opts.length>3, "tiene que ofrecer también las demás categorías");
+  igual(new Set(opts).size, opts.length, "no puede repetir opciones");
   cierto([...document.getElementById("meta-fondo").options][1].textContent.includes("700"), "no muestra el saldo");
   document.getElementById("meta-nombre").value="Retiro"; document.getElementById("meta-objetivo").value="9000";
   document.getElementById("meta-fondo").value="Fondo de Retiro";
@@ -7465,6 +7467,41 @@ test("pasar una meta manual a 'atada' la deja con el saldo del fondo", ()=>conEd
   document.getElementById("meta-fondo").value="Fondo de Retiro";
   guardarMeta();
   igual(metas[0].fondoCat, "Fondo de Retiro"); igual(metas[0].fondoManual, undefined); igual(montoDeMeta(metas[0],movs), 700);
+}));
+
+const AHORROS_SUB=()=>[...AHORROS_META(),
+  {id:11,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",moneda:"ARS",importe:400,fecha:"2026-05-05",esAhorro:true},
+  {id:12,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Plazo fijo",moneda:"ARS",importe:250,fecha:"2026-05-06",esAhorro:true},
+  {id:13,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",moneda:"ARS",importe:100,fecha:"2026-06-05",usaAhorro:true}];
+
+test("una meta puede atarse solo a una subcategoría de un ahorro", ()=>{
+  const l=AHORROS_SUB();
+  igual(saldoAhorroCategoria(l,"Fondo de Retiro","Cedears"), 300); igual(saldoAhorroCategoria(l,"Fondo de Retiro","Plazo fijo"), 250);
+  igual(saldoAhorroCategoria(l,"Fondo de Retiro"), 1250, "sin subcategoría suma todo el ahorro");
+  igual(montoDeMeta({fondoCat:"Fondo de Retiro",fondoSub:"Cedears"},l), 300);
+  igual(nombreFondoMeta({fondoCat:"Fondo de Retiro",fondoSub:"Cedears"}), "Fondo de Retiro › Cedears");
+  igual(nombreFondoMeta({fondoCat:"Mudanza"}), "Mudanza");
+  igual(subcategoriasDeAhorroARS(l).map(x=>x.sub+":"+x.saldo).join(","), "Cedears:300,Plazo fijo:250", "solo las categorías con más de una subcategoría");
+});
+
+test("el editor ofrece ahorros, partes de un ahorro y otras categorías; y guarda la elegida", ()=>conEditorMeta(()=>{
+  movs=AHORROS_SUB(); metas=[{id:7,nombre:"Retiro",objetivo:9000,actual:0,emoji:"🎯",fondoCat:"Fondo de Retiro"}];
+  openEditMetaModal(7);
+  const sel=document.getElementById("meta-fondo");
+  const grupos=[...sel.querySelectorAll("optgroup")].map(g=>g.label);
+  cierto(grupos.includes("Tus ahorros") && grupos.includes("Solo una parte de un ahorro") && grupos.includes("Otra categoría (arranca en $0)"), grupos.join("|"));
+  sel.value="Fondo de Retiro||Cedears"; guardarMeta();
+  igual(metas[0].fondoCat,"Fondo de Retiro"); igual(metas[0].fondoSub,"Cedears"); igual(montoDeMeta(metas[0],movs),300);
+  openEditMetaModal(7);
+  igual(document.getElementById("meta-fondo").value, "Fondo de Retiro||Cedears", "al reabrir tiene que seguir elegida la subcategoría");
+  document.getElementById("meta-fondo").value="Fondo de Retiro"; guardarMeta();
+  igual(metas[0].fondoSub, undefined, "volver a la categoría entera borra la subcategoría"); igual(montoDeMeta(metas[0],movs),1250);
+  openEditMetaModal(7);
+  const otra=[...document.getElementById("meta-fondo").options].map(o=>o.value).find(v=>v && v!=="Fondo de Retiro" && v!=="Mudanza" && !v.includes("||"));
+  document.getElementById("meta-fondo").value=otra; guardarMeta();
+  igual(metas[0].fondoCat, otra); igual(montoDeMeta(metas[0],movs), 0, "una categoría sin ahorros arranca en $0");
+  openEditMetaModal(7); document.getElementById("meta-fondo").value=""; guardarMeta();
+  igual(metas[0].fondoCat, undefined); igual(metas[0].fondoSub, undefined);
 }));
 
 test("las tarjetas de metas muestran el monto del fondo, un 🔗, y tocar una atada lleva a cargar un ahorro", ()=>{
