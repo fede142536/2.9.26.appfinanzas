@@ -424,10 +424,11 @@ function montoARS(m){
 // Una meta puede tomar su monto de una categoría de ahorro (`meta.fondoCat`): el saldo en pesos de esa
 // categoría (lo depositado menos lo retirado), el mismo que muestra Ahorros. Así el monto de la meta nunca
 // se desfasa del fondo ni hace falta cargarlo a mano. Sin `fondoCat`, el monto es el `actual` que se carga a mano.
-function saldoAhorroCategoria(lista, cat){
+function saldoAhorroCategoria(lista, cat, sub){
   let s=0;
   (lista||[]).forEach(m=>{
     if((m.cat||"Sin categoría")!==cat) return;
+    if(sub && m.subcat!==sub) return;   // meta atada solo a una subcategoría (ej. Fondo de Retiro › Cedears)
     if(esDepositoAhorro(m)) s+=montoARS(m); else if(esRetiroAhorro(m)) s-=montoARS(m);
   });
   return Math.round(s*100)/100;
@@ -438,8 +439,20 @@ function categoriasDeAhorroARS(lista){
   (lista||[]).forEach(m=>{ if((esDepositoAhorro(m)||esRetiroAhorro(m)) && montoARS(m)) cats.add(m.cat||"Sin categoría"); });
   return [...cats].map(cat=>({cat, saldo:saldoAhorroCategoria(lista,cat)})).filter(x=>x.saldo!==0).sort((a,b)=>Math.abs(b.saldo)-Math.abs(a.saldo));
 }
+// Las subcategorías con saldo, solo de las categorías que tienen más de una: [{cat, sub, saldo}].
+function subcategoriasDeAhorroARS(lista){
+  const por={};
+  (lista||[]).forEach(m=>{
+    if((esDepositoAhorro(m)||esRetiroAhorro(m)) && montoARS(m) && m.subcat){ const c=m.cat||"Sin categoría"; (por[c]=por[c]||new Set()).add(m.subcat); }
+  });
+  const out=[];
+  Object.entries(por).forEach(([cat,subs])=>{ if(subs.size>1) subs.forEach(sub=>{ const saldo=saldoAhorroCategoria(lista,cat,sub); if(saldo) out.push({cat,sub,saldo}); }); });
+  return out.sort((a,b)=>Math.abs(b.saldo)-Math.abs(a.saldo));
+}
+// "Fondo de Retiro" o "Fondo de Retiro › Cedears": de dónde toma su monto una meta atada.
+const nombreFondoMeta=m=>m && m.fondoCat ? (m.fondoCat+(m.fondoSub?" › "+m.fondoSub:"")) : "";
 function montoDeMeta(m, lista){
-  if(m && m.fondoCat) return Math.max(saldoAhorroCategoria(lista, m.fondoCat), 0);
+  if(m && m.fondoCat) return Math.max(saldoAhorroCategoria(lista, m.fondoCat, m.fondoSub), 0);
   return (m && m.actual) || 0;
 }
 // Ata solas las metas cuyo monto cargado a mano coincide (±$1) con el saldo de UNA sola categoría de ahorro: es lo

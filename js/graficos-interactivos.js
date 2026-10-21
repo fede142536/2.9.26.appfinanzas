@@ -254,14 +254,25 @@ function drawInteractiveBars(canvas, labels, values, tipEl, fmtFn){
 // id de la meta que se está editando (null = el modal #modal-meta está creando una nueva).
 let editingMetaId=null;
 
-// El selector "¿De dónde sale el monto?": a mano, o el saldo de una categoría de ahorro.
-function llenarSelectFondoMeta(valor){
+// El selector "¿De dónde sale el monto?": a mano, o el saldo de una categoría (o subcategoría) de ahorro.
+// Valor de cada opción: "Categoría" o "Categoría||Subcategoría". Además de los ahorros que ya tienen saldo se ofrecen
+// todas las demás categorías (arrancan en $0 hasta que cargues un ahorro en ellas).
+const SEP_FONDO="||";
+function llenarSelectFondoMeta(valor, valorSub){
   const sel=document.getElementById("meta-fondo");
   if(!sel) return;
+  const opt=(cat,sub,saldo)=>`<option value="${escapeHtml(cat+(sub?SEP_FONDO+sub:""))}">${sub?`${escapeHtml(cat)} › ${escapeHtml(sub)}`:`Saldo de ${escapeHtml(cat)}`} (${fmtTotal(saldo)})</option>`;
   const cats=categoriasDeAhorroARS(movs);
   if(valor && !cats.some(c=>c.cat===valor)) cats.push({cat:valor, saldo:saldoAhorroCategoria(movs,valor)});
-  sel.innerHTML=`<option value="">Lo cargo a mano</option>`+cats.map(c=>`<option value="${escapeHtml(c.cat)}">Saldo de ${escapeHtml(c.cat)} (${fmtTotal(c.saldo)})</option>`).join("");
-  sel.value=valor||"";
+  const subs=subcategoriasDeAhorroARS(movs);
+  if(valor && valorSub && !subs.some(x=>x.cat===valor&&x.sub===valorSub)) subs.push({cat:valor, sub:valorSub, saldo:saldoAhorroCategoria(movs,valor,valorSub)});
+  const usadas=new Set(cats.map(c=>c.cat));
+  const otras=Object.keys(getCats("Gasto")).filter(c=>!usadas.has(c)).sort((a,b)=>a.localeCompare(b));
+  sel.innerHTML=`<option value="">Lo cargo a mano</option>`
+    +(cats.length?`<optgroup label="Tus ahorros">${cats.map(c=>opt(c.cat,"",c.saldo)).join("")}</optgroup>`:"")
+    +(subs.length?`<optgroup label="Solo una parte de un ahorro">${subs.map(x=>opt(x.cat,x.sub,x.saldo)).join("")}</optgroup>`:"")
+    +(otras.length?`<optgroup label="Otra categoría (arranca en $0)">${otras.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")}</optgroup>`:"");
+  sel.value=valor ? valor+(valorSub?SEP_FONDO+valorSub:"") : "";
 }
 function openMetaModal(){
   editingMetaId=null;
@@ -285,7 +296,7 @@ function openEditMetaModal(id){
   document.getElementById("meta-nombre").value=m.nombre;
   document.getElementById("meta-objetivo").value=m.objetivo;
   document.getElementById("meta-emoji").value=iconoSeguro(m.emoji)||"🎯";
-  llenarSelectFondoMeta(m.fondoCat||"");
+  llenarSelectFondoMeta(m.fondoCat||"", m.fondoSub||"");
   document.getElementById("btn-guardar-meta").textContent="Guardar cambios";
   document.getElementById("modal-meta").classList.add("open");
 }
@@ -296,20 +307,20 @@ function guardarMeta(){
   const emoji=iconoSeguro(document.getElementById("meta-emoji").value) || "🎯";
   if(!nombre||objetivo<=0){showToast("Completá nombre y objetivo");return;}
   const editando=editingMetaId;
-  const fondoCat=(document.getElementById("meta-fondo")||{}).value||"";
+  const [fondoCat, fondoSub]=(((document.getElementById("meta-fondo")||{}).value)||"").split(SEP_FONDO);
   if(editando){
     const m=metas.find(x=>x.id===editando);
     if(m){
       m.nombre=nombre; m.objetivo=objetivo; m.emoji=emoji;
-      if(fondoCat){ m.fondoCat=fondoCat; delete m.fondoManual; m.actual=montoDeMeta(m,movs); }
+      if(fondoCat){ m.fondoCat=fondoCat; if(fondoSub) m.fondoSub=fondoSub; else delete m.fondoSub; delete m.fondoManual; m.actual=montoDeMeta(m,movs); }
       else{
         // Al pasar de "atada" a "a mano" el monto cargado queda como estaba el saldo, y no se vuelve a atar sola.
         if(m.fondoCat) m.actual=montoDeMeta(m,movs);
-        delete m.fondoCat; m.fondoManual=true;
+        delete m.fondoCat; delete m.fondoSub; m.fondoManual=true;
       }
     }
   } else {
-    metas.push({id:Date.now(),nombre,objetivo,actual:0,emoji, ...(fondoCat?{fondoCat}:{fondoManual:true})});
+    metas.push({id:Date.now(),nombre,objetivo,actual:0,emoji, ...(fondoCat?{fondoCat, ...(fondoSub?{fondoSub}:{})}:{fondoManual:true})});
   }
   editingMetaId=null;
   save();closeMetaModal();
@@ -363,14 +374,14 @@ function renderMetas(){
     const emoji=iconoSeguro(m.emoji)||"🎯";
     const falta=Math.max(0,m.objetivo-monto);
     const atada=!!m.fondoCat;
-    const aria=`${m.nombre}, ${pct}%, ${cumplida?"meta cumplida":"faltan "+fmtTotal(falta)}. ${atada?"Toma su monto de "+m.fondoCat+". Cargar un ahorro":"Depositar"}`;
+    const aria=`${m.nombre}, ${pct}%, ${cumplida?"meta cumplida":"faltan "+fmtTotal(falta)}. ${atada?"Toma su monto de "+nombreFondoMeta(m)+". Cargar un ahorro":"Depositar"}`;
     return `<div class="meta-wrap"><button type="button" class="meta-card" aria-label="${escapeHtml(aria)}"
         onpointerdown="metaCardDown(${m.id})" onpointerup="metaCardUp()" onpointerleave="metaCardUp()"
         oncontextmenu="metaCardContextMenu(event,${m.id})" onclick="metaCardClick(${m.id})">
       <span class="meta-ring" style="background:conic-gradient(var(--save) ${pct*3.6}deg,var(--border) 0)">
         <span class="meta-ring-inner${cumplida?' cumplida':''}">${cumplida?"✓":escapeHtml(emoji)}</span>
       </span>
-      <span class="meta-nombre">${escapeHtml(m.nombre)}${atada?` <span title="Toma su monto de ${escapeHtml(m.fondoCat)}" aria-hidden="true">🔗</span>`:""}</span>
+      <span class="meta-nombre">${escapeHtml(m.nombre)}${atada?` <span title="Toma su monto de ${escapeHtml(nombreFondoMeta(m))}" aria-hidden="true">🔗</span>`:""}</span>
       <span class="meta-pct">${pct}%</span>
       <span class="meta-falta">${cumplida?"¡Meta cumplida!":"Faltan "+fmtTotal(falta)}</span>
     </button><button type="button" class="meta-edit" aria-label="Editar la meta ${escapeHtml(m.nombre)}" onclick="openEditMetaModal(${m.id})">✎</button></div>`;
@@ -409,8 +420,12 @@ function irACargarAhorroDeMeta(m){
   const chk=document.getElementById("inp-ahorro");
   if(chk){ chk.checked=true; onAhorroToggle(); }
   const sel=document.getElementById("inp-cat");
-  if(sel && [...sel.options].some(o=>o.value===m.fondoCat)){ sel.value=m.fondoCat; updateSubcats(); }
-  showToast(`Cargá el ahorro: se suma solo a "${m.nombre}" (toma su monto de ${m.fondoCat})`);
+  if(sel && [...sel.options].some(o=>o.value===m.fondoCat)){
+    sel.value=m.fondoCat; updateSubcats();
+    const sub=document.getElementById("inp-subcat");
+    if(m.fondoSub && sub && [...sub.options].some(o=>o.value===m.fondoSub)) sub.value=m.fondoSub;
+  }
+  showToast(`Cargá el ahorro: se suma solo a "${m.nombre}" (toma su monto de ${nombreFondoMeta(m)})`);
 }
 
 // ── Menú Editar/Eliminar ──
