@@ -82,6 +82,7 @@
 <script src="js/dashboard.js"></script>
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
+<script src="js/conciliacion.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
 <script src="js/cuentas-tarjetas-categorias.js"></script>
@@ -7365,6 +7366,292 @@ test("'Tus datos' no se rompe con la app vacía ni con fechas raras", ()=>conVen
     cierto(el.textContent.includes("—"));
   } finally { el.remove(); }
 }));
+
+// ═══════════════════════════════════════════
+// METAS ATADAS AL FONDO
+// ═══════════════════════════════════════════
+grupo("Metas atadas al fondo");
+
+const AHORROS_META=()=>[
+  {id:1,tipo:"Gasto",cat:"Fondo de Retiro",moneda:"ARS",importe:1000,fecha:"2026-01-05",esAhorro:true},
+  {id:2,tipo:"Gasto",cat:"Fondo de Retiro",moneda:"ARS",importe:300,fecha:"2026-02-05",usaAhorro:true},
+  {id:3,tipo:"Gasto",cat:"Mudanza",moneda:"ARS",importe:500,fecha:"2026-03-05",esAhorro:true},
+  {id:4,tipo:"Gasto",cat:"Fondo de Retiro",moneda:"USD",importe:901.63,importeOrig:901.63,fecha:"2026-04-05",usaAhorro:true},   // dólares con importe repetido: no cuenta
+  {id:5,tipo:"Gasto",cat:"Super",moneda:"ARS",importe:99999,fecha:"2026-04-06"}                                                        // no es ahorro
+];
+
+test("saldoAhorroCategoria: depósitos menos retiros en pesos de esa categoría, sin dólares ni gastos comunes", ()=>{
+  igual(saldoAhorroCategoria(AHORROS_META(), "Fondo de Retiro"), 700);
+  igual(saldoAhorroCategoria(AHORROS_META(), "Mudanza"), 500);
+  igual(saldoAhorroCategoria(AHORROS_META(), "Inexistente"), 0);
+  igual(saldoAhorroCategoria([], "X"), 0);
+});
+
+test("categoriasDeAhorroARS lista las categorías con saldo, la mayor primero", ()=>{
+  igual(categoriasDeAhorroARS(AHORROS_META()).map(c=>c.cat+":"+c.saldo).join(","), "Fondo de Retiro:700,Mudanza:500");
+  igual(categoriasDeAhorroARS([{id:1,tipo:"Gasto",cat:"Solo USD",moneda:"USD",importe:0,importeOrig:50,esAhorro:true}]).length, 0, "una categoría solo en dólares no tiene saldo en pesos");
+});
+
+test("montoDeMeta: atada toma el saldo (nunca negativo); sin atar, el monto cargado", ()=>{
+  const l=AHORROS_META();
+  igual(montoDeMeta({fondoCat:"Fondo de Retiro", actual:5}, l), 700, "tiene que ignorar el actual viejo");
+  igual(montoDeMeta({fondoCat:"Mudanza", actual:0}, l), 500);
+  igual(montoDeMeta({actual:123}, l), 123);
+  igual(montoDeMeta({}, l), 0);
+  igual(montoDeMeta({fondoCat:"Fondo de Retiro"}, [{id:1,tipo:"Gasto",cat:"Fondo de Retiro",moneda:"ARS",importe:10,usaAhorro:true}]), 0, "retirar más de lo depositado no da una meta negativa");
+});
+
+test("la meta se mueve sola con cada depósito o retiro del fondo", ()=>{
+  const l=AHORROS_META(); const meta={fondoCat:"Fondo de Retiro", actual:0, objetivo:2000};
+  igual(montoDeMeta(meta,l), 700);
+  l.push({id:9,tipo:"Gasto",cat:"Fondo de Retiro",moneda:"ARS",importe:250,fecha:"2026-05-01",esAhorro:true});
+  igual(montoDeMeta(meta,l), 950, "un depósito nuevo no se reflejó");
+  l.pop(); l.push({id:10,tipo:"Gasto",cat:"Fondo de Retiro",moneda:"ARS",importe:100,fecha:"2026-05-02",usaAhorro:true});
+  igual(montoDeMeta(meta,l), 600, "un retiro no se reflejó");
+});
+
+test("vincularMetasAlFondo ata la meta que ya igualabas a mano con UN fondo", ()=>{
+  const l=AHORROS_META();
+  const m=[{nombre:"Retiro",actual:700.4,objetivo:9000},{nombre:"Mudanza",actual:0,objetivo:4000},{nombre:"Otra",actual:123,objetivo:50}];
+  const r=vincularMetasAlFondo(m,l);
+  igual(r.map(x=>x.meta+"→"+x.cat).join(","), "Retiro→Fondo de Retiro");
+  igual(m[0].fondoCat, "Fondo de Retiro"); igual(m[1].fondoCat, undefined, "una meta en 0 no se ata a nada"); igual(m[2].fondoCat, undefined);
+  igual(vincularMetasAlFondo(m,l).length, 0, "la segunda vez no hay nada que atar");
+});
+
+test("no ata si es ambiguo, si el usuario la dejó a mano, o si el fondo no tiene saldo", ()=>{
+  const dos=[{id:1,tipo:"Gasto",cat:"A",moneda:"ARS",importe:500,esAhorro:true},{id:2,tipo:"Gasto",cat:"B",moneda:"ARS",importe:500.5,esAhorro:true}];
+  igual(vincularMetasAlFondo([{nombre:"X",actual:500,objetivo:1}], dos).length, 0, "dos categorías coinciden: no se sabe cuál");
+  igual(vincularMetasAlFondo([{nombre:"X",actual:700,objetivo:1,fondoManual:true}], AHORROS_META()).length, 0, "la dejó a mano a propósito");
+  igual(vincularMetasAlFondo([{nombre:"X",actual:700,objetivo:1}], []).length, 0);
+});
+
+function conEditorMeta(fn){
+  const els=[];
+  const crear=(tag,id)=>{ const e=document.createElement(tag); e.id=id; document.body.appendChild(e); els.push(e); return e; };
+  crear("div","modal-meta"); crear("div","meta-modal-title"); crear("div","btn-guardar-meta");
+  crear("input","meta-nombre"); crear("input","meta-objetivo"); crear("input","meta-emoji"); crear("select","meta-fondo");
+  const antes={metas, movs, render:renderMetas, editing:editingMetaId};
+  renderMetas=()=>{};
+  try{ return fn(); } finally{ metas=antes.metas; movs=antes.movs; renderMetas=antes.render; editingMetaId=antes.editing; els.forEach(e=>e.remove()); }
+}
+
+test("el editor ofrece las categorías de ahorro con su saldo y guarda la meta atada", ()=>conEditorMeta(()=>{
+  movs=AHORROS_META(); metas=[];
+  openMetaModal();
+  const opts=[...document.getElementById("meta-fondo").options].map(o=>o.value);
+  igual(opts.join("|"), "|Fondo de Retiro|Mudanza", "tiene que ofrecer 'a mano' y cada categoría con saldo");
+  cierto([...document.getElementById("meta-fondo").options][1].textContent.includes("700"), "no muestra el saldo");
+  document.getElementById("meta-nombre").value="Retiro"; document.getElementById("meta-objetivo").value="9000";
+  document.getElementById("meta-fondo").value="Fondo de Retiro";
+  guardarMeta();
+  igual(metas.length,1); igual(metas[0].fondoCat,"Fondo de Retiro"); igual(montoDeMeta(metas[0],movs), 700);
+}));
+
+test("pasar una meta de 'atada' a 'a mano' conserva el monto y no se vuelve a atar sola", ()=>conEditorMeta(()=>{
+  movs=AHORROS_META(); metas=[{id:7,nombre:"Retiro",objetivo:9000,actual:0,emoji:"🎯",fondoCat:"Fondo de Retiro"}];
+  openEditMetaModal(7);
+  igual(document.getElementById("meta-fondo").value, "Fondo de Retiro");
+  document.getElementById("meta-fondo").value="";
+  guardarMeta();
+  igual(metas[0].fondoCat, undefined); igual(metas[0].actual, 700, "el monto cargado tiene que quedar como el saldo");
+  cierto(metas[0].fondoManual===true, "tiene que marcarse como manual");
+  igual(vincularMetasAlFondo(metas, movs).length, 0, "no puede volver a atarse sola");
+}));
+
+test("pasar una meta manual a 'atada' la deja con el saldo del fondo", ()=>conEditorMeta(()=>{
+  movs=AHORROS_META(); metas=[{id:7,nombre:"Retiro",objetivo:9000,actual:42,emoji:"🎯",fondoManual:true}];
+  openEditMetaModal(7);
+  document.getElementById("meta-fondo").value="Fondo de Retiro";
+  guardarMeta();
+  igual(metas[0].fondoCat, "Fondo de Retiro"); igual(metas[0].fondoManual, undefined); igual(montoDeMeta(metas[0],movs), 700);
+}));
+
+test("las tarjetas de metas muestran el monto del fondo, un 🔗, y tocar una atada lleva a cargar un ahorro", ()=>{
+  const ids=["metas-list","dep-meta","metas-sum","depositar-card"];
+  const els=ids.map(id=>{ const e=document.createElement(id==="dep-meta"?"select":"div"); e.id=id; document.body.appendChild(e); return e; });
+  const antes={metas, movs, dep:openDepositoSheet, ir:irACargarAhorroDeMeta};
+  movs=AHORROS_META();
+  metas=[{id:1,nombre:"Retiro",objetivo:1400,actual:0,emoji:"👴",fondoCat:"Fondo de Retiro"},{id:2,nombre:"Viaje",objetivo:1000,actual:250,emoji:"✈️"}];
+  let llamado=null;
+  openDepositoSheet=id=>{ llamado="deposito"+id; }; irACargarAhorroDeMeta=m=>{ llamado="ahorro:"+m.fondoCat; };
+  try{
+    renderMetas();
+    const html=document.getElementById("metas-list").innerHTML;
+    cierto(html.includes("50%"), "la meta atada tiene que mostrar 700 de 1400 = 50%");
+    cierto(html.includes("25%"), "la manual sigue con su monto");
+    igual((html.match(/🔗/g)||[]).length, 1, "solo la atada lleva el 🔗");
+    cierto(document.getElementById("metas-sum").textContent.includes("950"), "el total tiene que sumar 700 + 250: "+document.getElementById("metas-sum").textContent);
+    metaCardClick(1); igual(llamado, "ahorro:Fondo de Retiro", "tocar una meta atada tiene que llevar a cargar un ahorro");
+    metaCardClick(2); igual(llamado, "deposito2", "una manual sigue abriendo la hoja de depósito");
+  } finally { metas=antes.metas; movs=antes.movs; openDepositoSheet=antes.dep; irACargarAhorroDeMeta=antes.ir; els.forEach(e=>e.remove()); }
+});
+
+test("al arrancar se atan las metas que coinciden y se avisa; el editor y el arranque están conectados", async ()=>{
+  const antes={metas, movs, save:window.save, toast:window.showToast};
+  let guardado=0, aviso="";
+  movs=AHORROS_META(); metas=[{id:1,nombre:"Retiro",objetivo:9000,actual:700,emoji:"🎯"}];
+  window.save=()=>{ guardado++; return true; }; window.showToast=m=>{ aviso=m; };
+  try{
+    igual(vincularMetasAlArrancar(), 1);
+    igual(guardado, 1); cierto(aviso.includes("Retiro") && aviso.includes("Fondo de Retiro"), aviso);
+    igual(vincularMetasAlArrancar(), 0); igual(guardado, 1, "no vuelve a guardar si no hay nada que atar");
+  } finally { metas=antes.metas; movs=antes.movs; window.save=antes.save; window.showToast=antes.toast; }
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="meta-fondo"'), "falta el selector en el editor de metas");
+  cierto((await (await fetch("js/main.js")).text()).includes("vincularMetasAlArrancar()"), "el arranque no ata las metas");
+});
+
+// ═══════════════════════════════════════════
+// CONCILIAR CON EL BROKER (PRUEBA)
+// ═══════════════════════════════════════════
+grupo("Conciliar con el broker");
+
+// Las diferencias REALES que había entre Balanz y el fondo en el backup del usuario.
+const INV_B=(id,fecha,sub,imp,extra)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:sub,ticker:"SPY",importe:imp,importeUSD:0,fecha,cuenta:"Balanz",...(extra||{})});
+const FON_B=(id,fecha,imp,retiro,extra)=>({id,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",moneda:"ARS",importe:imp,fecha,[retiro?"usaAhorro":"esAhorro"]:true,...(extra||{})});
+const CONCIL_DATOS=()=>[
+  INV_B(1,"2026-05-08","CEDEARs Compra",55391.20,{refBalanz:"1"}), INV_B(2,"2026-06-03","CEDEARs Compra",76868.18,{refBalanz:"2"}),
+  INV_B(3,"2026-06-18","CEDEARs Venta",520393.58,{refBalanz:"3"}), INV_B(4,"2026-07-01","CEDEARs Compra",593121.13,{refBalanz:"4"}),
+  INV_B(5,"2026-07-02","CEDEARs Compra SPY",236402.86),
+  INV_B(6,"2026-07-07","CEDEARs Venta",233674.48,{refBalanz:"6"}),
+  INV_B(7,"2026-07-13","CEDEARs Venta",77917.98,{refBalanz:"7"}), INV_B(8,"2026-07-13","CEDEARs Venta",77916.38),
+  INV_B(9,"2026-07-14","CEDEARs Compra",78680.16,{refBalanz:"9"}), INV_B(10,"2026-08-05","CEDEARs Compra",40930.59,{refBalanz:"10"}),
+  INV_B(11,"2026-08-10","CEDEARs Venta",202940.38,{refBalanz:"11"}), INV_B(12,"2026-08-27","CEDEARs Venta",81772.16,{refBalanz:"12"}),
+  FON_B(21,"2025-12-03",52320.89), FON_B(22,"2026-05-08",55391.19), FON_B(23,"2026-06-03",76868.18), FON_B(24,"2026-07-01",593121.13),
+  FON_B(25,"2026-07-14",78680.15), FON_B(26,"2026-08-05",40930.59),
+  FON_B(31,"2026-06-18",520382.40,true), FON_B(32,"2026-07-07",234828.73,true), FON_B(33,"2026-08-04",203337.72,true), FON_B(34,"2026-08-27",81772.16,true)
+];
+
+test("conciliarCedears reproduce lo que había entre Balanz y el fondo del usuario", ()=>{
+  const c=conciliarCedears(CONCIL_DATOS());
+  igual(c.ok.map(o=>o.inv.id).sort((a,b)=>a-b).join(","), "2,4,10,12", "coinciden exacto: 3/6, 1/7, 5/8 y 27/8");
+  igual(c.diferencias.map(d=>d.inv.id).sort((a,b)=>a-b).join(","), "1,3,6,9,11");
+  igual(c.faltanEnFondo.map(f=>f.inv.id).sort((a,b)=>a-b).join(","), "5,7", "la compra del 2/7 y la venta del 13/7");
+  igual(c.sobranEnFondo.length, 0);
+  igual(c.duplicados.length, 1);
+  igual(c.anteriores.map(a=>a.fondo.id).join(","), "21", "el depósito de 2025 es anterior a la primera inversión");
+  igual(c.primera, "2026-05-08");
+});
+
+test("las diferencias traen cuánto y qué tipo de diferencia es", ()=>{
+  const d=conciliarCedears(CONCIL_DATOS()).diferencias;
+  const por=id=>d.find(x=>x.inv.id===id);
+  igual(por(3).dMonto, -11.18); igual(por(3).tipo, "monto"); igual(por(3).lado, "venta");
+  igual(por(6).dMonto, 1154.25);
+  igual(por(1).dMonto, -0.01);
+  igual(por(11).tipo, "monto y fecha"); igual(por(11).dDias, -6, "el fondo lo tiene 6 días antes que el broker");
+});
+
+test("el duplicado conserva la inversión de Balanz y marca la cargada a mano como repetida", ()=>{
+  const dup=conciliarCedears(CONCIL_DATOS()).duplicados[0];
+  igual(dup.conservar.id, 7); igual(dup.repetida.id, 8); igual(dup.lado, "venta");
+  // sin importar el orden en que vengan
+  const al=conciliarCedears(CONCIL_DATOS().reverse()).duplicados[0];
+  igual(al.conservar.id, 7); igual(al.repetida.id, 8);
+});
+
+test("el ajuste dice cuánto cambiaría el saldo si todo coincidiera con el broker (coincide con el backup corregido)", ()=>{
+  igual(ajusteSaldoConciliacion(conciliarCedears(CONCIL_DATOS())), 160025.31);
+  const r=resumenConciliacion(conciliarCedears(CONCIL_DATOS()));
+  igual(r.pendientes, 8, "5 distintas + 2 faltan + 1 duplicado"); igual(r.coinciden, 4); igual(r.anteriores, 1); igual(r.hayDatos, true);
+});
+
+test("un fondo que coincide en todo no tiene pendientes", ()=>{
+  const l=[INV_B(1,"2026-05-08","CEDEARs Compra",1000,{refBalanz:"1"}), FON_B(2,"2026-05-08",1000), INV_B(3,"2026-06-01","CEDEARs Venta",400,{refBalanz:"3"}), FON_B(4,"2026-06-01",400,true)];
+  const r=resumenConciliacion(conciliarCedears(l));
+  igual(r.pendientes, 0); igual(r.coinciden, 2); igual(r.ajuste, 0);
+});
+
+test("lo que sobra en el fondo (después de la primera inversión) se marca; lo anterior no", ()=>{
+  const l=[INV_B(1,"2026-05-08","CEDEARs Compra",1000,{refBalanz:"1"}), FON_B(2,"2026-05-08",1000), FON_B(3,"2026-07-20",5000), FON_B(4,"2026-01-10",300)];
+  const c=conciliarCedears(l);
+  igual(c.sobranEnFondo.map(s=>s.fondo.id).join(","), "3"); igual(c.anteriores.map(s=>s.fondo.id).join(","), "4");
+  igual(ajusteSaldoConciliacion(c), -5000, "si sobra un depósito, corregir baja el saldo");
+});
+
+test("los límites: más de 7 días o más de 3% de diferencia no se emparejan", ()=>{
+  const base=[INV_B(1,"2026-05-10","CEDEARs Compra",1000,{refBalanz:"1"})];
+  igual(conciliarCedears([...base, FON_B(2,"2026-05-17",1000)]).diferencias.length, 1, "7 días: se empareja");
+  const lejos=conciliarCedears([...base, FON_B(2,"2026-05-18",1000)]);
+  igual(lejos.diferencias.length, 0); igual(lejos.faltanEnFondo.length, 1); igual(lejos.sobranEnFondo.length, 1, "8 días: son cosas distintas");
+  igual(conciliarCedears([...base, FON_B(2,"2026-05-10",1030)]).diferencias.length, 1, "3%: se empareja");
+  igual(conciliarCedears([...base, FON_B(2,"2026-05-10",1040)]).diferencias.length, 0, "4%: no");
+});
+
+test("si hay dos candidatos se queda con el de monto más parecido, y cada uno se usa una sola vez", ()=>{
+  const l=[INV_B(1,"2026-05-10","CEDEARs Compra",1000,{refBalanz:"1"}), INV_B(2,"2026-05-11","CEDEARs Compra",1010,{refBalanz:"2"}), FON_B(3,"2026-05-10",1009), FON_B(4,"2026-05-11",1001)];
+  const c=conciliarCedears(l);
+  igual(c.diferencias.length, 2);
+  igual(c.diferencias.find(d=>d.inv.id===1).fondo.id, 4, "1000 ↔ 1001, no 1000 ↔ 1009");
+  igual(c.diferencias.find(d=>d.inv.id===2).fondo.id, 3);
+});
+
+test("compras y ventas no se mezclan: un depósito nunca se empareja con una venta", ()=>{
+  const c=conciliarCedears([INV_B(1,"2026-05-10","CEDEARs Venta",1000,{refBalanz:"1"}), FON_B(2,"2026-05-10",1000)]);
+  igual(c.ok.length+c.diferencias.length, 0); igual(c.faltanEnFondo.length, 1);
+});
+
+test("ignora lo que no es de CEDEARs ni del fondo de Cedears, los dólares y los importes vacíos; no modifica la lista", ()=>{
+  const l=[...CONCIL_DATOS(),
+    {id:90,tipo:"Inversion",cat:"FCI",subcat:"FCI Suscripción",ticker:"BCAHA",importe:900,fecha:"2026-08-10"},
+    {id:91,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",moneda:"USD",importe:0,importeOrig:5,fecha:"2026-08-10",usaAhorro:true},
+    {id:92,tipo:"Gasto",cat:"Mudanza",subcat:"Cedears",moneda:"ARS",importe:50,fecha:"2026-08-10",esAhorro:true},
+    INV_B(93,"2026-08-11","CEDEARs Compra",0)];
+  const foto=JSON.stringify(l);
+  const c=conciliarCedears(l);
+  igual(JSON.stringify(l), foto, "no puede modificar los datos");
+  igual(resumenConciliacion(c).pendientes, 8, "lo ajeno no cambia el resultado");
+});
+
+test("sin CEDEARs, lista vacía o datos raros no se rompe y no hay datos que mostrar", ()=>{
+  igual(resumenConciliacion(conciliarCedears([])).hayDatos, false);
+  igual(resumenConciliacion(conciliarCedears(null)).hayDatos, false);
+  igual(resumenConciliacion(conciliarCedears([{id:1,tipo:"Gasto",cat:"Super",importe:5}])).hayDatos, false);
+  conciliarCedears([INV_B(1,"fecha-rara","CEDEARs Compra",100), FON_B(2,undefined,100)]);   // no tira error
+  cierto(conciliacionHTML(conciliarCedears([])).includes("No encontré inversiones de CEDEARs"));
+});
+
+test("el detalle muestra cada sección con sus números y es solo de lectura", ()=>{
+  const h=conciliacionHTML(conciliarCedears(CONCIL_DATOS()));
+  cierto(h.includes("Versión de prueba"), "no avisa que es una prueba");
+  ["Montos o fechas distintas (5)","Faltan en tu fondo (2)","Posibles duplicados (1)","Coinciden con el broker (4)","Anteriores a tu primera inversión cargada (1)"].forEach(t=>cierto(h.includes(t), "falta: "+t));
+  cierto(!h.includes("Sobran en tu fondo"), "no tiene que mostrar una sección vacía");
+  cierto(h.includes("8 diferencias") && h.includes("160.025,31"), "falta el resumen con el ajuste total");
+  cierto(h.includes("Inversión (") && h.includes("Balanz") && h.includes("Tu fondo"), "tiene que mostrar los dos lados de cada diferencia");
+  cierto(!/<button/.test(h), "la versión de prueba no puede tener botones que cambien datos");
+  cierto(!h.includes("onclick"), "sin acciones en el detalle");
+});
+
+test("el detalle de un fondo que coincide dice que todo está bien", ()=>{
+  const l=[INV_B(1,"2026-05-08","CEDEARs Compra",1000,{refBalanz:"1"}), FON_B(2,"2026-05-08",1000)];
+  const h=conciliacionHTML(conciliarCedears(l));
+  cierto(h.includes("Todo coincide con el broker") && h.includes("1 operaciones"), h);
+});
+
+test("la tarjeta de Ahorros resume el estado y se oculta si no hay CEDEARs", ()=>{
+  const ids=["concil-card","concil-resumen","modal-concil","concil-detalle"];
+  const els=ids.map(id=>{ const e=document.createElement("div"); e.id=id; document.body.appendChild(e); return e; });
+  const antes=movs;
+  try{
+    movs=CONCIL_DATOS(); renderConciliacionCard();
+    igual(document.getElementById("concil-card").style.display, "");
+    cierto(document.getElementById("concil-resumen").textContent.includes("8 diferencias") && document.getElementById("concil-resumen").textContent.includes("4 coinciden"));
+    abrirConciliacion();
+    cierto(document.getElementById("modal-concil").classList.contains("open"), "no abrió el detalle");
+    cierto(document.getElementById("concil-detalle").textContent.includes("Faltan en tu fondo"));
+    cerrarConciliacion(); cierto(!document.getElementById("modal-concil").classList.contains("open"));
+    movs=[]; renderConciliacionCard();
+    igual(document.getElementById("concil-card").style.display, "none", "sin CEDEARs no se muestra");
+  } finally { movs=antes; els.forEach(e=>e.remove()); }
+});
+
+test("la pantalla de Ahorros trae la tarjeta, la hoja y el script", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  ["concil-card","concil-resumen","modal-concil","concil-detalle","js/conciliacion.js","PRUEBA"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
+  cierto((await (await fetch("sw.js")).text()).slice(0).includes("./js/conciliacion.js"), "el service worker no cachea conciliacion.js");
+  cierto((await (await fetch("js/ahorros.js")).text()).includes("renderConciliacionCard()"), "Ahorros no dibuja la tarjeta");
+});
 
 // ═══════════════════════════════════════════
 // IDS REPETIDOS

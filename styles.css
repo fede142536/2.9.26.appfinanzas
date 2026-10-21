@@ -768,3 +768,14 @@ canvas{width:100%!important;max-width:100%}
 .cfg-cuerpo .card{margin-left:0;margin-right:0}
 #cfg-sec-peligro>summary{border-color:var(--danger-light)}
 #cfg-sec-peligro .cfg-sec-titulo{color:var(--danger)}
+
+/* Conciliar con el broker (prueba) */
+.concil-aviso{background:var(--warning-light);color:var(--text);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;line-height:1.4}
+.concil-sec{margin:16px 0 4px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.concil-fila{padding:10px 0;border-bottom:1px solid var(--border)}
+.concil-fila:last-child{border-bottom:none}
+.concil-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:14px}
+.concil-delta{font-weight:600;white-space:nowrap;font-size:13px}
+.concil-det{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.35}
+.concil-plegable{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}
+.concil-plegable>summary{cursor:pointer;font-size:13px;font-weight:600}
