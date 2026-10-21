@@ -599,6 +599,12 @@ canvas{width:100%!important;max-width:100%}
 .tc-res-sub.ok{color:var(--success)}
 .tc-res-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
 .tc-res-monto{font-size:14px;font-weight:700}
+.vinc-pago-op{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 10px;width:100%;text-align:left;padding:10px 12px;margin-bottom:6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;cursor:pointer}
+.vinc-pago-op:active{transform:scale(.99)}
+.vinc-pago-t{min-width:0}
+.vinc-pago-m{font-weight:700}
+.vinc-pago-c{flex-basis:100%;font-size:11px;color:var(--muted)}
+.vinc-pago-solo{justify-content:center;font-weight:600;background:var(--warning-light);border-color:transparent;color:var(--warning)}
 .tc-res-btn{padding:7px 14px;border:0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--warning);color:#fff;cursor:pointer}
 /* Franja de próximos vencimientos (Movimientos, arriba de la lista). */
 .venc-wrap{margin:10px 16px 0}
