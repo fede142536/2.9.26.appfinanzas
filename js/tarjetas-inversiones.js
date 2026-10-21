@@ -266,7 +266,9 @@ function datosResumenTc(vencTc, tarjeta, ym){
   const pag=(mes.pagado && typeof mes.pagado==="object") ? mes.pagado : {};
   const elegir=(explicita, dia)=> fechaValida(explicita) ? explicita : fechaVencimiento(ym, dia);
   return {cierre:elegir(mes.cierre, t.dia.cierre), vto:elegir(mes.vto, t.dia.vto),
-          pagado:{ARS:!!pag.ARS, USD:!!pag.USD}, habitual:t.dia};
+          pagado:{ARS:!!pag.ARS, USD:!!pag.USD},
+          pagadoCon:{ARS:(pag.ARS && pag.ARS.mov) || null, USD:(pag.USD && pag.USD.mov) || null},   // el gasto que lo pagó, si se vinculó uno
+          habitual:t.dia};
 }
 
 // Copia del objeto guardado con lo de una tarjeta ya cambiado y sin restos vacíos. Las dos
@@ -297,11 +299,12 @@ function conFechasResumen(vencTc, tarjeta, ym, {cierre, vto, repetir}){
 }
 
 // Marca (o desmarca) como pagado el resumen de una tarjeta, en una moneda, en un mes.
-function conResumenPagado(vencTc, tarjeta, ym, moneda, valor){
+// Con `movId` queda vinculado al gasto que ya cargaste como pago: es solo una referencia, no toca ese movimiento.
+function conResumenPagado(vencTc, tarjeta, ym, moneda, valor, movId){
   return _conTarjeta(vencTc, tarjeta, t=>{
     const mes={...(t.meses[ym]||{})};
     const pag={...(mes.pagado||{})};
-    if(valor) pag[monedaTc(moneda)]=true; else delete pag[monedaTc(moneda)];
+    if(valor) pag[monedaTc(moneda)]=movId ? {mov:movId} : true; else delete pag[monedaTc(moneda)];
     if(Object.keys(pag).length) mes.pagado=pag; else delete mes.pagado;
     t.meses[ym]=mes;
   });
@@ -326,7 +329,7 @@ function proximosVencimientos(hoyISO, lista, vencTc, ventana, mesesAdelante, ven
       if(!d.vto) return;
       // pagado: lo marcaste, o los pagos ligados lo cubren
       agregar({tipo:"tarjeta", nombre:r.tarjeta||"Tarjeta", tarjeta:r.tarjeta, ym, fecha:d.vto,
-               dias:diasEntre(hoyISO,d.vto), monto:r.resta, moneda:r.moneda}, !!d.pagado[r.moneda] || r.resta<=0);
+               dias:diasEntre(hoyISO,d.vto), monto:r.resta, moneda:r.moneda}, resumenMarcadoPagado(d, r.moneda, lista) || r.resta<=0);
     });
     // Un gasto frecuente de tarjeta con su propio día de vencimiento (además del resumen de la tarjeta).
     getTcMovsEnMes(ym).forEach(m=>{
@@ -408,7 +411,7 @@ function vencimientosFranjaHTML(items, max){
   const lim=Math.max(max||3, vencidos);   // los vencidos sin pagar se muestran todos, no se esconden en "y N más"
   const filas=items.slice(0,lim).map(v=>{
     const color=v.dias<0 ? "var(--danger)" : v.dias<=1 ? "var(--warning)" : "var(--muted)";
-    const accion=v.tipo==="tarjeta" ? `marcarPagadoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)},true)`
+    const accion=v.tipo==="tarjeta" ? `abrirVincularPagoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)})`
       : v.tipo==="frecuenteTc" ? `toggleTcFrecPagado(${Number(v.id)},${attrJS(v.ym)})`
       : `toggleFrecPagado(${Number(v.id)},${attrJS(v.ym)})`;
     return `<div class="venc-fila${v.dias<0?" venc-vencida":""}"><span class="venc-nombre">${v.tipo==="tarjeta"?"💳":"🔁"} ${escapeHtml(v.nombre)}</span>
@@ -589,13 +592,82 @@ function guardarFechasTc(){
   if(typeof pintarFranjaVencimientos==="function") pintarFranjaVencimientos();
 }
 
-// Marca el resumen como pagado (o lo desmarca). Es solo una marca: el pago real lo cargás vos
-// como un gasto, porque no siempre coincide con el resumen (gastos de emisión, intereses…).
-function marcarPagadoTc(tarjeta, ym, moneda, valor){
-  guardarVencTc(conResumenPagado(leerVencTc(), tarjeta, ym, moneda, valor!==false));
-  showToast(valor===false ? "Pago desmarcado" : "✓ Marcado como pagado");
+// ¿Está el resumen marcado como pagado? Si se vinculó a un gasto y ese gasto se borró, la marca ya no vale.
+function resumenMarcadoPagado(d, moneda, lista){
+  const mon=monedaTc(moneda);
+  if(!d.pagado[mon]) return false;
+  const id=d.pagadoCon[mon];
+  return !id || (lista||[]).some(m=>m.id===id);
+}
+
+// Los gastos que pueden ser el pago de este resumen: gastos de "Tarjeta de crédito" en esa moneda, del mes del resumen o del
+// siguiente (se paga después de cerrar), que no estén ya vinculados a otro resumen. Primero los que nombran a la tarjeta,
+// después los de monto más parecido al resumen. El pago real no siempre coincide con lo cargado (compras que todavía no
+// cargaste, intereses, gastos de emisión), por eso se elige a mano en vez de adivinarlo.
+const CAT_PAGO_TARJETA="Tarjeta de crédito";
+function candidatosPagoTc(lista, vencTc, ym, tarjeta, moneda, total){
+  const mon=monedaTc(moneda), nombre=String(tarjeta||"").toLowerCase();
+  const usados=new Set();
+  Object.values(vencTc||{}).forEach(v=>Object.values(normalizarTc(v).meses).forEach(mes=>{
+    ["ARS","USD"].forEach(k=>{ const id=mes.pagado && mes.pagado[k] && mes.pagado[k].mov; if(id) usados.add(id); });
+  }));
+  const meses=[ym, addMonths(ym,1)];
+  const montoDe=m=>mon==="USD" ? (m.importeOrig||0) : (m.importe||0);
+  const nombra=m=>!!nombre && `${m.nota||""} ${m.subcat||""}`.toLowerCase().includes(nombre);
+  return (lista||[]).filter(m=>esGasto(m) && m.cat===CAT_PAGO_TARJETA && monedaTc(m.moneda)===mon && montoDe(m)>0
+      && meses.includes(String(m.fecha||"").slice(0,7)) && !usados.has(m.id))
+    .map(m=>({m, nombra:nombra(m), dif:Math.abs(montoDe(m)-(total||0))}))
+    .sort((a,b)=>(b.nombra-a.nombra) || a.dif-b.dif || String(b.m.fecha).localeCompare(String(a.m.fecha)))
+    .map(x=>x.m);
+}
+
+// Marca el resumen como pagado (o lo desmarca). Es solo una marca: no carga ni cambia ningún gasto ni el balance. El pago real
+// ya lo cargaste vos como un gasto; con `movId` queda además vinculado a ese gasto.
+function marcarPagadoTc(tarjeta, ym, moneda, valor, movId){
+  guardarVencTc(conResumenPagado(leerVencTc(), tarjeta, ym, moneda, valor!==false, movId));
+  showToast(valor===false ? "Pago desmarcado" : movId ? "✓ Vinculado a tu pago" : "✓ Marcado como pagado");
   renderTarjetas();
   if(typeof pintarFranjaVencimientos==="function") pintarFranjaVencimientos();
+}
+
+// ── Hoja "¿Cómo lo pagaste?": vincular el gasto que ya cargaste, o solo marcarlo ──
+let vincularPagoCtx=null;
+function vincularPagoTcHTML(ctx, lista, vencTc){
+  const r=resumenTarjetaMes(ctx.ym, ctx.tarjeta, ctx.moneda, lista);
+  const cands=candidatosPagoTc(lista, vencTc, ctx.ym, ctx.tarjeta, ctx.moneda, r.total);
+  const usd=monedaTc(ctx.moneda)==="USD";
+  const montoDe=m=>usd ? (m.importeOrig||0) : (m.importe||0);
+  const filas=cands.slice(0,8).map(m=>`<button type="button" class="vinc-pago-op" onclick="elegirVincularPagoTc(${Number(m.id)})">
+      <span class="vinc-pago-t"><strong>${escapeHtml(fmtDiaMes(m.fecha))}</strong> · ${escapeHtml(m.subcat||"Pago")}${m.nota?` · ${escapeHtml(m.nota)}`:""}</span>
+      <span class="vinc-pago-m">${fmt(montoDe(m),usd?"USD":"ARS")}</span>
+      ${m.cuenta?`<span class="vinc-pago-c">${escapeHtml(m.cuenta)}</span>`:""}</button>`).join("");
+  return {
+    titulo:`${ctx.tarjeta||"Tarjeta"}${usd?" (USD)":""} · resumen de ${mesLbl(ctx.ym)}`,
+    cuerpo:(cands.length
+      ? `<p class="txt-sm" style="margin:0 0 8px">¿Cuál de tus gastos fue el pago de este resumen?</p>${filas}`
+      : `<p class="txt-sm txt-muted" style="margin:0 0 8px">No encontré un gasto de "${CAT_PAGO_TARJETA}" de ${mesLbl(ctx.ym)} o ${mesLbl(addMonths(ctx.ym,1))} para vincular.</p>`)
+      + `<button type="button" class="vinc-pago-op vinc-pago-solo" onclick="elegirVincularPagoTc(0)"><span class="vinc-pago-t">Solo marcarlo como pagado</span></button>
+         <p class="txt-xs txt-muted" style="margin:8px 0 0;line-height:1.45">En los dos casos <strong>no se carga ningún gasto y tu balance no cambia</strong>: es solo una marca para que deje de avisarte.</p>`,
+    cantidad:cands.length};
+}
+function abrirVincularPagoTc(tarjeta, ym, moneda){
+  vincularPagoCtx={tarjeta, ym, moneda};
+  const h=vincularPagoTcHTML(vincularPagoCtx, movs, leerVencTc());
+  document.getElementById("vinc-pago-titulo").textContent=h.titulo;
+  document.getElementById("vinc-pago-cuerpo").innerHTML=h.cuerpo;
+  document.getElementById("modal-vincular-pago").classList.add("open");
+}
+function cerrarVincularPagoTc(){
+  const m=document.getElementById("modal-vincular-pago");
+  if(m) m.classList.remove("open");
+  vincularPagoCtx=null;
+}
+// movId 0 = solo marcarlo.
+function elegirVincularPagoTc(movId){
+  const c=vincularPagoCtx;
+  if(!c) return;
+  cerrarVincularPagoTc();
+  marcarPagadoTc(c.tarjeta, c.ym, c.moneda, true, movId||undefined);
 }
 
 // ═══════════════════════════════════════════
@@ -903,7 +975,8 @@ function resumenesTcHTML(ym){
   return `<div class="tc-res"><div class="tc-res-titulo">Resumen de ${escapeHtml(mesLbl(ym))}</div>`+rs.map(r=>{
     const d=datosResumenTc(vencTc, r.tarjeta, ym);
     const badge=r.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
-    const pagadoManual=d.pagado[r.moneda];
+    const pagadoManual=resumenMarcadoPagado(d, r.moneda, movs);
+    const movPago=d.pagadoCon[r.moneda] ? movs.find(m=>m.id===d.pagadoCon[r.moneda]) : null;
     const pagadoLigado=r.total>0 && r.resta===0;          // pagos cargados con la versión anterior
     const pagado=pagadoManual||pagadoLigado;
 
@@ -922,20 +995,29 @@ function resumenesTcHTML(ym){
     const args=`${attrJS(r.tarjeta)},${attrJS(ym)},${attrJS(r.moneda)}`;
     let sub, right;
     if(pagadoManual){
-      sub=`<div class="tc-res-sub ok">✓ Pagado</div>`;
+      sub=`<div class="tc-res-sub ok">✓ Pagado${movPago?` con tu gasto del ${escapeHtml(fmtDiaMes(movPago.fecha))} (${fmt(r.moneda==="USD"?(movPago.importeOrig||0):(movPago.importe||0), r.moneda)})`:""}</div>${movPago?diferenciaPagoTcHTML(r, movPago):""}`;
       right=`<button type="button" class="tc-res-link" onclick="marcarPagadoTc(${args},false)">Deshacer</button>`;
     } else if(pagadoLigado){
       sub=`<div class="tc-res-sub ok">✓ Pagado ${fmt(r.pagado,r.moneda)}</div>`;
       right=`<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${attrJS(ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)})">Deshacer</button>`;
     } else {
       sub=`<div class="tc-res-sub">${r.pagado>0?`Pagaste ${fmt(r.pagado,r.moneda)} · resta <strong>${fmt(r.resta,r.moneda)}</strong>`:"Sin pagar"}</div>`;
-      right=`<button type="button" class="tc-res-btn" onclick="marcarPagadoTc(${args},true)">Marcar pagado</button>`;
+      right=`<button type="button" class="tc-res-btn" onclick="abrirVincularPagoTc(${args})">Marcar pagado</button>`;
     }
     return `<div class="tc-res-row">
       <div class="tc-res-mid"><div class="tc-res-name">💳 ${escapeHtml(r.tarjeta||"Sin tarjeta")}${badge}</div>${sub}${fechas}</div>
       <div class="tc-res-right"><div class="tc-res-monto">${fmt(r.total,r.moneda)}</div>${right}</div>
     </div>`;
   }).join("")+`</div>`;
+}
+
+// Si lo que pagaste no es lo que suman las compras cargadas, lo dice: típico de una tarjeta que agrega gastos que todavía
+// no cargaste. Con menos de $1 de diferencia no dice nada.
+function diferenciaPagoTcHTML(r, movPago){
+  const pagado=r.moneda==="USD" ? (movPago.importeOrig||0) : (movPago.importe||0);
+  const dif=Math.round((pagado-r.total)*100)/100;
+  if(Math.abs(dif)<1) return "";
+  return `<div class="tc-res-sub">${dif>0 ? `Pagaste ${fmt(dif,r.moneda)} más que las compras cargadas: puede haber gastos de la tarjeta sin cargar.` : `Pagaste ${fmt(-dif,r.moneda)} menos que las compras cargadas.`}</div>`;
 }
 
 // Borra los pagos ligados a un resumen (cargados con una versión anterior, cuando había un botón

@@ -4936,7 +4936,7 @@ test("normalizarTc: el formato viejo (un número) es el día de vencimiento, y l
 
 test("datosResumenTc: la fecha cargada para ese mes gana; si no hay, vale el día habitual", ()=>{
   const v={Visa:{dia:{cierre:5, vto:15}, meses:{"2026-11":{cierre:"2026-11-06", vto:"2026-11-17"}}}};
-  igual(datosResumenTc(v,"Visa","2026-11"), {cierre:"2026-11-06", vto:"2026-11-17", pagado:{ARS:false, USD:false}, habitual:{cierre:5, vto:15}});
+  igual(datosResumenTc(v,"Visa","2026-11"), {cierre:"2026-11-06", vto:"2026-11-17", pagado:{ARS:false, USD:false}, pagadoCon:{ARS:null, USD:null}, habitual:{cierre:5, vto:15}});
   const dic=datosResumenTc(v,"Visa","2026-12");
   igual([dic.cierre, dic.vto], ["2026-12-05","2026-12-15"], "diciembre no tiene carga: usa el día habitual");
   igual(datosResumenTc(v,"Master","2026-11").vto, null, "otra tarjeta sin nada cargado");
@@ -5000,7 +5000,7 @@ test("la franja trae un botón Pagado por fila: de la tarjeta marca el resumen, 
     {tipo:"frecuente", nombre:"Alquiler", id:77, ym:"2026-09", moneda:"ARS", dias:3, monto:2000}
   ]);
   cierto((html.match(/class="venc-ok"/g)||[]).length===2, "falta un botón en alguna fila: "+html);
-  cierto(html.includes("marcarPagadoTc("), "la tarjeta no marca el resumen: "+html);
+  cierto(html.includes("abrirVincularPagoTc("), "la tarjeta no abre la hoja de pago: "+html);
   cierto(html.includes("toggleFrecPagado(77,"), "el frecuente no se tilda: "+html);
 });
 
@@ -5023,7 +5023,7 @@ test("la fila de Tarjetas muestra cierre y vencimiento con los días que faltan,
     const html=resumenesTcHTML(ym);
     cierto(html.includes("Cierre ") && html.includes("Vence ") && html.includes("en 2 días"), "faltan las fechas: "+html);
     cierto(html.includes("Marcar pagado"), "falta el botón Marcar pagado");
-    cierto(!/>Pagar</.test(html) && !html.includes("abrirPagoTc"), "no tiene que quedar el botón Pagar: "+html);
+    cierto(!/>Pagar</.test(html) && html.includes("abrirVincularPagoTc"), "'Marcar pagado' abre la hoja de vincular; no hay botón Pagar: "+html);
   });
 });
 
@@ -5062,13 +5062,84 @@ test("la hoja de fechas guarda cierre y vencimiento del mes, y valida que no est
   });
 });
 
-test("la hoja de fechas usa el calendario del sistema y ya no existe la de pagar", async ()=>{
+test("la hoja de fechas usa el calendario del sistema y el pago no carga gastos (solo se vincula)", async ()=>{
   const html=await (await fetch("index.html")).text();
   cierto(/id="fechas-tc-cierre"[^>]*type="date"|type="date"[^>]*id="fechas-tc-cierre"/.test(html), "el cierre no usa un input de fecha");
   cierto(/id="fechas-tc-vto"[^>]*type="date"|type="date"[^>]*id="fechas-tc-vto"/.test(html), "el vencimiento no usa un input de fecha");
-  cierto(!html.includes("modal-pago-tc") && !html.includes("pago-tc-"), "quedó la hoja de pagar el resumen");
+  cierto(html.includes("modal-vincular-pago"), "falta la hoja para vincular el pago ya cargado");
   const js=await (await fetch("js/tarjetas-inversiones.js")).text();
-  cierto(!js.includes("abrirPagoTc") && !js.includes("guardarPagoTc") && !js.includes("crearPagoTarjeta"), "quedó código del flujo de pagar");
+  cierto(!js.includes("abrirPagoTc") && !js.includes("guardarPagoTc") && !js.includes("crearPagoTarjeta"), "quedó código del flujo de pagar (el que cargaba un gasto)");
+});
+
+// ── Vincular el pago que ya cargaste como gasto (sin tocar el balance) ──
+const PAGO_GASTO=(id,fecha,imp,extra)=>({id,tipo:"Gasto",cat:"Tarjeta de crédito",subcat:"Pago total",moneda:"ARS",importe:imp,fecha,cuenta:"Galicia",...(extra||{})});
+
+test("candidatosPagoTc: gastos de Tarjeta de crédito del mes y del siguiente, el que nombra a la tarjeta primero", ()=>{
+  const l=[PAGO_GASTO(1,"2026-09-20",5000), PAGO_GASTO(2,"2026-10-05",160000,{nota:"Visa"}), PAGO_GASTO(3,"2026-10-06",90000,{nota:"Mastercard"}),
+           PAGO_GASTO(4,"2026-11-02",1), PAGO_GASTO(5,"2026-08-30",1), {...PAGO_GASTO(6,"2026-10-07",1000), cat:"Super"},
+           {...PAGO_GASTO(7,"2026-10-07",20), moneda:"USD", importe:0, importeOrig:20}, PAGO_GASTO(8,"2026-10-08",0)];
+  igual(candidatosPagoTc(l, {}, "2026-09", "Visa", "ARS", 160000).map(m=>m.id), [2,3,1], "Visa primero; después por monto parecido; sin dólares ni otras categorías ni meses lejanos");
+  igual(candidatosPagoTc(l, {}, "2026-09", "Visa", "USD", 20).map(m=>m.id), [7], "en dólares usa importeOrig");
+  const venc=conResumenPagado({}, "Visa", "2026-08", "ARS", true, 2);
+  igual(candidatosPagoTc(l, venc, "2026-09", "Visa", "ARS", 160000).map(m=>m.id), [3,1], "un gasto ya vinculado a otro resumen no se ofrece de nuevo");
+});
+
+test("vincular un pago guarda la referencia y marca pagado; si borrás ese gasto, vuelve a figurar sin pagar", ()=>{
+  const v=conResumenPagado({}, "Visa", "2026-09", "ARS", true, 55);
+  const d=datosResumenTc(v, "Visa", "2026-09");
+  igual(d.pagado.ARS, true); igual(d.pagadoCon.ARS, 55); igual(d.pagado.USD, false); igual(d.pagadoCon.USD, null);
+  igual(resumenMarcadoPagado(d, "ARS", [{id:55}]), true);
+  igual(resumenMarcadoPagado(d, "ARS", []), false, "el gasto vinculado ya no existe");
+  const solo=datosResumenTc(conResumenPagado({}, "Visa", "2026-09", "ARS", true), "Visa", "2026-09");
+  igual(solo.pagado.ARS, true); igual(solo.pagadoCon.ARS, null); igual(resumenMarcadoPagado(solo, "ARS", []), true, "marcado a mano no depende de ningún gasto");
+  igual(datosResumenTc(conResumenPagado(v, "Visa", "2026-09", "ARS", false), "Visa", "2026-09").pagado.ARS, false, "deshacer");
+});
+
+test("vincular el pago NO cambia el balance ni agrega movimientos, y saca a la tarjeta de los avisos", ()=>conVenc({tcs:TCS_SEPT, venc:conFechasResumen({},"Visa","2026-09",{vto:"2026-09-10"})}, ()=>{
+  const antes={movs, tcs, render:renderTarjetas, fr:window.pintarFranjaVencimientos, toast:window.showToast, ctx:vincularPagoCtx};
+  const pago=PAGO_GASTO(900,"2026-09-12",1000000,{nota:"Visa"});
+  movs=[pago];
+  renderTarjetas=()=>{}; window.pintarFranjaVencimientos=()=>{}; window.showToast=()=>{};
+  try{
+    const bal=JSON.stringify(totalesDePlata(movs)), cant=movs.length, tcsFoto=JSON.stringify(tcs);
+    cierto(proximosVencimientos("2026-09-08", movs, leerVencTc()).some(v=>v.tarjeta==="Visa"), "antes de vincular tendría que avisar");
+    vincularPagoCtx={tarjeta:"Visa", ym:"2026-09", moneda:"ARS"};
+    elegirVincularPagoTc(900);
+    igual(JSON.stringify(totalesDePlata(movs)), bal, "el balance no puede cambiar"); igual(movs.length, cant, "no puede cargar ningún gasto"); igual(JSON.stringify(tcs), tcsFoto);
+    igual(movs[0].importe, 1000000, "el gasto vinculado queda intacto");
+    igual(datosResumenTc(leerVencTc(), "Visa", "2026-09").pagadoCon.ARS, 900);
+    igual(proximosVencimientos("2026-09-08", movs, leerVencTc()).filter(v=>v.tarjeta==="Visa").length, 0, "ya no avisa");
+    movs=[];   // se borró el gasto vinculado
+    cierto(proximosVencimientos("2026-09-08", movs, leerVencTc()).some(v=>v.tarjeta==="Visa"), "sin el gasto vuelve a avisar");
+    igual(vincularPagoCtx, null, "la hoja se cierra al elegir");
+  } finally { movs=antes.movs; renderTarjetas=antes.render; window.pintarFranjaVencimientos=antes.fr; window.showToast=antes.toast; vincularPagoCtx=antes.ctx; }
+}));
+
+test("la hoja de pago: lista los gastos candidatos, avisa que no cambia el balance y ofrece solo marcarlo", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
+  const ctx={tarjeta:"Visa", ym:"2026-09", moneda:"ARS"};
+  const h=vincularPagoTcHTML(ctx, [PAGO_GASTO(900,"2026-10-05",160000,{nota:"Visa"})], {});
+  cierto(h.cantidad===1 && h.cuerpo.includes("elegirVincularPagoTc(900)") && h.cuerpo.includes("160.000"), h.cuerpo);
+  cierto(h.cuerpo.includes("Solo marcarlo como pagado") && h.cuerpo.includes("elegirVincularPagoTc(0)"), "falta la opción de solo marcarlo");
+  cierto(h.cuerpo.includes("tu balance no cambia"), "tiene que decir que el balance no cambia");
+  const vacia=vincularPagoTcHTML(ctx, [], {});
+  cierto(vacia.cantidad===0 && vacia.cuerpo.includes("No encontré un gasto") && vacia.cuerpo.includes("elegirVincularPagoTc(0)"), vacia.cuerpo);
+  cierto(h.titulo.includes("Visa") && h.titulo.includes("Septiembre"), h.titulo);
+}));
+
+test("la fila de Tarjetas muestra con qué gasto se pagó y cuánto difiere de las compras cargadas", ()=>{
+  const ym=currentYM(), pago=PAGO_GASTO(901,ym+"-12",150000);
+  const venc=conResumenPagado({}, "Visa", ym, "ARS", true, 901);
+  return conVenc({tcs:[{id:1, desc:"Notebook", total:120000, cuotasTotal:12, mesInicio:ym, tarjeta:"Visa", moneda:"ARS"}], venc}, ()=>{
+    const antes=movs; movs=[pago];
+    try{
+      const html=resumenesTcHTML(ym);
+      cierto(html.includes("✓ Pagado con tu gasto del 12"), "falta con qué gasto se pagó: "+html);
+      cierto(html.includes("más que las compras cargadas") && html.includes("sin cargar"), "falta la diferencia: "+html);
+      cierto(html.includes("Deshacer"));
+      igual(diferenciaPagoTcHTML({total:150000, moneda:"ARS"}, pago), "", "sin diferencia no dice nada");
+      cierto(diferenciaPagoTcHTML({total:200000, moneda:"ARS"}, pago).includes("menos"));
+    } finally { movs=antes; }
+  });
 });
 
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
