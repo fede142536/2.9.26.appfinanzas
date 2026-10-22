@@ -331,12 +331,55 @@ function actualizarFilaFrecPagado(id, ym, pagado){
   });
 }
 
+// ── Ingresos frecuentes (un sueldo, un alquiler cobrado) ──
+// Se expanden mes a mes como los gastos frecuentes, pero el día de cobro importa: el ingreso de un mes entra al balance recién
+// cuando llega su día (`diaCobro`, o el día de la fecha con que lo cargaste) o cuando lo marcás como cobrado. Así "Disponible" nunca
+// cuenta plata que todavía no te pagaron, y los meses que vienen no suman ingresos que no existen.
+const nombreFrecuente=m=>m && m.tipo==="Ingreso" ? "ingreso frecuente" : "gasto frecuente";
+function diaCobroDe(m){
+  const d=diaValido(m && m.diaCobro);
+  return d!==null ? d : (diaValido(String(m&&m.fecha||"").slice(8,10)) || 1);
+}
+function fechaCobroFrec(m, ym){ return fechaVencimiento(ym, diaCobroDe(m)) || (ym+"-01"); }
+// ¿Ya cuenta el ingreso frecuente `m` en el mes `ym`? (hoyISO: la fecha de hoy)
+function ingresoFrecuenteCuenta(m, ym, hoyISO){
+  return !!(m.pagos && m.pagos[ym]) || fechaCobroFrec(m, ym)<=hoyISO;
+}
+// Los ingresos frecuentes del mes que todavía no cuentan (no llegó su día y no los marcaste cobrados), por fecha.
+function ingresosFrecPorCobrar(ym, hoyISO, lista){
+  const hoy=hoyISO||hoyLocal();
+  return (lista||movs).filter(m=>m.tipo==="Ingreso" && m.frecuente && gastoFrecActivoEnMes(m, ym) && !ingresoFrecuenteCuenta(m, ym, hoy))
+    .map(m=>({id:m.id, ym, fecha:fechaCobroFrec(m, ym), monto:getGastoFrecMontoEnMes(m, ym), moneda:m.moneda==="USD"?"USD":"ARS",
+              nombre:m.subcat && !SUBCAT_SIN_VALOR.includes(m.subcat) ? m.subcat : (m.cat||"Ingreso frecuente")}))
+    .sort((a,b)=>a.fecha.localeCompare(b.fecha));
+}
+function marcarIngresoCobrado(id, ym){
+  const g=movs.find(x=>x.id===id && x.frecuente && x.tipo==="Ingreso");
+  if(!g) return;
+  if(!g.pagos) g.pagos={};
+  g.pagos[ym]=true;
+  save();
+  showToast("✓ Cobrado: ya suma a tu balance");
+  renderMovs();
+}
+function porCobrarFranjaHTML(items){
+  if(!items.length) return "";
+  const fmt=v=>v.moneda==="USD" ? `USD ${v.monto.toFixed(2)}` : fmtS(v.monto);
+  const filas=items.map(v=>`<div class="venc-fila"><span class="venc-nombre">🔁 ${escapeHtml(v.nombre)}</span>
+      <span class="venc-txt" style="color:var(--muted)">cobra el ${escapeHtml(fmtDiaMes(v.fecha))} · <strong>${fmt(v)}</strong></span>
+      <button type="button" class="venc-ok venc-cobrado" aria-label="Marcar ${escapeHtml(v.nombre)} como cobrado" onclick="marcarIngresoCobrado(${Number(v.id)},${attrJS(v.ym)})">✓ Cobrado</button></div>`).join("");
+  return `<div class="venc-franja venc-por-cobrar"><div class="venc-titulo">⏳ Por cobrar este mes</div>${filas}</div>`;
+}
+
 function getMesMov(ym){
   const resultado=[];
+  const hoy=hoyLocal();
   movs.forEach(m=>{
-    // Gasto frecuente: expandir a un movimiento virtual por cada mes activo
-    if(m.tipo==="Gasto" && m.frecuente){
+    // Gasto o ingreso frecuente: expandir a un movimiento virtual por cada mes activo
+    if((m.tipo==="Gasto" || m.tipo==="Ingreso") && m.frecuente){
       if(!gastoFrecActivoEnMes(m, ym)) return;
+      const esIng=m.tipo==="Ingreso";
+      if(esIng && !ingresoFrecuenteCuenta(m, ym, hoy)) return;   // todavía no cobrado: ver ingresosFrecPorCobrar
       const monto=getGastoFrecMontoEnMes(m, ym);
       const isUSD=m.moneda==="USD";
       // Construyo una copia virtual con el monto vigente para ese mes
@@ -346,7 +389,7 @@ function getMesMov(ym){
         importe: isUSD ? 0 : monto,
         importeOrig: isUSD ? monto : null,
         // La fecha virtual es el día 1 del mes o el mesInicio si es ese mismo mes
-        fecha: ym===String(m.fecha||"").slice(0,7) ? m.fecha : (ym+"-01"),
+        fecha: esIng ? fechaCobroFrec(m, ym) : (ym===String(m.fecha||"").slice(0,7) ? m.fecha : (ym+"-01")),
         // El pago es por mes (m.pagos es {ym: true}), no por movimiento: el mismo gasto
         // frecuente puede estar pago en septiembre e impago en octubre.
         pagado: !!(m.pagos && m.pagos[ym])
@@ -540,7 +583,7 @@ function construirCuerpoTxItem(m){
       // texto que arma esta sección en el handoff de Movimientos. El texto en estado impago
       // no dice "Impago" solo, dice "Marcar pagado": un badge que solo INFORMABA el estado no
       // invitaba a tocarlo. Una vez pagado alcanza con informar ("✓ Pagado").
-      if(m.frecuente){
+      if(m.frecuente && m.tipo==="Gasto"){
         const ym=String(m.fecha||"").slice(0,7);
         statusBadge = m.pagado
           ? `<span class="badge badge-success js-toggle-pago" role="button" tabindex="0" aria-label="Pagado. Tocá para deshacerlo" data-ym="${ym}">✓ Pagado</span>`
@@ -552,7 +595,7 @@ function construirCuerpoTxItem(m){
       if(esPataDeCambio(m)){
         sub=infoCambio && infoCambio.tc ? `${fmtS(infoCambio.tc)} por dólar` : "";
       } else {
-        sub=subtituloFila([subcatVisible(m.subcat)]);
+        sub=subtituloFila([subcatVisible(m.subcat), m.frecuente && m.tipo==="Ingreso" ? "🔁 Mensual" : ""]);
       }
     }
     // El ícono en sí (el emoji) sigue necesitando sus propios casos; el COLOR (iconClass) es
@@ -889,7 +932,7 @@ function pintarFranjaVencimientos(){
   const el=document.getElementById("mov-arrastre");
   if(!el) return;
   const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();
-  const html=aplica ? vencimientosFranjaHTML(proximosVencimientos(hoyLocal(), movs, leerVencTc(), undefined, undefined, VENC_VENCIDOS_LARGO)) : "";
+  const html=aplica ? vencimientosFranjaHTML(proximosVencimientos(hoyLocal(), movs, leerVencTc(), undefined, undefined, VENC_VENCIDOS_LARGO)) + porCobrarFranjaHTML(ingresosFrecPorCobrar(currentYM(), hoyLocal())) : "";
   if(html){ el.className="venc-wrap"; el.innerHTML=html; el.style.display="block"; }
   else if(filtro==="Todos"){ el.className="info-line"; el.innerHTML=""; el.style.display="none"; }   // sin restos de la franja anterior
 }
@@ -1426,18 +1469,18 @@ async function borrarMov(id, btn){
   // desde el MES QUE EL USUARIO ESTÁ VIENDO (mesActual), no el calendario real
   if(m && m.frecuente){
     const mesDeBaja=mesActual; // usa el mes seleccionado en la pestaña Movs
-    if(await mostrarConfirm(`Este es un gasto frecuente mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`, {textoOk:"Dar de baja", textoCancelar:"Eliminar todo"})){
+    if(await mostrarConfirm(`Este es un ${nombreFrecuente(m)} mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`, {textoOk:"Dar de baja", textoCancelar:"Eliminar todo"})){
       // mesFin es el último mes INCLUIDO. Para "dar de baja desde X", mesFin = mes anterior a X.
       const revertirBaja=capturarCampos([m], ["mesFin"]);
       m.mesFin = addMonths(mesDeBaja, -1);
       save();
-      ofrecerDeshacerCambio(`Gasto frecuente dado de baja desde ${mesLbl(mesDeBaja)} ✓`, revertirBaja);
+      ofrecerDeshacerCambio(`${nombreFrecuente(m)[0].toUpperCase()+nombreFrecuente(m).slice(1)} dado de baja desde ${mesLbl(mesDeBaja)} ✓`, revertirBaja);
       renderMovs();
       return;
     }
     // Si dijo cancelar, ofrecemos borrado total con segunda confirmación
-    if(!await mostrarConfirm(`⚠️ Vas a eliminar el gasto frecuente y todos sus meses (incluyendo el historial). ¿Confirmás?`, {textoOk:"Eliminar todo", peligroso:true})) return;
-    eliminarConDeshacer("mov", x=>x.id===id, "Gasto frecuente eliminado");
+    if(!await mostrarConfirm(`⚠️ Vas a eliminar el ${nombreFrecuente(m)} y todos sus meses (incluyendo el historial). ¿Confirmás?`, {textoOk:"Eliminar todo", peligroso:true})) return;
+    eliminarConDeshacer("mov", x=>x.id===id, m.tipo==="Ingreso" ? "Ingreso frecuente eliminado" : "Gasto frecuente eliminado");
     renderMovs();
     return;
   }

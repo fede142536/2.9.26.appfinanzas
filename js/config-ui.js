@@ -620,7 +620,8 @@ function armarBackup(){
       iconsCustom,
       vencimientosTc: leerVencTc(),
       diasAvisoVenc: leerDiasAviso(),
-      bancosTarjeta: leerBancosTc()
+      bancosTarjeta: leerBancosTc(),
+      fondoEmergencia: leerFondoEmergencia()
     }
   };
 }
@@ -754,6 +755,7 @@ function aplicarBackup(backup){
     guardarVencTc(backup.datos.vencimientosTc);
   }
   if(Number.isInteger(backup.datos.diasAvisoVenc)) guardarDiasAviso(backup.datos.diasAvisoVenc);
+  if(backup.datos.fondoEmergencia && typeof backup.datos.fondoEmergencia==="object" && !Array.isArray(backup.datos.fondoEmergencia)) guardarFondoEmergencia(backup.datos.fondoEmergencia);
   if(backup.datos.bancosTarjeta && typeof backup.datos.bancosTarjeta==="object" && !Array.isArray(backup.datos.bancosTarjeta)) guardarBancosTc(backup.datos.bancosTarjeta);
   save();
   setSensitiveRaw("fimphist3",JSON.stringify(importHistory));

@@ -440,6 +440,8 @@ function setTipo(t){
   document.getElementById("campos-cambio").style.display=t==="Cambio"?"block":"none";
   // La card de opciones (ahorro/traspaso/frecuente/recuperable) solo aparece en Gasto
   document.getElementById("opciones-gasto").style.display=(t==="Gasto")?"":"none";
+  document.getElementById("opciones-ingreso").style.display=(t==="Ingreso")?"":"none";
+  if(t!=="Ingreso"){ const fi=document.getElementById("inp-frec-ingreso"); if(fi) fi.checked=false; }
   if(t!=="Gasto"){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
@@ -749,7 +751,7 @@ async function guardarSinFreno(){
   // En USD: importe queda como `importeOrig` (nativo USD); `importe` se setea a 0
   // así no se mezcla con el flujo ARS y los cálculos de saldo final ARS no lo cuentan
   const isUSD=moneda==="USD";
-  const esFrec=tipo==="Gasto" && document.getElementById("inp-frecuente")?.checked;
+  const esFrec=(tipo==="Gasto" && document.getElementById("inp-frecuente")?.checked) || (tipo==="Ingreso" && document.getElementById("inp-frec-ingreso")?.checked);
   const fechaCarga=document.getElementById("inp-fecha").value;
   const mov={id:Date.now(),tipo,
     importe: isUSD ? 0 : importe,
@@ -768,12 +770,14 @@ async function guardarSinFreno(){
     mov.mesInicio=String(fechaCarga||"").slice(0,7) || currentYM();
     mov.cambios=[]; // historial de aumentos vacío
     mov.mesFin=null;
-    const diaVto=diaValido(document.getElementById("inp-frec-dia")?.value);
-    if(diaVto!==null) mov.diaVto=diaVto;   // opcional: solo si se cargó, para el aviso de vencimientos
+    if(tipo==="Gasto"){
+      const diaVto=diaValido(document.getElementById("inp-frec-dia")?.value);
+      if(diaVto!==null) mov.diaVto=diaVto;   // opcional: solo si se cargó, para el aviso de vencimientos
+    }
   }
   movs.unshift(mov);
   save();
-  let msg="Ingreso guardado ✓";
+  let msg=esFrec ? "🔁 Ingreso frecuente guardado ✓" : "Ingreso guardado ✓";
   if(tipo==="Gasto"){
     if(esFrec) msg="🔁 Gasto frecuente guardado ✓";
     else if(document.getElementById("inp-ahorro").checked) msg="Ahorro guardado ✓";
@@ -810,6 +814,7 @@ function resetForm(t){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
     document.getElementById("inp-traspaso").checked=false;
+    const fi=document.getElementById("inp-frec-ingreso"); if(fi) fi.checked=false;   // un ingreso no se repite salvo que lo pidas de nuevo
     ahorroTocado=false;
     document.getElementById("inp-recup").value="";
     const recupSw=document.getElementById("inp-recup-switch");

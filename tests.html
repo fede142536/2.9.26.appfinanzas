@@ -84,6 +84,8 @@
 <script src="js/ahorros.js"></script>
 <script src="js/conciliacion.js"></script>
 <script src="js/papelera.js"></script>
+<script src="js/fondo-emergencia.js"></script>
+<script src="js/carga-rapida.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
@@ -5566,6 +5568,283 @@ test("con una sola cuenta no hay nada para filtrar y los chips no aparecen", ()=
   } finally { els.forEach(e=>e.remove()); filtro=prev.filtro; filtroCuenta=prev.cuenta; }
 });
 
+// ── Fondo de emergencia ──
+async function conEmergencia(cfg, fn){
+  const antes=localStorage.getItem(EMERG_KEY);
+  if(cfg) localStorage.setItem(EMERG_KEY, JSON.stringify(cfg)); else localStorage.removeItem(EMERG_KEY);
+  try{ return await fn(); }
+  finally{ if(antes===null) localStorage.removeItem(EMERG_KEY); else localStorage.setItem(EMERG_KEY, antes); }
+}
+const GASTO_E=(id,fecha,imp,extra)=>({id,tipo:"Gasto",cat:"Super",subcat:"Otros",moneda:"ARS",importe:imp,fecha,cuenta:"Galicia",...(extra||{})});
+const AHORRO_E=(id,fecha,imp,cat)=>({id,tipo:"Gasto",cat,subcat:"Otros",moneda:"ARS",importe:imp,fecha,esAhorro:true});
+// hoy = octubre 2026 → los 6 meses completos son abril a septiembre
+const MESES_E=()=>[GASTO_E(1,"2026-04-10",100000), GASTO_E(2,"2026-05-10",200000), GASTO_E(3,"2026-06-10",300000), GASTO_E(4,"2026-07-10",300000), GASTO_E(5,"2026-08-10",200000), GASTO_E(6,"2026-09-10",100000),
+  GASTO_E(7,"2026-10-05",999999),                                                   // el mes en curso no cuenta
+  GASTO_E(8,"2026-09-12",50000,{esAhorro:true}), GASTO_E(9,"2026-09-13",70000,{traspaso:true}),   // ahorro y traspaso no son consumo
+  GASTO_E(10,"2026-09-14",100000,{usaAhorro:true})];                                // pagado con ahorro SÍ es consumo
+const mesFnE=lista=>ym=>lista.filter(m=>String(m.fecha).slice(0,7)===ym);
+
+test("gastoMensualPromedio: consumo de los meses completos, sin el mes en curso, ahorros ni traspasos", ()=>{
+  const g=gastoMensualPromedio("2026-10", mesFnE(MESES_E()));
+  igual(g.meses, 6); igual(g.promedio, 216666.67, "1.300.000 en 6 meses; septiembre: 100.000 + 100.000 pagados con ahorro");
+  igual(gastoMensualPromedio("2026-10", mesFnE([])), null, "sin gastos no hay promedio");
+  const tarde=gastoMensualPromedio("2026-10", mesFnE([GASTO_E(1,"2026-08-10",300000), GASTO_E(2,"2026-09-10",100000)]));
+  igual(tarde.meses, 2, "los meses vacíos del principio no bajan el promedio"); igual(tarde.promedio, 200000);
+});
+
+test("ahorroParaEmergencia: suma las categorías elegidas (o todas las que tienen saldo a favor)", ()=>{
+  const l=[AHORRO_E(1,"2026-01-01",800000,"Fondo de Retiro"), AHORRO_E(2,"2026-01-01",300000,"Emergencias"), {...GASTO_E(3,"2026-02-01",50000,{usaAhorro:true}), cat:"Emergencias"}];
+  igual(ahorroParaEmergencia(l, null).monto, 1050000); igual(ahorroParaEmergencia(l, null).cats.length, 2);
+  igual(ahorroParaEmergencia(l, ["Emergencias"]).monto, 250000, "300.000 − 50.000 retirados");
+  igual(ahorroParaEmergencia(l, ["Otra"]).monto, 0); igual(ahorroParaEmergencia([], null).monto, 0);
+});
+
+test("planFondoEmergencia: meses cubiertos, objetivo, cuánto falta y estado", ()=>{
+  const gasto=[...MESES_E().slice(0,6)];   // promedio 200.000/mes
+  const plan=(ahorro, meses)=>planFondoEmergencia([...gasto, AHORRO_E(50,"2026-01-01",ahorro,"Emergencias")], {cats:null, meses}, "2026-10", mesFnE([...gasto]));
+  const p=plan(500000, 6);
+  igual(p.gastoMensual, 200000); igual(p.fondo, 500000); igual(p.meses, 2.5); igual(p.objetivoMonto, 1200000); igual(p.falta, 700000); igual(p.pct, 42); igual(p.estado, "enCamino");
+  igual(plan(100000, 6).estado, "bajo", "menos de un mes");
+  const ok=plan(1500000, 6); igual(ok.estado, "cumplido"); igual(ok.falta, 0); igual(ok.pct, 100); igual(ok.meses, 7.5);
+  igual(planFondoEmergencia([], {cats:null, meses:6}, "2026-10", mesFnE([])).estado, "sinDatos");
+  igual(plan(500000, 3).objetivoMonto, 600000, "el objetivo cambia con los meses");
+});
+
+test("la configuración del fondo de emergencia se guarda y aguanta datos rotos", ()=>conEmergencia(null, ()=>{
+  igual(leerFondoEmergencia(), {cats:null, meses:6});
+  guardarFondoEmergencia({cats:["Emergencias"], meses:9}); igual(leerFondoEmergencia(), {cats:["Emergencias"], meses:9});
+  guardarFondoEmergencia({cats:null, meses:999}); igual(leerFondoEmergencia().meses, 6, "un objetivo absurdo vuelve al valor por defecto");
+  localStorage.setItem(EMERG_KEY, "{roto"); igual(leerFondoEmergencia(), {cats:null, meses:6});
+  localStorage.setItem(EMERG_KEY, JSON.stringify({cats:[1,"A"], meses:"x"})); igual(leerFondoEmergencia(), {cats:["A"], meses:6});
+}));
+
+test("la tarjeta del fondo de emergencia muestra los meses, el objetivo y qué ahorros cuentan", ()=>{
+  const p=planFondoEmergencia([AHORRO_E(1,"2026-01-01",500000,"Emergencias"), ...MESES_E().slice(0,6)], {cats:null, meses:6}, "2026-10", mesFnE(MESES_E().slice(0,6)));
+  const h=fondoEmergenciaHTML(p);
+  cierto(h.includes("2,5") && h.includes("meses de gastos") && h.includes("Objetivo: 6 meses") && h.includes("te faltan") && h.includes("Emergencias") && h.includes("Configurar"), h);
+  cierto(fondoEmergenciaHTML({estado:"sinDatos"}).includes("Todavía no hay gastos"));
+  cierto(fondoEmergenciaHTML({...p, estado:"cumplido", falta:0, pct:100}).includes("objetivo cumplido"));
+  cierto(fondoEmergenciaHTML({...p, meses:1}).includes("1 <span>mes de gastos"), "singular");
+});
+
+test("configurar el fondo de emergencia: elegir meses y categorías, y se guarda", ()=>conEmergencia(null, async ()=>{
+  const mk=(tag,id)=>{ const e=document.createElement(tag); e.id=id; document.body.appendChild(e); return e; };
+  const els=[mk("select","emerg-meses"), mk("div","emerg-cats"), mk("div","modal-emerg"), mk("div","emerg-card")];
+  const antes={movs, toast:window.showToast}; window.showToast=()=>{};
+  try{
+    movs=[AHORRO_E(1,"2026-01-01",800000,"Fondo de Retiro"), AHORRO_E(2,"2026-01-01",300000,"Emergencias")];
+    abrirFondoEmergencia();
+    igual(document.querySelectorAll("#emerg-cats input").length, 2); cierto([...els[0].options].map(o=>o.value).includes("6"));
+    cierto(els[2].classList.contains("open"), "tiene que abrir la hoja");
+    const retiro=[...document.querySelectorAll("#emerg-cats input")].find(c=>c.dataset.cat==="Fondo de Retiro"); retiro.checked=false;
+    els[0].value="9"; guardarConfigEmergencia();
+    igual(leerFondoEmergencia(), {cats:["Emergencias"], meses:9}); cierto(!els[2].classList.contains("open"), "se cierra al guardar");
+    abrirFondoEmergencia(); const marcadas=[...document.querySelectorAll("#emerg-cats input")].map(c=>c.checked); igual(marcadas.sort(), [false,true], "al reabrir se ven las elegidas");
+    [...document.querySelectorAll("#emerg-cats input")].forEach(c=>c.checked=true); guardarConfigEmergencia(); igual(leerFondoEmergencia().cats, null, "todas marcadas = todas (también las que lleguen después)");
+  } finally { movs=antes.movs; window.showToast=antes.toast; els.forEach(e=>e.remove()); }
+}));
+
+test("el fondo de emergencia está en la pantalla de Ahorros, en el backup y en el service worker", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  ["emerg-card","modal-emerg","emerg-meses","emerg-cats","js/fondo-emergencia.js"].forEach(t=>cierto(html.includes(t), "falta "+t));
+  cierto((await (await fetch("sw.js")).text()).includes("./js/fondo-emergencia.js"));
+  cierto((await (await fetch("js/ahorros.js")).text()).includes("renderFondoEmergencia"), "renderAhorro no dibuja la tarjeta");
+  igual(armarBackup().datos.fondoEmergencia, leerFondoEmergencia()); cierto(aplicarBackup.toString().includes("fondoEmergencia"));
+});
+
+// ── Ingresos frecuentes ──
+async function conHoy(hoy, fn){
+  const antes=window.hoyLocal; window.hoyLocal=()=>hoy;
+  try{ return await fn(); } finally{ window.hoyLocal=antes; }
+}
+const SUELDO_F=(extra)=>({id:900, tipo:"Ingreso", cat:"Sueldo", subcat:"Otros", moneda:"ARS", importe:1000000, importeOrig:null, fecha:"2026-08-05", cuenta:"Galicia",
+                        frecuente:true, mesInicio:"2026-08", mesFin:null, cambios:[], ...(extra||{})});
+
+test("el día de cobro: el que se cargó, o el de la fecha; en los meses cortos, el último día", ()=>{
+  igual(diaCobroDe(SUELDO_F()), 5); igual(diaCobroDe(SUELDO_F({diaCobro:20})), 20); igual(diaCobroDe(SUELDO_F({diaCobro:"x", fecha:"2026-08-31"})), 31, "un día inválido cae a la fecha");
+  igual(fechaCobroFrec(SUELDO_F({diaCobro:31}), "2026-02"), "2026-02-28"); igual(fechaCobroFrec(SUELDO_F(), "2026-10"), "2026-10-05");
+});
+
+test("un ingreso frecuente entra al mes cuando llega su día, o antes si lo marcás cobrado", ()=>conHoy("2026-10-03", ()=>{
+  const antes=movs; movs=[SUELDO_F()];
+  try{
+    igual(getMesMov("2026-08").length, 1, "agosto ya pasó"); igual(getMesMov("2026-09").length, 1);
+    igual(getMesMov("2026-10").length, 0, "hoy es 3 y cobra el 5: todavía no cuenta");
+    igual(getMesMov("2026-11").length, 0, "los meses que vienen no suman ingresos que no existen");
+    igual(getMesMov("2026-07").length, 0, "antes del mes de inicio no existe");
+    movs[0].pagos={"2026-10":true}; const oct=getMesMov("2026-10"); igual(oct.length, 1, "marcado cobrado cuenta aunque no haya llegado el día");
+    igual(oct[0].importe, 1000000); igual(oct[0].fecha, "2026-10-05"); cierto(oct[0]._isFrecVirtual && oct[0].tipo==="Ingreso");
+  } finally { movs=antes; }
+}));
+
+test("el día de cobro llegó: cuenta ese mismo día, y respeta el fin y los aumentos", ()=>conHoy("2026-10-05", ()=>{
+  const antes=movs;
+  try{
+    movs=[SUELDO_F()]; igual(getMesMov("2026-10").length, 1, "hoy es el día de cobro");
+    movs=[SUELDO_F({mesFin:"2026-09"})]; igual(getMesMov("2026-10").length, 0, "dado de baja desde octubre"); igual(getMesMov("2026-09").length, 1);
+    movs=[SUELDO_F({cambios:[{desde:"2026-09", monto:1200000}]})];
+    igual(getMesMov("2026-08")[0].importe, 1000000); igual(getMesMov("2026-09")[0].importe, 1200000, "el aumento rige desde su mes"); igual(getMesMov("2026-10")[0].importe, 1200000);
+    movs=[SUELDO_F({moneda:"USD", importe:0, importeOrig:500})]; const usd=getMesMov("2026-09")[0]; igual(usd.importeOrig, 500); igual(usd.importe, 0, "en dólares no suma pesos");
+  } finally { movs=antes; }
+}));
+
+test("el balance del mes solo suma el ingreso frecuente cuando ya cuenta", ()=>{
+  const antes=movs; movs=[SUELDO_F()];
+  return conHoy("2026-10-03", ()=>{
+    try{
+      igual(resumenDePeriodo(getMesMov("2026-10")).ingresos, 0, "antes del día de cobro no hay ingreso");
+      return conHoy("2026-10-06", ()=>{ igual(resumenDePeriodo(getMesMov("2026-10")).ingresos, 1000000, "después sí"); });
+    } finally { movs=antes; }
+  });
+});
+
+test("ingresosFrecPorCobrar y marcarIngresoCobrado: lo que falta cobrar y cómo pasa a sumar", ()=>conHoy("2026-10-03", ()=>{
+  const antes={movs, save:window.save, toast:window.showToast, render:renderMovs};
+  movs=[SUELDO_F(), SUELDO_F({id:901, subcat:"Alquiler", diaCobro:2, importe:300000})];   // el segundo ya llegó (día 2)
+  window.save=()=>true; window.showToast=()=>{}; renderMovs=()=>{};
+  try{
+    const p=ingresosFrecPorCobrar("2026-10", "2026-10-03");
+    igual(p.length, 1); igual(p[0].id, 900); igual(p[0].fecha, "2026-10-05"); igual(p[0].monto, 1000000); igual(p[0].nombre, "Sueldo");
+    const h=porCobrarFranjaHTML(p); cierto(h.includes("Por cobrar este mes") && h.includes("Sueldo") && h.includes("cobra el 5") && h.includes("marcarIngresoCobrado(900"), h);
+    igual(porCobrarFranjaHTML([]), "");
+    marcarIngresoCobrado(900, "2026-10");
+    igual(ingresosFrecPorCobrar("2026-10", "2026-10-03").length, 0); igual(getMesMov("2026-10").filter(m=>m.tipo==="Ingreso").length, 2, "ahora suma");
+    marcarIngresoCobrado(12345, "2026-10");   // un id que no existe no rompe
+    movs=[{...SUELDO_F(), frecuente:false, fecha:"2026-10-20"}]; igual(ingresosFrecPorCobrar("2026-10","2026-10-03").length, 0, "un ingreso común no es 'por cobrar'");
+  } finally { movs=antes.movs; window.save=antes.save; window.showToast=antes.toast; renderMovs=antes.render; }
+}));
+
+test("un ingreso frecuente nunca figura como vencimiento, aunque tenga un día cargado", ()=>conHoy("2026-10-05", ()=>conVenc({movs:[SUELDO_F({diaVto:6}), FREC_VTO(2, 6)]}, ()=>{
+  const v=proximosVencimientos("2026-10-05", movs, {});
+  igual(v.map(x=>x.id), [2], "solo el gasto frecuente");
+})));
+
+test("las filas: el ingreso frecuente no tiene 'Marcar pagado' y se distingue como mensual", ()=>{
+  const virtual={...SUELDO_F(), _isFrecVirtual:true, fecha:"2026-10-05", pagado:false};
+  const h=construirCuerpoTxItem(virtual);
+  cierto(!h.includes("Marcar pagado") && !h.includes("js-toggle-pago"), "un ingreso no se 'paga'"); cierto(h.includes("🔁 Mensual"), h);
+  cierto(construirCuerpoTxItem({...virtual, tipo:"Gasto"}).includes("Marcar pagado"), "el gasto frecuente sigue igual");
+});
+
+test("el editor de un ingreso frecuente dice 'Cobra el día', conserva aumentos y guarda el día de cobro", ()=>{
+  const h=renderEditForm(SUELDO_F());
+  cierto(h.includes("INGRESO FRECUENTE") && h.includes("Cobra el día") && h.includes('value="5"') && h.includes("Registrar aumento") && !h.includes("Vence el día"), h.slice(0,300));
+  const g=renderEditForm({...SUELDO_F(), tipo:"Gasto"}); cierto(g.includes("GASTO FRECUENTE") && g.includes("Vence el día"), "el gasto frecuente no cambió");
+});
+
+test("el alta tiene la opción de ingreso frecuente, aparece solo en Ingreso y guarda la marca", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="opciones-ingreso"') && html.includes('id="inp-frec-ingreso"'), "falta la opción en el alta");
+  const js=await (await fetch("js/form-cargar.js")).text();
+  cierto(js.includes('tipo==="Ingreso" && document.getElementById("inp-frec-ingreso")'), "guardar() no lee la casilla");
+  cierto(js.includes('"opciones-ingreso").style.display=(t==="Ingreso")'), "la opción tiene que aparecer solo para Ingreso");
+  cierto(js.includes("Ingreso frecuente guardado"), "falta el aviso de guardado");
+});
+
+test("al eliminar un ingreso frecuente los textos hablan de ingreso, no de gasto", async ()=>{
+  const mov=await (await fetch("js/movimientos.js")).text(), dash=await (await fetch("js/dashboard.js")).text();
+  cierto(mov.includes("nombreFrecuente(m)") && dash.includes("nombreFrecuente(m)"));
+  igual(nombreFrecuente({tipo:"Ingreso"}), "ingreso frecuente"); igual(nombreFrecuente({tipo:"Gasto"}), "gasto frecuente");
+});
+
+// ── Carga rápida por texto ──
+const CR_CTX=(extra)=>({hoy:"2026-10-22", cuentas:["Cuentas","Efectivo","Tarjetas de crédito","Balanz","Galicia","BPat","Mercado Libre","Naranja X"], tarjetas:["Visa","Mastercard","Naranja","Otra","Mercado Pago"],
+  sugerir:(t,tp)=>{ const n=normalizarTexto(t); if(/nafta/.test(n)) return {cat:"Auto", subcat:"Combustible"}; if(/netflix/.test(n)) return {cat:"Salidas", subcat:"Suscripción"}; if(/sueldo/.test(n)&&tp==="Ingreso") return {cat:"Salario", subcat:"Salario"}; if(/super|verdu/.test(n)) return {cat:"Supermercado"}; return null; },
+  cats:tp=>tp==="Ingreso" ? {Salario:["Salario","Otros"]} : {Auto:["Combustible","Peajes"], Salidas:["Suscripción","Otros"], Supermercado:["Otros"], Casa:["Otros"]}, ...(extra||{})});
+const cr=(t,e)=>interpretarCargaRapida(t, CR_CTX(e));
+
+test("carga rápida: 'nafta 15000 visa ayer' → compra con tarjeta, monto, categoría, tarjeta y fecha", ()=>{
+  const r=cr("nafta 15000 visa ayer");
+  igual(r.ok, true); igual(r.tipo, "Tarjeta"); igual(r.importe, 15000); igual(r.tarjeta, "Visa"); igual(r.fecha, "2026-10-21"); igual(r.nota, "Nafta");
+  igual(r.cat, "Auto"); igual(r.subcat, "Combustible"); igual(r.moneda, "ARS"); igual(r.cuotas, 0);
+  cierto(r.entendido.includes("Visa") && r.entendido.includes("ayer") && r.entendido.some(x=>x.includes("15.000")), r.entendido.join("|"));
+});
+
+test("carga rápida: gasto con cuenta, ingreso con cuenta, y el sueldo reconocido", ()=>{
+  const g=cr("super 12.500 mercado libre");
+  igual(g.tipo, "Gasto"); igual(g.importe, 12500); igual(g.cuenta, "Mercado Libre", "una cuenta de dos palabras"); igual(g.cat, "Supermercado"); igual(g.fecha, "2026-10-22"); igual(g.nota, "Super");
+  const i=cr("sueldo 1.200.000 galicia");
+  igual(i.tipo, "Ingreso"); igual(i.importe, 1200000); igual(i.cuenta, "Galicia"); igual(i.cat, "Salario"); igual(i.subcat, "Salario");
+  const e=cr("cobré 50000 efectivo"); igual(e.tipo, "Ingreso"); igual(e.cuenta, "Efectivo");
+});
+
+test("carga rápida: montos en distintos formatos", ()=>{
+  const m=t=>cr(t).importe;
+  igual(m("café 3500"), 3500); igual(m("café $3.500"), 3500); igual(m("café 3500,50"), 3500.5); igual(m("regalo 15k"), 15000); igual(m("regalo 1,5k"), 1500);
+  igual(m("alquiler 350 mil"), 350000); igual(m("auto 2 palos"), 2000000); igual(m("auto 1,2 palos"), 1200000); igual(m("pizza 12.5"), 12.5);
+  igual(m("3 pizzas 12000"), 12000, "con varios números, el más grande es el monto"); igual(m("café 800 $2000"), 2000, "el que lleva $ gana");
+});
+
+test("carga rápida: dólares y moneda", ()=>{
+  const r=cr("netflix usd 5,99 mastercard");
+  igual(r.moneda, "USD"); igual(r.importe, 5.99); igual(r.tarjeta, "Mastercard"); igual(r.tipo, "Tarjeta"); igual(r.cat, "Salidas"); igual(r.nota, "Netflix");
+  igual(cr("pasajes 120 dolares").moneda, "USD"); igual(cr("pasajes 120 u$s").moneda, "USD"); igual(cr("pasajes 120").moneda, "ARS");
+  cierto(cr("netflix usd 5,99 mastercard").entendido.some(x=>x.startsWith("USD 5,99")));
+});
+
+test("carga rápida: fechas (hoy, ayer, anteayer, hace N días, dd/mm, el N)", ()=>{
+  const f=t=>cr(t).fecha;
+  igual(f("café 100 hoy"), "2026-10-22"); igual(f("café 100"), "2026-10-22"); igual(f("café 100 ayer"), "2026-10-21"); igual(f("café 100 anteayer"), "2026-10-20"); igual(f("café 100 antes de ayer"), "2026-10-20");
+  igual(f("café 100 hace 3 días"), "2026-10-19"); igual(f("café 100 hace 30 dias"), "2026-09-22");
+  igual(f("café 100 15/10"), "2026-10-15"); igual(f("café 100 5-9"), "2026-09-05"); igual(f("café 100 3/4/2025"), "2025-04-03"); igual(f("café 100 3/4/25"), "2025-04-03");
+  igual(f("café 100 28/12"), "2025-12-28", "un día de diciembre en octubre es del año pasado");
+  igual(f("café 100 el 15"), "2026-10-15"); igual(f("café 100 el 28"), "2026-09-28", "el 28 todavía no llegó este mes: es del mes pasado");
+  igual(f("café 100 31/2"), "2026-10-22", "una fecha imposible no se toma");
+  igual(cr("café 100 ayer").nota, "Café", "las palabras de fecha no quedan en la descripción");
+});
+
+test("carga rápida: cuotas", ()=>{
+  const r=cr("heladera 600000 en 6 cuotas visa");
+  igual(r.tipo, "Tarjeta"); igual(r.cuotas, 6); igual(r.importe, 600000, "el 6 de las cuotas no se confunde con el monto"); igual(r.tarjeta, "Visa"); igual(r.nota, "Heladera");
+  igual(cr("zapatillas 90000 3 cuotas").tipo, "Tarjeta", "con cuotas es tarjeta aunque no diga cuál"); igual(cr("zapatillas 90000 3 cuotas").tarjeta, "");
+  igual(cr("zapatillas 90000 1 cuota").tipo, "Gasto", "una sola cuota sin tarjeta es un gasto común");
+});
+
+test("carga rápida: alias de tarjeta, 'Otra' no se confunde con una palabra, y cuentas de varias palabras", ()=>{
+  igual(cr("super 5000 master").tarjeta, "Mastercard"); igual(cr("super 5000 MASTERCARD").tarjeta, "Mastercard", "sin importar mayúsculas");
+  igual(cr("compré otra remera 8000").tarjeta, "", "'otra' es una palabra, no la tarjeta Otra"); igual(cr("compré otra remera 8000").nota, "Otra remera");
+  const n=cr("regalo 9000 naranja x"); igual(n.cuenta, "Naranja X"); igual(n.tarjeta, "", "la cuenta de dos palabras gana sobre la tarjeta de una");
+  const ambas=cr("nafta 20000 visa galicia"); igual(ambas.tipo, "Tarjeta"); igual(ambas.tarjeta, "Visa"); igual(ambas.cuenta, "Galicia");
+  igual(cr("café 100 cuentas").cuenta, "", "'Cuentas' (sin elegir) no es una cuenta que se pueda nombrar");
+});
+
+test("carga rápida: la descripción conserva acentos y mayúsculas útiles y saca el relleno de los bordes", ()=>{
+  igual(cr("pagué el café de la esquina 3500 en efectivo").nota, "Café de la esquina"); igual(cr("pagué el café de la esquina 3500 en efectivo").cuenta, "Efectivo");
+  igual(cr("3500").nota, ""); igual(cr("3500").ok, true, "solo el monto alcanza");
+  igual(cr("3500").cat, "", "sin descripción no hay categoría");
+});
+
+test("carga rápida: si no hay monto o no hay texto avisa en vez de inventar", ()=>{
+  const sin=cr("nafta ayer visa"); igual(sin.ok, false); cierto(sin.motivo.includes("monto"), sin.motivo);
+  const vacio=cr("   "); igual(vacio.ok, false); cierto(vacio.motivo.length>0);
+  igual(cr("").ok, false); igual(cr(null).ok, false);
+  igual(cr("nafta 0 visa").ok, false, "un monto en cero no sirve");
+});
+
+test("carga rápida: rellena el formulario de Gasto sin guardar nada", ()=>{
+  const ids=["inp-importe","inp-nota","inp-cat","inp-subcat","inp-cuenta","inp-fecha","inp-moneda","carga-rapida","carga-rapida-res"];
+  const els={}; ids.forEach(id=>{ const e=document.createElement(["inp-cat","inp-subcat","inp-cuenta","inp-moneda"].includes(id)?"select":"input"); e.id=id; document.body.appendChild(e); els[id]=e; });
+  els["inp-cat"].innerHTML="<option>Casa</option><option>Supermercado</option>"; els["inp-cuenta"].innerHTML="<option>Efectivo</option><option>Galicia</option>"; els["inp-subcat"].innerHTML="<option>Otros</option>"; els["inp-moneda"].innerHTML="<option>ARS</option><option>USD</option>";
+  els["carga-rapida-res"]=document.querySelector("#carga-rapida-res");
+  const antes={movs:JSON.stringify(movs), tcs:JSON.stringify(tcs), setTipo:window.setTipo, ctx:window.contextoCargaRapida, upd:window.updateSubcats, tipoV:tipo};
+  let tipoPuesto=null; window.setTipo=t=>{ tipoPuesto=t; }; window.updateSubcats=()=>{}; window.contextoCargaRapida=()=>CR_CTX();
+  try{
+    els["carga-rapida"].value="super 12500 galicia ayer";
+    const r=cargaRapida();
+    igual(r.ok, true); igual(tipoPuesto, "Gasto"); igual(els["inp-nota"].value, "Super"); igual(els["inp-cat"].value, "Supermercado"); igual(els["inp-cuenta"].value, "Galicia"); igual(els["inp-fecha"].value, "2026-10-21");
+    cierto(els["inp-importe"].value.replace(/\D/g,"")==="12500", "monto: "+els["inp-importe"].value);
+    igual(els["carga-rapida"].value, "", "limpia el campo"); cierto(els["carga-rapida-res"].textContent.includes("Revisá y tocá Guardar"), els["carga-rapida-res"].textContent);
+    igual(JSON.stringify(movs), antes.movs, "no puede guardar nada"); igual(JSON.stringify(tcs), antes.tcs);
+    els["carga-rapida"].value="solo texto"; const mal=cargaRapida(); igual(mal.ok, false); cierto(els["carga-rapida-res"].textContent.includes("monto")); igual(els["carga-rapida"].value, "solo texto", "si no entendió, no borra lo escrito");
+  } finally { window.setTipo=antes.setTipo; window.contextoCargaRapida=antes.ctx; window.updateSubcats=antes.upd; ids.slice(0,8).forEach(id=>els[id].remove()); }
+});
+
+test("la carga rápida está en la pantalla de Cargar y en el service worker", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  ["id=\"carga-rapida\"","carga-rapida-res","cargaRapida()","js/carga-rapida.js"].forEach(t=>cierto(html.includes(t), "falta "+t));
+  cierto((await (await fetch("sw.js")).text()).includes("./js/carga-rapida.js"));
+});
+
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
   igual(proximosVencimientos("2026-09-08", movs, {}), []);
 }));
@@ -5941,7 +6220,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 11, "esperaba las 11 casillas conocidas (ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
+  igual(cajas.length, 12, "esperaba las 12 casillas conocidas (frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);

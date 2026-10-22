@@ -1157,16 +1157,16 @@ function closeCuentaDetail(){
 async function borrarMovDesdeCuenta(id, cuentaNombre, btn){
   const m=movs.find(x=>x.id===id);
   if(!m) return;
-  if(m.tipo==="Gasto" && m.frecuente){
+  if((m.tipo==="Gasto" || m.tipo==="Ingreso") && m.frecuente){
     const mesDeBaja=mesActual;
-    if(await mostrarConfirm(`Este es un gasto frecuente mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`, {textoOk:"Dar de baja", textoCancelar:"Eliminar todo"})){
+    if(await mostrarConfirm(`Este es un ${nombreFrecuente(m)} mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`, {textoOk:"Dar de baja", textoCancelar:"Eliminar todo"})){
       const revertirBaja=capturarCampos([m], ["mesFin"]);
       m.mesFin=addMonths(mesDeBaja,-1);
       save();
-      ofrecerDeshacerCambio(`Gasto frecuente dado de baja desde ${mesLbl(mesDeBaja)} ✓`, revertirBaja);
+      ofrecerDeshacerCambio(`${nombreFrecuente(m)[0].toUpperCase()+nombreFrecuente(m).slice(1)} dado de baja desde ${mesLbl(mesDeBaja)} ✓`, revertirBaja);
     } else {
-      if(!await mostrarConfirm("⚠️ Vas a eliminar el gasto frecuente y todos sus meses (incluyendo el historial). ¿Confirmás?", {textoOk:"Eliminar todo", peligroso:true})) return;
-      eliminarConDeshacer("mov", x=>x.id===id, "Gasto frecuente eliminado");
+      if(!await mostrarConfirm(`⚠️ Vas a eliminar el ${nombreFrecuente(m)} y todos sus meses (incluyendo el historial). ¿Confirmás?`, {textoOk:"Eliminar todo", peligroso:true})) return;
+      eliminarConDeshacer("mov", x=>x.id===id, m.tipo==="Ingreso" ? "Ingreso frecuente eliminado" : "Gasto frecuente eliminado");
     }
   } else {
     // Doble-toque de confirmación, igual que en el resto de la app

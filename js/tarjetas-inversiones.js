@@ -340,7 +340,7 @@ function proximosVencimientos(hoyISO, lista, vencTc, ventana, mesesAdelante, ven
                dias:diasEntre(hoyISO,fecha), monto:m.importe||0, moneda:monedaTc(m.moneda)}, !!m.pagado);
     });
     getMesMov(ym).forEach(m=>{
-      if(!m._isFrecVirtual) return;
+      if(!m._isFrecVirtual || m.tipo!=="Gasto") return;   // un ingreso frecuente no vence: se cobra
       const fecha=fechaVencimiento(ym, m.diaVto);
       if(!fecha) return;
       const usd=m.moneda==="USD";
