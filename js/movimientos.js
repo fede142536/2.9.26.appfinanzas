@@ -929,6 +929,7 @@ function listaDelResumenFrec(){
 // que ya pasó no sirve de nada. Se repinta sola al tildar un frecuente como pagado.
 function pintarFranjaVencimientos(){
   if(typeof pintarAvisoCalendario==="function") pintarAvisoCalendario();
+  if(typeof pintarAvisoCierre==="function") pintarAvisoCierre();
   const el=document.getElementById("mov-arrastre");
   if(!el) return;
   const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();

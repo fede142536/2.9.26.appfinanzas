@@ -85,6 +85,7 @@
 <script src="js/conciliacion.js"></script>
 <script src="js/papelera.js"></script>
 <script src="js/carga-rapida.js"></script>
+<script src="js/cierre-mes.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
@@ -5760,6 +5761,138 @@ test("la carga rápida está en la pantalla de Cargar y en el service worker", a
   cierto((await (await fetch("sw.js")).text()).includes("./js/carga-rapida.js"));
 });
 
+// ── Resumen y cierre del mes ──
+const MES_C=(id,tipo,cat,imp,fecha,extra)=>({id,tipo,cat,subcat:"Otros",moneda:"ARS",importe:imp,fecha,cuenta:"Galicia",...(extra||{})});
+const DATOS_CIERRE=()=>[
+  MES_C(1,"Ingreso","Sueldo",1000000,"2026-09-05"), MES_C(2,"Ingreso","Sueldo",900000,"2026-08-05"),
+  MES_C(10,"Gasto","Super",200000,"2026-09-10"), MES_C(11,"Gasto","Casa",100000,"2026-09-12"), MES_C(12,"Gasto","Salud",50000,"2026-09-15"),
+  MES_C(13,"Gasto","Super",60000,"2026-09-20",{esAhorro:true}), MES_C(14,"Gasto","Super",30000,"2026-09-21",{usaAhorro:true}),
+  // agosto, julio y junio: Super ~100.000 y Casa ~100.000
+  MES_C(20,"Gasto","Super",100000,"2026-08-10"), MES_C(21,"Gasto","Casa",100000,"2026-08-12"),
+  MES_C(22,"Gasto","Super",100000,"2026-07-10"), MES_C(23,"Gasto","Casa",100000,"2026-07-12"),
+  MES_C(24,"Gasto","Super",100000,"2026-06-10"), MES_C(25,"Gasto","Casa",100000,"2026-06-12")];
+const mesFnC=lista=>ym=>lista.filter(m=>String(m.fecha).slice(0,7)===ym);
+
+test("resumenDelMes: ingresos, gastos, ahorro, comparación con el mes anterior y en qué se fue", ()=>{
+  const l=DATOS_CIERRE(), r=resumenDelMes("2026-09", mesFnC(l), null, l);
+  igual(r.hayDatos, true); igual(r.ingresos, 1030000, "1.000.000 + 30.000 de lo pagado con ahorros, como en el balance de Movimientos");
+  igual(r.gastos, 380000, "200.000 + 100.000 + 50.000 + 30.000 pagados con ahorro; el depósito al fondo no es gasto");
+  igual(r.ahorrado, 60000); igual(r.retirado, 30000); igual(r.disponible, 1030000-380000-60000);
+  igual(r.dIngresos, 14, "1.030.000 vs 900.000: +14%"); igual(r.dGastos, 90, "380.000 vs 200.000: +90%");
+  igual(r.top.map(c=>c.cat), ["Super","Casa","Salud"]); igual(r.top[0].monto, 230000); igual(r.top[0].pct, 61);
+  igual(r.cantidad, 6);
+});
+
+test("resumenDelMes: marca las categorías que subieron respecto del promedio de los 3 meses anteriores, y el gasto más grande", ()=>{
+  const l=DATOS_CIERRE(), r=resumenDelMes("2026-09", mesFnC(l), null, l);
+  igual(r.subas.map(s=>s.cat), ["Super"], "Super 230.000 vs promedio 100.000"); igual(r.subas[0].pct, 130); igual(r.subas[0].promedio, 100000);
+  cierto(!r.subas.some(s=>s.cat==="Casa"), "Casa no cambió"); cierto(!r.subas.some(s=>s.cat==="Salud"), "Salud no tiene promedio con qué comparar");
+  igual(r.mayor.monto, 200000); igual(r.mayor.desc, "Super");
+  const chico=resumenDelMes("2026-09", mesFnC([...l.filter(m=>m.id!==10), MES_C(10,"Gasto","Super",75000,"2026-09-10")]), null, []);
+  igual(chico.subas.length, 0, "una suba menor a 30% no es noticia");
+});
+
+test("resumenDelMes: sin datos o sin meses anteriores no inventa nada", ()=>{
+  igual(resumenDelMes("2026-09", mesFnC([]), null, []).hayDatos, false);
+  const solo=[MES_C(1,"Gasto","Super",1000,"2026-09-10")], r=resumenDelMes("2026-09", mesFnC(solo), null, solo);
+  igual(r.dGastos, null, "sin mes anterior no hay porcentaje"); igual(r.subas, []);
+});
+
+test("mesParaCerrar: el mes anterior durante los primeros días, si tuvo movimientos y no está cerrado ni descartado", ()=>{
+  const f=mesFnC(DATOS_CIERRE());
+  igual(mesParaCerrar("2026-10-03", f, {}, null), "2026-09");
+  igual(mesParaCerrar("2026-10-11", f, {}, null), null, "pasaron los 10 días");
+  igual(mesParaCerrar("2026-10-03", f, {"2026-09":"2026-10-02T00:00:00Z"}, null), null, "ya cerrado");
+  igual(mesParaCerrar("2026-10-03", f, {}, "2026-09"), null, "descartado");
+  igual(mesParaCerrar("2026-12-03", f, {}, null), null, "noviembre no tuvo movimientos");
+  igual(mesParaCerrar("2027-01-02", mesFnC([MES_C(1,"Gasto","X",1,"2026-12-10")]), {}, null), "2026-12", "en enero cierra diciembre del año anterior");
+});
+
+test("los meses cerrados se guardan, se leen y aguantan datos rotos", ()=>{
+  const antes=localStorage.getItem(CIERRE_KEY);
+  try{
+    localStorage.removeItem(CIERRE_KEY); igual(leerMesesCerrados(), {});
+    guardarMesesCerrados({"2026-09":"2026-10-02T10:00:00Z", "malo":"x", "2026-08":5}); igual(Object.keys(leerMesesCerrados()), ["2026-09"], "se descarta lo que no es un mes con su fecha");
+    cierto(mesCerrado("2026-09")); cierto(!mesCerrado("2026-08"));
+    localStorage.setItem(CIERRE_KEY, "{roto"); igual(leerMesesCerrados(), {});
+  } finally { if(antes===null) localStorage.removeItem(CIERRE_KEY); else localStorage.setItem(CIERRE_KEY, antes); }
+});
+
+test("chequeoDelMes: solo lista lo que aplica, marca lo pendiente y lo que ya está en orden", ()=>conVenc({tcs:[], venc:{}}, ()=>{
+  const lista=[...DATOS_CIERRE(), {...FREC_VTO(77, 10), pagos:{}, mesInicio:"2026-09", cuenta:"Galicia"}, MES_C(30,"Gasto","Super",5000,"2026-09-25",{cuenta:"Cuentas"})];
+  const base={movs:lista, tcs:[], mesFn:mesFnC(lista), vencTc:{}, hoy:"2026-10-03", metas:[], backupDias:2, conciliacion:{hayDatos:false,pendientes:0}, incompletos:0, vencidos:[], ingresosPorCobrar:[]};
+  const it=chequeoDelMes("2026-09", base); const por=id=>it.filter(x=>x.id===id);
+  igual(por("sincuenta")[0].estado, "pendiente"); cierto(por("sincuenta")[0].titulo.includes("1 movimiento sin cuenta"), por("sincuenta")[0].titulo);
+  igual(por("backup")[0].estado, "ok"); igual(por("tarjetas").length, 0, "sin tarjetas no hay chequeo de tarjetas"); igual(por("cobrar").length, 0); igual(por("datos").length, 0); igual(por("conciliacion").length, 0);
+  const lista2=lista.filter(m=>m.id!==30); const it2=chequeoDelMes("2026-09", {...base, movs:lista2, mesFn:mesFnC(lista2)});
+  igual(it2.find(x=>x.id==="sincuenta").estado, "ok"); igual(pendientesDelChequeo(it2) >= 0, true);
+  const mal=chequeoDelMes("2026-09", {...base, backupDias:20, incompletos:2, vencidos:[{nombre:"Visa", dias:-3}], ingresosPorCobrar:[{nombre:"Sueldo"}], conciliacion:{hayDatos:true,pendientes:4}});
+  igual(mal.find(x=>x.id==="backup").estado, "pendiente"); cierto(mal.find(x=>x.id==="backup").titulo.includes("20 días"));
+  igual(mal.find(x=>x.id==="datos").estado, "pendiente"); igual(mal.find(x=>x.id==="vencidos").estado, "pendiente"); igual(mal.find(x=>x.id==="cobrar").estado, "pendiente");
+  igual(mal.find(x=>x.id==="conciliacion").estado, "info", "la conciliación solo informa, no bloquea el cierre");
+  igual(chequeoDelMes("2026-09", {...base, backupDias:Infinity}).find(x=>x.id==="backup").titulo, "Todavía no hiciste ninguna copia de seguridad");
+}));
+
+test("chequeoDelMes: metas atadas con gastos sin marcar y tarjetas sin marcar pagadas", ()=>conVenc({tcs:[{id:1, desc:"Notebook", total:120000, cuotasTotal:1, mesInicio:"2026-09", tarjeta:"Visa", moneda:"ARS"}], venc:{}}, ()=>{
+  const lista=[...DATOS_CIERRE(), MES_C(40,"Gasto","Mudanza",7000,"2026-09-22")];
+  const base={movs:lista, tcs, mesFn:mesFnC(lista), vencTc:{}, hoy:"2026-10-03", metas:[{id:5, nombre:"Mudanza", objetivo:1000, fondoCat:"Mudanza"}], backupDias:1, conciliacion:{}, incompletos:0, vencidos:[], ingresosPorCobrar:[]};
+  const it=chequeoDelMes("2026-09", base);
+  const m=it.find(x=>x.id==="metas"); cierto(m && m.estado==="pendiente" && m.metaId===5 && m.titulo.includes("Mudanza") && m.detalle.includes('"Mudanza"'), JSON.stringify(m));
+  const t=it.find(x=>x.id==="tarjetas"); cierto(t && t.estado==="pendiente" && t.detalle.includes("Visa"), JSON.stringify(t));
+  const pago=conResumenPagado({}, "Visa", "2026-09", "ARS", true); const ok=chequeoDelMes("2026-09", {...base, vencTc:pago}).find(x=>x.id==="tarjetas"); igual(ok.estado, "ok");
+}));
+
+test("la hoja de cierre: muestra el resumen y el chequeo, cierra el mes con confirmación si hay pendientes y lo reabre", async ()=>{
+  const mk=(tag,id)=>{ const e=document.createElement(tag); e.id=id; document.body.appendChild(e); return e; };
+  const els=["cierre-cuerpo","cierre-titulo","cierre-btn","cierre-compartir","modal-cierre"].map(id=>mk(id==="cierre-btn"||id==="cierre-compartir"?"button":"div",id));
+  const antes={movs, tcs, metas, k:localStorage.getItem(CIERRE_KEY), confirm:window.mostrarConfirm, toast:window.showToast, hoy:window.hoyLocal};
+  let preguntas=0, resp=true;
+  window.mostrarConfirm=async()=>{ preguntas++; return resp; }; window.showToast=()=>{}; window.hoyLocal=()=>"2026-10-03";
+  try{
+    localStorage.removeItem(CIERRE_KEY);
+    movs=[...DATOS_CIERRE(), MES_C(30,"Gasto","Super",5000,"2026-09-25",{cuenta:"Cuentas"})]; tcs=[]; metas=[];
+    abrirCierreMes();
+    igual(cierreYM, "2026-09", "el 3 de octubre toca cerrar septiembre");
+    const h=els[0].innerHTML;
+    cierto(h.includes("Te quedó disponible") && h.includes("En qué se fue la plata") && h.includes("Para mirar") && h.includes("Antes de cerrar") && h.includes("sin cuenta"), h.slice(0,300));
+    cierto(els[1].textContent.includes("Septiembre") && els[2].textContent==="Cerrar el mes" && els[4].classList.contains("open"));
+    resp=false; await alternarCierreMes(); igual(preguntas, 1, "hay pendientes: pregunta"); cierto(!mesCerrado("2026-09"), "si dice que no, no se cierra");
+    resp=true; await alternarCierreMes(); cierto(mesCerrado("2026-09")); cierto(els[0].innerHTML.includes("Mes cerrado") && els[2].textContent==="Reabrir el mes");
+    await alternarCierreMes(); cierto(!mesCerrado("2026-09"), "reabrir no pregunta"); igual(preguntas, 2);
+    cierreMesCambiar(-1); igual(cierreYM, "2026-08"); cierreMesCambiar(1); cierreMesCambiar(1); cierreMesCambiar(1); cierto(cierreYM<=currentYM(), "no se puede ir a un mes futuro");
+  } finally { movs=antes.movs; tcs=antes.tcs; metas=antes.metas; window.mostrarConfirm=antes.confirm; window.showToast=antes.toast; window.hoyLocal=antes.hoy;
+    if(antes.k===null) localStorage.removeItem(CIERRE_KEY); else localStorage.setItem(CIERRE_KEY, antes.k); els.forEach(e=>e.remove()); cierreYM=null; }
+});
+
+test("el aviso de cierre aparece a principio de mes, se puede descartar y no aparece en otras vistas", ()=>{
+  const el=document.createElement("div"); el.id="mov-cierre-aviso"; document.body.appendChild(el);
+  const antes={movs, hoy:window.hoyLocal, filtro, mes:mesActual, k:localStorage.getItem(CIERRE_AVISO_KEY), c:localStorage.getItem(CIERRE_KEY)};
+  window.hoyLocal=()=>"2026-10-03"; movs=DATOS_CIERRE(); filtro="Todos"; mesActual=currentYM(); localStorage.removeItem(CIERRE_AVISO_KEY); localStorage.removeItem(CIERRE_KEY);
+  try{
+    // el aviso solo se muestra mirando el mes en curso; el de los tests no es octubre, así que se prueba la lógica aparte
+    igual(mesParaCerrar(hoyLocal(), getMesMov, leerMesesCerrados(), localStorage.getItem(CIERRE_AVISO_KEY)), "2026-09");
+    mesActual="2026-09"; pintarAvisoCierre(); igual(el.style.display, "none", "no aparece si no estás mirando el mes en curso");
+    descartarAvisoCierre("2026-09"); igual(localStorage.getItem(CIERRE_AVISO_KEY), "2026-09"); igual(mesParaCerrar(hoyLocal(), getMesMov, {}, localStorage.getItem(CIERRE_AVISO_KEY)), null, "descartado no vuelve");
+  } finally { movs=antes.movs; window.hoyLocal=antes.hoy; filtro=antes.filtro; mesActual=antes.mes; el.remove();
+    if(antes.k===null) localStorage.removeItem(CIERRE_AVISO_KEY); else localStorage.setItem(CIERRE_AVISO_KEY, antes.k); if(antes.c===null) localStorage.removeItem(CIERRE_KEY); else localStorage.setItem(CIERRE_KEY, antes.c); }
+});
+
+test("el resumen se puede dibujar como imagen PNG", async ()=>{
+  const l=DATOS_CIERRE(), r=resumenDelMes("2026-09", mesFnC(l), null, l);
+  const canvas=dibujarResumenMes(document.createElement("canvas"), r);
+  igual(canvas.width, 1080); cierto(canvas.height>=800, "alto: "+canvas.height);
+  const blob=await new Promise(res=>canvas.toBlob(res,"image/png"));
+  cierto(blob && blob.size>2000 && blob.type==="image/png", "no se generó el PNG");
+});
+
+test("el cierre del mes está en el menú, en index.html, en el service worker y en el backup", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  ["modal-cierre","cierre-cuerpo","mov-cierre-aviso","abrirCierreMes()","js/cierre-mes.js","alternarCierreMes()","compartirResumenMes()"].forEach(t=>cierto(html.includes(t), "falta "+t));
+  cierto((await (await fetch("sw.js")).text()).includes("./js/cierre-mes.js"));
+  igual(armarBackup().datos.mesesCerrados, leerMesesCerrados()); cierto(aplicarBackup.toString().includes("mesesCerrados"));
+  cierto((await (await fetch("js/movimientos.js")).text()).includes("pintarAvisoCierre"), "Movimientos no pinta el aviso");
+});
+
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
   igual(proximosVencimientos("2026-09-08", movs, {}), []);
 }));
@@ -6097,11 +6230,11 @@ function menuLateral(html){
   return html.slice(ini, fin);
 }
 
-test("los siete ítems del menú usan emoji, no símbolos geométricos", async ()=>{
+test("los ocho ítems del menú usan emoji, no símbolos geométricos", async ()=>{
   const html=await (await fetch("index.html")).text();
   const menu=menuLateral(html);
   const iconos=[...menu.matchAll(/<span class="nav-icon">([^<]*)<\/span>/g)].map(m=>m[1]);
-  igual(iconos.length, 7, "el menú tiene que seguir teniendo sus siete ítems");
+  igual(iconos.length, 8, "el menú tiene que seguir teniendo sus ocho ítems (siete pantallas + Cerrar el mes)");
   // Ningún símbolo suelto geométrico de los que había antes: todo emoji.
   const geometricos=iconos.filter(ic=>["≡","▣","◎","⬆","⚙"].includes(ic));
   igual(geometricos, [], "quedó algún ícono geométrico sin convertir: " + JSON.stringify(iconos));
