@@ -186,12 +186,12 @@ function filasConciliacionHTML(c){
       [lineaInv(d.inv,d.cantInv), lineaFondo(d.fondo,d.cantFondo,d.dDias)],
       "var(--warning)")).join(""),
     "Es el mismo movimiento (mismo CEDEAR), pero tu fondo tiene otro monto, fecha o cantidad que la inversión cargada (la de Balanz trae el monto exacto del broker).");
-  h+=sec("Faltan en tu fondo", c.faltanEnFondo.length, c.faltanEnFondo.map(f=>fila(
+  h+=sec("Inversiones sin movimiento en tu fondo de ahorro", c.faltanEnFondo.length, c.faltanEnFondo.map(f=>fila(
       titulo(f, f.inv.fecha, ladoTxt(f.lado)), fmtS(f.inv.importe),
-      [`${lineaInv(f.inv,null)}`, `No hay ${f.lado==="venta"?"un retiro":"un depósito"} de ${f.ticker||"este CEDEAR"} en tu fondo.`], "var(--danger)",
+      [`${lineaInv(f.inv,null)}`, `No hay ${f.lado==="venta"?"un retiro":"un depósito"} de ${f.ticker||"este CEDEAR"} en tu fondo de ahorro.`], "var(--danger)",
       f.ticker ? `<button type="button" class="btn-sm concil-excl" onclick="excluirTickerConcil(${attrJS(f.ticker)})">${escapeHtml(f.ticker)} no pasa por mi fondo</button>` : "")).join(""),
     "Si ese CEDEAR lo comprás y vendés con plata que ya estaba en el broker (no sale de tu fondo), tocá \"no pasa por mi fondo\": deja de compararse. No cambia ningún movimiento.");
-  h+=sec("Sobran en tu fondo", c.sobranEnFondo.length, c.sobranEnFondo.map(f=>fila(
+  h+=sec("Movimientos de tu fondo de ahorro sin inversión", c.sobranEnFondo.length, c.sobranEnFondo.map(f=>fila(
       titulo(f, f.fondo.fecha, f.lado==="venta"?"Retiro":"Depósito"), fmtS(f.fondo.importe),
       [lineaFondo(f.fondo,null,0), `No hay ${f.lado==="venta"?"una venta":"una compra"}${f.ticker?" de "+escapeHtml(f.ticker):""} parecida en tus inversiones.`], "var(--danger)")).join(""),
     "Puede ser una inversión que todavía no cargaste (o importaste de Balanz).");
@@ -222,7 +222,8 @@ function chipsConciliacionHTML(c){
 }
 
 function conciliacionHTML(c, filtro){
-  const cab=`<div class="concil-aviso">🧪 <strong>Versión de prueba.</strong> Solo muestra las diferencias; no cambia ninguno de tus movimientos.</div>`;
+  const cab=`<div class="concil-aviso">🧪 <strong>Versión de prueba.</strong> Solo muestra las diferencias; no cambia ninguno de tus movimientos.</div>
+    <p class="txt-xs txt-muted" style="margin:8px 0 0;line-height:1.45">Compara cada compra o venta de CEDEARs que tenés cargada como inversión con el depósito o retiro que cargaste en tu fondo de ahorro (<em>${escapeHtml(CONCIL_FONDO.cat)} › ${escapeHtml(CONCIL_FONDO.subcat)}</em>). Si un CEDEAR no es ahorro, tocá "no pasa por mi fondo".</p>`;
   const total=resumenConciliacion(c);
   if(!total.hayDatos) return cab+`<p class="txt-sm txt-muted" style="margin-top:12px">No encontré inversiones de CEDEARs para comparar con tu fondo.</p>`;
   const vista=filtrarConciliacion(c, filtro||"");
