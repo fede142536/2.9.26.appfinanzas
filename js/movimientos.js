@@ -1496,7 +1496,9 @@ async function borrarMov(id, btn){
     },2500);
     return;
   }
-  eliminarConDeshacer("mov", m=>m.id===id, "Movimiento eliminado");
+  // Una venta cargada con "Sale de mis ahorros" lleva un retiro del fondo ligado: se van juntos para no dejar el fondo descuadrado.
+  const ligados=movs.some(x=>x.origenInvId===id);
+  eliminarConDeshacer("mov", x=>x.id===id || x.origenInvId===id, ligados ? "Venta eliminada junto con su retiro del fondo" : "Movimiento eliminado");
   renderMovs();
 }
 async function confirmarBorrarTc(id){

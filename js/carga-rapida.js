@@ -235,6 +235,15 @@ function interpretarCargaRapida(texto, ctx){
   else if(hayInv) out.tipo="Inversion";
   else if(ingresoPorVerbo || restantes.some(t=>CR_INGRESO.test(t.n))) out.tipo="Ingreso";
 
+  // "de mis ahorros" / "del fondo de retiro" en una venta: la plata salió de un fondo de ahorro (el formulario tilda "Sale de mis ahorros").
+  if(out.tipo==="Inversion" && opInv==="venta"){
+    const marca=toks.findIndex(t=>!t.u && /^(ahorro|ahorros|fondo)$/.test(t.n));
+    if(marca>=0){
+      out.saleDeAhorro=true;
+      toks.forEach((t,i)=>{ if(!t.u && /^(ahorro|ahorros|fondo|retiro|mis|mi|del|de|el|la)$/.test(t.n) && Math.abs(i-marca)<=3) t.u=true; });
+    }
+  }
+
   // 8. Descripción: lo que sobra, sin palabras de relleno en los bordes
   let sobra=toks.filter(t=>!t.u);
   while(sobra.length && CR_RELLENO.has(sobra[0].n)) sobra=sobra.slice(1);
@@ -283,7 +292,7 @@ function interpretarCargaRapida(texto, ctx){
   const m$=out.moneda==="USD" ? `USD ${String(out.importe).replace(".",",")}` : fmtS(out.importe);
   const tipoTxt=out.tipo==="Cambio" ? `Cambio · ${out.operacion==="venta"?"Venta":"Compra"} de dólares` : out.tipo==="Inversion" ? `Inversión · ${out.operacion==="venta"?"Venta":"Compra"}${out.ticker?" "+out.ticker:""}` : (out.tipo==="Tarjeta"&&out.cuotas>1 ? `Tarjeta en ${out.cuotas} cuotas` : out.tipo);
   const extraCambio=out.tipo==="Cambio" ? [out.tc>0 ? `a ${fmtS(out.tc)}` : "", out.pesos>0 ? `${fmtS(out.pesos)} en pesos` : ""] : [];
-  out.entendido=[tipoTxt, m$, ...extraCambio, out.cat?(out.cat+(out.subcat?` › ${out.subcat}`:"")):"", out.tarjeta, out.cuenta, fechaTxt||"hoy"].filter(Boolean);
+  out.entendido=[tipoTxt, m$, out.saleDeAhorro?"sale de tus ahorros":"", ...extraCambio, out.cat?(out.cat+(out.subcat?` › ${out.subcat}`:"")):"", out.tarjeta, out.cuenta, fechaTxt||"hoy"].filter(Boolean);
   return out;
 }
 
@@ -347,6 +356,8 @@ function aplicarCargaRapida(r){
     crPonerSelect("inv-cuenta", r.cuenta);
     crPonerFecha("inv-fecha", r.fecha);
     const nt=document.getElementById("inv-nota"); if(nt) nt.value=r.nota;
+    const sa=document.getElementById("inv-sale-ahorro"); if(sa) sa.checked=!!r.saleDeAhorro;
+    if(typeof actualizarSaleDeAhorro==="function") actualizarSaleDeAhorro();
   } else if(r.tipo==="Tarjeta"){
     document.getElementById("tc-desc").value=r.nota || r.cat || "Compra con tarjeta";
     crPonerMonto("tc-total", r.importe, typeof formatearNumeroConMiles!=="undefined" ? formatearNumeroConMiles : null);

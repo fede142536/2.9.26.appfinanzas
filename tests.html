@@ -87,6 +87,7 @@
 <script src="js/carga-rapida.js"></script>
 <script src="js/atajos.js"></script>
 <script src="js/aumentos.js"></script>
+<script src="js/retiro-por-venta.js"></script>
 <script src="js/cierre-mes.js"></script>
 <script src="js/huella.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
@@ -6519,7 +6520,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 12, "esperaba las 12 casillas conocidas (frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
+  igual(cajas.length, 13, "esperaba las 13 casillas conocidas (frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);
@@ -9425,6 +9426,120 @@ test("aumentos: 'sigue igual' silencia ese fijo por seis meses", ()=>{
 test("aumentos: la hoja está en index.html, el sw y los tests", async ()=>{
   const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text();
   cierto(html.includes('id="modal-aumentos"') && html.includes('id="aumentos-cuerpo"')); cierto(/js\/aumentos\.js\?v=\d+/.test(html)); cierto(sw.includes("./js/aumentos.js"));
+});
+
+grupo("Venta que sale de un fondo de ahorro");
+
+const FONDO_T=()=>[
+  {id:1, tipo:"Gasto", cat:"Fondo de retiro", subcat:"Cedear", importe:300000, moneda:"ARS", esAhorro:true, fecha:"2026-08-10", nota:"SPY x 5"},
+  {id:2, tipo:"Gasto", cat:"Fondo de retiro", subcat:"Cedear", importe:50000, moneda:"ARS", usaAhorro:true, traspaso:true, fecha:"2026-09-01", nota:"Venta KO"},
+  {id:3, tipo:"Gasto", cat:"Fondo de retiro", subcat:"FCI", importe:900000, moneda:"ARS", esAhorro:true, fecha:"2026-08-12", nota:"Fondo común"},
+  {id:4, tipo:"Gasto", cat:"Fondo USD", subcat:"Bonos", importe:0, importeOrig:200, moneda:"USD", esAhorro:true, fecha:"2026-08-12", nota:"AL30"},
+  {id:5, tipo:"Gasto", cat:"Supermercado", subcat:"Otros", importe:10000, moneda:"ARS", fecha:"2026-09-12", nota:"Coto"}];
+
+test("venta de ahorro: fondosConSaldo lista cada categoría › subcategoría con saldo, por moneda", ()=>{
+  igual(fondosConSaldo(FONDO_T(), "ARS"), [{cat:"Fondo de retiro", sub:"FCI", saldo:900000}, {cat:"Fondo de retiro", sub:"Cedear", saldo:250000}]);
+  igual(fondosConSaldo(FONDO_T(), "USD"), [{cat:"Fondo USD", sub:"Bonos", saldo:200}]);
+  igual(fondosConSaldo([{...FONDO_T()[1]}], "ARS"), [], "un fondo sin saldo no se ofrece"); igual(fondosConSaldo(null, "ARS"), []);
+});
+
+test("venta de ahorro: el fondo sugerido es donde aparece el ticker; si no, el de más saldo", ()=>{
+  const f=fondosConSaldo(FONDO_T(), "ARS");
+  igual(fondoSugerido(FONDO_T(), f, "SPY").sub, "Cedear"); igual(fondoSugerido(FONDO_T(), f, "spy").sub, "Cedear", "sin importar mayúsculas");
+  igual(fondoSugerido(FONDO_T(), f, "XYZ").sub, "FCI", "sin pista, el de mayor saldo"); igual(fondoSugerido(FONDO_T(), [], "SPY"), null);
+});
+
+test("venta de ahorro: el retiro ligado baja el fondo, no cuenta como gasto y queda atado a la venta", ()=>{
+  const inv={id:100, tipo:"Inversion", importe:104003.22, importeUSD:0, cat:"CEDEARs", subcat:"CEDEARs Venta", ticker:"SPY", fecha:"2026-10-22", cuenta:"Balanz", nota:"Spy x 5"};
+  const r=crearRetiroPorVenta(inv, {cat:"Fondo de retiro", sub:"Cedear"}, 101);
+  igual(r.origenInvId, 100); igual(r.usaAhorro, true); igual(r.traspaso, true); igual(r.esAhorro, false); igual(r.tipo, "Gasto"); igual(r.importe, 104003.22); igual(r.nota, "Spy x 5");
+  const lista=[...FONDO_T(), inv, r];
+  igual(saldoAhorroCategoria(lista, "Fondo de retiro", "Cedear"), 250000-104003.22, "el fondo baja");
+  igual(esConsumo(r), false, "no es un gasto"); igual(esRetiroAhorro(r), true);
+  igual(totalesDePlata(lista.filter(m=>m.id>=100)).gastos, totalesDePlata([inv]).gastos, "el retiro no suma a los gastos del balance");
+  igual(crearRetiroPorVenta({...inv, nota:""}, {cat:"A", sub:"B"}, 1).nota, "Venta SPY", "sin nota, usa el ticker");
+});
+
+test("venta de ahorro: en dólares el retiro va en USD", ()=>{
+  const inv={id:7, tipo:"Inversion", importe:0, importeUSD:50, cat:"Bonos USD", subcat:"Bonos USD Venta", ticker:"AL30", fecha:"2026-10-22", cuenta:"Balanz", nota:""};
+  const r=crearRetiroPorVenta(inv, {cat:"Fondo USD", sub:"Bonos"}, 8);
+  igual([r.moneda, r.importe, r.importeOrig, r.usaAhorro, r.traspaso], ["USD", 0, 50, true, true]);
+  igual(fondosConSaldo([...FONDO_T(), r], "USD")[0].saldo, 150);
+});
+
+test("venta de ahorro: editar la venta actualiza el retiro ligado y no toca otros", ()=>{
+  const inv={id:100, tipo:"Inversion", importe:100000, importeUSD:0, ticker:"SPY", fecha:"2026-10-22", cuenta:"Balanz"};
+  const lista=[inv, crearRetiroPorVenta(inv, {cat:"F", sub:"C"}, 101), {id:5, tipo:"Gasto", importe:1, origenInvId:999}];
+  inv.importe=120000; inv.fecha="2026-10-20"; inv.cuenta="Cocos";
+  igual(sincronizarRetiroLigado(inv, lista), 1); igual([lista[1].importe, lista[1].fecha, lista[1].cuenta], [120000, "2026-10-20", "Cocos"]); igual(lista[2].importe, 1);
+});
+
+test("venta de ahorro: solo las ventas o rescates ofrecen la casilla", ()=>{
+  igual(esOperacionDeVenta("CEDEARs Venta"), true); igual(esOperacionDeVenta("FCI Rescate capital"), true); igual(esOperacionDeVenta("Caución Tomada"), true);
+  igual(esOperacionDeVenta("CEDEARs Compra SPY"), false); igual(esOperacionDeVenta("Dividendo"), false); igual(esOperacionDeVenta(""), false);
+});
+
+// Arma el formulario de Inversión mínimo para probar guardar y la casilla.
+async function conFormularioInversion(fn){
+  const ids={"inv-importe":"input","inv-ticker":"input","inv-nota":"input","inv-fecha":"input","inv-mep":"input","inv-sale-ahorro":"input","inv-cat":"select","inv-subcat":"select","inv-cuenta":"select","inv-moneda":"select","inv-fondo":"select","inv-sale-ahorro-group":"div","inv-fondo-group":"div"};
+  const els={}; Object.entries(ids).forEach(([id,t])=>{ const e=document.createElement(t); e.id=id; if(id==="inv-mep"||id==="inv-sale-ahorro") e.type="checkbox"; document.body.appendChild(e); els[id]=e; });
+  els["inv-cat"].innerHTML="<option>CEDEARs</option>"; els["inv-subcat"].innerHTML="<option>Compra SPY</option><option>Venta</option>"; els["inv-cuenta"].innerHTML="<option>Balanz</option>"; els["inv-moneda"].innerHTML="<option>ARS</option><option>USD</option>";
+  const antes={movs, save:window.save, toast:window.showToast, reset:window.resetForm, vibrar:window.vibrar, tipo};
+  let toasts=[]; window.save=()=>true; window.showToast=m=>toasts.push(m); window.resetForm=()=>{}; window.vibrar=()=>{}; tipo="Inversion";
+  movs=FONDO_T();
+  try{ await fn(els, toasts); } finally { movs=antes.movs; window.save=antes.save; window.showToast=antes.toast; window.resetForm=antes.reset; window.vibrar=antes.vibrar; tipo=antes.tipo; Object.values(els).forEach(e=>e.remove()); }
+}
+
+test("venta de ahorro: la casilla aparece solo en una venta con fondos y propone el fondo del ticker", ()=>conFormularioInversion((els)=>{
+  els["inv-subcat"].value="Compra SPY"; els["inv-ticker"].value="SPY"; actualizarSaleDeAhorro(); igual(els["inv-sale-ahorro-group"].style.display, "none", "en una compra no aparece");
+  els["inv-subcat"].value="Venta"; actualizarSaleDeAhorro(); igual(els["inv-sale-ahorro-group"].style.display, "", "en una venta aparece");
+  igual(els["inv-fondo-group"].style.display, "none", "el selector espera a que la tildes");
+  els["inv-sale-ahorro"].checked=true; actualizarSaleDeAhorro(); igual(els["inv-fondo-group"].style.display, "");
+  igual(els["inv-fondo"].options.length, 2); cierto(els["inv-fondo"].selectedOptions[0].textContent.includes("Cedear"), "propone el fondo donde figura SPY: "+els["inv-fondo"].selectedOptions[0].textContent);
+  movs=[{id:9, tipo:"Gasto", cat:"Supermercado", importe:5, moneda:"ARS"}]; actualizarSaleDeAhorro(); igual(els["inv-sale-ahorro-group"].style.display, "none", "sin fondos con saldo no se ofrece"); igual(els["inv-sale-ahorro"].checked, false);
+}));
+
+test("venta de ahorro: guardar con la casilla crea la venta y el retiro ligado, y el fondo baja", ()=>conFormularioInversion(async (els, toasts)=>{
+  els["inv-importe"].value="104.003,22"; els["inv-ticker"].value="SPY"; els["inv-subcat"].value="Venta"; els["inv-fecha"].value="2026-10-22"; els["inv-nota"].value="Spy x 5"; els["inv-sale-ahorro"].checked=true;
+  actualizarSaleDeAhorro();
+  const antes=saldoAhorroCategoria(movs, "Fondo de retiro", "Cedear");
+  await guardarSinFreno();
+  const venta=movs.find(m=>m.tipo==="Inversion"), retiro=movs.find(m=>m.origenInvId);
+  cierto(venta && retiro, "se crearon las dos"); igual(venta.importe, 104003.22); igual(venta.subcat, "CEDEARs Venta"); igual(retiro.origenInvId, venta.id); cierto(retiro.id!==venta.id);
+  igual(retiro.cat, "Fondo de retiro"); igual(retiro.subcat, "Cedear"); igual(retiro.importe, 104003.22); igual(retiro.traspaso, true);
+  igual(Math.round((antes-saldoAhorroCategoria(movs, "Fondo de retiro", "Cedear"))*100)/100, 104003.22, "el fondo bajó lo vendido");
+  cierto(toasts.some(t=>t.includes("descontada de Fondo de retiro")), toasts.join("|"));
+}));
+
+test("venta de ahorro: sin la casilla guarda solo la venta, como siempre", ()=>conFormularioInversion(async (els)=>{
+  els["inv-importe"].value="1.000"; els["inv-ticker"].value="SPY"; els["inv-subcat"].value="Venta"; els["inv-fecha"].value="2026-10-22";
+  actualizarSaleDeAhorro(); await guardarSinFreno();
+  igual(movs.filter(m=>m.origenInvId).length, 0); igual(movs.filter(m=>m.tipo==="Inversion").length, 1);
+}));
+
+test("venta de ahorro: borrar la venta se lleva el retiro ligado, y deshacer vuelve las dos", ()=>conPapelera(async (ctx, toast)=>{
+  const inv={id:100, tipo:"Inversion", importe:5000, importeUSD:0, ticker:"SPY", fecha:"2026-10-22", cuenta:"Balanz", cat:"CEDEARs", subcat:"CEDEARs Venta"};
+  movs=[inv, crearRetiroPorVenta(inv, {cat:"F", sub:"C"}, 101), {id:5, tipo:"Gasto", importe:10, cat:"X", subcat:"Y", fecha:"2026-10-01", moneda:"ARS"}];
+  const antesRender=window.renderMovs; window.renderMovs=()=>{};
+  try{
+    const btn=document.createElement("button"); btn.dataset.confirm="1";
+    await borrarMov(100, btn);
+    igual(movs.map(m=>m.id), [5], "se fueron los dos"); cierto(toast.textContent.includes("junto con su retiro"), toast.textContent);
+    toast.querySelector(".toast-accion").click();
+    igual(movs.map(m=>m.id).sort((a,b)=>a-b), [5,100,101], "deshacer los devuelve");
+  } finally { window.renderMovs=antesRender; }
+}));
+
+test("venta de ahorro: la carga rápida reconoce 'de mis ahorros' y 'del fondo de retiro' en una venta", ()=>{
+  const a=cr("vendi spy 104003,22 balanz de mis ahorros"); igual(a.tipo, "Inversion"); igual(a.operacion, "venta"); igual(a.saleDeAhorro, true); igual(a.nota, ""); cierto(a.entendido.includes("sale de tus ahorros"), a.entendido.join("|"));
+  const b=cr("venta spy fondo de retiro x5 104003,22 balanz"); igual(b.tipo, "Inversion"); igual(b.saleDeAhorro, true); igual(b.nota, "X5");
+  igual(cr("vendi spy 104003,22 balanz").saleDeAhorro, undefined, "sin la pista no se tilda");
+  igual(cr("compre spy 104003,22 de mis ahorros").saleDeAhorro, undefined, "en una compra no aplica");
+});
+
+test("venta de ahorro: index, sw y tests cargan el archivo nuevo", async ()=>{
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text();
+  cierto(/js\/retiro-por-venta\.js\?v=\d+/.test(html)); cierto(sw.includes("./js/retiro-por-venta.js")); cierto(html.includes('id="inv-sale-ahorro"') && html.includes('id="inv-fondo"'));
 });
 
 grupo("Aislamiento de los tests");

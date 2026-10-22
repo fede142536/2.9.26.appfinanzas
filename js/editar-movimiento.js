@@ -511,6 +511,7 @@ function guardarEdit(){
     }
     m.importeUSD = mepUsdEl ? 0 : Math.round(usd*100)/100;
   }
+  if(m.tipo==="Inversion") sincronizarRetiroLigado(m, movs);   // el retiro del fondo que acompaña a una venta se pone igual
   save();
   vibrar([15,50,15]);
   closeEditModal();
