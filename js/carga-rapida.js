@@ -29,6 +29,9 @@ function crElegirSubInversion(opciones, op, ticker){
   return "";
 }
 
+// Comprar o vender dólares es un cambio de moneda (no un gasto ni una inversión): operación + moneda o una de estas marcas.
+const CR_MARCA_CAMBIO=new Set(["mep","blue","ccl","oficial"]);
+
 const CR_PLACEHOLDER_CUENTAS=["cuentas","tarjetas de credito"];
 
 // Minúsculas y sin acentos, pero CONSERVANDO los puntos y comas de los números (normalizarTexto los saca).
@@ -54,7 +57,7 @@ function crLeerMonto(n){
 // Interpreta `texto`. ctx = {hoy:"YYYY-MM-DD", cuentas:[…], tarjetas:[…], sugerir:(texto,tipo)=>{cat,subcat}|null, cats:tipo=>({cat:[subs]})}.
 // Devuelve {ok, motivo, tipo, importe, moneda, fecha, cuenta, tarjeta, cuotas, nota, cat, subcat, entendido:[…]}.
 function interpretarCargaRapida(texto, ctx){
-  const out={ok:false, motivo:"", tipo:"Gasto", importe:0, moneda:"ARS", fecha:ctx.hoy, cuenta:"", tarjeta:"", cuotas:0, nota:"", cat:"", subcat:"", ticker:"", operacion:"", entendido:[]};
+  const out={ok:false, motivo:"", tipo:"Gasto", importe:0, moneda:"ARS", fecha:ctx.hoy, cuenta:"", tarjeta:"", cuotas:0, nota:"", cat:"", subcat:"", ticker:"", operacion:"", pesos:0, tc:0, entendido:[]};
   const toks=String(texto||"").trim().split(/\s+/).filter(Boolean).map(o=>({o, n:crNorm(o), u:false}));
   if(!toks.length){ out.motivo="Escribí algo, por ejemplo: nafta 15000 visa ayer"; return out; }
   const usar=(i,len)=>{ for(let k=0;k<len;k++) toks[i+k].u=true; };
@@ -166,9 +169,34 @@ function interpretarCargaRapida(texto, ctx){
       opInv="";
     }
   }
+  // 6b. Cambio de moneda: "vendí 30 usd", "compré 50 dólares mep", "vendí mep 30 a 1500"
+  let hayCambio=false;
+  if(!hayInv && !out.tarjeta && !(out.cuotas>1)){
+    const opT=toks.find(t=>CR_OP_VENTA.has(t.n) || CR_OP_COMPRA.has(t.n));
+    const marca=toks.filter(t=>!t.u && CR_MARCA_CAMBIO.has(t.n));
+    if(opT && (out.moneda==="USD" || marca.length)){
+      hayCambio=true; out.operacion=CR_OP_VENTA.has(opT.n) ? "venta" : "compra";
+      opT.u=true; marca.forEach(t=>{ t.u=true; });
+      out.moneda="USD"; out.mepMarca=marca.some(t=>t.n==="mep");
+      // dos números: el chico son los dólares y el grande, el tipo de cambio ("a 1500") o los pesos totales si es muy grande
+      const otros=toks.map((t,i)=>({i, t, r:t.u?null:crLeerMonto(t.n)})).filter(x=>x.r);
+      if(otros.length){
+        const x=otros.sort((a,b)=>b.r.valor-a.r.valor)[0];
+        if(out.importe>0){
+          const usd=Math.min(out.importe, x.r.valor), mayor=Math.max(out.importe, x.r.valor);
+          out.importe=usd; if(mayor<=10000) out.tc=mayor; else out.pesos=mayor;
+          x.t.u=true;
+        } else { out.importe=x.r.valor; x.t.u=true; }
+      }
+      if(out.tc>0 && !(out.pesos>0)) out.pesos=Math.round(out.importe*out.tc*100)/100;
+      if(out.pesos>0 && !(out.tc>0) && out.importe>0) out.tc=Math.round(out.pesos/out.importe*100)/100;
+    }
+  }
+
   // 7. Tipo
   const restantes=toks.filter(t=>!t.u);
-  if(out.tarjeta || out.cuotas>1) out.tipo="Tarjeta";
+  if(hayCambio) out.tipo="Cambio";
+  else if(out.tarjeta || out.cuotas>1) out.tipo="Tarjeta";
   else if(hayInv) out.tipo="Inversion";
   else if(ingresoPorVerbo || restantes.some(t=>CR_INGRESO.test(t.n))) out.tipo="Ingreso";
 
@@ -181,24 +209,46 @@ function interpretarCargaRapida(texto, ctx){
   out.nota=nota;
 
   // 9. Categoría (la misma sugerencia de la nota: tu historial primero, después reglas conocidas)
-  if(out.tipo==="Inversion"){
+  if(out.tipo==="Cambio"){
+    out.nota=out.mepMarca ? (nota ? nota+" · MEP" : "MEP") : nota;
+  } else if(out.tipo==="Inversion"){
     const catsInv=ctx.cats ? ctx.cats("Inversion") : null;
     out.operacion=opInv||"compra";
     if(activo && (!catsInv || catsInv[activo])) out.cat=activo;
     if(out.cat && catsInv) out.subcat=crElegirSubInversion(catsInv[out.cat], out.operacion, out.ticker);
     out.nota=nota;   // lo que sobra, si algo: el ticker ya identifica el activo
   } else {
+    // Si el texto nombra una de TUS categorías ("dinero extra", "salario", "casa"), eso manda: y si solo existe como categoría de
+    // ingresos, es un ingreso.
+    const dePorNombre=(tp)=>{
+      const cats=ctx.cats ? (ctx.cats(tp)||{}) : {};
+      const frase=sobra.map(t=>t.n).join(" ");
+      return Object.keys(cats).map(c=>({cat:c, n:crNorm(c)})).filter(x=>x.n && new RegExp(`(^| )${x.n.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}( |$)`).test(frase)).sort((a,b)=>b.n.length-a.n.length)[0] || null;
+    };
+    let porNombre=null;
+    // "pagué", "transferí", "gasté"…: lo hiciste vos, así que el nombre de una categoría de ingresos no lo vuelve un ingreso
+    const verboSalida=toks.some(t=>/^(transferi|pague|gaste|abone|regale|preste|compre|pago)$/.test(t.n));
+    if(out.tipo==="Gasto" || out.tipo==="Ingreso"){
+      const ing=dePorNombre("Ingreso"), gas=dePorNombre("Gasto");
+      if(out.tipo==="Gasto" && ing && !verboSalida && (!gas || ing.n.length>gas.n.length)){ out.tipo="Ingreso"; porNombre=ing; }
+      else if(out.tipo==="Ingreso" && ing){ porNombre=ing; }
+      else if(out.tipo==="Gasto" && gas){ porNombre=gas; }
+    }
     const tipoCat=out.tipo==="Tarjeta" ? "Gasto" : out.tipo;
     const sug=nota && ctx.sugerir ? ctx.sugerir(nota, tipoCat) : null;
     const catsDe=ctx.cats ? ctx.cats(out.tipo==="Tarjeta"?"Tarjeta":out.tipo) : null;
-    if(sug && sug.cat && (!catsDe || catsDe[sug.cat])){ out.cat=sug.cat; out.subcat=(sug.subcat && catsDe && (catsDe[sug.cat]||[]).includes(sug.subcat)) ? sug.subcat : ""; }
+    if(porNombre){
+      out.cat=porNombre.cat;
+      if(sug && sug.cat===porNombre.cat && sug.subcat && catsDe && (catsDe[sug.cat]||[]).includes(sug.subcat)) out.subcat=sug.subcat;
+    } else if(sug && sug.cat && (!catsDe || catsDe[sug.cat])){ out.cat=sug.cat; out.subcat=(sug.subcat && catsDe && (catsDe[sug.cat]||[]).includes(sug.subcat)) ? sug.subcat : ""; }
   }
 
   if(!(out.importe>0)){ out.motivo="No encontré el monto. Probá con algo como: nafta 15000 visa ayer"; return out; }
   out.ok=true;
   const m$=out.moneda==="USD" ? `USD ${String(out.importe).replace(".",",")}` : fmtS(out.importe);
-  const tipoTxt=out.tipo==="Inversion" ? `Inversión · ${out.operacion==="venta"?"Venta":"Compra"}${out.ticker?" "+out.ticker:""}` : (out.tipo==="Tarjeta"&&out.cuotas>1 ? `Tarjeta en ${out.cuotas} cuotas` : out.tipo);
-  out.entendido=[tipoTxt, m$, out.cat?(out.cat+(out.subcat?` › ${out.subcat}`:"")):"", out.tarjeta, out.cuenta, fechaTxt||"hoy"].filter(Boolean);
+  const tipoTxt=out.tipo==="Cambio" ? `Cambio · ${out.operacion==="venta"?"Venta":"Compra"} de dólares` : out.tipo==="Inversion" ? `Inversión · ${out.operacion==="venta"?"Venta":"Compra"}${out.ticker?" "+out.ticker:""}` : (out.tipo==="Tarjeta"&&out.cuotas>1 ? `Tarjeta en ${out.cuotas} cuotas` : out.tipo);
+  const extraCambio=out.tipo==="Cambio" ? [out.tc>0 ? `a ${fmtS(out.tc)}` : "", out.pesos>0 ? `${fmtS(out.pesos)} en pesos` : ""] : [];
+  out.entendido=[tipoTxt, m$, ...extraCambio, out.cat?(out.cat+(out.subcat?` › ${out.subcat}`:"")):"", out.tarjeta, out.cuenta, fechaTxt||"hoy"].filter(Boolean);
   return out;
 }
 
@@ -246,7 +296,15 @@ function crPonerFecha(id, iso){
 // Rellena el formulario de Cargar con lo interpretado. No guarda.
 function aplicarCargaRapida(r){
   setTipo(r.tipo);
-  if(r.tipo==="Inversion"){
+  if(r.tipo==="Cambio"){
+    if(typeof setSentidoCambio==="function") setSentidoCambio(r.operacion);
+    const u=document.getElementById("cambio-usd"); if(u) u.value=String(r.importe);
+    if(r.pesos>0) crPonerMonto("cambio-ars", r.pesos, typeof formatearNumeroConMiles!=="undefined" ? formatearNumeroConMiles : null);
+    crPonerSelect("cambio-cuenta", r.cuenta);
+    crPonerFecha("cambio-fecha", r.fecha);
+    const nt=document.getElementById("cambio-nota"); if(nt) nt.value=r.nota;
+    if(typeof calcTipoCambio==="function") calcTipoCambio();
+  } else if(r.tipo==="Inversion"){
     crPonerMonto("inv-importe", r.importe, typeof formatearNumeroConMiles!=="undefined" ? formatearNumeroConMiles : null);
     if(typeof pillMoneda==="function") pillMoneda("inv-moneda", r.moneda);
     if(crPonerSelect("inv-cat", r.cat)){ if(typeof updateInvSubcats==="function") updateInvSubcats(); crPonerSelect("inv-subcat", r.subcat); if(typeof buildInvCatChips==="function") buildInvCatChips(); }
