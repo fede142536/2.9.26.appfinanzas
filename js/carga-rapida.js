@@ -5,7 +5,11 @@
 // movimiento: tipo, monto, moneda, fecha, cuenta o tarjeta, cuotas y categoría (con la misma sugerencia que ya usa la nota).
 // NO guarda nada: rellena el formulario de Cargar para que lo revises y toques "Guardar".
 
-const CR_RELLENO=new Set(["en","con","de","del","por","pague","pagué","gaste","gasté","compre","compré","pago","gasto","a","mi","la","el","un","una","me","cobre","cobré","use","usé"]);
+const CR_RELLENO=new Set(["en","con","de","del","por","pague","pagué","gaste","gasté","compre","compré","pago","gasto","a","al","mi","la","el","un","una","me","cobre","cobré","use","usé","para","que","y"]);
+// "me transfirió", "me depositaron", "me pagó"…: alguien te mandó plata, es un ingreso. Con "me" delante alcanza el verbo; sin "me" solo
+// valen las formas de tercera persona del pasado ("transfirió", "depositaron"), porque "deposito" o "pago" dichos solos suelen ser un gasto.
+const CR_VERBO_ME=/^(transfi\w*|deposit\w*|pag(o|aron|aba)|devolv\w*|devolu\w*|mand\w*|envi\w*|lleg\w*|acredit\w*|regal\w*|prest\w*|abon\w*|reintegr\w*)$/;
+const CR_VERBO_SOLO=/^(transfirio|transfirieron|depositaron|acreditaron|acredito|devolvio|devolvieron|pagaron|llego)$/;
 const CR_INGRESO=/^(sueldo|salario|haberes|aguinaldo|bono|honorarios|cobre|ingreso|cobro|devolucion|reintegro)$/;
 // Inversiones: palabras que dicen QUÉ se compró o vendió y cuál es la operación.
 const CR_ACTIVO={accion:"Acciones", acciones:"Acciones", cedear:"CEDEARs", cedears:"CEDEARs", etf:"CEDEARs", fci:"FCI", caucion:"Caución", cripto:"Cripto", criptomoneda:"Cripto", bitcoin:"Cripto", btc:"Cripto", eth:"Cripto",
@@ -123,6 +127,15 @@ function interpretarCargaRapida(texto, ctx){
     if(elegido.valor>0){ out.importe=elegido.valor; usar(elegido.i, elegido.largo); }
   }
 
+  // 5b. Ingreso por verbo: "tany me transfirió 45000 a galicia", "me pagaron 120000", "recibí 5000"
+  let ingresoPorVerbo=false;
+  toks.forEach((t,i)=>{
+    if(t.u) return;
+    if(t.n==="me" && libre(i+1) && CR_VERBO_ME.test(toks[i+1].n)){ usar(i,2); ingresoPorVerbo=true; }
+    else if(/^(recibi|recibimos|cobre|cobramos)$/.test(t.n)){ usar(i,1); ingresoPorVerbo=true; }
+    else if(CR_VERBO_SOLO.test(t.n)){ usar(i,1); ingresoPorVerbo=true; }
+  });
+
   // 6. Inversión: un activo que conocés por su ticker ("ypf", "spy") o que se nombra ("acción", "cedear", "fci"), con su operación.
   let hayInv=false, activo="", opInv="";
   if(!out.tarjeta && !(out.cuotas>1)){
@@ -156,7 +169,7 @@ function interpretarCargaRapida(texto, ctx){
   const restantes=toks.filter(t=>!t.u);
   if(out.tarjeta || out.cuotas>1) out.tipo="Tarjeta";
   else if(hayInv) out.tipo="Inversion";
-  else if(restantes.some(t=>CR_INGRESO.test(t.n))) out.tipo="Ingreso";
+  else if(ingresoPorVerbo || restantes.some(t=>CR_INGRESO.test(t.n))) out.tipo="Ingreso";
 
   // 8. Descripción: lo que sobra, sin palabras de relleno en los bordes
   let sobra=toks.filter(t=>!t.u);

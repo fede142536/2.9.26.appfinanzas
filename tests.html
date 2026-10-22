@@ -5676,9 +5676,9 @@ test("al eliminar un ingreso frecuente los textos hablan de ingreso, no de gasto
 
 // ── Carga rápida por texto ──
 const CR_CTX=(extra)=>({hoy:"2026-10-22", cuentas:["Cuentas","Efectivo","Tarjetas de crédito","Balanz","Galicia","BPat","Mercado Libre","Naranja X"], tarjetas:["Visa","Mastercard","Naranja","Otra","Mercado Pago"],
-  sugerir:(t,tp)=>{ const n=normalizarTexto(t); if(/nafta/.test(n)) return {cat:"Auto", subcat:"Combustible"}; if(/netflix/.test(n)) return {cat:"Salidas", subcat:"Suscripción"}; if(/sueldo/.test(n)&&tp==="Ingreso") return {cat:"Salario", subcat:"Salario"}; if(/super|verdu/.test(n)) return {cat:"Supermercado"}; return null; },
+  sugerir:(t,tp)=>{ const n=normalizarTexto(t); if(/nafta/.test(n)) return {cat:"Auto", subcat:"Combustible"}; if(/netflix/.test(n)) return {cat:"Salidas", subcat:"Suscripción"}; if(/sueldo/.test(n)&&tp==="Ingreso") return {cat:"Salario", subcat:"Salario"}; if(/tany/.test(n)&&tp==="Ingreso") return {cat:"Tany"}; if(/tany|kiosco|maria/.test(n)&&tp==="Gasto") return {cat:"Supermercado"}; if(/super|verdu/.test(n)) return {cat:"Supermercado"}; return null; },
   tickers:[{clave:"ypf",ticker:"YPFD",cat:"Acciones"},{clave:"ypfd",ticker:"YPFD",cat:"Acciones"},{clave:"spy",ticker:"SPY",cat:"CEDEARs"},{clave:"mcd",ticker:"MCD",cat:"CEDEARs"}],
-  cats:tp=>tp==="Ingreso" ? {Salario:["Salario","Otros"]} : tp==="Inversion" ? {Acciones:["Compra","Venta"], CEDEARs:["Compra SPY","Compra otro","Venta","Dividendo"], FCI:["Suscripción","Rescate capital","Rendimiento"], "Caución":["Colocada","Tomada"]} : {Auto:["Combustible","Peajes"], Salidas:["Suscripción","Otros"], Supermercado:["Otros"], Casa:["Otros"], "Vacaciones Gastos":["Italia"]}, ...(extra||{})});
+  cats:tp=>tp==="Ingreso" ? {Salario:["Salario","Otros"], Tany:["Gastos Grales"]} : tp==="Inversion" ? {Acciones:["Compra","Venta"], CEDEARs:["Compra SPY","Compra otro","Venta","Dividendo"], FCI:["Suscripción","Rescate capital","Rendimiento"], "Caución":["Colocada","Tomada"]} : {Auto:["Combustible","Peajes"], Salidas:["Suscripción","Otros"], Supermercado:["Otros"], Casa:["Otros"], "Vacaciones Gastos":["Italia"]}, ...(extra||{})});
 const cr=(t,e)=>interpretarCargaRapida(t, CR_CTX(e));
 
 test("carga rápida: 'nafta 15000 visa ayer' → compra con tarjeta, monto, categoría, tarjeta y fecha", ()=>{
@@ -5786,6 +5786,23 @@ test("carga rápida: la inversión rellena el formulario de Inversión sin guard
     cierto(els["inv-importe"].value.replace(/\D/g,"")==="45000", els["inv-importe"].value); cierto(els["carga-rapida-res"].textContent.includes("Inversión · Venta YPFD"), els["carga-rapida-res"].textContent);
     igual(JSON.stringify(movs), antes.movs, "no guarda nada"); igual(JSON.stringify(tcs), antes.tcs);
   } finally { window.setTipo=antes.setTipo; window.contextoCargaRapida=antes.ctx; window.updateInvSubcats=antes.upd; ids.forEach(id=>{ const e=els[id]; if(e) e.remove(); }); }
+});
+
+test("carga rápida: 'tany me transfirió 45000 a galicia' es un ingreso (no un gasto) y la descripción queda en 'Tany'", ()=>{
+  // Caso reportado: quedaba como gasto de Supermercado con la nota "Tany me transfiero al".
+  ["tany me transfirió 45000 a galicia", "tany me transfiero al galicia 45000", "Tany me transfirió al Galicia 45.000"].forEach(t=>{
+    const r=cr(t);
+    igual(r.ok, true, t); igual(r.tipo, "Ingreso", t); igual(r.importe, 45000); igual(r.cuenta, "Galicia"); igual(r.nota, "Tany", "la descripción no arrastra el verbo ni el 'al': "+t); igual(r.cat, "Tany", "la categoría sale de la descripción limpia");
+  });
+  igual(cr("me pagaron 120000 sueldo").tipo, "Ingreso"); igual(cr("me depositaron 5000 efectivo").tipo, "Ingreso"); igual(cr("me devolvió maria 3000").tipo, "Ingreso");
+  igual(cr("recibí 5000 de maría").tipo, "Ingreso"); igual(cr("recibí 5000 de maría").nota, "María");
+  igual(cr("maría transfirió 8000").tipo, "Ingreso", "tercera persona del pasado sin 'me'"); igual(cr("llegó la transferencia 8000").tipo, "Ingreso");
+});
+
+test("carga rápida: pagar o transferir TÚ es un gasto, no un ingreso", ()=>{
+  igual(cr("pagué 3000 al kiosco").tipo, "Gasto"); igual(cr("pagué 3000 al kiosco").nota, "Kiosco");
+  igual(cr("transferí 5000 a tany").tipo, "Gasto"); igual(cr("deposito 5000 efectivo").tipo, "Gasto", "'deposito' solo es un gasto o un ahorro, no un ingreso");
+  igual(cr("pago luz 12000").tipo, "Gasto"); igual(cr("compré 3000 de pan").tipo, "Gasto");
 });
 
 test("carga rápida: la descripción conserva acentos y mayúsculas útiles y saca el relleno de los bordes", ()=>{
