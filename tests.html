@@ -9474,6 +9474,40 @@ test("venta de ahorro: editar la venta actualiza el retiro ligado y no toca otro
   igual(sincronizarRetiroLigado(inv, lista), 1); igual([lista[1].importe, lista[1].fecha, lista[1].cuenta], [120000, "2026-10-20", "Cocos"]); igual(lista[2].importe, 1);
 });
 
+test("venta de ahorro: lo sacado del fondo que quedó a mano SUMA a lo disponible del mes (y un traspaso a otra inversión no)", ()=>{
+  const dep={id:1, tipo:"Gasto", cat:"Fondo", subcat:"A", importe:200000, moneda:"ARS", esAhorro:true, fecha:"2026-10-02"};
+  const sueldo={id:2, tipo:"Ingreso", cat:"Salario", importe:1000000, moneda:"ARS", fecha:"2026-10-05"};
+  const inv={id:100, tipo:"Inversion", importe:500000, importeUSD:0, cat:"FCI", subcat:"FCI Rescate capital", ticker:"FCI1", fecha:"2026-10-20", cuenta:"Balanz"};
+  const base=resumenDePeriodo([sueldo, dep, inv], {ars:0});
+  igual(base.disponible, 800000, "sin retiro: el rescate es neutro"); igual(base.retiradoAMano, 0);
+  const retiro=crearRetiroPorVenta(inv, {cat:"Fondo", sub:"A"}, 101);
+  const con=resumenDePeriodo([sueldo, dep, inv, retiro], {ars:0});
+  igual(con.retiradoAMano, 500000); igual(con.disponible, 1300000, "los 500.000 que volvieron a la mano suman"); igual(con.ingresos, base.ingresos, "no es un ingreso"); igual(con.gastos, base.gastos, "ni un gasto"); igual(con.ahorrado, 200000);
+  const aOtraInversion={id:102, tipo:"Gasto", cat:"Fondo", subcat:"A", importe:500000, moneda:"ARS", usaAhorro:true, traspaso:true, fecha:"2026-10-20"};
+  igual(resumenDePeriodo([sueldo, dep, aOtraInversion], {ars:0}).disponible, 800000, "pasar el fondo a otra inversión no lo deja a mano");
+  igual(resumenDePeriodo([sueldo, dep, {...retiro, moneda:"USD", importe:0, importeOrig:500}], {ars:0}).retiradoAMano, 0, "los dólares no entran a la cuenta en pesos");
+  igual(esRetiroAMano(retiro), true); igual(esRetiroAMano(aOtraInversion), false);
+});
+
+test("venta de ahorro: una venta con retiro ligado no cuenta además como ganancia (no se suma dos veces)", ()=>{
+  const inv={id:100, tipo:"Inversion", importe:104003.22, importeUSD:0, cat:"CEDEARs", subcat:"CEDEARs Venta", ticker:"SPY", fecha:"2026-10-20", cuenta:"Balanz"};
+  const sueldo={id:2, tipo:"Ingreso", cat:"Salario", importe:1000000, moneda:"ARS", fecha:"2026-10-05"};
+  invalidarResultadoInv();
+  igual(gananciaInvDelMes("2026-10", [inv]).ars, 104003.22, "sin retiro: sin compra cargada, todo cuenta como resultado (como siempre)");
+  const lista=[sueldo, inv, crearRetiroPorVenta(inv, {cat:"Fondo", sub:"A"}, 101)];
+  igual(gananciaInvDelMes("2026-10", lista).ars, 0, "con retiro: la ganancia no se cuenta, la suma viene del retiro");
+  igual(resumenDePeriodo(lista, gananciaInvDelMes("2026-10", lista)).disponible, 1104003.22, "suma una sola vez");
+  const conCompra=[{id:50, tipo:"Inversion", importe:90000, importeUSD:0, ticker:"SPY", cat:"CEDEARs", subcat:"CEDEARs Compra", fecha:"2026-09-01"}, ...lista];
+  igual(capitalInvertido(conCompra).ars, 0, "igual descuenta el capital que volvió"); invalidarResultadoInv();
+});
+
+test("venta de ahorro: el resumen del cierre del mes lo cuenta aparte", ()=>{
+  const inv={id:100, tipo:"Inversion", importe:500000, importeUSD:0, cat:"FCI", subcat:"FCI Rescate capital", ticker:"FCI1", fecha:"2026-10-20", cuenta:"Balanz"};
+  const lista=[{id:2, tipo:"Ingreso", cat:"Salario", importe:1000000, moneda:"ARS", fecha:"2026-10-05"}, inv, crearRetiroPorVenta(inv, {cat:"Fondo", sub:"A"}, 101)];
+  const r=resumenDelMes("2026-10", ()=>lista, null, lista);
+  igual(r.aMano, 500000); igual(r.disponible, 1500000); cierto(resumenMesHTML(r).includes("Sacaste"), "falta la nota del cierre");
+});
+
 test("venta de ahorro: solo las ventas o rescates ofrecen la casilla", ()=>{
   igual(esOperacionDeVenta("CEDEARs Venta"), true); igual(esOperacionDeVenta("FCI Rescate capital"), true); igual(esOperacionDeVenta("Caución Tomada"), true);
   igual(esOperacionDeVenta("CEDEARs Compra SPY"), false); igual(esOperacionDeVenta("Dividendo"), false); igual(esOperacionDeVenta(""), false);

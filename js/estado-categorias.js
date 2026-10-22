@@ -606,9 +606,13 @@ function totalesDePlata(lista, gananciaInv){
 //                fondo baja, que es lo que pasó.
 //   gastos     = consumo + la pérdida de inversión (si la hubo).
 //   ahorrado   = lo que se mandó al fondo este período. Sigue siendo tuyo, pero ya no está a mano.
-//   disponible = ingresos − gastos − ahorrado: lo que quedó a mano. ES el "Balance del mes".
+//   disponible = ingresos − gastos − ahorrado + lo sacado del fondo que quedó a mano (retiradoAMano): lo que quedó a mano. ES el "Balance del mes".
 // Las inversiones no se descuentan: de ellas solo cuenta el resultado, como en el balance de siempre.
 // `lista` ya con los gastos frecuentes expandidos por mes (getMesMov / getMovsEnRango).
+// Retiro del fondo que quedó a mano: el que acompaña a la venta o el rescate de una inversión cargada con "Sale de mis ahorros"
+// (ver retiro-por-venta.js). Es un traspaso (no se gastó), pero a diferencia de uno que va a otra inversión, esa plata VUELVE A LA MANO.
+const esRetiroAMano=m=>esRetiroAhorro(m) && esTraspaso(m) && !!m.origenInvId;
+
 function resumenDePeriodo(lista, ganInv){
   const r2=x=>Math.round(x*100)/100;
   const t=totalesDePlata(lista||[], ganInv);
@@ -618,7 +622,9 @@ function resumenDePeriodo(lista, ganInv){
   const ingresos=r2(t.ingresos+retirosGastados+Math.max(ganancia,0));
   const gastos=r2(t.gastos+Math.max(-ganancia,0));
   const ahorrado=r2(t.depositos);
-  return {ingresos, gastos, ahorrado, balanceCaja:r2(ingresos-gastos), disponible:r2(ingresos-gastos-ahorrado)};
+  // Lo sacado del fondo que quedó a mano (solo pesos). Depositar baja lo disponible; sacar del fondo para tenerlo a mano lo sube.
+  const retiradoAMano=r2((lista||[]).filter(esRetiroAMano).reduce((s,m)=>s+montoARS(m),0));
+  return {ingresos, gastos, ahorrado, retiradoAMano, balanceCaja:r2(ingresos-gastos), disponible:r2(ingresos-gastos-ahorrado+retiradoAMano)};
 }
 
 // ── SEGURIDAD ──

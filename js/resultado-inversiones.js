@@ -43,6 +43,9 @@ function montoInv(m, moneda){
 //   eventos         lista de ganancias reconocidas, para poder auditarlas
 function calcularResultadoInv(lista){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion").slice().sort(ordenDeOperacion);
+  // Una venta cargada con "Sale de mis ahorros" lleva un retiro del fondo ligado (retiro-por-venta.js) y ESE retiro es el que suma a lo
+  // disponible. Si además se contara como ganancia, la misma plata entraría dos veces: de esa venta solo se descuenta el capital.
+  const conRetiro=new Set((lista||[]).filter(x=>x && x.origenInvId).map(x=>x.origenInvId));
   const capital={};   // capital[ticker] = {ars, usd}
   const ganancia={};  // ganancia[ym]    = {ars, usd}
   const flujo={};     // flujo[ym]       = {ars, usd}
@@ -65,8 +68,9 @@ function calcularResultadoInv(lista){
         // que se note que falta una operación en vez de esconderlo en un total.
         const devuelve=Math.min(monto, cap[k]);
         cap[k]-=devuelve;
-        gan[k]+=monto-devuelve;
         flu[k]-=devuelve;
+        if(conRetiro.has(m.id)) return;
+        gan[k]+=monto-devuelve;
         if(monto-devuelve>0) eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:monto-devuelve});
       } else {
         cap[k]+=monto;
@@ -97,7 +101,8 @@ function firmaDeLista(lista){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion");
   let suma=0;
   inv.forEach(m=>{ suma += (m.id||0) + (m.importe||0) + (m.importeUSD||0); });
-  return inv.length+"|"+suma;
+  const ligadas=(lista||[]).filter(m=>m && m.origenInvId).length;   // un retiro ligado cambia el resultado de su venta
+  return inv.length+"|"+suma+"|"+ligadas;
 }
 function resultadoInv(lista){
   const fuente = lista || (typeof movs!=="undefined" ? movs : []);

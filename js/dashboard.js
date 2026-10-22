@@ -358,7 +358,7 @@ function renderDashResumen(){
   if(headlineEl) headlineEl.textContent = bal>=0
     ? `${Mes} ${esActual?"viene":"cerró"} en positivo: te quedaron ${fmtAbbr(bal)}.`
     : `${Mes} ${esActual?"viene":"cerró"} en negativo: gastaste ${fmtAbbr(-bal)} más de lo que entró.`;
-  if(subEl) subEl.textContent=`Entraron ${fmtAbbr(mesData.ingreso)} · salieron ${fmtAbbr(mesData.gasto)}${mesData.ahorrado>0?` · ahorraste ${fmtAbbr(mesData.ahorrado)}`:""}`;
+  if(subEl) subEl.textContent=`Entraron ${fmtAbbr(mesData.ingreso)} · salieron ${fmtAbbr(mesData.gasto)}${mesData.ahorrado>0?` · ahorraste ${fmtAbbr(mesData.ahorrado)}`:""}${mesData.retiradoAMano>0?` · sacaste ${fmtAbbr(mesData.retiradoAMano)} de tus ahorros`:""}`;
 
   dashInsightsActuales=construirInsights(ym, mesData, monthly);
   dashInsightAbierto=null;
@@ -464,6 +464,7 @@ function getDashData(year){
       ingreso:d.ingresos,
       gasto:d.gastos,
       ahorrado:d.ahorrado,
+      retiradoAMano:d.retiradoAMano,
       balance:d.disponible
     })).sort((a,b)=>a.mes.localeCompare(b.mes));
   } else {

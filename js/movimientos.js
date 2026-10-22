@@ -1309,6 +1309,7 @@ function renderMovs(){
       <span class="mov-summary-label">${balLabel}</span>
       <span class="mov-summary-val" id="chip-mov-bal" style="color:${disponible>=0?"var(--success)":"var(--danger)"}">${fmtTotal(0)}</span>
       ${guardado>0?`<span class="mov-summary-sub">Disponible, ya descontado lo ahorrado (${fmtTotal(guardado)})</span>`:""}
+      ${rp.retiradoAMano>0?`<span class="mov-summary-sub">Incluye ${fmtTotal(rp.retiradoAMano)} que sacaste de tus ahorros</span>`:""}
     </div>`;
     const mosTodos=[];
     mosTodos.push(mosaicoHTML("↓","Ingresos","var(--success)",fmtTotal(ingTotal),
@@ -1318,6 +1319,9 @@ function renderMovs(){
     if(mosFrec) mosTodos.push(mosFrec);
     if(guardado>0){
       mosTodos.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(guardado),pctDeIngreso(guardado)));
+    }
+    if(rp.retiradoAMano>0){
+      mosTodos.push(mosaicoHTML("💸","Sacado de ahorros","var(--save)",fmtTotal(rp.retiradoAMano),"quedó a mano"));
     }
     if(invertidoUSD>=0.01){
       mosTodos.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${invertidoUSD.toFixed(2)}`,subInvertidoUSD));
