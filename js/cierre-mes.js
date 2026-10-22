@@ -58,7 +58,7 @@ function resumenDelMes(ym, mesFn, ganFn, crudos){
   let inusuales=[];
   try{ if(typeof inusualesDelMes==="function") inusuales=inusualesDelMes(crudos||[], ym).slice(0,2).map(i=>({desc:i.mov.nota||i.mov.cat, monto:i.mov.importe, veces:i.veces, cat:i.cat})); }catch(e){ inusuales=[]; }
   return {ym, hayDatos:lista.length>0, cantidad:lista.length,
-    ingresos:r.ingresos, gastos:r.gastos, ahorrado:r.ahorrado, disponible:r.disponible,
+    ingresos:r.ingresos, gastos:r.gastos, ahorrado:r.ahorrado, aMano:r.retiradoAMano, disponible:r.disponible,
     retirado:r2cm(lista.filter(esRetiroAhorro).reduce((s,m)=>s+montoARS(m),0)),
     dIngresos:deltaPct(r.ingresos, rAnt.ingresos), dGastos:deltaPct(r.gastos, rAnt.gastos), anterior:{ingresos:rAnt.ingresos, gastos:rAnt.gastos},
     top, subas:subas.slice(0,2).map(({dif,...x})=>x), mayor:mayor?{desc:mayor.nota||mayor.cat||"Gasto", monto:r2cm(montoARS(mayor)), fecha:mayor.fecha}:null, inusuales};
@@ -127,6 +127,7 @@ function resumenMesHTML(r){
   r.subas.forEach(s=>notas.push(`📈 <strong>${escapeHtml(s.cat)}</strong> subió ${s.pct}% respecto de tu promedio de los últimos meses (${fmtTotal(s.monto)} vs ${fmtTotal(s.promedio)}).`));
   r.inusuales.forEach(i=>notas.push(`⚠️ ${escapeHtml(i.desc)}: ${fmtTotal(i.monto)}, ${i.veces}× lo habitual en ${escapeHtml(i.cat)}.`));
   if(r.mayor) notas.push(`💸 Tu gasto más grande fue <strong>${escapeHtml(r.mayor.desc)}</strong>: ${fmtTotal(r.mayor.monto)}.`);
+  if(r.aMano>0) notas.push(`💸 Sacaste ${fmtTotal(r.aMano)} de tus ahorros que quedaron a mano: están sumados a lo disponible.`);
   if(r.ahorrado>0 || r.retirado>0) notas.push(`🏦 Ahorraste ${fmtTotal(r.ahorrado)}${r.retirado>0?` y usaste ${fmtTotal(r.retirado)} de tus ahorros`:""}.`);
   return `<div class="cierre-hero"><div class="txt-xs txt-muted">Te quedó disponible</div><div class="cierre-hero-num" style="color:${col}">${fmtTotal(r.disponible)}</div></div>
     <div class="cierre-fila3">
