@@ -367,11 +367,15 @@ function registrosIncompletos(lista, tcsLista){
 
   (lista||[]).forEach(m=>{
     const enUSD=m.moneda==="USD";
-    const monto=enUSD ? m.importeOrig : m.importe;
     // Un movimiento en USD guarda 0 en `importe` a propósito, así que solo se mira el campo
-    // que le corresponde a su moneda.
+    // que le corresponde a su moneda. Las inversiones guardan los dólares en `importeUSD` (no en
+    // `importeOrig`, que es de gastos e ingresos): mirar `importeOrig` las daba por rotas.
+    const monto=m.tipo==="Inversion" ? (enUSD ? m.importeUSD : m.importe) : (enUSD ? m.importeOrig : m.importe);
     if(numeroRoto(monto)){
-      rotos.push({que:"movimiento", id:m.id, desc:m.nota||m.cat||"(sin descripción)",
+      // Con qué reconocerlo: qué es, el ticker y la fecha ("Bonos AL30 del 3/6"), no solo la categoría.
+      const f=String(m.fecha||"").slice(0,10).split("-");
+      const cuando=f.length===3 ? ` del ${Number(f[2])}/${Number(f[1])}` : "";
+      rotos.push({que:"movimiento", id:m.id, desc:`${m.nota||m.cat||"(sin descripción)"}${m.ticker?` ${m.ticker}`:""}${cuando}`,
                   motivo:"el importe no es un número"});
     }
   });

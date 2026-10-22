@@ -1993,6 +1993,16 @@ test("un movimiento en USD no se marca por tener importe 0", ()=>{
   igual(registrosIncompletos([rotoUSD], []).length, 1);
 });
 
+test("una inversión en USD guarda los dólares en importeUSD: no es un registro roto (las ventas de AL30 de Balanz)", ()=>{
+  const venta={id:8, tipo:"Inversion", cat:"Bonos", subcat:"Bonos Venta", ticker:"AL30", fecha:"2026-06-03", moneda:"USD", importe:0, importeUSD:61.38, cuenta:"Balanz", refBalanz:"6074448"};
+  igual(registrosIncompletos([venta], []), [], "tenía importeUSD: estaba bien");
+  const sinMonto=registrosIncompletos([{...venta, importeUSD:undefined}], []);
+  igual(sinMonto.length, 1, "si de verdad falta el monto en dólares, sí se avisa");
+  igual(sinMonto[0].desc, "Bonos AL30 del 3/6", "el aviso dice cuál es: qué, ticker y fecha");
+  igual(registrosIncompletos([{...venta, moneda:"ARS", importe:5000, importeUSD:0}], []), [], "en pesos se mira `importe`");
+  igual(registrosIncompletos([{...venta, moneda:"ARS", importe:undefined}], []).length, 1);
+});
+
 test("un importe de cero no es un registro roto", ()=>{
   // Cero es un dato válido. Si esto se marcara, la alerta gritaría por movimientos sanos.
   igual(registrosIncompletos([{id:7, tipo:"Gasto", nota:"Regalo", moneda:"ARS", importe:0}], []), []);
