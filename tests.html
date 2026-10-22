@@ -5678,7 +5678,7 @@ test("al eliminar un ingreso frecuente los textos hablan de ingreso, no de gasto
 const CR_CTX=(extra)=>({hoy:"2026-10-22", cuentas:["Cuentas","Efectivo","Tarjetas de crédito","Balanz","Galicia","BPat","Mercado Libre","Naranja X"], tarjetas:["Visa","Mastercard","Naranja","Otra","Mercado Pago"],
   sugerir:(t,tp)=>{ const n=normalizarTexto(t); if(/nafta/.test(n)) return {cat:"Auto", subcat:"Combustible"}; if(/netflix/.test(n)) return {cat:"Salidas", subcat:"Suscripción"}; if(/sueldo/.test(n)&&tp==="Ingreso") return {cat:"Salario", subcat:"Salario"}; if(/tany/.test(n)&&tp==="Ingreso") return {cat:"Tany"}; if(/tany|kiosco|maria/.test(n)&&tp==="Gasto") return {cat:"Supermercado"}; if(/super|verdu/.test(n)) return {cat:"Supermercado"}; return null; },
   tickers:[{clave:"ypf",ticker:"YPFD",cat:"Acciones"},{clave:"ypfd",ticker:"YPFD",cat:"Acciones"},{clave:"spy",ticker:"SPY",cat:"CEDEARs"},{clave:"mcd",ticker:"MCD",cat:"CEDEARs"}],
-  cats:tp=>tp==="Ingreso" ? {Salario:["Salario","Otros"], Tany:["Gastos Grales"]} : tp==="Inversion" ? {Acciones:["Compra","Venta"], CEDEARs:["Compra SPY","Compra otro","Venta","Dividendo"], FCI:["Suscripción","Rescate capital","Rendimiento"], "Caución":["Colocada","Tomada"]} : {Auto:["Combustible","Peajes"], Salidas:["Suscripción","Otros"], Supermercado:["Otros"], Casa:["Otros"], "Vacaciones Gastos":["Italia"]}, ...(extra||{})});
+  cats:tp=>tp==="Ingreso" ? {Salario:["Salario","Otros"], Tany:["Gastos Grales"], "Dinero extra":["Otros"]} : tp==="Inversion" ? {Acciones:["Compra","Venta"], CEDEARs:["Compra SPY","Compra otro","Venta","Dividendo"], FCI:["Suscripción","Rescate capital","Rendimiento"], "Caución":["Colocada","Tomada"]} : {Auto:["Combustible","Peajes"], Salidas:["Suscripción","Otros"], Supermercado:["Otros"], Casa:["Otros"], Tany:["Otros"], "Vacaciones Gastos":["Italia"]}, ...(extra||{})});
 const cr=(t,e)=>interpretarCargaRapida(t, CR_CTX(e));
 
 test("carga rápida: 'nafta 15000 visa ayer' → compra con tarjeta, monto, categoría, tarjeta y fecha", ()=>{
@@ -5828,6 +5828,45 @@ test("carga rápida: la categoría sale de lo reciente antes que de un viaje vie
     igual(sugerirParaCargaRapida("Cosa rara","Gasto").cat, "Hobby", "sin reglas ni historial reciente, se usa todo el historial como último recurso");
     igual(sugerirParaCargaRapida("Algo nunca visto","Gasto"), null);
   } finally { movs=antes; window.currentYMD=hoyV; }
+});
+
+test("carga rápida: comprar o vender dólares (MEP, USD) es un cambio de moneda, no un gasto", ()=>{
+  // Caso reportado: "vendí mep 30" quedaba como un gasto de vacaciones.
+  const v=cr("vendí mep 30", {sugerir:()=>({cat:"Vacaciones Gastos", subcat:"Alemania"})});
+  igual(v.ok, true); igual(v.tipo, "Cambio"); igual(v.operacion, "venta"); igual(v.importe, 30); igual(v.moneda, "USD"); igual(v.nota, "MEP"); igual(v.cat, "", "un cambio no tiene categoría");
+  igual(v.pesos, 0, "sin los pesos, quedan para completar"); cierto(v.entendido[0].includes("Cambio · Venta de dólares"), v.entendido.join("|"));
+  const c=cr("compré 50 dólares"); igual(c.tipo, "Cambio"); igual(c.operacion, "compra"); igual(c.importe, 50);
+  const t=cr("vendí 30 usd mep a 1500 efectivo"); igual(t.importe, 30); igual(t.tc, 1500); igual(t.pesos, 45000, "con el tipo de cambio se calculan los pesos"); igual(t.cuenta, "Efectivo");
+  const p=cr("vendí 30 usd 45000"); igual(p.importe, 30); igual(p.pesos, 45000); igual(p.tc, 1500, "con los pesos totales se calcula el tipo de cambio");
+  const d=cr("compré 50 dólares a 1480"); igual(d.pesos, 74000);
+  igual(cr("compré spy 500000").tipo, "Inversion", "con un activo sigue siendo una inversión"); igual(cr("netflix usd 5,99 mastercard").tipo, "Tarjeta", "pagar algo en dólares no es un cambio");
+  igual(cr("pasajes 120 dolares").tipo, "Gasto", "sin una operación de compra o venta, los dólares son solo la moneda del gasto");
+});
+
+test("carga rápida: si el texto nombra una categoría tuya, manda; y una categoría solo de ingresos vuelve la frase un ingreso", ()=>{
+  // Casos reportados: "dinero extra 45000" y "dinero extra a favor 400" quedaban como gasto de Vacaciones.
+  const sug={sugerir:()=>({cat:"Vacaciones Gastos", subcat:"Italia"})};
+  const a=cr("dinero extra 45000", sug); igual(a.tipo, "Ingreso"); igual(a.cat, "Dinero extra"); igual(a.importe, 45000);
+  const b=cr("dinero extra a favor 400", sug); igual(b.tipo, "Ingreso"); igual(b.cat, "Dinero extra"); igual(b.nota, "Dinero extra a favor");
+  const c=cr("casa 5000", sug); igual(c.tipo, "Gasto"); igual(c.cat, "Casa", "una categoría de gastos nombrada se usa tal cual");
+  igual(cr("tany 3000", sug).tipo, "Gasto", "'Tany' existe como gasto y como ingreso: sin otras pistas es un gasto");
+  igual(cr("Dinero extra 45000 galicia", sug).cuenta, "Galicia");
+  igual(cr("sueldo 1000000").cat, "Salario", "lo de siempre sigue funcionando");
+});
+
+test("carga rápida: el cambio de moneda rellena el formulario de Cambio sin guardar", ()=>{
+  const ids=["cambio-usd","cambio-ars","cambio-cuenta","cambio-fecha","cambio-nota","carga-rapida","carga-rapida-res"];
+  const els={}; ids.forEach(id=>{ const e=document.createElement(id==="cambio-cuenta"?"select":"input"); e.id=id; document.body.appendChild(e); els[id]=e; });
+  els["cambio-cuenta"].innerHTML="<option>Efectivo</option><option>Balanz</option>"; els["carga-rapida-res"]=document.querySelector("#carga-rapida-res");
+  const antes={movs:JSON.stringify(movs), setTipo:window.setTipo, sent:window.setSentidoCambio, calc:window.calcTipoCambio, ctx:window.contextoCargaRapida};
+  let tipoPuesto=null, sentido=null, calculo=0; window.setTipo=t=>{ tipoPuesto=t; }; window.setSentidoCambio=s=>{ sentido=s; }; window.calcTipoCambio=()=>{ calculo++; }; window.contextoCargaRapida=()=>CR_CTX();
+  try{
+    els["carga-rapida"].value="vendí 30 usd mep a 1500 efectivo";
+    const r=cargaRapida();
+    igual(r.ok, true); igual(tipoPuesto, "Cambio"); igual(sentido, "venta"); igual(els["cambio-usd"].value, "30"); cierto(els["cambio-ars"].value.replace(/\D/g,"")==="45000", els["cambio-ars"].value);
+    igual(els["cambio-cuenta"].value, "Efectivo"); igual(els["cambio-nota"].value, "MEP"); cierto(calculo>=1, "recalcula el tipo de cambio");
+    igual(JSON.stringify(movs), antes.movs, "no guarda nada");
+  } finally { window.setTipo=antes.setTipo; window.setSentidoCambio=antes.sent; window.calcTipoCambio=antes.calc; window.contextoCargaRapida=antes.ctx; ids.forEach(id=>{ const e=els[id]; if(e) e.remove(); }); }
 });
 
 test("carga rápida: la descripción conserva acentos y mayúsculas útiles y saca el relleno de los bordes", ()=>{
