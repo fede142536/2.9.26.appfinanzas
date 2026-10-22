@@ -255,7 +255,8 @@ function construirInsights(ym, mesData, monthlyAnio){
         icon:al.icono, bg:"var(--warning-light)",
         a:"", b:al.titulo, bc:"var(--warning)", c:"",
         rows:[], detalle:al.detalle,
-        action:"Ir a Movimientos", actionFn:irAMovimientos
+        action: al.accion ? al.accion.texto : "Ir a Movimientos",
+        actionFn: al.accion ? ()=>window[al.accion.fn]() : irAMovimientos
       });
     });
   }

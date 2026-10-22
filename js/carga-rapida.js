@@ -54,9 +54,44 @@ function crLeerMonto(n){
   return {valor:Math.round(v*mult*100)/100, explicito:/^\$/.test(n)||mult!==1};
 }
 
+// ── Números dichos con palabras ("quince mil", "dos millones doscientos mil", "tres cuotas") ──
+// Al dictar, el celular a veces escribe los números con letras. Se pasan a cifras ANTES de interpretar, pero solo si la frase no trae
+// ninguna cifra: así "cena con tres amigos 30000" no se toca (el monto ya está) y "nafta quince mil visa" sí se entiende.
+const CR_NUM_UNIDAD={cero:0,uno:1,un:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,
+  veinte:20,veintiuno:21,veintiun:21,veintiuna:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29,
+  treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90,
+  cien:100,ciento:100,doscientos:200,doscientas:200,trescientos:300,trescientas:300,cuatrocientos:400,cuatrocientas:400,quinientos:500,quinientas:500,seiscientos:600,seiscientas:600,setecientos:700,setecientas:700,ochocientos:800,ochocientas:800,novecientos:900,novecientas:900};
+function crNumerosEnPalabras(texto){
+  const t=String(texto||"");
+  if(/\d/.test(t)) return t;
+  const toks=t.split(/\s+/).filter(Boolean);
+  const n=toks.map(x=>crNorm(x));
+  const esMil=w=>w==="mil", esMillon=w=>w==="millon"||w==="millones";
+  const esNum=(w,sig)=> (w in CR_NUM_UNIDAD && (w!=="un" && w!=="una" && w!=="uno" || esMil(sig) || esMillon(sig))) || esMil(w) || esMillon(w);
+  const out=[];
+  for(let i=0;i<toks.length;i++){
+    if(!esNum(n[i], n[i+1])){ out.push(toks[i]); continue; }
+    let j=i, total=0, cur=0;
+    while(j<toks.length){
+      const w=n[j];
+      if(esNum(w, n[j+1])){
+        if(esMil(w)){ total+=(cur||1)*1000; cur=0; }
+        else if(esMillon(w)){ total+=(cur||1)*1000000; cur=0; }
+        else cur+=CR_NUM_UNIDAD[w];
+        j++;
+      }else if(w==="y" && j+1<toks.length && esNum(n[j+1], n[j+2]) && n[j+1] in CR_NUM_UNIDAD && CR_NUM_UNIDAD[n[j+1]]<10 && cur>=20) j++;   // "treinta y cinco"
+      else break;
+    }
+    out.push(String(total+cur));
+    i=j-1;
+  }
+  return out.join(" ");
+}
+
 // Interpreta `texto`. ctx = {hoy:"YYYY-MM-DD", cuentas:[…], tarjetas:[…], sugerir:(texto,tipo)=>{cat,subcat}|null, cats:tipo=>({cat:[subs]})}.
 // Devuelve {ok, motivo, tipo, importe, moneda, fecha, cuenta, tarjeta, cuotas, nota, cat, subcat, entendido:[…]}.
 function interpretarCargaRapida(texto, ctx){
+  texto=crNumerosEnPalabras(texto);
   const out={ok:false, motivo:"", tipo:"Gasto", importe:0, moneda:"ARS", fecha:ctx.hoy, cuenta:"", tarjeta:"", cuotas:0, nota:"", cat:"", subcat:"", ticker:"", operacion:"", pesos:0, tc:0, entendido:[]};
   const toks=String(texto||"").trim().split(/\s+/).filter(Boolean).map(o=>({o, n:crNorm(o), u:false}));
   if(!toks.length){ out.motivo="Escribí algo, por ejemplo: nafta 15000 visa ayer"; return out; }
@@ -353,3 +388,98 @@ function cargaRapida(){
   }
   return r;
 }
+
+// ═══════════════════════════════════════════
+// DICTADO POR VOZ
+// ═══════════════════════════════════════════
+// El botón 🎤 escucha una frase ("nafta quince mil visa") y la pasa por la misma carga rápida de arriba: rellena el formulario,
+// no guarda nada. Usa el reconocimiento de voz del navegador (gratis, sin servidores propios). OJO: en Chrome el audio se envía a
+// Google para transcribirlo, por eso la primera vez se avisa y hace falta internet. Si el navegador no lo ofrece, el botón no aparece.
+
+const VOZ_AVISO_KEY="fvozaviso";
+let vozEscuchando=null;     // la sesión de reconocimiento en curso, o null
+
+const vozConstructor=()=> typeof window!=="undefined" ? (window.SpeechRecognition||window.webkitSpeechRecognition||null) : null;
+const vozDisponible=()=>!!vozConstructor();
+
+// Pura. Junta lo que va entendiendo el reconocedor: {texto, final}. `resultados` es el SpeechRecognitionResultList (o algo igual).
+function transcripcionDeVoz(resultados){
+  let texto="", final=true;
+  for(let i=0;i<(resultados||[]).length;i++){
+    const r=resultados[i];
+    if(!r || !r[0]) continue;
+    texto+=(texto?" ":"")+String(r[0].transcript||"").trim();
+    if(!r.isFinal) final=false;
+  }
+  return {texto:texto.trim(), final};
+}
+// Pura. Qué decirle al usuario según el código de error del reconocedor.
+function mensajeErrorVoz(codigo){
+  switch(codigo){
+    case "not-allowed": case "service-not-allowed": return "No tengo permiso para usar el micrófono. Habilitalo para esta app en los ajustes del navegador.";
+    case "no-speech": return "No te escuché. Tocá el micrófono y decilo de nuevo.";
+    case "audio-capture": return "No encuentro el micrófono del celular.";
+    case "network": return "Para entender la voz hace falta internet. Probá de nuevo con conexión o escribilo.";
+    case "language-not-supported": return "Tu navegador no entiende el idioma elegido para dictar.";
+    case "aborted": return "";
+    default: return "No pude entender el audio. Probá de nuevo o escribilo.";
+  }
+}
+
+function vozPintarBoton(escuchando){
+  const b=document.getElementById("carga-rapida-voz");
+  if(!b) return;
+  b.classList.toggle("grabando", !!escuchando);
+  b.textContent=escuchando ? "⏹" : "🎤";
+  b.setAttribute("aria-label", escuchando ? "Dejar de escuchar" : "Dictar por voz");
+  b.setAttribute("aria-pressed", escuchando ? "true" : "false");
+}
+function vozMensaje(texto, esError){
+  const res=document.getElementById("carga-rapida-res");
+  if(!res) return;
+  res.style.display=texto ? "block" : "none";
+  res.style.color=esError ? "var(--danger)" : "var(--text-muted)";
+  res.textContent=texto||"";
+}
+
+async function dictarCargaRapida(){
+  if(vozEscuchando){ try{ vozEscuchando.stop(); }catch(e){ /* ya terminó */ } return; }
+  const SR=vozConstructor();
+  if(!SR){ vozMensaje("Tu navegador no permite dictar. Escribí la frase en el campo.", true); return; }
+  let avisado=false; try{ avisado=localStorage.getItem(VOZ_AVISO_KEY)==="1"; }catch(e){ /* sin almacenamiento */ }
+  if(!avisado){
+    const ok=await mostrarConfirm("Para entender tu voz, el navegador envía el audio a su servicio de reconocimiento (en Chrome, Google). Enola no lo guarda. ¿Querés usar el dictado?", {textoOk:"Sí, dictar"});
+    if(!ok) return;
+    try{ localStorage.setItem(VOZ_AVISO_KEY,"1"); }catch(e){ /* sin almacenamiento */ }
+  }
+  const inp=document.getElementById("carga-rapida");
+  if(!inp) return;
+  const rec=new SR();
+  rec.lang="es-AR"; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1;
+  let ultimo={texto:"", final:false}, fallo=false;
+  rec.onresult=ev=>{
+    ultimo=transcripcionDeVoz(ev.results);
+    inp.value=ultimo.texto;
+  };
+  rec.onerror=ev=>{ fallo=true; const m=mensajeErrorVoz(ev && ev.error); if(m) vozMensaje(m, true); };
+  rec.onend=()=>{
+    vozEscuchando=null; vozPintarBoton(false);
+    if(fallo) return;
+    if(ultimo.texto.trim()) cargaRapida();
+    else vozMensaje(mensajeErrorVoz("no-speech"), true);
+  };
+  try{
+    rec.start();
+    vozEscuchando=rec; vozPintarBoton(true);
+    vozMensaje("🎤 Te escucho… decí, por ejemplo: “nafta quince mil visa”.", false);
+  }catch(e){
+    vozEscuchando=null; vozPintarBoton(false);
+    vozMensaje(mensajeErrorVoz("audio-capture"), true);
+  }
+}
+// El botón solo aparece si el navegador sabe reconocer voz.
+function iniciarBotonVoz(){
+  const b=document.getElementById("carga-rapida-voz");
+  if(b) b.style.display=vozDisponible() ? "" : "none";
+}
+iniciarBotonVoz();

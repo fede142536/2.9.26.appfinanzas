@@ -446,6 +446,10 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
     });
   }
 
+  // ── Gastos fijos que quedaron viejos, o gastos mensuales que subieron ──
+  const aumentos=typeof alertaDeAumentos==="function" ? alertaDeAumentos(lista, tcsLista, hoyYM, Number(String(hoyYMD).slice(8,10))||undefined) : null;
+  if(aumentos) out.push(aumentos);
+
   // ── Registros a los que les falta un dato ──
   // Va al final pero se cuela primero si existe: un número que no se puede calcular ensucia
   // todas las demás cuentas, así que arreglarlo es más urgente que cualquier otro aviso.
@@ -492,6 +496,7 @@ function renderAlertas(){
     return `<div style="background:${c.bg};border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
       <div style="font-size:13px;font-weight:600;color:${c.fg}">${a.icono} ${escapeHtml(a.titulo)}</div>
       <div class="txt-xs txt-muted" style="margin-top:3px;line-height:1.45">${escapeHtml(a.detalle)}</div>
+      ${a.accion ? `<button type="button" class="btn-sm" style="margin-top:8px" onclick="${a.accion.fn}()">${escapeHtml(a.accion.texto)}</button>` : ""}
     </div>`;
   }).join("");
 }

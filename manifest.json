@@ -28,5 +28,59 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Cargar gasto",
+      "short_name": "Gasto",
+      "description": "Anotar un gasto",
+      "url": "./index.html?accion=gasto",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Cargar ingreso",
+      "short_name": "Ingreso",
+      "description": "Anotar un ingreso",
+      "url": "./index.html?accion=ingreso",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Carga rápida",
+      "short_name": "Rápida",
+      "description": "Escribir o dictar una frase",
+      "url": "./index.html?accion=rapida",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Cerrar el mes",
+      "short_name": "Cierre",
+      "description": "Resumen y cierre del mes",
+      "url": "./index.html?accion=cierre",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

@@ -85,6 +85,8 @@
 <script src="js/conciliacion.js"></script>
 <script src="js/papelera.js"></script>
 <script src="js/carga-rapida.js"></script>
+<script src="js/atajos.js"></script>
+<script src="js/aumentos.js"></script>
 <script src="js/cierre-mes.js"></script>
 <script src="js/huella.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
@@ -9160,6 +9162,269 @@ test("la reparación de ids corre al arrancar (con copia de seguridad), al resta
   cierto(arr.indexOf('guardarCopiaLocal("seguridad")') < arr.indexOf("repararIdsDuplicados"), "la copia de seguridad tiene que ir antes de reparar");
   cierto(cfg.slice(cfg.indexOf("function aplicarBackup(")).includes("repararIdsDuplicados(movs)"), "no repara al restaurar");
   cierto(imp.includes("repararIdsDuplicados(movs)"), "no repara al importar");
+});
+
+grupo("Atajos del ícono de la app");
+
+test("atajos: accionDeUrl lee solo las acciones conocidas", ()=>{
+  igual(accionDeUrl("?accion=gasto"), "gasto"); igual(accionDeUrl("?accion=Ingreso"), "ingreso"); igual(accionDeUrl("?accion=rapida"), "rapida"); igual(accionDeUrl("?accion=cierre"), "cierre");
+  igual(accionDeUrl("./index.html?accion=gasto&x=1"), "gasto", "con la dirección entera");
+  igual(accionDeUrl(""), ""); igual(accionDeUrl("?accion=borrar"), "", "una acción desconocida no hace nada"); igual(accionDeUrl("?otra=1"), ""); igual(accionDeUrl(null), "");
+});
+
+test("atajos: gasto e ingreso abren Cargar con el tipo elegido y enfocan el importe", async ()=>{
+  const antes={abrir:window.abrirCarga, tipo:window.setTipo, cierre:window.abrirCierreMes};
+  const llamadas=[]; window.abrirCarga=()=>llamadas.push("cargar"); window.setTipo=t=>llamadas.push("tipo:"+t); window.abrirCierreMes=()=>llamadas.push("cierre");
+  const campo=document.createElement("input"); campo.id="inp-importe"; document.body.appendChild(campo);
+  try{
+    igual(ejecutarAtajo("gasto"), true); igual(llamadas, ["cargar","tipo:Gasto"]);
+    llamadas.length=0; ejecutarAtajo("ingreso"); igual(llamadas, ["cargar","tipo:Ingreso"]);
+    llamadas.length=0; ejecutarAtajo("cierre"); igual(llamadas, ["cierre"], "el cierre no pasa por Cargar");
+    llamadas.length=0; igual(ejecutarAtajo("nada"), false); igual(llamadas, []);
+    await new Promise(r=>setTimeout(r,320)); igual(document.activeElement, campo, "el cursor queda en el importe");
+  } finally { window.abrirCarga=antes.abrir; window.setTipo=antes.tipo; window.abrirCierreMes=antes.cierre; campo.remove(); }
+});
+
+test("atajos: la carga rápida abre Cargar sin cambiar el tipo", ()=>{
+  const antes={abrir:window.abrirCarga, tipo:window.setTipo}; const llamadas=[]; window.abrirCarga=()=>llamadas.push("cargar"); window.setTipo=()=>llamadas.push("tipo");
+  try{ igual(ejecutarAtajo("rapida"), true); igual(llamadas, ["cargar"]); } finally { window.abrirCarga=antes.abrir; window.setTipo=antes.tipo; }
+});
+
+test("atajos: el manifest los declara, apuntan a acciones válidas y están en index, sw y el arranque", async ()=>{
+  const man=await (await fetch("manifest.json")).json();
+  cierto(Array.isArray(man.shortcuts) && man.shortcuts.length>=3 && man.shortcuts.length<=4, "Android muestra hasta 4 atajos");
+  man.shortcuts.forEach(s=>{
+    cierto(s.name && s.url, "cada atajo con nombre y dirección");
+    cierto(ATAJOS_VALIDOS.includes(accionDeUrl(s.url.slice(s.url.indexOf("?")))), "acción inválida: "+s.url);
+    cierto(s.url.startsWith("./"), "la dirección tiene que quedar dentro del alcance de la app: "+s.url);
+  });
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), main=await (await fetch("js/main.js")).text();
+  cierto(/js\/atajos\.js\?v=\d+/.test(html), "index.html no carga atajos.js"); cierto(sw.includes("./js/atajos.js"), "sw.js no lo precachea");
+  cierto(main.includes("atajoAlArrancar()"), "el arranque no lo llama");
+});
+
+grupo("Carga rápida por voz");
+
+test("voz: los números dichos con letras pasan a cifras solo si la frase no trae cifras", ()=>{
+  igual(crNumerosEnPalabras("nafta quince mil visa"), "nafta 15000 visa");
+  igual(crNumerosEnPalabras("supermercado treinta y cinco mil quinientos galicia"), "supermercado 35500 galicia");
+  igual(crNumerosEnPalabras("sueldo dos millones doscientos mil galicia"), "sueldo 2200000 galicia");
+  igual(crNumerosEnPalabras("alquiler un millón efectivo"), "alquiler 1000000 efectivo");
+  igual(crNumerosEnPalabras("café mil quinientos efectivo"), "café 1500 efectivo");
+  igual(crNumerosEnPalabras("tele noventa mil visa en tres cuotas"), "tele 90000 visa en 3 cuotas");
+  igual(crNumerosEnPalabras("cena con tres amigos 30000 visa"), "cena con tres amigos 30000 visa", "si ya hay una cifra no se toca nada");
+  igual(crNumerosEnPalabras("compré una remera"), "compré una remera", "'una' suelta no es un número");
+  igual(crNumerosEnPalabras(""), ""); igual(crNumerosEnPalabras(null), "");
+});
+
+test("voz: la carga rápida entiende lo dictado con palabras", ()=>{
+  const r=cr("nafta quince mil visa en tres cuotas ayer");
+  igual(r.ok, true); igual(r.importe, 15000); igual(r.tarjeta, "Visa"); igual(r.cuotas, 3); igual(r.fecha, "2026-10-21");
+  const s=cr("netflix cinco dólares mastercard"); igual(s.ok, true); igual(s.importe, 5); igual(s.moneda, "USD");
+});
+
+test("voz: transcripcionDeVoz une los tramos y avisa cuándo terminó", ()=>{
+  const res=(...x)=>x.map(([t,f])=>Object.assign([{transcript:t}],{isFinal:f}));
+  igual(transcripcionDeVoz(res(["nafta quince", false])), {texto:"nafta quince", final:false});
+  igual(transcripcionDeVoz(res(["nafta quince mil", true], [" visa", true])), {texto:"nafta quince mil visa", final:true});
+  igual(transcripcionDeVoz([]), {texto:"", final:true}); igual(transcripcionDeVoz(null), {texto:"", final:true});
+});
+
+test("voz: cada error del reconocedor tiene un mensaje claro", ()=>{
+  cierto(mensajeErrorVoz("not-allowed").includes("micrófono")); cierto(mensajeErrorVoz("service-not-allowed").includes("micrófono"));
+  cierto(mensajeErrorVoz("no-speech").includes("No te escuché")); cierto(mensajeErrorVoz("network").includes("internet"));
+  igual(mensajeErrorVoz("aborted"), "", "cancelar a propósito no es un error"); cierto(mensajeErrorVoz("otra-cosa").length>10);
+});
+
+test("voz: el botón solo aparece si el navegador reconoce voz", ()=>{
+  const b=document.createElement("button"); b.id="carga-rapida-voz"; b.style.display="none"; document.body.appendChild(b);
+  const a1=window.SpeechRecognition, a2=window.webkitSpeechRecognition;
+  try{
+    window.SpeechRecognition=undefined; window.webkitSpeechRecognition=undefined; iniciarBotonVoz(); igual(b.style.display, "none"); igual(vozDisponible(), false);
+    window.webkitSpeechRecognition=function(){}; iniciarBotonVoz(); igual(b.style.display, ""); igual(vozDisponible(), true);
+  } finally { window.SpeechRecognition=a1; window.webkitSpeechRecognition=a2; b.remove(); }
+});
+
+test("voz: dictar escucha en es-AR, muestra lo que entiende y al terminar lo manda a la carga rápida", async ()=>{
+  const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; const btn=document.createElement("button"); btn.id="carga-rapida-voz";
+  document.body.append(inp,res,btn);
+  const antes={sr:window.webkitSpeechRecognition, sr2:window.SpeechRecognition, cr:window.cargaRapida, aviso:localStorage.getItem(VOZ_AVISO_KEY)};
+  let inst=null, enviado=null;
+  window.SpeechRecognition=undefined; window.webkitSpeechRecognition=function(){ inst=this; this.start=()=>{ this.corriendo=true; }; this.stop=()=>{ this.onend&&this.onend(); }; };
+  window.cargaRapida=()=>{ enviado=inp.value; };
+  localStorage.setItem(VOZ_AVISO_KEY,"1");
+  try{
+    await dictarCargaRapida();
+    igual(inst.lang, "es-AR"); igual(inst.interimResults, true); cierto(inst.corriendo, "arrancó"); cierto(btn.classList.contains("grabando")); igual(btn.textContent, "⏹");
+    inst.onresult({results:[Object.assign([{transcript:"nafta quince"}],{isFinal:false})]}); igual(inp.value, "nafta quince", "se ve mientras habla");
+    inst.onresult({results:[Object.assign([{transcript:"nafta quince mil visa"}],{isFinal:true})]});
+    inst.onend();
+    igual(enviado, "nafta quince mil visa"); cierto(!btn.classList.contains("grabando")); igual(btn.textContent, "🎤");
+  } finally {
+    window.webkitSpeechRecognition=antes.sr; window.SpeechRecognition=antes.sr2; window.cargaRapida=antes.cr; vozEscuchando=null;
+    if(antes.aviso===null) localStorage.removeItem(VOZ_AVISO_KEY); else localStorage.setItem(VOZ_AVISO_KEY, antes.aviso);
+    inp.remove(); res.remove(); btn.remove();
+  }
+});
+
+test("voz: un error o el silencio avisan y no cargan nada", async ()=>{
+  const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; const btn=document.createElement("button"); btn.id="carga-rapida-voz";
+  document.body.append(inp,res,btn);
+  const antes={sr:window.webkitSpeechRecognition, sr2:window.SpeechRecognition, cr:window.cargaRapida, aviso:localStorage.getItem(VOZ_AVISO_KEY)};
+  let inst=null, enviado=0;
+  window.SpeechRecognition=undefined; window.webkitSpeechRecognition=function(){ inst=this; this.start=()=>{}; this.stop=()=>{}; };
+  window.cargaRapida=()=>{ enviado++; }; localStorage.setItem(VOZ_AVISO_KEY,"1");
+  try{
+    await dictarCargaRapida(); inst.onerror({error:"not-allowed"}); inst.onend();
+    cierto(res.textContent.includes("micrófono"), res.textContent); igual(enviado, 0); cierto(!btn.classList.contains("grabando"));
+    await dictarCargaRapida(); inst.onend();
+    cierto(res.textContent.includes("No te escuché"), res.textContent); igual(enviado, 0);
+  } finally {
+    window.webkitSpeechRecognition=antes.sr; window.SpeechRecognition=antes.sr2; window.cargaRapida=antes.cr; vozEscuchando=null;
+    if(antes.aviso===null) localStorage.removeItem(VOZ_AVISO_KEY); else localStorage.setItem(VOZ_AVISO_KEY, antes.aviso);
+    inp.remove(); res.remove(); btn.remove();
+  }
+});
+
+grupo("Aumentos en gastos fijos");
+
+const AUM_TABLA=(()=>{ const t={}; let ym="2025-08"; for(let i=0;i<14;i++){ ym=addMonths(ym,1); t[ym]=2; } return t; })();   // 2% por mes de 2025-09 a 2026-10
+const fijo=(extra)=>({id:1, tipo:"Gasto", frecuente:true, nota:"Alquiler", cat:"Casa", importe:400000, moneda:"ARS", fecha:"2025-08-01", mesInicio:"2025-08", ...(extra||{})});
+
+test("aumentos: inflacionAcumulada compone los meses y no inventa los que faltan", ()=>{
+  igual(inflacionAcumulada("2026-01","2026-03",{"2026-02":2,"2026-03":3}), 5.1, "1,02 × 1,03 = 5,06%");
+  igual(inflacionAcumulada("2026-01","2026-03",{"2026-02":2}), null, "falta marzo");
+  igual(inflacionAcumulada("2026-03","2026-03",{}), null); igual(inflacionAcumulada("x","2026-03",{}), null); igual(inflacionAcumulada("2026-01","2026-02",null), null);
+});
+
+test("aumentos: un fijo con 6 meses o más sin cambio se detecta, con su inflación y un monto sugerido", ()=>{
+  const r=fijosSinActualizar([fijo()], [], "2026-10", {}, AUM_TABLA);
+  igual(r.length, 1); igual(r[0].desc, "Alquiler"); igual(r[0].meses, 14); igual(r[0].desde, "2025-08"); igual(r[0].monto, 400000);
+  igual(r[0].inflacion, Math.round((Math.pow(1.02,13)-1)*1000)/10);
+  igual(r[0].sugerido, Math.round(400000*(1+r[0].inflacion/100)/100)*100, "sugerido con la inflación redondeada que se muestra");
+  igual(fijosSinActualizar([fijo()], [], "2026-10", {}, {})[0].sugerido, null, "sin serie de inflación no se inventa un sugerido");
+});
+
+test("aumentos: el último aumento registrado reinicia la cuenta", ()=>{
+  igual(fijosSinActualizar([fijo({cambios:[{desde:"2026-06", monto:450000}]})], [], "2026-10", {}, AUM_TABLA).length, 0, "hace 4 meses");
+  const r=fijosSinActualizar([fijo({cambios:[{desde:"2026-01", monto:450000}]})], [], "2026-10", {}, AUM_TABLA);
+  igual(r.length, 1); igual(r[0].desde, "2026-01"); igual(r[0].meses, 9); igual(r[0].monto, 450000, "avisa con el monto vigente");
+  igual(fijosSinActualizar([fijo({cambios:[{desde:"2027-01", monto:999999}]})], [], "2026-10", {}, AUM_TABLA)[0].monto, 400000, "un aumento futuro todavía no cuenta");
+});
+
+test("aumentos: no avisa de ingresos, dólares, ahorro, fijos terminados, recientes ni silenciados", ()=>{
+  const lista=[fijo({id:1,tipo:"Ingreso"}), fijo({id:2,moneda:"USD",importe:0,importeOrig:100}), fijo({id:3,mesFin:"2026-08"}), fijo({id:4,mesInicio:"2026-07"}), fijo({id:5,nota:"Osde"})];
+  const r=fijosSinActualizar(lista, [], "2026-10", {"mov:5":"2027-04"}, AUM_TABLA);
+  igual(r.length, 0);
+  igual(fijosSinActualizar([fijo({id:5})], [], "2026-10", {"mov:5":"2026-10"}, AUM_TABLA).length, 1, "el silencio ya venció");
+});
+
+test("aumentos: los fijos de tarjeta también se revisan", ()=>{
+  const t={id:7, desc:"Gimnasio", frecuente:true, total:30000, moneda:"ARS", tarjeta:"Visa", mesInicio:"2026-01", cat:"Salud"};
+  const r=fijosSinActualizar([], [t], "2026-10", {}, AUM_TABLA);
+  igual(r.length, 1); igual(r[0].kind, "tc"); igual(r[0].clave, "tc:7"); igual(r[0].meses, 9);
+  igual(fijosSinActualizar([], [{...t, total:30000, cuotasTotal:3, frecuente:false}], "2026-10", {}, AUM_TABLA).length, 0, "las cuotas no son fijos");
+});
+
+const cambiosSeguidos=(...meses)=>meses.map((ym,i)=>({desde:ym, monto:[420000,441000,463050,486200][i]}));
+
+test("aumentos: un fijo que venías actualizando cada mes y este mes no, se detecta con su ritmo", ()=>{
+  const x=fijo({cambios:cambiosSeguidos("2026-07","2026-08","2026-09")});
+  const r=fijosQueSuelenCambiar([x], [], "2026-10", {});
+  igual(r.length, 1); igual(r[0].desc, "Alquiler"); igual(r[0].monto, 463050); igual(r[0].seguidos, 3); igual(r[0].mensual, 5, "463.050 / 400.000 en 3 meses = +5% por mes");
+  igual(r[0].sugerido, 486200);
+  igual(fijosSinActualizar([x], [], "2026-10", {}, AUM_TABLA).length, 0, "no es un fijo estancado");
+});
+
+test("aumentos: 'suele cambiar' no avisa si ya cargaste este mes o uno futuro, si faltó un mes o si lo silenciaste", ()=>{
+  igual(fijosQueSuelenCambiar([fijo({cambios:cambiosSeguidos("2026-07","2026-08","2026-09","2026-10")})], [], "2026-10", {}).length, 0, "ya tiene octubre");
+  igual(fijosQueSuelenCambiar([fijo({cambios:[...cambiosSeguidos("2026-07","2026-08","2026-09"), {desde:"2026-11", monto:500000}]})], [], "2026-10", {}).length, 0, "ya cargó noviembre por adelantado");
+  igual(fijosQueSuelenCambiar([fijo({cambios:[{desde:"2026-07",monto:420000},{desde:"2026-09",monto:441000}]})], [], "2026-10", {}).length, 0, "se saltó agosto");
+  igual(fijosQueSuelenCambiar([fijo({cambios:[{desde:"2026-08",monto:420000},{desde:"2026-09",monto:441000}]})], [], "2026-10", {}).length, 0, "solo 2 meses seguidos");
+  igual(fijosQueSuelenCambiar([fijo({cambios:cambiosSeguidos("2026-07","2026-08","2026-09")})], [], "2026-10", {"mov:1":"2026-11"}).length, 0, "silenciado hasta noviembre");
+  igual(fijosQueSuelenCambiar([fijo({tipo:"Ingreso", cambios:cambiosSeguidos("2026-07","2026-08","2026-09")}), fijo({id:2, moneda:"USD", importe:0, importeOrig:50, cambios:cambiosSeguidos("2026-07","2026-08","2026-09")})], [], "2026-10", {}).length, 0, "ni ingresos ni dólares");
+  const t={id:7, desc:"Seguro", frecuente:true, total:100000, moneda:"ARS", tarjeta:"Visa", mesInicio:"2026-05", cat:"Auto", cambios:[{desde:"2026-07",monto:110000},{desde:"2026-08",monto:121000},{desde:"2026-09",monto:133100}]};
+  const rt=fijosQueSuelenCambiar([], [t], "2026-10", {}); igual(rt.length, 1); igual(rt[0].kind, "tc"); igual(rt[0].mensual, 10, "100.000 → 133.100 en 3 meses = +10% por mes");
+});
+
+test("aumentos: antes del día 10 no se avisa de lo que 'suele cambiar'; después sí", ()=>{
+  const x=fijo({cambios:cambiosSeguidos("2026-07","2026-08","2026-09")});
+  const sil=localStorage.getItem(AUM_KEY); localStorage.removeItem(AUM_KEY);
+  try{
+    igual(avisosDeAumentos([x], [], "2026-10", 5).habituales.length, 0); igual(avisosDeAumentos([x], [], "2026-10", 10).habituales.length, 1); igual(avisosDeAumentos([x], [], "2026-10").habituales.length, 1, "sin día se muestra todo (hoja abierta a propósito)");
+    igual(alertaDeAumentos([x], [], "2026-10", 5), null);
+    const a=alertaDeAumentos([x], [], "2026-10", 15);
+    cierto(a.titulo.includes("Alquiler suele actualizarse todos los meses"), a.titulo); cierto(a.detalle.includes("Venías cambiando Alquiler"), a.detalle);
+  } finally { if(sil!==null) localStorage.setItem(AUM_KEY, sil); }
+});
+
+test("aumentos: conCambioDeMonto agrega, reemplaza el mismo mes, ordena y no toca el original", ()=>{
+  const orig=[{desde:"2026-03", monto:100}];
+  const a=conCambioDeMonto(orig, "2026-10", 120.456); igual(a, [{desde:"2026-03",monto:100},{desde:"2026-10",monto:120.46}]); igual(orig, [{desde:"2026-03",monto:100}], "el original queda igual");
+  igual(conCambioDeMonto(a, "2026-10", 130), [{desde:"2026-03",monto:100},{desde:"2026-10",monto:130}]);
+  igual(conCambioDeMonto(undefined, "2026-10", 5), [{desde:"2026-10",monto:5}]);
+});
+
+test("aumentos: un gasto mensual cargado a mano que sube se detecta; uno estable, uno viejo o un fijo no", ()=>{
+  const g=(id,nota,ym,imp,extra)=>({id, tipo:"Gasto", nota, cat:"Servicios", importe:imp, moneda:"ARS", fecha:ym+"-10", ...(extra||{})});
+  const lista=[g(1,"Luz Edenor","2026-07",30000), g(2,"Luz Edenor","2026-08",31000), g(3,"Luz Edenor","2026-09",32000), g(4,"Luz Edenor","2026-10",45000),
+    g(5,"Internet Fibertel","2026-07",20000), g(6,"Internet Fibertel","2026-08",20000), g(7,"Internet Fibertel","2026-09",20000), g(8,"Internet Fibertel","2026-10",20500),
+    g(9,"Gas Metrogas","2026-04",10000), g(10,"Gas Metrogas","2026-05",10000), g(11,"Gas Metrogas","2026-06",10000), g(12,"Gas Metrogas","2026-07",30000)];
+  const r=gastosQueSubieron(lista, "2026-10", {});
+  igual(r.length, 1, "solo la luz: internet subió 2,5% y el gas es viejo"); igual(r[0].desc, "Luz Edenor"); igual(r[0].actual, 45000); igual(r[0].base, 31000);
+  igual(Math.round(r[0].pct*100), 45);
+  igual(gastosQueSubieron(lista, "2026-10", {[r[0].clave]:"2026-12"}).length, 0, "silenciado");
+  igual(gastosQueSubieron(lista.map(x=>x.id>=1&&x.id<=4?{...x, frecuente:true}:x), "2026-10", {}).length, 0, "un fijo no cuenta como carga a mano");
+});
+
+test("aumentos: alertaDeAumentos arma un aviso con botón y alertasDelMomento lo incluye", ()=>{
+  const antesTabla=window.tablaInflacion; window.tablaInflacion=()=>AUM_TABLA;
+  const sil=localStorage.getItem(AUM_KEY); localStorage.removeItem(AUM_KEY);
+  try{
+    const a=alertaDeAumentos([fijo()], [], "2026-10");
+    igual(a.accion.fn, "abrirAumentos"); cierto(a.titulo.includes("Alquiler") && a.titulo.includes("14 meses"), a.titulo); cierto(a.detalle.includes("inflación"), a.detalle); igual(a.nivel, "info");
+    igual(alertaDeAumentos([], [], "2026-10"), null);
+    cierto(alertasDelMomento([fijo()], [], "2026-10-22").some(x=>x.accion && x.accion.fn==="abrirAumentos"), "aparece en el Dashboard");
+  } finally { window.tablaInflacion=antesTabla; if(sil!==null) localStorage.setItem(AUM_KEY, sil); }
+});
+
+test("aumentos: registrar desde la hoja crea el cambio desde este mes, se puede deshacer y el aviso desaparece", ()=>{
+  const hoy=currentYM();
+  const cuerpo=document.createElement("div"); cuerpo.id="aumentos-cuerpo"; const modal=document.createElement("div"); modal.id="modal-aumentos"; document.body.append(cuerpo,modal);
+  const antes={movs, tcs, tabla:window.tablaInflacion, sil:localStorage.getItem(AUM_KEY), save:window.save, refrescar:window.refrescarVistas}; localStorage.removeItem(AUM_KEY);
+  let toastEl=document.querySelector("#toast"), toastCreado=false;   // (el getElementById de esta página devuelve un div suelto si no existe)
+  if(!toastEl){ toastEl=document.createElement("div"); toastEl.id="toast"; document.body.appendChild(toastEl); toastCreado=true; }
+  window.tablaInflacion=()=>({}); window.save=()=>true; window.refrescarVistas=()=>{};
+  try{
+    const inicio=addMonths(hoy,-9);
+    movs=[{id:"x1", tipo:"Gasto", frecuente:true, nota:"Alquiler", cat:"Casa", importe:400000, moneda:"ARS", fecha:inicio+"-01", mesInicio:inicio}]; tcs=[];
+    abrirAumentos(); cierto(modal.classList.contains("open")); cierto(cuerpo.textContent.includes("Alquiler") && cuerpo.textContent.includes("9 meses"), cuerpo.textContent);
+    const inp=document.getElementById("aum-in-0");
+    inp.value=""; igual(registrarAumento(0), false, "sin monto no hace nada");
+    inp.value="400.000"; igual(registrarAumento(0), false, "el mismo monto tampoco");
+    inp.value="480.000"; igual(registrarAumento(0), true);
+    igual(movs[0].cambios, [{desde:hoy, monto:480000}]); igual(getGastoFrecMontoEnMes(movs[0], hoy), 480000); igual(getGastoFrecMontoEnMes(movs[0], addMonths(hoy,-1)), 400000, "el historial no cambia");
+    cierto(cuerpo.textContent.includes("al día"), "ya no hay nada para revisar");
+    toastEl.querySelector(".toast-accion").click();
+    cierto(movs[0].cambios===undefined || movs[0].cambios.length===0, "deshacer devuelve lo anterior"); cierto(document.getElementById("aumentos-cuerpo").textContent.includes("Alquiler"));
+  } finally { movs=antes.movs; tcs=antes.tcs; window.tablaInflacion=antes.tabla; window.save=antes.save; window.refrescarVistas=antes.refrescar; if(antes.sil===null) localStorage.removeItem(AUM_KEY); else localStorage.setItem(AUM_KEY, antes.sil); cuerpo.remove(); modal.remove(); if(toastCreado) toastEl.remove(); }
+});
+
+test("aumentos: 'sigue igual' silencia ese fijo por seis meses", ()=>{
+  const hoy=currentYM();
+  const cuerpo=document.createElement("div"); cuerpo.id="aumentos-cuerpo"; document.body.appendChild(cuerpo);
+  const antes={movs, tcs, tabla:window.tablaInflacion, sil:localStorage.getItem(AUM_KEY)}; localStorage.removeItem(AUM_KEY); window.tablaInflacion=()=>({});
+  try{
+    const inicio=addMonths(hoy,-9);
+    movs=[{id:"x2", tipo:"Gasto", frecuente:true, nota:"Osde", cat:"Salud", importe:90000, moneda:"ARS", fecha:inicio+"-01", mesInicio:inicio}]; tcs=[];
+    renderAumentos(); silenciarFijo(0);
+    igual(leerSilenciosAumentos()["mov:x2"], addMonths(hoy,6)); igual(fijosSinActualizar(movs, tcs, hoy, leerSilenciosAumentos(), {}).length, 0);
+  } finally { movs=antes.movs; tcs=antes.tcs; window.tablaInflacion=antes.tabla; if(antes.sil===null) localStorage.removeItem(AUM_KEY); else localStorage.setItem(AUM_KEY, antes.sil); cuerpo.remove(); }
+});
+
+test("aumentos: la hoja está en index.html, el sw y los tests", async ()=>{
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text();
+  cierto(html.includes('id="modal-aumentos"') && html.includes('id="aumentos-cuerpo"')); cierto(/js\/aumentos\.js\?v=\d+/.test(html)); cierto(sw.includes("./js/aumentos.js"));
 });
 
 grupo("Aislamiento de los tests");
