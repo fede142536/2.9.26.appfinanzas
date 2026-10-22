@@ -1160,14 +1160,13 @@ async function borrarMovDesdeCuenta(id, cuentaNombre, btn){
   if(m.tipo==="Gasto" && m.frecuente){
     const mesDeBaja=mesActual;
     if(await mostrarConfirm(`Este es un gasto frecuente mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`, {textoOk:"Dar de baja", textoCancelar:"Eliminar todo"})){
+      const revertirBaja=capturarCampos([m], ["mesFin"]);
       m.mesFin=addMonths(mesDeBaja,-1);
       save();
-      showToast(`Gasto frecuente dado de baja desde ${mesLbl(mesDeBaja)} ✓`);
+      ofrecerDeshacerCambio(`Gasto frecuente dado de baja desde ${mesLbl(mesDeBaja)} ✓`, revertirBaja);
     } else {
       if(!await mostrarConfirm("⚠️ Vas a eliminar el gasto frecuente y todos sus meses (incluyendo el historial). ¿Confirmás?", {textoOk:"Eliminar todo", peligroso:true})) return;
-      movs=movs.filter(x=>x.id!==id);
-      save();
-      showToast("Gasto frecuente eliminado");
+      eliminarConDeshacer("mov", x=>x.id===id, "Gasto frecuente eliminado");
     }
   } else {
     // Doble-toque de confirmación, igual que en el resto de la app
@@ -1181,9 +1180,7 @@ async function borrarMovDesdeCuenta(id, cuentaNombre, btn){
       },2500);
       return;
     }
-    movs=movs.filter(x=>x.id!==id);
-    save();
-    showToast("Movimiento eliminado");
+    eliminarConDeshacer("mov", x=>x.id===id, "Movimiento eliminado");
   }
   renderMovs();
   renderDashCuentas();

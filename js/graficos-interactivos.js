@@ -298,9 +298,10 @@ async function marcarGastosComoAhorroMeta(){
   const total=lista.reduce((s,m)=>s+montoARS(m),0);
   if(!await mostrarConfirm(`¿Marcar ${lista.length} gasto${lista.length===1?"":"s"} de "${cat}" (${fmtTotal(total)}) como ahorro? Pasan a sumar al fondo y a la meta, y dejan de contar como gasto.`, {textoOk:"Marcar como ahorro"})) return;
   try{ await guardarCopiaLocal("seguridad"); }catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
+  const revertir=capturarCampos(lista, ["esAhorro"]);
   lista.forEach(m=>{ m.esAhorro=true; });
   save();
-  showToast(`${lista.length} ${lista.length===1?"gasto marcado":"gastos marcados"} como ahorro ✓`);
+  ofrecerDeshacerCambio(`${lista.length} ${lista.length===1?"gasto marcado":"gastos marcados"} como ahorro ✓`, ()=>{ revertir(); llenarSelectFondoMeta(cat, sub||""); });
   llenarSelectFondoMeta(cat, sub||"");
   renderMetas();
 }
@@ -525,9 +526,7 @@ async function borrarMeta(id){
   const m=metas.find(x=>x.id===id);
   if(!m) return;
   if(!await mostrarConfirm(`¿Eliminar la meta "${m.nombre}"? Se pierde el progreso guardado.`, {textoOk:"Eliminar", peligroso:true})) return;
-  metas=metas.filter(x=>x.id!==id);
-  save();
-  showToast("Meta eliminada");
+  eliminarConDeshacer("meta", x=>x.id===id, "Meta eliminada");
   renderMetas();
 }
 

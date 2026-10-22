@@ -83,6 +83,7 @@
 <script src="js/inflacion.js"></script>
 <script src="js/ahorros.js"></script>
 <script src="js/conciliacion.js"></script>
+<script src="js/papelera.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
@@ -4168,7 +4169,7 @@ test("el backup incluye TODOS los datos del usuario", ()=>{
 });
 
 test("ENC_KEYS cubre todas las claves sensibles conocidas", ()=>{
-  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons"]){
+  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera"]){
     cierto(ENC_KEYS.includes(k), `ENC_KEYS no incluye "${k}": esos datos quedarían sin cifrar`);
   }
 });
@@ -5374,6 +5375,195 @@ test("la tarjeta de Configuración se oculta cuando todo tiene cuenta, y la hoja
   const html=await (await fetch("index.html")).text();
   ["sin-cuenta-card","modal-sin-cuenta","sin-cuenta-detalle","js/cuentas-sugeridas.js"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
   cierto((await (await fetch("sw.js")).text()).includes("./js/cuentas-sugeridas.js"), "el service worker no cachea cuentas-sugeridas.js");
+});
+
+// ── Deshacer y papelera ──
+async function conPapelera(fn){
+  const antes={movs, tcs, metas, papelera, save:window.save, toast:window.showToast, confirm:window.mostrarConfirm, k:localStorage.getItem(PAPELERA_KEY), refrescar:window.refrescarVistas};
+  let toastEl=document.querySelector("#toast"), creado=false;   // (el getElementById de esta página devuelve un div suelto si no existe)
+  if(!toastEl){ toastEl=document.createElement("div"); toastEl.id="toast"; document.body.appendChild(toastEl); creado=true; }
+  const ctx={guardados:0};
+  window.save=()=>{ ctx.guardados++; return true; }; window.refrescarVistas=()=>{};
+  papelera=[];
+  try{ return await fn(ctx, toastEl); }
+  finally{
+    movs=antes.movs; tcs=antes.tcs; metas=antes.metas; papelera=antes.papelera; window.save=antes.save; window.showToast=antes.toast; window.mostrarConfirm=antes.confirm; window.refrescarVistas=antes.refrescar;
+    if(antes.k===null) localStorage.removeItem(PAPELERA_KEY); else localStorage.setItem(PAPELERA_KEY, antes.k);
+    toastEl.classList.remove("show","con-accion"); if(creado) toastEl.remove();
+  }
+}
+const MOV_P=(id,extra)=>({id,tipo:"Gasto",cat:"Super",subcat:"Verdulería",importe:1000+id,fecha:"2026-10-10",cuenta:"Galicia",...(extra||{})});
+
+test("purgarPapelera: descarta lo de más de 30 días y se queda con los 300 más recientes", ()=>{
+  const ahora=Date.parse("2026-10-22T12:00:00Z"), dia=86400000;
+  const e=(k,diasAtras)=>({k, item:{id:k}, kind:"mov", idx:0, en:new Date(ahora-diasAtras*dia).toISOString()});
+  igual(purgarPapelera([e(1,5), e(2,31), e(3,30), e(4,0)], ahora).map(x=>x.k), [1,3,4]);
+  const muchos=Array.from({length:350},(_,i)=>e(i+1,1));
+  const r=purgarPapelera(muchos, ahora); igual(r.length, 300); igual(r[0].k, 51, "se pierden los más viejos"); igual(r[299].k, 350);
+  igual(purgarPapelera(null, ahora), []); igual(purgarPapelera([null, {k:1}, {k:2,item:{},en:"fecha rota"}], ahora), [], "entradas rotas se descartan");
+});
+
+test("eliminarConDeshacer: saca el movimiento, lo manda a la papelera, guarda y avisa con Deshacer", ()=>conPapelera(async (ctx, toast)=>{
+  movs=[MOV_P(1), MOV_P(2), MOV_P(3)];
+  const n=eliminarConDeshacer("mov", m=>m.id===2, "Movimiento eliminado");
+  igual(n, 1); igual(movs.map(m=>m.id), [1,3]); igual(papelera.length, 1); igual(papelera[0].item.id, 2); igual(papelera[0].idx, 1); igual(papelera[0].kind, "mov");
+  igual(ctx.guardados, 1, "tiene que guardar");
+  cierto(toast.classList.contains("show") && toast.classList.contains("con-accion"), "falta el aviso");
+  cierto(toast.textContent.includes("Movimiento eliminado") && toast.querySelector(".toast-accion").textContent==="Deshacer");
+  igual(new Set([nuevaClavePapelera(), nuevaClavePapelera(), nuevaClavePapelera()]).size, 3, "las claves no se repiten aunque sea el mismo milisegundo");
+  igual(eliminarConDeshacer("mov", m=>m.id===999, "x"), 0, "si no hay nada que borrar no hace nada"); igual(papelera.length, 1);
+}));
+
+test("tocar Deshacer devuelve el movimiento a su lugar, con sus datos, y lo saca de la papelera", ()=>conPapelera(async (ctx, toast)=>{
+  movs=[MOV_P(1), MOV_P(2,{nota:"Polleria", cuenta:"Mercado Libre"}), MOV_P(3)];
+  const original=JSON.stringify(movs[1]);
+  eliminarConDeshacer("mov", m=>m.id===2, "Movimiento eliminado");
+  toast.querySelector(".toast-accion").click();
+  igual(movs.map(m=>m.id), [1,2,3], "vuelve a la misma posición"); igual(JSON.stringify(movs[1]), original, "con todos sus datos");
+  igual(papelera.length, 0); cierto(!toast.classList.contains("con-accion") || !toast.classList.contains("show"), "el aviso se cierra");
+}));
+
+test("se restauran varios a la vez (las dos patas de un cambio) y los tres tipos: movimiento, compra con tarjeta y meta", ()=>conPapelera(async ()=>{
+  movs=[MOV_P(1,{cambioId:"c1"}), MOV_P(2), MOV_P(3,{cambioId:"c1"})]; tcs=[{id:50, desc:"Notebook", total:1000, cuotasTotal:3, tarjeta:"Visa"}]; metas=[{id:70, nombre:"Viaje", objetivo:500, actual:0}];
+  eliminarConDeshacer("mov", m=>m.cambioId==="c1", "Cambio eliminado"); igual(movs.map(m=>m.id), [2]); igual(papelera.length, 2);
+  eliminarConDeshacer("tc", t=>t.id===50, "x"); eliminarConDeshacer("meta", m=>m.id===70, "x");
+  igual(tcs.length, 0); igual(metas.length, 0); igual(papelera.map(e=>e.kind).sort(), ["meta","mov","mov","tc"]);
+  restaurarDePapelera(papelera.filter(e=>e.kind==="mov").map(e=>e.k));
+  igual(movs.map(m=>m.id), [1,2,3], "las dos patas vuelven en su lugar");
+  restaurarDePapelera(papelera.map(e=>e.k));
+  igual(tcs.map(t=>t.id), [50]); igual(metas.map(m=>m.id), [70]); igual(papelera.length, 0);
+}));
+
+test("al restaurar, un id que ya está ocupado no se pisa", ()=>conPapelera(async ()=>{
+  movs=[MOV_P(1)]; eliminarConDeshacer("mov", m=>m.id===1, "x");
+  movs=[MOV_P(1,{nota:"otro"})];   // mientras tanto se cargó otro con el mismo id
+  restaurarDePapelera(papelera.map(e=>e.k));
+  igual(movs.length, 2); igual(new Set(movs.map(m=>m.id)).size, 2, "no puede haber ids repetidos"); igual(movs.find(m=>m.nota==="otro").id, 1, "el otro queda como estaba");
+}));
+
+test("la papelera se guarda aparte, se lee al arrancar y descarta lo viejo", ()=>conPapelera(async ()=>{
+  movs=[MOV_P(1)]; eliminarConDeshacer("mov", m=>m.id===1, "x");
+  const guardado=JSON.parse(localStorage.getItem(PAPELERA_KEY)); igual(guardado.length, 1); igual(guardado[0].item.id, 1);
+  papelera=[]; cargarPapelera(); igual(papelera.length, 1, "al abrir la app vuelve a estar");
+  localStorage.setItem(PAPELERA_KEY, JSON.stringify([{k:1, kind:"mov", idx:0, item:{id:9}, en:"2020-01-01T00:00:00Z"}])); cargarPapelera(); igual(papelera.length, 0, "lo de más de 30 días no vuelve");
+  localStorage.setItem(PAPELERA_KEY, "{roto"); cargarPapelera(); igual(papelera, [], "un dato roto no tira error");
+}));
+
+test("capturarCampos devuelve cada campo a como estaba, incluso si no existía", ()=>{
+  const a={id:1, cuenta:"Cuentas", esAhorro:false}, b={id:2};
+  const revertir=capturarCampos([a,b], ["cuenta","esAhorro"]);
+  a.cuenta="Galicia"; a.esAhorro=true; b.cuenta="BPat"; b.esAhorro=true;
+  revertir();
+  igual(a, {id:1, cuenta:"Cuentas", esAhorro:false}); igual(b, {id:2}, "lo que no existía vuelve a no existir");
+});
+
+test("ofrecerDeshacerCambio: el botón revierte, guarda y deja el mensaje de 'deshecho'", ()=>conPapelera(async (ctx, toast)=>{
+  const m={id:1, cuenta:"Cuentas"}; const revertir=capturarCampos([m],["cuenta"]); m.cuenta="Galicia";
+  let avisos=[]; const showAntes=window.showToast; window.showToast=t=>avisos.push(t);
+  ofrecerDeshacerCambio("1 movimiento → Galicia ✓", revertir);
+  cierto(toast.textContent.includes("→ Galicia"));
+  toast.querySelector(".toast-accion").click();
+  igual(m.cuenta, "Cuentas"); igual(ctx.guardados, 1); cierto(avisos.some(a=>a.includes("deshecho")), avisos.join("|"));
+  window.showToast=showAntes;
+}));
+
+test("un aviso común reemplaza al aviso con botón y el temporizador viejo no lo corta", ()=>conPapelera(async (ctx, toast)=>{
+  showToastAccion("Eliminado", "Deshacer", ()=>{}, 50);
+  cierto(toast.classList.contains("con-accion"));
+  showToast("Otro aviso");
+  cierto(!toast.classList.contains("con-accion") && toast.textContent==="Otro aviso" && toast.classList.contains("show"));
+  await new Promise(r=>setTimeout(r,120));
+  cierto(toast.classList.contains("show"), "el temporizador del aviso anterior cortó el nuevo");
+}));
+
+test("la pantalla de la papelera lista, restaura uno y se vacía con confirmación", ()=>conPapelera(async (ctx)=>{
+  const mk=id=>{ const e=document.createElement("div"); e.id=id; document.body.appendChild(e); return e; };
+  const els=["papelera-resumen","modal-papelera","papelera-detalle"].map(mk);
+  try{
+    movs=[MOV_P(1,{nota:"Polleria"}), MOV_P(2)]; tcs=[{id:50, desc:"Notebook", total:90000, cuotasTotal:3, tarjeta:"Visa", moneda:"ARS"}];
+    renderPapeleraCard(); cierto(els[0].textContent.includes("30 días"), "papelera vacía tiene que explicar");
+    abrirPapelera(); cierto(els[2].innerHTML.includes("vacía"));
+    eliminarConDeshacer("mov", m=>m.id===1, "x"); eliminarConDeshacer("tc", t=>t.id===50, "x");
+    abrirPapelera(); const h=els[2].innerHTML;
+    cierto(h.includes("Super") && h.includes("Polleria") && h.includes("Galicia") && h.includes("Notebook") && h.includes("Eliminado hoy") && h.includes("Vaciar la papelera"), h);
+    igual((h.match(/Restaurar/g)||[]).length, 2);
+    restaurarElementoPapelera(papelera[0].k); igual(papelera.length, 1); igual(movs.length, 2, "el movimiento volvió");
+    let resp=false; window.mostrarConfirm=async()=>resp; window.showToast=()=>{};
+    await vaciarPapeleraConfirmando(); igual(papelera.length, 1, "si dice que no, no se borra");
+    resp=true; await vaciarPapeleraConfirmando(); igual(papelera.length, 0); cierto(els[2].innerHTML.includes("vacía"));
+  } finally { els.forEach(e=>e.remove()); }
+}));
+
+test("todos los lugares donde se elimina algo usan la papelera", async ()=>{
+  const lee=async f=>(await (await fetch(f)).text());
+  const mov=await lee("js/movimientos.js"), dash=await lee("js/dashboard.js"), aho=await lee("js/ahorros.js"), inv=await lee("js/tarjetas-inversiones.js"), met=await lee("js/graficos-interactivos.js");
+  cierto((mov.match(/eliminarConDeshacer\(/g)||[]).length>=4, "movimientos.js: cambio, frecuente, normal y tarjeta");
+  cierto(dash.includes('eliminarConDeshacer("mov"') && aho.includes('eliminarConDeshacer("mov"') && inv.includes('eliminarConDeshacer("mov"') && met.includes('eliminarConDeshacer("meta"'));
+  cierto(!/movs=movs\.filter\(m=>m\.id!==id\);\s*save\(\);\s*showToast/.test(mov+dash+aho), "quedó un borrado directo sin papelera");
+  const html=await lee("index.html"); ["modal-papelera","papelera-detalle","papelera-resumen","js/papelera.js"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
+  cierto((await lee("sw.js")).includes("./js/papelera.js"), "el service worker no cachea papelera.js");
+});
+
+// ── Filtro por cuenta en Movimientos ──
+const MOV_CTA=(id,tipo,importe,cuenta,extra)=>({id,tipo,cat:tipo==="Ingreso"?"Sueldo":"Super",subcat:"Otros",importe,moneda:"ARS",fecha:"2026-10-1"+(id%9),cuenta,...(extra||{})});
+
+test("cuentasDeLista y coincideCuenta: cuentas del período, la más usada primero; 'Cuentas' y vacío son 'sin cuenta'", ()=>conBancosTc({Visa:"BPat"}, ()=>{
+  const l=[MOV_CTA(1,"Gasto",10,"Galicia"), MOV_CTA(2,"Gasto",10,"Galicia"), MOV_CTA(3,"Gasto",10,"Efectivo"), MOV_CTA(4,"Gasto",10,"Cuentas"), MOV_CTA(5,"Gasto",10,""), {_isTc:true,id:6,tarjeta:"Visa",importe:5}];
+  igual(cuentasDeLista(l), [{cuenta:"",n:2},{cuenta:"Galicia",n:2},{cuenta:"BPat",n:1},{cuenta:"Efectivo",n:1}].sort((a,b)=>b.n-a.n||a.cuenta.localeCompare(b.cuenta)), "una compra con tarjeta cuenta en el banco de su tarjeta");
+  cierto(coincideCuenta(l[0],"Galicia") && !coincideCuenta(l[2],"Galicia"));
+  cierto(coincideCuenta(l[3],SIN_CUENTA) && coincideCuenta(l[4],SIN_CUENTA) && !coincideCuenta(l[0],SIN_CUENTA), "'Cuentas' y vacío son sin cuenta");
+  cierto(coincideCuenta(l[5],"BPat"), "la tarjeta cae en el banco asociado");
+}));
+
+test("resumenDeCuenta: lo que salió y lo que entró en pesos, sin lo pagado con el fondo, traspasos ni compras con tarjeta", ()=>{
+  const l=[MOV_CTA(1,"Gasto",1000,"Galicia"), MOV_CTA(2,"Gasto",500,"Galicia",{esAhorro:true}), MOV_CTA(3,"Gasto",700,"Galicia",{usaAhorro:true}), MOV_CTA(4,"Gasto",300,"Galicia",{traspaso:true}),
+           MOV_CTA(5,"Ingreso",5000,"Galicia"), {...MOV_CTA(6,"Gasto",0,"Galicia"), moneda:"USD", importeOrig:20},
+           {id:7,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:2000,fecha:"2026-10-10",cuenta:"Balanz"},
+           {id:8,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"SPY",importe:900,fecha:"2026-10-11",cuenta:"Balanz"},
+           {_isTc:true,id:9,importe:99999}];
+  const r=resumenDeCuenta(l);
+  igual(r.salio, 3500, "1000 + 500 (al fondo sale de la cuenta) + 2000 de la compra de CEDEARs");
+  igual(r.entro, 5900, "5000 de ingreso + 900 de la venta"); igual(r.n, 8, "las compras con tarjeta no cuentan");
+  igual(resumenDeCuenta([]), {n:0, salio:0, entro:0});
+});
+
+test("Movimientos: elegir una cuenta deja solo sus movimientos, muestra el resumen y 'Todas' lo saca", ()=>{
+  const ids=["mov-summary","mov-arrastre","mov-cat-filtro","mov-tarjeta-filtro","tx-list","mov-mes-label","mov-cuenta-filtro","mov-cuenta-resumen"];
+  const els=ids.map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const prev={filtro, cat:filtroCategoria, mes:mesActual, ff:filtroFecha, cuenta:filtroCuenta, movs, tcs};
+  const hoyYM=currentYM();
+  const dia=n=>`${hoyYM}-${String(n).padStart(2,"0")}`;
+  movs=[{...MOV_CTA(1,"Gasto",1000,"Galicia"),fecha:dia(2)}, {...MOV_CTA(2,"Gasto",250,"Efectivo"),fecha:dia(3)}, {...MOV_CTA(3,"Ingreso",4000,"Galicia"),fecha:dia(4)}, {...MOV_CTA(4,"Gasto",80,"Cuentas"),fecha:dia(5)}]; tcs=[];
+  filtro="Todos"; filtroCategoria=""; mesActual=hoyYM; filtroFecha=null; filtroCuenta="";
+  const q=id=>document.querySelector("#"+id);
+  try{
+    renderMovs();
+    cierto(q("mov-cuenta-filtro").style.display==="flex" && q("mov-cuenta-filtro").textContent.includes("Galicia") && q("mov-cuenta-filtro").textContent.includes("Sin cuenta"), "faltan los chips: "+q("mov-cuenta-filtro").textContent);
+    igual(q("mov-cuenta-resumen").style.display, "none", "sin filtro no hay resumen");
+    cierto(q("tx-list").innerHTML.includes("Efectivo"));
+    setFiltroCuenta("Galicia");
+    const lista=q("tx-list").innerHTML;
+    cierto(lista.includes("Galicia") && !lista.includes(">Efectivo<") && !lista.includes("🏦 Efectivo"), "el filtro no dejó solo Galicia");
+    const res=q("mov-cuenta-resumen");
+    cierto(res.style.display==="block" && res.textContent.includes("Galicia") && res.textContent.includes("2 movimientos") && res.textContent.includes("1.000") && res.textContent.includes("4.000"), "resumen: "+res.textContent);
+    cierto(q("mov-cuenta-filtro").innerHTML.includes("filter-chip active"), "la cuenta elegida tiene que verse activa");
+    setFiltroCuenta(SIN_CUENTA); cierto(q("mov-cuenta-resumen").textContent.includes("Sin cuenta elegida") && q("mov-cuenta-resumen").textContent.includes("1 movimiento"));
+    setFiltroCuenta(""); igual(q("mov-cuenta-resumen").style.display, "none"); cierto(q("tx-list").innerHTML.includes("Efectivo"));
+    // en la solapa de tarjetas no aplica
+    setFiltroCuenta("Galicia"); setFiltro("Tarjeta"); igual(q("mov-cuenta-filtro").style.display, "none");
+  } finally { els.forEach(e=>e.remove()); filtro=prev.filtro; filtroCategoria=prev.cat; mesActual=prev.mes; filtroFecha=prev.ff; filtroCuenta=prev.cuenta; movs=prev.movs; tcs=prev.tcs; }
+});
+
+test("con una sola cuenta no hay nada para filtrar y los chips no aparecen", ()=>{
+  const els=["mov-cuenta-filtro","mov-cuenta-resumen"].map(id=>{ const d=document.createElement("div"); d.id=id; document.body.appendChild(d); return d; });
+  const prev={filtro, cuenta:filtroCuenta};
+  filtro="Todos"; filtroCuenta="";
+  try{
+    pintarFiltroCuenta([MOV_CTA(1,"Gasto",10,"Galicia"), MOV_CTA(2,"Gasto",10,"Galicia")], []);
+    igual(els[0].style.display, "none");
+    filtroCuenta="Galicia"; pintarFiltroCuenta([MOV_CTA(1,"Gasto",10,"Galicia")], [MOV_CTA(1,"Gasto",10,"Galicia")]);
+    igual(els[0].style.display, "flex", "con un filtro activo siempre se puede quitar");
+  } finally { els.forEach(e=>e.remove()); filtro=prev.filtro; filtroCuenta=prev.cuenta; }
 });
 
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{
@@ -7650,7 +7840,7 @@ test("la configuración está en 5 secciones plegables, cerradas al empezar", as
 test("ninguna tarjeta de Configuración se perdió ni quedó fuera de una sección", async ()=>{
   const cfg=await configHTML();
   TARJETAS_CONFIG.forEach(t=>cierto(cfg.includes(t), "falta la tarjeta: "+t));
-  igual((cfg.match(/<div class="card"/g)||[]).length, 17, "tienen que ser 17 tarjetas (16 + la de movimientos sin cuenta)");
+  igual((cfg.match(/<div class="card"/g)||[]).length, 18, "tienen que ser 18 tarjetas (16 + movimientos sin cuenta + papelera)");
   // toda tarjeta está adentro de alguna sección: antes del primer <details> no hay ninguna
   cierto(!cfg.slice(0, cfg.indexOf('<details class="cfg-seccion"')).includes('<div class="card"'), "quedó una tarjeta suelta antes de las secciones");
   // el contenido sigue bien cerrado: tantas aperturas como cierres

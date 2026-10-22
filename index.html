@@ -8,7 +8,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v177">
+<meta name="enola-version" content="enola-v178">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c6ca8">
@@ -29,7 +29,7 @@
      protegen solos si todavía no están; ver renderChartMensualBI y handleXlsx). -->
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=177">
+<link rel="stylesheet" href="styles.css?v=178">
 </head>
 <body>
 <!-- Aviso de versión desactualizada. Los estilos van inline a propósito: styles.css también
@@ -348,6 +348,16 @@
     <div class="inset mb-10"><div class="txt-md txt-strong" id="vinc-pago-titulo"></div></div>
     <div id="vinc-pago-cuerpo"></div>
     <button class="btn-sm" style="width:100%;margin-top:12px" onclick="cerrarVincularPagoTc()">Cancelar</button>
+  </div>
+</div>
+
+<!-- HOJA: PAPELERA (lo eliminado en los últimos 30 días) -->
+<div class="modal-overlay" id="modal-papelera" onclick="if(event.target===this)cerrarPapelera()">
+  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🗑 Papelera</div>
+    <div id="papelera-detalle"></div>
+    <button class="btn-sm" style="width:100%;margin-top:12px" onclick="cerrarPapelera()">Cerrar</button>
   </div>
 </div>
 
@@ -730,6 +740,8 @@
   <div class="seg-filter" id="mov-filtros"></div>
   <div id="mov-tarjeta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
   <div id="mov-cat-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
+  <div id="mov-cuenta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;align-items:center;gap:6px"></div>
+  <div id="mov-cuenta-resumen" class="cuenta-resumen" style="display:none"></div>
   <div id="mov-arrastre" class="info-line" style="display:none"></div>
   <div id="gcal-aviso" class="venc-wrap" style="display:none"></div>
   <div id="mov-presup-resumen" style="padding:0 16px 8px;display:none"></div>
@@ -1223,8 +1235,13 @@
     </div>
   </details>
   <details class="cfg-seccion" id="cfg-sec-exportar">
-    <summary><span class="cfg-sec-ico">📤</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Exportar y mis datos</span><span class="cfg-sec-sub">Excel y PDF · CSV para BI · Cantidad de datos</span></span></summary>
+    <summary><span class="cfg-sec-ico">📤</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Exportar y mis datos</span><span class="cfg-sec-sub">Papelera · Excel y PDF · CSV para BI · Cantidad de datos</span></span></summary>
     <div class="cfg-cuerpo">
+  <div class="card">
+    <div class="card-title">🗑 Papelera</div>
+    <p class="txt-sm txt-muted mb-10" id="papelera-resumen"></p>
+    <button type="button" class="btn-sm" onclick="abrirPapelera()">Ver papelera</button>
+  </div>
   <div class="card">
     <div class="card-title">Exportar a Excel</div>
     <div class="two-col">
@@ -1290,30 +1307,31 @@
      existiría y showPage() se cortaría con un TypeError dejando la pantalla a medio pintar. -->
 <button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento"></button>
 
-<script src="js/estado-categorias.js?v=177"></script>
-<script src="js/resultado-inversiones.js?v=177"></script>
-<script src="js/render-comun.js?v=177"></script>
-<script src="js/form-cargar.js?v=177"></script>
-<script src="js/movimientos.js?v=177"></script>
-<script src="js/editar-movimiento.js?v=177"></script>
-<script src="js/tarjetas-inversiones.js?v=177"></script>
-<script src="js/analisis.js?v=177"></script>
-<script src="js/cambio-moneda.js?v=177"></script>
-<script src="js/traspasos.js?v=177"></script>
-<script src="js/dashboard.js?v=177"></script>
-<script src="js/inflacion.js?v=177"></script>
-<script src="js/ahorros.js?v=177"></script>
-<script src="js/conciliacion.js?v=177"></script>
-<script src="js/cuentas-sugeridas.js?v=177"></script>
-<script src="js/graficos-interactivos.js?v=177"></script>
-<script src="js/importar-exportar.js?v=177"></script>
-<script src="js/cuentas-tarjetas-categorias.js?v=177"></script>
-<script src="js/config-ui.js?v=177"></script>
-<script src="js/calendario-google.js?v=177"></script>
-<script src="js/backup-drive.js?v=177"></script>
-<script src="js/presupuestos.js?v=177"></script>
-<script src="js/seguridad-pin.js?v=177"></script>
-<script src="js/main.js?v=177"></script>
+<script src="js/estado-categorias.js?v=178"></script>
+<script src="js/resultado-inversiones.js?v=178"></script>
+<script src="js/render-comun.js?v=178"></script>
+<script src="js/form-cargar.js?v=178"></script>
+<script src="js/movimientos.js?v=178"></script>
+<script src="js/editar-movimiento.js?v=178"></script>
+<script src="js/tarjetas-inversiones.js?v=178"></script>
+<script src="js/analisis.js?v=178"></script>
+<script src="js/cambio-moneda.js?v=178"></script>
+<script src="js/traspasos.js?v=178"></script>
+<script src="js/dashboard.js?v=178"></script>
+<script src="js/inflacion.js?v=178"></script>
+<script src="js/ahorros.js?v=178"></script>
+<script src="js/conciliacion.js?v=178"></script>
+<script src="js/papelera.js?v=178"></script>
+<script src="js/cuentas-sugeridas.js?v=178"></script>
+<script src="js/graficos-interactivos.js?v=178"></script>
+<script src="js/importar-exportar.js?v=178"></script>
+<script src="js/cuentas-tarjetas-categorias.js?v=178"></script>
+<script src="js/config-ui.js?v=178"></script>
+<script src="js/calendario-google.js?v=178"></script>
+<script src="js/backup-drive.js?v=178"></script>
+<script src="js/presupuestos.js?v=178"></script>
+<script src="js/seguridad-pin.js?v=178"></script>
+<script src="js/main.js?v=178"></script>
 
 <script>
 // ═══════════════════════════════════════════
