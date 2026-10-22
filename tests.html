@@ -5805,6 +5805,31 @@ test("carga rápida: pagar o transferir TÚ es un gasto, no un ingreso", ()=>{
   igual(cr("pago luz 12000").tipo, "Gasto"); igual(cr("compré 3000 de pan").tipo, "Gasto");
 });
 
+test("carga rápida: recuperar, retirar o sacar plata de una inversión es una venta/rescate (no una compra) y ponerla es una compra", ()=>{
+  // Casos reportados: "recuperé 35999 bcaha" y "retiré 560 bmma" quedaban como Compra con la palabra en la descripción.
+  const ctx={tickers:[{clave:"bcaha",ticker:"BCAHA",cat:"FCI"},{clave:"bmma",ticker:"BMMA",cat:"FCI"}]};
+  ["recuperé 35999 bcaha","recupere 35999 bcaha","retiré 560 bmma","retire 560 bmma","saqué 560 bmma","rescaté 560 bmma","rescate 560 bmma","retiré de bmma 560"].forEach(t=>{
+    const r=cr(t, ctx); igual(r.tipo, "Inversion", t); igual(r.operacion, "venta", t); igual(r.subcat, "Rescate capital", t); igual(r.nota, "", "el verbo no queda en la descripción: "+t);
+  });
+  const c=cr("puse 5000 en bcaha", ctx); igual(c.operacion, "compra"); igual(c.subcat, "Suscripción"); igual(c.ticker, "BCAHA"); igual(c.nota, "");
+  igual(cr("invertí 5000 bmma", ctx).operacion, "compra"); igual(cr("deposité 5000 bcaha", ctx).operacion, "compra");
+  igual(cr("retiro de garage 5000", ctx).tipo, "Gasto", "sin un activo, 'retiro' sigue siendo una palabra común");
+});
+
+test("carga rápida: la categoría sale de lo reciente antes que de un viaje viejo, y 'pan' va a Supermercado", ()=>{
+  const antes=movs, hoyV=window.currentYMD;
+  window.currentYMD=()=>"2026-10-22";
+  movs=[{id:1,tipo:"Gasto",cat:"Vacaciones Gastos",subcat:"Alemania",nota:"Pan",importe:5,fecha:"2026-05-20"}];
+  try{
+    igual(sugerirParaCargaRapida("Pan","Gasto").cat, "Supermercado", "el 'Pan' de Alemania es de hace 5 meses: se usa la regla de hoy");
+    movs=[{id:1,tipo:"Gasto",cat:"Vacaciones Gastos",subcat:"Alemania",nota:"Pan",importe:5,fecha:"2026-10-01"}];
+    igual(sugerirParaCargaRapida("Pan","Gasto").cat, "Vacaciones Gastos", "si lo reciente dice otra cosa (estás de viaje), manda lo reciente");
+    movs=[{id:1,tipo:"Gasto",cat:"Hobby",subcat:"Libros",nota:"Cosa rara",importe:5,fecha:"2025-01-01"}];
+    igual(sugerirParaCargaRapida("Cosa rara","Gasto").cat, "Hobby", "sin reglas ni historial reciente, se usa todo el historial como último recurso");
+    igual(sugerirParaCargaRapida("Algo nunca visto","Gasto"), null);
+  } finally { movs=antes; window.currentYMD=hoyV; }
+});
+
 test("carga rápida: la descripción conserva acentos y mayúsculas útiles y saca el relleno de los bordes", ()=>{
   igual(cr("pagué el café de la esquina 3500 en efectivo").nota, "Café de la esquina"); igual(cr("pagué el café de la esquina 3500 en efectivo").cuenta, "Efectivo");
   igual(cr("3500").nota, ""); igual(cr("3500").ok, true, "solo el monto alcanza");

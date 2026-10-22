@@ -14,8 +14,9 @@ const CR_INGRESO=/^(sueldo|salario|haberes|aguinaldo|bono|honorarios|cobre|ingre
 // Inversiones: palabras que dicen QUÉ se compró o vendió y cuál es la operación.
 const CR_ACTIVO={accion:"Acciones", acciones:"Acciones", cedear:"CEDEARs", cedears:"CEDEARs", etf:"CEDEARs", fci:"FCI", caucion:"Caución", cripto:"Cripto", criptomoneda:"Cripto", bitcoin:"Cripto", btc:"Cripto", eth:"Cripto",
   bonos:"Bonos USD", on:"ONs Corporativas", ons:"ONs Corporativas", lecap:"Otros", letra:"Otros"};
-const CR_OP_VENTA=new Set(["venta","vendi","vendimos","vender","rescate","rescate","rescati"]);
-const CR_OP_COMPRA=new Set(["compra","compre","compramos","comprar","suscripcion","suscribi","suscribo"]);
+// Sacar plata de una inversión es una venta o un rescate; ponerla, una compra o suscripción ("recuperé", "retiré", "saqué" / "puse", "invertí").
+const CR_OP_VENTA=new Set(["venta","vendi","vendimos","vender","rescate","rescati","rescatamos","recupere","recuperamos","recuperar","retire","retiramos","retirar","retiro","saque","sacamos","sacar"]);
+const CR_OP_COMPRA=new Set(["compra","compre","compramos","comprar","suscripcion","suscribi","suscribo","puse","pusimos","poner","inverti","invertimos","invertir","deposite","depositamos"]);
 // La opción de subcategoría de inversión que corresponde a la operación ("Venta", "Compra SPY", "Rescate capital"…).
 function crElegirSubInversion(opciones, op, ticker){
   const lista=(opciones||[]).map(o=>({o, n:crNorm(o)}));
@@ -211,8 +212,17 @@ function tickersConocidos(lista){
   });
   return out;
 }
+// La categoría de una nota escrita HOY: primero lo que cargaste en los últimos meses (CR_RECIENTE_DIAS), después las reglas de comercios
+// conocidos y, solo si nada de eso alcanza, todo el historial. Así un "pan" cargado en un viaje de hace seis meses no manda el pan de hoy
+// a "Vacaciones". Devuelve {cat, subcat, fuente} o null, igual que buscarSugerencia.
+const CR_RECIENTE_DIAS=150;
+function sugerirParaCargaRapida(texto, tipo){
+  const corte=crSumarDias(currentYMD(), -CR_RECIENTE_DIAS);
+  const recientes=(movs||[]).filter(m=>String(m.fecha||"")>=corte);
+  return sugerirPorNotaExacta(texto, tipo, recientes) || sugerirPorPalabras(texto, tipo, recientes) || sugerirPorReglas(texto, tipo) || sugerirCategoriaPara(texto, tipo, movs);
+}
 function contextoCargaRapida(){
-  return {hoy:currentYMD(), cuentas:getCuentas(), tarjetas:getTarjetas(), tickers:tickersConocidos(movs), sugerir:(t,tp)=>buscarSugerencia(t,tp), cats:tp=>getCats(tp)};
+  return {hoy:currentYMD(), cuentas:getCuentas(), tarjetas:getTarjetas(), tickers:tickersConocidos(movs), sugerir:sugerirParaCargaRapida, cats:tp=>getCats(tp)};
 }
 function crPonerSelect(id, valor){
   const sel=document.getElementById(id);
