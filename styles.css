@@ -292,7 +292,14 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 #tx-list tx-item:not(:first-child) .tx-item-content{border-top:1px solid var(--border)}
 #tx-list .tx-icon{width:36px;height:36px;font-size:16px}
 #tx-list .tx-cat{font-size:14px}
-#tx-list .tc-banco{color:var(--muted);font-weight:500}
+#tx-list .carga-rapida{margin:8px 16px 0;padding:12px 14px}
+.emerg-num{font-size:28px;font-weight:700;margin-top:4px}
+.emerg-num span{font-size:14px;font-weight:500;color:var(--muted)}
+.emerg-barra{height:8px;border-radius:4px;background:var(--border);overflow:hidden;margin-top:8px}
+.emerg-barra>div{height:100%;border-radius:4px;transition:width .4s}
+.emerg-cat{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px}
+.emerg-cat span{flex:1}
+.tc-banco{color:var(--muted);font-weight:500}
 .tc-banco-fila{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:12px;color:var(--muted)}
 .tc-banco-fila .form-select{flex:1;height:34px;padding:0 10px;font-size:13px}
 .tx-sub:has(.tx-cuenta){display:flex;align-items:center;gap:5px}
@@ -644,6 +651,9 @@ canvas{width:100%!important;max-width:100%}
 .venc-con-vencidos .venc-titulo{color:var(--danger)}
 .venc-vencida .venc-nombre{color:var(--danger)}
 .venc-vencida .venc-ok{background:var(--danger)}
+.venc-por-cobrar{background:var(--success-light);border:1px solid transparent}
+.venc-por-cobrar .venc-titulo{color:var(--success)}
+.venc-cobrado{background:var(--success)}
 .venc-mas{font-size:12px;color:var(--muted);margin-top:2px}
 /* Copias automáticas (Config): una fila por copia con su fecha y los botones de restaurar/borrar. */
 .copia-row{display:flex;align-items:center;gap:10px;padding:10px 0}

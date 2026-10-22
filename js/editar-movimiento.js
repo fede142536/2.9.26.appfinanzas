@@ -183,16 +183,17 @@ function closeEditModal(){
 }
 function renderEditForm(m){
   if(m.tipo==="Gasto"||m.tipo==="Ingreso"){
-    const esFrec=m.tipo==="Gasto" && m.frecuente;
+    const esFrec=(m.tipo==="Gasto" || m.tipo==="Ingreso") && m.frecuente;
+    const esIngFrec=esFrec && m.tipo==="Ingreso";
     const hoyYM=currentYM();
     const cambios=esFrec && Array.isArray(m.cambios) ? m.cambios.slice() : [];
     const montoVigente = esFrec ? getGastoFrecMontoEnMes(m, hoyYM) : 0;
     return `
-      <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:${m.tipo==="Gasto"?"var(--danger-light)":"var(--success-light)"};color:${m.tipo==="Gasto"?"var(--danger)":"var(--success)"};margin-bottom:10px">${esFrec?"🔁 GASTO FRECUENTE":m.tipo.toUpperCase()}</div>
+      <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:${m.tipo==="Gasto"?"var(--danger-light)":"var(--success-light)"};color:${m.tipo==="Gasto"?"var(--danger)":"var(--success)"};margin-bottom:10px">${esFrec?(esIngFrec?"🔁 INGRESO FRECUENTE":"🔁 GASTO FRECUENTE"):m.tipo.toUpperCase()}</div>
       ${esFrec?`
         <div class="inset">
           <div class="seccion-label mb-6">Monto vigente este mes</div>
-          <div style="font-size:18px;font-weight:600;color:var(--danger)">${fmtMoneda(montoVigente, m.moneda)}</div>
+          <div style="font-size:18px;font-weight:600;color:${esIngFrec?"var(--success)":"var(--danger)"}">${fmtMoneda(montoVigente, m.moneda)}</div>
         </div>
       `:""}
       <div class="form-group"><label class="form-label" id="edit-importe-label">${esFrec?"Monto base":(m.moneda==="USD"?"Importe (USD)":"Importe (ARS)")}</label>
@@ -248,10 +249,13 @@ function renderEditForm(m){
             <input type="month" id="edit-frec-fin" class="form-input" value="${m.mesFin||''}">
           </div>
         </div>
-        <div class="form-group"><label class="form-label" for="edit-frec-dia">Vence el día (opcional)</label>
+        ${esIngFrec?`<div class="form-group"><label class="form-label" for="edit-frec-dia">Cobra el día</label>
+          <input type="number" id="edit-frec-dia" class="form-input" value="${diaCobroDe(m)}" placeholder="Ej: 5" inputmode="numeric" min="1" max="31" step="1">
+          <p style="font-size:10px;color:var(--muted);margin-top:4px">Entra a tu balance cuando llega ese día de cada mes (en los meses cortos, el último día).</p>
+        </div>`:`<div class="form-group"><label class="form-label" for="edit-frec-dia">Vence el día (opcional)</label>
           <input type="number" id="edit-frec-dia" class="form-input" value="${diaValido(m.diaVto)||""}" placeholder="Ej: 10" inputmode="numeric" min="1" max="31" step="1">
           <p style="font-size:10px;color:var(--muted);margin-top:4px">Con el día cargado, la app te avisa unos días antes si todavía no lo marcaste como pagado.</p>
-        </div>
+        </div>`}
         <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 Registrar aumento de precio</div>
           <p style="font-size:11px;color:var(--muted);margin-bottom:8px">El nuevo monto se aplicará desde el mes elegido en adelante.</p>
@@ -446,7 +450,8 @@ function guardarEdit(){
       const diaEl=document.querySelector("#edit-frec-dia");
       if(diaEl){
         const dv=diaValido(diaEl.value);
-        if(dv!==null) m.diaVto=dv; else delete m.diaVto;
+        if(m.tipo==="Ingreso"){ if(dv!==null) m.diaCobro=dv; else delete m.diaCobro; }   // el ingreso cobra, no vence
+        else if(dv!==null) m.diaVto=dv; else delete m.diaVto;
       }
       const aumMes=document.getElementById("edit-frec-aum-mes").value;
       const aumMonto=parseFloat(document.getElementById("edit-frec-aum-monto").value)||0;
