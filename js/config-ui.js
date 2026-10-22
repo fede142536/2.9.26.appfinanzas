@@ -621,7 +621,8 @@ function armarBackup(){
       vencimientosTc: leerVencTc(),
       diasAvisoVenc: leerDiasAviso(),
       bancosTarjeta: leerBancosTc(),
-      mesesCerrados: leerMesesCerrados()
+      mesesCerrados: leerMesesCerrados(),
+      concilExcluidos: leerConcilExcluidos()
     }
   };
 }
@@ -755,6 +756,7 @@ function aplicarBackup(backup){
     guardarVencTc(backup.datos.vencimientosTc);
   }
   if(Number.isInteger(backup.datos.diasAvisoVenc)) guardarDiasAviso(backup.datos.diasAvisoVenc);
+  if(Array.isArray(backup.datos.concilExcluidos)) guardarConcilExcluidos(backup.datos.concilExcluidos);
   if(backup.datos.mesesCerrados && typeof backup.datos.mesesCerrados==="object" && !Array.isArray(backup.datos.mesesCerrados)) guardarMesesCerrados(backup.datos.mesesCerrados);
   if(backup.datos.bancosTarjeta && typeof backup.datos.bancosTarjeta==="object" && !Array.isArray(backup.datos.bancosTarjeta)) guardarBancosTc(backup.datos.bancosTarjeta);
   save();
