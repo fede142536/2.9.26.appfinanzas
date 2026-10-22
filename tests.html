@@ -86,6 +86,7 @@
 <script src="js/papelera.js"></script>
 <script src="js/carga-rapida.js"></script>
 <script src="js/cierre-mes.js"></script>
+<script src="js/huella.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
@@ -5891,6 +5892,110 @@ test("el cierre del mes está en el menú, en index.html, en el service worker y
   cierto((await (await fetch("sw.js")).text()).includes("./js/cierre-mes.js"));
   igual(armarBackup().datos.mesesCerrados, leerMesesCerrados()); cierto(aplicarBackup.toString().includes("mesesCerrados"));
   cierto((await (await fetch("js/movimientos.js")).text()).includes("pintarAvisoCierre"), "Movimientos no pinta el aviso");
+});
+
+// ── Huella o rostro ──
+async function conHuellaFalsa({prf=true, resultadoEnCrear=true, cancela=false, plataforma=true}, fn){
+  const secreto=new Uint8Array(32).map((_,i)=>i*7+1);
+  const llamadas={crear:0, pedir:0, ext:null};
+  const falsa={
+    create:async(o)=>{ llamadas.crear++; if(cancela){ const e=new Error("x"); e.name="NotAllowedError"; throw e; }
+      llamadas.ext=o.publicKey.extensions;
+      return {rawId:new Uint8Array([9,8,7,6]).buffer, getClientExtensionResults:()=>prf ? {prf:{enabled:true, ...(resultadoEnCrear?{results:{first:secreto.buffer}}:{})}} : {}}; },
+    get:async(o)=>{ llamadas.pedir++; if(cancela){ const e=new Error("x"); e.name="NotAllowedError"; throw e; }
+      return {getClientExtensionResults:()=>({prf:{results:{first:secreto.buffer}}})}; }
+  };
+  const credAntes=Object.getOwnPropertyDescriptor(navigator,"credentials"), pkAntes=Object.getOwnPropertyDescriptor(window,"PublicKeyCredential");
+  Object.defineProperty(navigator,"credentials",{value:falsa, configurable:true});
+  Object.defineProperty(window,"PublicKeyCredential",{value:{isUserVerifyingPlatformAuthenticatorAvailable:async()=>plataforma}, configurable:true});
+  const antes={confirm:window.mostrarConfirm, prompt:window.mostrarPrompt, alerta:window.mostrarAlerta, toast:window.showToast, hash:localStorage.getItem("fpinhash"), h:localStorage.getItem(HUELLA_KEY)};
+  const ctx={alertas:[], toasts:[], llamadas, secreto, pinTipeado:"1234"};
+  window.showToast=t=>ctx.toasts.push(t); window.mostrarAlerta=async m=>{ ctx.alertas.push(m); }; window.mostrarPrompt=async()=>ctx.pinTipeado;
+  localStorage.setItem("fpinhash", await hashPin("1234")); localStorage.removeItem(HUELLA_KEY);
+  try{ return await fn(ctx); }
+  finally{
+    if(credAntes) Object.defineProperty(navigator,"credentials",credAntes); else delete navigator.credentials;
+    if(pkAntes) Object.defineProperty(window,"PublicKeyCredential",pkAntes); else delete window.PublicKeyCredential;
+    window.mostrarPrompt=antes.prompt; window.mostrarAlerta=antes.alerta; window.showToast=antes.toast;
+    if(antes.hash===null) localStorage.removeItem("fpinhash"); else localStorage.setItem("fpinhash", antes.hash);
+    if(antes.h===null) localStorage.removeItem(HUELLA_KEY); else localStorage.setItem(HUELLA_KEY, antes.h);
+  }
+}
+
+test("el PIN se guarda cifrado con el secreto del celular y solo con ese secreto se recupera", async ()=>{
+  const sec=new Uint8Array(32).map((_,i)=>i+1), otro=new Uint8Array(32).map((_,i)=>i+2);
+  const env=await envolverPin("4821", sec);
+  cierto(!JSON.stringify(env).includes("4821"), "el PIN quedó en claro"); cierto(env.iv && env.data);
+  igual(await desenvolverPin(env, sec), "4821");
+  let fallo=false; try{ await desenvolverPin(env, otro); }catch(e){ fallo=e.name==="OperationError"; }
+  cierto(fallo, "con otro secreto no tiene que abrirse");
+  const env2=await envolverPin("4821", sec); cierto(env2.data!==env.data, "cada cifrado usa su propio iv");
+});
+
+test("activar la huella: pide el PIN, guarda el PIN cifrado (no en claro) y queda activa", ()=>conHuellaFalsa({}, async ctx=>{
+  igual(huellaActiva(), false);
+  igual(await activarHuella(), true);
+  cierto(huellaActiva()); igual(ctx.llamadas.crear, 1); cierto(ctx.llamadas.ext.prf && ctx.llamadas.ext.prf.eval.first.byteLength===32, "tiene que pedir la extensión PRF con una sal de 32 bytes");
+  const crudo=localStorage.getItem(HUELLA_KEY); cierto(!crudo.includes("1234"), "el PIN no puede estar en claro"); igual(Object.keys(JSON.parse(crudo)).sort(), ["cred","data","iv","salt"]);
+  igual(await desenvolverPin(leerHuella(), ctx.secreto), "1234", "con el secreto del celular se recupera el PIN");
+  cierto(ctx.toasts.some(t=>t.includes("Huella activada")));
+}));
+
+test("activar la huella cuando el secreto llega recién en un segundo toque", ()=>conHuellaFalsa({resultadoEnCrear:false}, async ctx=>{
+  igual(await activarHuella(), true); igual(ctx.llamadas.pedir, 1, "pide el secreto con un segundo toque"); cierto(huellaActiva());
+}));
+
+test("no se activa: sin PIN, con PIN equivocado, sin PRF, sin huella en el celular o si el usuario cancela", async ()=>{
+  await conHuellaFalsa({}, async ctx=>{ localStorage.removeItem("fpinhash"); igual(await activarHuella(), false); cierto(ctx.toasts.some(t=>t.includes("Primero activá el PIN"))); igual(ctx.llamadas.crear, 0); });
+  await conHuellaFalsa({}, async ctx=>{ ctx.pinTipeado="9999"; igual(await activarHuella(), false); cierto(ctx.toasts.some(t=>t.includes("PIN incorrecto"))); igual(ctx.llamadas.crear, 0, "con PIN equivocado ni se pide la huella"); cierto(!huellaActiva()); });
+  await conHuellaFalsa({prf:false}, async ctx=>{ igual(await activarHuella(), false); cierto(ctx.alertas.some(a=>a.includes("función de seguridad")), ctx.alertas.join("|")); cierto(!huellaActiva(), "sin PRF no se guarda nada"); });
+  await conHuellaFalsa({plataforma:false}, async ctx=>{ igual(await activarHuella(), false); cierto(ctx.alertas.some(a=>a.includes("huella o rostro")), ctx.alertas.join("|")); igual(ctx.llamadas.crear, 0); });
+  await conHuellaFalsa({cancela:true}, async ctx=>{ igual(await activarHuella(), false); cierto(ctx.toasts.some(t=>t.includes("Se canceló"))); cierto(!huellaActiva()); });
+});
+
+test("desbloquear con huella recupera el PIN y entra por checkPin; si el PIN ya no coincide, desactiva la huella", ()=>conHuellaFalsa({}, async ctx=>{
+  await activarHuella();
+  const lock=document.createElement("div"); lock.id="lock-screen"; lock.style.display="flex"; document.body.appendChild(lock);
+  const err=document.createElement("p"); err.id="pin-error"; document.body.appendChild(err);
+  const antes={check:window.checkPin, upd:window.updatePinDisplay, buf:pinBuffer};
+  let pinProbado=null; window.updatePinDisplay=()=>{};
+  try{
+    window.checkPin=async()=>{ pinProbado=pinBuffer; lock.style.display="none"; };
+    igual(await desbloquearConHuella(), true); igual(pinProbado, "1234", "prueba el PIN recuperado por el camino normal");
+    lock.style.display="flex"; window.checkPin=async()=>{ /* PIN incorrecto: la pantalla sigue */ };
+    igual(await desbloquearConHuella(), false); cierto(!huellaActiva(), "si el PIN guardado ya no sirve, se desactiva"); cierto(err.textContent.includes("ya no coincide"), err.textContent);
+    igual(await desbloquearConHuella(), false, "sin huella activa no hace nada");
+  } finally { window.checkPin=antes.check; window.updatePinDisplay=antes.upd; pinBuffer=antes.buf; lock.remove(); err.remove(); }
+}));
+
+test("si el usuario cancela la huella al abrir, no pasa nada y puede teclear el PIN", ()=>conHuellaFalsa({}, async ctx=>{
+  await activarHuella();
+  const credencial=navigator.credentials; navigator.credentials.get=async()=>{ const e=new Error("c"); e.name="NotAllowedError"; throw e; };
+  const err=document.createElement("p"); err.id="pin-error"; document.body.appendChild(err);
+  try{ igual(await desbloquearConHuella(), false); cierto(huellaActiva(), "cancelar no desactiva la huella"); igual(err.textContent, "", "ni muestra un error"); }
+  finally{ err.remove(); }
+}));
+
+test("la huella se desactiva sola al cambiar o quitar el PIN, y el botón de la pantalla de bloqueo sigue a la huella", async ()=>{
+  const sp=await (await fetch("js/seguridad-pin.js")).text();
+  cierto(sp.includes("quitarHuella()") && (sp.match(/quitarHuella\(\)/g)||[]).length>=2, "setupPin y removePin tienen que quitar la huella");
+  cierto(sp.includes("desbloquearConHuella()") && sp.includes("mostrarBotonHuella()"), "el bloqueo tiene que ofrecer la huella");
+  const html=await (await fetch("index.html")).text();
+  ["btn-huella","huella-status","js/huella.js","desbloquearConHuella()"].forEach(t=>cierto(html.includes(t), "falta "+t));
+  cierto((await (await fetch("sw.js")).text()).includes("./js/huella.js"));
+  const b=document.createElement("button"); b.id="btn-huella"; document.body.appendChild(b);
+  const h0=localStorage.getItem(HUELLA_KEY);
+  try{ quitarHuella(); mostrarBotonHuella(); igual(b.style.display, "none"); localStorage.setItem(HUELLA_KEY, JSON.stringify({cred:"a",salt:"b",iv:"c",data:"d"})); mostrarBotonHuella(); igual(b.style.display, ""); }
+  finally{ b.remove(); if(h0===null) localStorage.removeItem(HUELLA_KEY); else localStorage.setItem(HUELLA_KEY, h0); }
+});
+
+test("leerHuella descarta datos rotos o incompletos", ()=>{
+  const antes=localStorage.getItem(HUELLA_KEY);
+  try{
+    localStorage.setItem(HUELLA_KEY, "{roto"); igual(leerHuella(), null);
+    localStorage.setItem(HUELLA_KEY, JSON.stringify({cred:"x"})); igual(leerHuella(), null);
+    localStorage.setItem(HUELLA_KEY, JSON.stringify({cred:"a",salt:"b",iv:"c",data:"d"})); cierto(huellaActiva());
+  } finally { if(antes===null) localStorage.removeItem(HUELLA_KEY); else localStorage.setItem(HUELLA_KEY, antes); }
 });
 
 test("sin ningún día cargado no se avisa de nada", ()=>conVenc({movs:[FREC_VTO(1,null)], tcs:TCS_SEPT}, ()=>{

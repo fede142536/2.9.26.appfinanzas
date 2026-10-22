@@ -274,6 +274,11 @@ function checkLock(){
     updatePinDisplay();
     document.getElementById("pin-error").textContent="";
     document.getElementById("lock-screen").style.display="flex";
+    // Si hay huella activa, el botón aparece y se la pide enseguida (se puede cancelar y teclear el PIN).
+    if(typeof mostrarBotonHuella==="function" && typeof huellaActiva==="function" && huellaActiva()){
+      mostrarBotonHuella();
+      setTimeout(()=>{ if(typeof desbloquearConHuella==="function") desbloquearConHuella(); }, 350);
+    }
   });
 }
 
@@ -434,6 +439,7 @@ async function setupPin(){
     await mostrarAlerta(`No se pudo guardar el PIN: ${err.message||err}\n\nTus datos quedaron como estaban.`, "Error");
     return;
   }
+  if(typeof quitarHuella==="function") quitarHuella();   // la huella guardaba el PIN anterior: hay que activarla de nuevo
   showToast("✓ PIN configurado. Se va a pedir al abrir la app.");
   renderPinStatus();
   // Las copias automáticas viejas quedaron en claro o con la clave anterior: se reemplazan.
@@ -479,6 +485,7 @@ async function removePin(){
     localStorage.removeItem("fpinhash");
     localStorage.removeItem("fencsalt");
     localStorage.removeItem("fencblob");
+    if(typeof quitarHuella==="function") quitarHuella();
     encKey=null;
     encCache=null;
     showToast("PIN desactivado");
@@ -505,5 +512,6 @@ function renderPinStatus(){
       <p class="txt-sm txt-muted mb-10">El PIN te protege si alguien toma tu celular. Es opcional.</p>
       <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%" onclick="setupPin()">🔐 Activar PIN</button>`;
   }
+  if(typeof renderHuellaStatus==="function") renderHuellaStatus();
 }
 
