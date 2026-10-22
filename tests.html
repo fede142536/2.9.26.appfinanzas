@@ -84,7 +84,6 @@
 <script src="js/ahorros.js"></script>
 <script src="js/conciliacion.js"></script>
 <script src="js/papelera.js"></script>
-<script src="js/fondo-emergencia.js"></script>
 <script src="js/carga-rapida.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
 <script src="js/graficos-interactivos.js"></script>
@@ -5566,90 +5565,6 @@ test("con una sola cuenta no hay nada para filtrar y los chips no aparecen", ()=
     filtroCuenta="Galicia"; pintarFiltroCuenta([MOV_CTA(1,"Gasto",10,"Galicia")], [MOV_CTA(1,"Gasto",10,"Galicia")]);
     igual(els[0].style.display, "flex", "con un filtro activo siempre se puede quitar");
   } finally { els.forEach(e=>e.remove()); filtro=prev.filtro; filtroCuenta=prev.cuenta; }
-});
-
-// ── Fondo de emergencia ──
-async function conEmergencia(cfg, fn){
-  const antes=localStorage.getItem(EMERG_KEY);
-  if(cfg) localStorage.setItem(EMERG_KEY, JSON.stringify(cfg)); else localStorage.removeItem(EMERG_KEY);
-  try{ return await fn(); }
-  finally{ if(antes===null) localStorage.removeItem(EMERG_KEY); else localStorage.setItem(EMERG_KEY, antes); }
-}
-const GASTO_E=(id,fecha,imp,extra)=>({id,tipo:"Gasto",cat:"Super",subcat:"Otros",moneda:"ARS",importe:imp,fecha,cuenta:"Galicia",...(extra||{})});
-const AHORRO_E=(id,fecha,imp,cat)=>({id,tipo:"Gasto",cat,subcat:"Otros",moneda:"ARS",importe:imp,fecha,esAhorro:true});
-// hoy = octubre 2026 → los 6 meses completos son abril a septiembre
-const MESES_E=()=>[GASTO_E(1,"2026-04-10",100000), GASTO_E(2,"2026-05-10",200000), GASTO_E(3,"2026-06-10",300000), GASTO_E(4,"2026-07-10",300000), GASTO_E(5,"2026-08-10",200000), GASTO_E(6,"2026-09-10",100000),
-  GASTO_E(7,"2026-10-05",999999),                                                   // el mes en curso no cuenta
-  GASTO_E(8,"2026-09-12",50000,{esAhorro:true}), GASTO_E(9,"2026-09-13",70000,{traspaso:true}),   // ahorro y traspaso no son consumo
-  GASTO_E(10,"2026-09-14",100000,{usaAhorro:true})];                                // pagado con ahorro SÍ es consumo
-const mesFnE=lista=>ym=>lista.filter(m=>String(m.fecha).slice(0,7)===ym);
-
-test("gastoMensualPromedio: consumo de los meses completos, sin el mes en curso, ahorros ni traspasos", ()=>{
-  const g=gastoMensualPromedio("2026-10", mesFnE(MESES_E()));
-  igual(g.meses, 6); igual(g.promedio, 216666.67, "1.300.000 en 6 meses; septiembre: 100.000 + 100.000 pagados con ahorro");
-  igual(gastoMensualPromedio("2026-10", mesFnE([])), null, "sin gastos no hay promedio");
-  const tarde=gastoMensualPromedio("2026-10", mesFnE([GASTO_E(1,"2026-08-10",300000), GASTO_E(2,"2026-09-10",100000)]));
-  igual(tarde.meses, 2, "los meses vacíos del principio no bajan el promedio"); igual(tarde.promedio, 200000);
-});
-
-test("ahorroParaEmergencia: suma las categorías elegidas (o todas las que tienen saldo a favor)", ()=>{
-  const l=[AHORRO_E(1,"2026-01-01",800000,"Fondo de Retiro"), AHORRO_E(2,"2026-01-01",300000,"Emergencias"), {...GASTO_E(3,"2026-02-01",50000,{usaAhorro:true}), cat:"Emergencias"}];
-  igual(ahorroParaEmergencia(l, null).monto, 1050000); igual(ahorroParaEmergencia(l, null).cats.length, 2);
-  igual(ahorroParaEmergencia(l, ["Emergencias"]).monto, 250000, "300.000 − 50.000 retirados");
-  igual(ahorroParaEmergencia(l, ["Otra"]).monto, 0); igual(ahorroParaEmergencia([], null).monto, 0);
-});
-
-test("planFondoEmergencia: meses cubiertos, objetivo, cuánto falta y estado", ()=>{
-  const gasto=[...MESES_E().slice(0,6)];   // promedio 200.000/mes
-  const plan=(ahorro, meses)=>planFondoEmergencia([...gasto, AHORRO_E(50,"2026-01-01",ahorro,"Emergencias")], {cats:null, meses}, "2026-10", mesFnE([...gasto]));
-  const p=plan(500000, 6);
-  igual(p.gastoMensual, 200000); igual(p.fondo, 500000); igual(p.meses, 2.5); igual(p.objetivoMonto, 1200000); igual(p.falta, 700000); igual(p.pct, 42); igual(p.estado, "enCamino");
-  igual(plan(100000, 6).estado, "bajo", "menos de un mes");
-  const ok=plan(1500000, 6); igual(ok.estado, "cumplido"); igual(ok.falta, 0); igual(ok.pct, 100); igual(ok.meses, 7.5);
-  igual(planFondoEmergencia([], {cats:null, meses:6}, "2026-10", mesFnE([])).estado, "sinDatos");
-  igual(plan(500000, 3).objetivoMonto, 600000, "el objetivo cambia con los meses");
-});
-
-test("la configuración del fondo de emergencia se guarda y aguanta datos rotos", ()=>conEmergencia(null, ()=>{
-  igual(leerFondoEmergencia(), {cats:null, meses:6});
-  guardarFondoEmergencia({cats:["Emergencias"], meses:9}); igual(leerFondoEmergencia(), {cats:["Emergencias"], meses:9});
-  guardarFondoEmergencia({cats:null, meses:999}); igual(leerFondoEmergencia().meses, 6, "un objetivo absurdo vuelve al valor por defecto");
-  localStorage.setItem(EMERG_KEY, "{roto"); igual(leerFondoEmergencia(), {cats:null, meses:6});
-  localStorage.setItem(EMERG_KEY, JSON.stringify({cats:[1,"A"], meses:"x"})); igual(leerFondoEmergencia(), {cats:["A"], meses:6});
-}));
-
-test("la tarjeta del fondo de emergencia muestra los meses, el objetivo y qué ahorros cuentan", ()=>{
-  const p=planFondoEmergencia([AHORRO_E(1,"2026-01-01",500000,"Emergencias"), ...MESES_E().slice(0,6)], {cats:null, meses:6}, "2026-10", mesFnE(MESES_E().slice(0,6)));
-  const h=fondoEmergenciaHTML(p);
-  cierto(h.includes("2,5") && h.includes("meses de gastos") && h.includes("Objetivo: 6 meses") && h.includes("te faltan") && h.includes("Emergencias") && h.includes("Configurar"), h);
-  cierto(fondoEmergenciaHTML({estado:"sinDatos"}).includes("Todavía no hay gastos"));
-  cierto(fondoEmergenciaHTML({...p, estado:"cumplido", falta:0, pct:100}).includes("objetivo cumplido"));
-  cierto(fondoEmergenciaHTML({...p, meses:1}).includes("1 <span>mes de gastos"), "singular");
-});
-
-test("configurar el fondo de emergencia: elegir meses y categorías, y se guarda", ()=>conEmergencia(null, async ()=>{
-  const mk=(tag,id)=>{ const e=document.createElement(tag); e.id=id; document.body.appendChild(e); return e; };
-  const els=[mk("select","emerg-meses"), mk("div","emerg-cats"), mk("div","modal-emerg"), mk("div","emerg-card")];
-  const antes={movs, toast:window.showToast}; window.showToast=()=>{};
-  try{
-    movs=[AHORRO_E(1,"2026-01-01",800000,"Fondo de Retiro"), AHORRO_E(2,"2026-01-01",300000,"Emergencias")];
-    abrirFondoEmergencia();
-    igual(document.querySelectorAll("#emerg-cats input").length, 2); cierto([...els[0].options].map(o=>o.value).includes("6"));
-    cierto(els[2].classList.contains("open"), "tiene que abrir la hoja");
-    const retiro=[...document.querySelectorAll("#emerg-cats input")].find(c=>c.dataset.cat==="Fondo de Retiro"); retiro.checked=false;
-    els[0].value="9"; guardarConfigEmergencia();
-    igual(leerFondoEmergencia(), {cats:["Emergencias"], meses:9}); cierto(!els[2].classList.contains("open"), "se cierra al guardar");
-    abrirFondoEmergencia(); const marcadas=[...document.querySelectorAll("#emerg-cats input")].map(c=>c.checked); igual(marcadas.sort(), [false,true], "al reabrir se ven las elegidas");
-    [...document.querySelectorAll("#emerg-cats input")].forEach(c=>c.checked=true); guardarConfigEmergencia(); igual(leerFondoEmergencia().cats, null, "todas marcadas = todas (también las que lleguen después)");
-  } finally { movs=antes.movs; window.showToast=antes.toast; els.forEach(e=>e.remove()); }
-}));
-
-test("el fondo de emergencia está en la pantalla de Ahorros, en el backup y en el service worker", async ()=>{
-  const html=await (await fetch("index.html")).text();
-  ["emerg-card","modal-emerg","emerg-meses","emerg-cats","js/fondo-emergencia.js"].forEach(t=>cierto(html.includes(t), "falta "+t));
-  cierto((await (await fetch("sw.js")).text()).includes("./js/fondo-emergencia.js"));
-  cierto((await (await fetch("js/ahorros.js")).text()).includes("renderFondoEmergencia"), "renderAhorro no dibuja la tarjeta");
-  igual(armarBackup().datos.fondoEmergencia, leerFondoEmergencia()); cierto(aplicarBackup.toString().includes("fondoEmergencia"));
 });
 
 // ── Ingresos frecuentes ──
