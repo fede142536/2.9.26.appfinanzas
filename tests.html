@@ -8776,8 +8776,8 @@ test("el detalle muestra cada sección con sus números y es solo de lectura", (
   cierto(h.includes("8 diferencias") && h.includes("160.025,31"), "falta el resumen con el ajuste total");
   cierto(h.includes("Inversión (") && h.includes("Balanz") && h.includes("Tu fondo"), "tiene que mostrar los dos lados de cada diferencia");
   const sinFiltros=h.replace(/<div class="concil-chips">.*?<\/div>/s,"");
-  cierto(!/<button/.test(sinFiltros), "la versión de prueba no puede tener botones que cambien datos (solo los filtros)");
-  cierto(!sinFiltros.includes("onclick"), "sin acciones en el detalle");
+  const acciones=[...sinFiltros.matchAll(/onclick="(\w+)\(/g)].map(m=>m[1]);
+  igual([...new Set(acciones)].filter(a=>!["excluirTickerConcil","incluirTickerConcil"].includes(a)), [], "los únicos botones permitidos son los de 'no pasa por mi fondo': nada que cambie movimientos");
   cierto(h.includes("setFiltroConcil"), "faltan los filtros por CEDEAR");
 });
 
@@ -8866,6 +8866,53 @@ test("los botones de filtro cambian la vista y no tocan los datos", ()=>{
     cierto(el.innerHTML.includes("SPY"));
     igual(JSON.stringify(movs), foto);
   } finally { movs=antes; concilFiltro=""; el.remove(); }
+});
+
+// ── CEDEARs que no pasan por el fondo ──
+const CONCIL_MCD=()=>[...CONCIL_DATOS(),
+  INV_T(50,"2026-06-04","CEDEARs Compra otro",12774.45,"XLK",{refBalanz:undefined}), INV_T(51,"2026-07-27","CEDEARs Compra otro",54238.57,"MCD",{nota:"MCD X 3"}),
+  INV_T(52,"2026-08-10","CEDEARs Venta",53581.03,"MCD"), INV_T(53,"2026-08-10","CEDEARs Venta",12863.82,"XLK")];
+
+test("excluir un CEDEAR lo saca de la comparación entera, y 'faltan' deja de incluirlo", ()=>{
+  const sin=conciliarCedears(CONCIL_MCD(), []);
+  igual(sin.faltanEnFondo.map(f=>f.ticker).filter(t=>t!=="SPY").sort(), ["MCD","MCD","XLK","XLK"], "sin excluir, los 4 de MCD y XLK figuran como faltantes");
+  const r=conciliarCedears(CONCIL_MCD(), ["MCD","XLK"]);
+  igual(r.faltanEnFondo.map(f=>f.inv.id).sort((a,b)=>a-b), [5,7], "quedan solo los de SPY de siempre");
+  igual(r.excluidos.map(e=>e.ticker+":"+e.n), ["MCD:2","XLK:2"]);
+  igual(resumenConciliacion(r).pendientes, 8, "el resumen vuelve a lo de antes de cargar MCD y XLK");
+  igual(ajusteSaldoConciliacion(r), 160025.31, "y el ajuste también");
+  igual(conciliarCedears(CONCIL_MCD(), ["mcd"]).excluidos.length, 1, "no importan las mayúsculas");
+  igual(conciliarCedears(CONCIL_DATOS(), ["XYZ"]).excluidos, [], "un ticker que no existe no aparece como excluido");
+});
+
+test("las exclusiones se guardan como preferencia, no tocan los movimientos y la comparación las usa sola", ()=>{
+  const antes=localStorage.getItem(CONCIL_EXCL_KEY), foto=JSON.stringify(CONCIL_MCD());
+  try{
+    localStorage.removeItem(CONCIL_EXCL_KEY); igual(leerConcilExcluidos(), []);
+    guardarConcilExcluidos(["mcd", "XLK", "xlk", "", 5]); igual(leerConcilExcluidos(), ["MCD","XLK"], "sin repetidos, en mayúsculas");
+    const datos=CONCIL_MCD(); const c=conciliarCedears(datos);
+    igual(c.excluidos.length, 2); igual(c.faltanEnFondo.filter(f=>f.ticker!=="SPY").length, 0, "usa lo guardado sin que se lo pasen");
+    igual(JSON.stringify(datos), foto, "no modifica ningún movimiento");
+    localStorage.setItem(CONCIL_EXCL_KEY, "{roto"); igual(leerConcilExcluidos(), []);
+  } finally { if(antes===null) localStorage.removeItem(CONCIL_EXCL_KEY); else localStorage.setItem(CONCIL_EXCL_KEY, antes); }
+});
+
+test("en pantalla: cada faltante trae 'no pasa por mi fondo', y lo excluido se ve aparte con 'volver a incluir'", ()=>{
+  const antes=localStorage.getItem(CONCIL_EXCL_KEY), toast=window.showToast;
+  const els=["concil-card","concil-resumen","modal-concil","concil-detalle"].map(id=>{ const e=document.createElement("div"); e.id=id; document.body.appendChild(e); return e; });
+  const movsAntes=movs; window.showToast=()=>{};
+  try{
+    localStorage.removeItem(CONCIL_EXCL_KEY); movs=CONCIL_MCD();
+    const h=conciliacionHTML(conciliarCedears(movs));
+    cierto(h.includes("excluirTickerConcil(&quot;MCD&quot;)") && h.includes("MCD no pasa por mi fondo") && h.includes("XLK no pasa por mi fondo"), "falta el botón en los faltantes");
+    cierto(h.includes("No cambia ningún movimiento"), "tiene que aclarar que no toca los movimientos");
+    abrirConciliacion(); excluirTickerConcil("MCD"); excluirTickerConcil("XLK");
+    const d=document.getElementById("concil-detalle").innerHTML;
+    cierto(d.includes("Fuera de la comparación (MCD, XLK)") && d.includes("incluirTickerConcil(&quot;MCD&quot;)") && d.includes("Volver a incluir XLK"), d.slice(0,200));
+    cierto(!d.includes("MCD no pasa por mi fondo"), "ya no figura entre los faltantes");
+    cierto(document.getElementById("concil-resumen").textContent.includes("8 diferencias"), document.getElementById("concil-resumen").textContent);
+    incluirTickerConcil("MCD"); igual(leerConcilExcluidos(), ["XLK"]); cierto(document.getElementById("concil-detalle").innerHTML.includes("MCD no pasa por mi fondo"), "al volver a incluirlo vuelve a compararse");
+  } finally { movs=movsAntes; window.showToast=toast; els.forEach(e=>e.remove()); if(antes===null) localStorage.removeItem(CONCIL_EXCL_KEY); else localStorage.setItem(CONCIL_EXCL_KEY, antes); }
 });
 
 test("el detalle de un fondo que coincide dice que todo está bien", ()=>{

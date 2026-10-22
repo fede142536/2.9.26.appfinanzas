@@ -855,5 +855,6 @@ canvas{width:100%!important;max-width:100%}
 .concil-chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
 .concil-chip{border:1px solid var(--border);background:var(--card,transparent);color:var(--text);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
 .concil-chip.activo{background:var(--tema-light,var(--bg));color:var(--tema-color,var(--text));border-color:var(--tema-color,var(--border))}
+.concil-excl{margin-top:8px}
 .concil-plegable{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}
 .concil-plegable>summary{cursor:pointer;font-size:13px;font-weight:600}

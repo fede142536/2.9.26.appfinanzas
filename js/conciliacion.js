@@ -42,13 +42,39 @@ function leerTickerYCantidad(nota, conocidos){
   return {ticker:null, cantidad:null};
 }
 
+// CEDEARs que NO pasan por el fondo (por ejemplo, los que comprás y vendés con plata que ya estaba en el broker): se sacan de la
+// comparación. Es una preferencia de pantalla —no cambia ningún movimiento—, así que va en localStorage llano.
+const CONCIL_EXCL_KEY="fconcilexcl";
+function leerConcilExcluidos(){
+  try{
+    const o=JSON.parse(localStorage.getItem(CONCIL_EXCL_KEY)||"[]");
+    return Array.isArray(o) ? [...new Set(o.filter(t=>typeof t==="string" && t.trim()).map(t=>t.trim().toUpperCase()))] : [];
+  }catch(e){ return []; }
+}
+function guardarConcilExcluidos(lista){ return guardarPreferencia(CONCIL_EXCL_KEY, JSON.stringify([...new Set((lista||[]).filter(t=>typeof t==="string").map(t=>t.trim().toUpperCase()).filter(Boolean))])); }
+function excluirTickerConcil(t){
+  guardarConcilExcluidos([...leerConcilExcluidos(), t]);
+  showToast(`${String(t).toUpperCase()} queda fuera de la comparación`);
+  renderConciliacionDetalle(); renderConciliacionCard();
+}
+function incluirTickerConcil(t){
+  guardarConcilExcluidos(leerConcilExcluidos().filter(x=>x!==String(t).toUpperCase()));
+  showToast(`${String(t).toUpperCase()} vuelve a la comparación`);
+  renderConciliacionDetalle(); renderConciliacionCard();
+}
+
 // Empareja los CEDEARs de `lista` con el fondo. Función pura: no toca nada.
 // Devuelve {ok, diferencias, faltanEnFondo, sobranEnFondo, duplicados, anteriores, primera, tickers}. Cada elemento trae
 // su `lado` ("compra" o "venta"), su `ticker` (o null) y los movimientos originales.
-function conciliarCedears(lista){
-  const todas=(lista||[]).filter(esInvCedear).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
-  const fondos=(lista||[]).filter(esFondoCedear);
-  const conocidos=[...new Set(todas.map(m=>m.ticker).filter(Boolean).map(t=>String(t).toUpperCase()))];
+function conciliarCedears(lista, excluidos){
+  const excl=new Set((excluidos===undefined ? leerConcilExcluidos() : (excluidos||[])).map(t=>String(t).toUpperCase()));
+  const todasLasInv=(lista||[]).filter(esInvCedear).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));
+  const conocidos=[...new Set(todasLasInv.map(m=>m.ticker).filter(Boolean).map(t=>String(t).toUpperCase()))];
+  // Lo excluido se saca ANTES de emparejar: ni sus inversiones ni sus depósitos del fondo participan.
+  const tickerInv=m=>m.ticker ? String(m.ticker).toUpperCase() : leerTickerYCantidad(m.nota, conocidos).ticker;
+  const todas=todasLasInv.filter(m=>!excl.has(tickerInv(m)));
+  const fondos=(lista||[]).filter(esFondoCedear).filter(m=>!excl.has(leerTickerYCantidad(m.nota, conocidos).ticker));
+  const excluidosOut=[...excl].filter(t=>todasLasInv.some(m=>tickerInv(m)===t)).sort().map(t=>({ticker:t, n:todasLasInv.filter(m=>tickerInv(m)===t).length}));
   const infoInv=new Map(), infoFondo=new Map();
   todas.forEach(m=>{
     const n=leerTickerYCantidad(m.nota, conocidos);
@@ -57,7 +83,7 @@ function conciliarCedears(lista){
   fondos.forEach(m=>infoFondo.set(m, leerTickerYCantidad(m.nota, conocidos)));
 
   const out={ok:[], diferencias:[], faltanEnFondo:[], sobranEnFondo:[], duplicados:[], anteriores:[],
-             primera:todas.length?String(todas[0].fecha).slice(0,10):null, tickers:[]};
+             primera:todas.length?String(todas[0].fecha).slice(0,10):null, tickers:[], excluidos:excluidosOut};
 
   // 1. Inversiones repetidas: se queda la que viene de Balanz (tiene refBalanz) o, si no, la primera.
   const dup=new Set();
@@ -149,7 +175,7 @@ const descConcil=m=>m.nota ? `“${escapeHtml(m.nota)}”` : "sin descripción";
 const origenInv=m=>m.refBalanz ? "Balanz" : "cargada a mano";
 
 function filasConciliacionHTML(c){
-  const fila=(top, delta, lineas, color)=>`<div class="concil-fila"><div class="concil-top"><span>${top}</span>${delta?`<span class="concil-delta" style="color:${color||"var(--text)"}">${delta}</span>`:""}</div>${lineas.map(l=>`<div class="concil-det">${l}</div>`).join("")}</div>`;
+  const fila=(top, delta, lineas, color, extra)=>`<div class="concil-fila"><div class="concil-top"><span>${top}</span>${delta?`<span class="concil-delta" style="color:${color||"var(--text)"}">${delta}</span>`:""}</div>${lineas.map(l=>`<div class="concil-det">${l}</div>`).join("")}${extra||""}</div>`;
   const sec=(titulo, n, cuerpo, nota)=>n ? `<div class="concil-sec">${titulo} (${n})</div>${nota?`<p class="txt-xs txt-muted" style="margin:0 0 4px">${nota}</p>`:""}${cuerpo}` : "";
   const titulo=(x,fecha,lado)=>`${chipTicker(x.ticker)} <strong>${lado} ${fmtFechaConcil(fecha)}</strong>`;
   const lineaInv=(m,ci)=>`Inversión (${origenInv(m)}): ${fmtS(m.importe)} · ${fmtFechaConcil(m.fecha)}${unidades(ci)}${m.nota?` · ${descConcil(m)}`:""}`;
@@ -162,8 +188,9 @@ function filasConciliacionHTML(c){
     "Es el mismo movimiento (mismo CEDEAR), pero tu fondo tiene otro monto, fecha o cantidad que la inversión cargada (la de Balanz trae el monto exacto del broker).");
   h+=sec("Faltan en tu fondo", c.faltanEnFondo.length, c.faltanEnFondo.map(f=>fila(
       titulo(f, f.inv.fecha, ladoTxt(f.lado)), fmtS(f.inv.importe),
-      [`${lineaInv(f.inv,null)}`, `No hay ${f.lado==="venta"?"un retiro":"un depósito"} de ${f.ticker||"este CEDEAR"} en tu fondo.`], "var(--danger)")).join(""),
-    "Si fue cambiar un CEDEAR por otro dentro del broker, esa plata no pasa por tu fondo y está bien así.");
+      [`${lineaInv(f.inv,null)}`, `No hay ${f.lado==="venta"?"un retiro":"un depósito"} de ${f.ticker||"este CEDEAR"} en tu fondo.`], "var(--danger)",
+      f.ticker ? `<button type="button" class="btn-sm concil-excl" onclick="excluirTickerConcil(${attrJS(f.ticker)})">${escapeHtml(f.ticker)} no pasa por mi fondo</button>` : "")).join(""),
+    "Si ese CEDEAR lo comprás y vendés con plata que ya estaba en el broker (no sale de tu fondo), tocá \"no pasa por mi fondo\": deja de compararse. No cambia ningún movimiento.");
   h+=sec("Sobran en tu fondo", c.sobranEnFondo.length, c.sobranEnFondo.map(f=>fila(
       titulo(f, f.fondo.fecha, f.lado==="venta"?"Retiro":"Depósito"), fmtS(f.fondo.importe),
       [lineaFondo(f.fondo,null,0), `No hay ${f.lado==="venta"?"una venta":"una compra"}${f.ticker?" de "+escapeHtml(f.ticker):""} parecida en tus inversiones.`], "var(--danger)")).join(""),
@@ -176,6 +203,10 @@ function filasConciliacionHTML(c){
   if(c.ok.length) h+=`<details class="concil-plegable"><summary>✓ Coinciden (${c.ok.length})</summary>${c.ok.map(o=>fila(
       titulo(o, o.inv.fecha, ladoTxt(o.lado)), fmtS(o.inv.importe),
       [`Inversión (${origenInv(o.inv)}) = tu fondo: ${descConcil(o.fondo)}${unidades(o.cantFondo)}`], "var(--save)")).join("")}</details>`;
+  if(c.excluidos && c.excluidos.length) h+=`<details class="concil-plegable"><summary>Fuera de la comparación (${c.excluidos.map(e=>escapeHtml(e.ticker)).join(", ")})</summary>
+    <p class="txt-xs txt-muted" style="margin:6px 0 0">Los marcaste como "no pasa por mi fondo", así que no se comparan con él. Podés volver a incluirlos cuando quieras.</p>${c.excluidos.map(e=>fila(
+      `${chipTicker(e.ticker)} <strong>${e.n} ${e.n===1?"operación":"operaciones"}</strong>`, "", [], "var(--muted)",
+      `<button type="button" class="btn-sm concil-excl" onclick="incluirTickerConcil(${attrJS(e.ticker)})">Volver a incluir ${escapeHtml(e.ticker)}</button>`)).join("")}</details>`;
   if(c.anteriores.length) h+=`<details class="concil-plegable"><summary>Anteriores a tu primera inversión cargada (${c.anteriores.length})</summary>
     <p class="txt-xs txt-muted" style="margin:6px 0 0">Tu primera inversión cargada es del ${fmtFechaConcil(c.primera)}. De antes solo hay movimientos del fondo, así que no hay con qué compararlos.</p>${c.anteriores.map(a=>fila(
       titulo(a, a.fondo.fecha, a.lado==="venta"?"Retiro":"Depósito"), fmtS(a.fondo.importe), [descConcil(a.fondo)], "var(--muted)")).join("")}</details>`;
