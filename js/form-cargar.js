@@ -255,7 +255,7 @@ const AUTO_CAT_RULES = [
   {re:/\b(disco|carrefour|coto|jumbo|dia|diarco|vea|toledo|chango\s*m[aá]s|la\s*anonima|wal\s*mart|super)\b/i, tipo:"Gasto", cat:"Supermercado", subcat:"Almacen"},
   {re:/\b(verdulería|verduler[ií]a|frutas?\s*y\s*verduras|fruver)\b/i, tipo:"Gasto", cat:"Supermercado", subcat:"Verduleria"},
   {re:/\b(carnicer[ií]a|carniceria|pollería|pollos?)\b/i, tipo:"Gasto", cat:"Supermercado", subcat:"Carnicería"},
-  {re:/\b(panader[ií]a|panaderia|facturas|medialunas)\b/i, tipo:"Gasto", cat:"Supermercado", subcat:"Panadería"},
+  {re:/\b(pan|panader[ií]a|panaderia|facturas|medialunas)\b/i, tipo:"Gasto", cat:"Supermercado", subcat:"Panadería"},
 
   // Transporte / Auto
   {re:/\b(ypf|shell|axion|puma|esso|nafta|gas\s*oil|gasoil|combustible)\b/i, tipo:"Gasto", cat:"Auto", subcat:"Nafta"},
