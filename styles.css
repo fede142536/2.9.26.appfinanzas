@@ -293,6 +293,34 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 #tx-list .tx-icon{width:36px;height:36px;font-size:16px}
 #tx-list .tx-cat{font-size:14px}
 #tx-list .carga-rapida{margin:8px 16px 0;padding:12px 14px}
+.cierre-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.cierre-nav .modal-title{flex:1;text-align:center}
+.cierre-cerrado{margin:8px 0;padding:8px 12px;border-radius:var(--radius-sm);background:var(--save-light);color:var(--save);font-size:13px;font-weight:600}
+.cierre-hero{text-align:center;margin:10px 0 6px}
+.cierre-hero-num{font-size:34px;font-weight:700;line-height:1.15}
+.cierre-fila3{display:flex;gap:8px;justify-content:space-between;text-align:center}
+.cierre-fila3>div{flex:1;display:flex;flex-direction:column;gap:2px;padding:8px 4px;border-radius:var(--radius-sm);background:var(--bg)}
+.cierre-fila3 strong{font-size:14px}
+.cierre-delta{font-size:11px;font-weight:600;color:var(--muted)}
+.cierre-delta.sube{color:var(--warning)}
+.cierre-delta.baja{color:var(--save)}
+.cierre-sec{margin:16px 0 6px;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.cierre-cat{margin-bottom:8px}
+.cierre-cat-top{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.cierre-barra{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:3px}
+.cierre-barra>div{height:100%;background:var(--save);border-radius:3px}
+.cierre-nota{margin:0 0 6px;font-size:13px;line-height:1.4}
+.cierre-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.cierre-item:last-child{border-bottom:none}
+.cierre-ico{font-size:16px;width:22px;text-align:center}
+.cierre-mid{flex:1;min-width:0}
+.cierre-tit{font-size:13px;font-weight:600}
+.cierre-item.ok .cierre-tit{font-weight:500;color:var(--muted)}
+.cierre-det{font-size:12px;color:var(--muted);line-height:1.35}
+.cierre-aviso{display:flex;align-items:center;gap:8px;margin:8px 16px 0;padding:10px 12px;border-radius:var(--radius-sm);background:var(--accent-light);font-size:13px}
+.cierre-aviso>span{flex:1}
+.cierre-x{border:0;background:transparent;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
+#cierre-btn.reabrir{background:transparent!important;color:var(--muted)!important;border:1px solid var(--border)}
 .tc-banco{color:var(--muted);font-weight:500}
 .tc-banco-fila{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:12px;color:var(--muted)}
 .tc-banco-fila .form-select{flex:1;height:34px;padding:0 10px;font-size:13px}
