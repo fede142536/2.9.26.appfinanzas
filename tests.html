@@ -8771,8 +8771,8 @@ test("sin CEDEARs, lista vacía o datos raros no se rompe y no hay datos que mos
 test("el detalle muestra cada sección con sus números y es solo de lectura", ()=>{
   const h=conciliacionHTML(conciliarCedears(CONCIL_DATOS()));
   cierto(h.includes("Versión de prueba"), "no avisa que es una prueba");
-  ["Montos, fechas o cantidades distintas (5)","Faltan en tu fondo (2)","Posibles duplicados (1)","Coinciden (4)","Anteriores a tu primera inversión cargada (1)"].forEach(t=>cierto(h.includes(t), "falta: "+t));
-  cierto(!h.includes("Sobran en tu fondo"), "no tiene que mostrar una sección vacía");
+  ["Montos, fechas o cantidades distintas (5)","Inversiones sin movimiento en tu fondo de ahorro (2)","Posibles duplicados (1)","Coinciden (4)","Anteriores a tu primera inversión cargada (1)"].forEach(t=>cierto(h.includes(t), "falta: "+t));
+  cierto(!h.includes("Movimientos de tu fondo de ahorro sin inversión"), "no tiene que mostrar una sección vacía");
   cierto(h.includes("8 diferencias") && h.includes("160.025,31"), "falta el resumen con el ajuste total");
   cierto(h.includes("Inversión (") && h.includes("Balanz") && h.includes("Tu fondo"), "tiene que mostrar los dos lados de cada diferencia");
   const sinFiltros=h.replace(/<div class="concil-chips">.*?<\/div>/s,"");
@@ -8931,7 +8931,7 @@ test("la tarjeta de Ahorros resume el estado y se oculta si no hay CEDEARs", ()=
     cierto(document.getElementById("concil-resumen").textContent.includes("8 diferencias") && document.getElementById("concil-resumen").textContent.includes("4 coinciden"));
     abrirConciliacion();
     cierto(document.getElementById("modal-concil").classList.contains("open"), "no abrió el detalle");
-    cierto(document.getElementById("concil-detalle").textContent.includes("Faltan en tu fondo"));
+    cierto(document.getElementById("concil-detalle").textContent.includes("Inversiones sin movimiento en tu fondo de ahorro"));
     cerrarConciliacion(); cierto(!document.getElementById("modal-concil").classList.contains("open"));
     movs=[]; renderConciliacionCard();
     igual(document.getElementById("concil-card").style.display, "none", "sin CEDEARs no se muestra");
