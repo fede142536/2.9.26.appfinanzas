@@ -5677,7 +5677,8 @@ test("al eliminar un ingreso frecuente los textos hablan de ingreso, no de gasto
 // ── Carga rápida por texto ──
 const CR_CTX=(extra)=>({hoy:"2026-10-22", cuentas:["Cuentas","Efectivo","Tarjetas de crédito","Balanz","Galicia","BPat","Mercado Libre","Naranja X"], tarjetas:["Visa","Mastercard","Naranja","Otra","Mercado Pago"],
   sugerir:(t,tp)=>{ const n=normalizarTexto(t); if(/nafta/.test(n)) return {cat:"Auto", subcat:"Combustible"}; if(/netflix/.test(n)) return {cat:"Salidas", subcat:"Suscripción"}; if(/sueldo/.test(n)&&tp==="Ingreso") return {cat:"Salario", subcat:"Salario"}; if(/super|verdu/.test(n)) return {cat:"Supermercado"}; return null; },
-  cats:tp=>tp==="Ingreso" ? {Salario:["Salario","Otros"]} : {Auto:["Combustible","Peajes"], Salidas:["Suscripción","Otros"], Supermercado:["Otros"], Casa:["Otros"]}, ...(extra||{})});
+  tickers:[{clave:"ypf",ticker:"YPFD",cat:"Acciones"},{clave:"ypfd",ticker:"YPFD",cat:"Acciones"},{clave:"spy",ticker:"SPY",cat:"CEDEARs"},{clave:"mcd",ticker:"MCD",cat:"CEDEARs"}],
+  cats:tp=>tp==="Ingreso" ? {Salario:["Salario","Otros"]} : tp==="Inversion" ? {Acciones:["Compra","Venta"], CEDEARs:["Compra SPY","Compra otro","Venta","Dividendo"], FCI:["Suscripción","Rescate capital","Rendimiento"], "Caución":["Colocada","Tomada"]} : {Auto:["Combustible","Peajes"], Salidas:["Suscripción","Otros"], Supermercado:["Otros"], Casa:["Otros"], "Vacaciones Gastos":["Italia"]}, ...(extra||{})});
 const cr=(t,e)=>interpretarCargaRapida(t, CR_CTX(e));
 
 test("carga rápida: 'nafta 15000 visa ayer' → compra con tarjeta, monto, categoría, tarjeta y fecha", ()=>{
@@ -5735,6 +5736,58 @@ test("carga rápida: alias de tarjeta, 'Otra' no se confunde con una palabra, y 
   igual(cr("café 100 cuentas").cuenta, "", "'Cuentas' (sin elegir) no es una cuenta que se pueda nombrar");
 });
 
+test("carga rápida: 'venta accion ypf 45000' es una inversión (no un gasto), con su ticker, categoría y operación", ()=>{
+  // Caso reportado: la frase caía en la sugerencia de la nota y quedaba como un gasto de vacaciones.
+  const r=cr("venta accion ypf 45000", {sugerir:()=>({cat:"Vacaciones Gastos", subcat:"Italia"})});
+  igual(r.ok, true); igual(r.tipo, "Inversion"); igual(r.operacion, "venta"); igual(r.ticker, "YPFD", "ypf se reconoce con el ticker que ya usaste"); igual(r.cat, "Acciones"); igual(r.subcat, "Venta"); igual(r.importe, 45000);
+  igual(r.nota, "", "el ticker ya identifica el activo"); cierto(r.entendido[0].includes("Inversión · Venta YPFD"), r.entendido.join("|"));
+  igual(cr("compré spy 500000 balanz ayer").subcat, "Compra SPY", "una compra de SPY elige 'Compra SPY'");
+  igual(cr("compré spy 500000 balanz ayer").cuenta, "Balanz"); igual(cr("compré spy 500000 balanz ayer").fecha, "2026-10-21");
+  igual(cr("vendí mcd 53581").tipo, "Inversion"); igual(cr("vendí mcd 53581").subcat, "Venta"); igual(cr("vendí mcd 53581").cat, "CEDEARs");
+  igual(cr("spy 100000").operacion, "compra", "sin operación se asume compra y se muestra");
+});
+
+test("carga rápida: inversiones con activo nombrado, ticker nuevo, fondos y dólares", ()=>{
+  const g=cr("compra accion ggal 20000"); igual(g.tipo, "Inversion"); igual(g.ticker, "GGAL", "un ticker que no conocés se toma de lo que sigue a 'acción'"); igual(g.cat, "Acciones"); igual(g.subcat, "Compra");
+  const f=cr("rescate fci 100000"); igual(f.tipo, "Inversion"); igual(f.operacion, "venta"); igual(f.cat, "FCI"); igual(f.subcat, "Rescate capital");
+  igual(cr("suscripcion fci 50000").subcat, "Suscripción");
+  const c=cr("cedear spy 12 usd venta"); igual(c.moneda, "USD"); igual(c.importe, 12); igual(c.subcat, "Venta"); igual(c.cat, "CEDEARs");
+  igual(cr("compra accion zzz 1000", {cats:tp=>tp==="Inversion"?{FCI:["Suscripción"]}:{}}).cat, "", "si la categoría no existe en tu app, la deja para que la elijas");
+});
+
+test("carga rápida: 'venta' o 'compra' sin un activo no vuelven una inversión, y lo demás sigue igual", ()=>{
+  const v=cr("venta de garage 5000"); igual(v.tipo, "Gasto"); igual(v.nota, "Venta de garage", "las palabras vuelven a la descripción");
+  igual(cr("compra del mes 80000").tipo, "Gasto"); igual(cr("compra del mes 80000").nota, "Compra del mes");
+  igual(cr("bono 50000").tipo, "Ingreso", "'bono' solo sigue siendo un ingreso"); igual(cr("nafta 15000 visa").tipo, "Tarjeta");
+  igual(cr("compré accion ypf 3 cuotas visa").tipo, "Tarjeta", "con tarjeta o cuotas no es una inversión");
+  igual(tickersConocidos([{tipo:"Inversion",ticker:"YPFD",tickerOrig:"YPF",cat:"Acciones"},{tipo:"Inversion",ticker:"SPY",cat:"CEDEARs"},{tipo:"Gasto",ticker:"X"}]).map(t=>t.clave+":"+t.ticker), ["ypfd:YPFD","ypf:YPFD","spy:SPY"]);
+});
+
+test("carga rápida: las subcategorías con el nombre de la categoría delante ('Acciones Venta') también se reconocen", ()=>{
+  const ops=["Acciones Compra","Acciones Venta"];
+  igual(crElegirSubInversion(ops, "venta", "YPFD"), "Acciones Venta"); igual(crElegirSubInversion(ops, "compra", "YPFD"), "Acciones Compra");
+  igual(crElegirSubInversion(["Compra SPY","Compra otro","Venta","Dividendo"], "venta"), "Venta"); igual(crElegirSubInversion(["Compra SPY","Compra otro","Venta"], "compra", "SPY"), "Compra SPY");
+  igual(crElegirSubInversion(["Suscripción","Rescate capital"], "venta"), "Rescate capital"); igual(crElegirSubInversion(["Varios"], "venta"), "", "sin opción parecida no inventa una");
+  const r=cr("venta accion ypf 45000", {cats:tp=>tp==="Inversion"?{Acciones:["Acciones Compra","Acciones Venta"]}:{}});
+  igual(r.subcat, "Acciones Venta", "el caso real: la venta de YPF quedaba como 'Acciones Compra'");
+});
+
+test("carga rápida: la inversión rellena el formulario de Inversión sin guardar", ()=>{
+  const ids=["inv-importe","inv-cat","inv-subcat","inv-ticker","inv-cuenta","inv-fecha","inv-nota","inv-moneda","carga-rapida","carga-rapida-res"];
+  const els={}; ids.forEach(id=>{ const e=document.createElement(["inv-cat","inv-subcat","inv-cuenta","inv-moneda"].includes(id)?"select":"input"); e.id=id; document.body.appendChild(e); els[id]=e; });
+  els["inv-cat"].innerHTML="<option>CEDEARs</option><option>Acciones</option>"; els["inv-subcat"].innerHTML="<option>Compra</option><option>Venta</option>"; els["inv-cuenta"].innerHTML="<option>Balanz</option><option>Galicia</option>"; els["inv-moneda"].innerHTML="<option>ARS</option><option>USD</option>";
+  els["carga-rapida-res"]=document.querySelector("#carga-rapida-res");
+  const antes={movs:JSON.stringify(movs), tcs:JSON.stringify(tcs), setTipo:window.setTipo, ctx:window.contextoCargaRapida, upd:window.updateInvSubcats};
+  let tipoPuesto=null; window.setTipo=t=>{ tipoPuesto=t; }; window.updateInvSubcats=()=>{}; window.contextoCargaRapida=()=>CR_CTX();
+  try{
+    els["carga-rapida"].value="venta accion ypf 45000 balanz";
+    const r=cargaRapida();
+    igual(r.ok, true); igual(tipoPuesto, "Inversion"); igual(els["inv-cat"].value, "Acciones"); igual(els["inv-subcat"].value, "Venta"); igual(els["inv-ticker"].value, "YPFD"); igual(els["inv-cuenta"].value, "Balanz");
+    cierto(els["inv-importe"].value.replace(/\D/g,"")==="45000", els["inv-importe"].value); cierto(els["carga-rapida-res"].textContent.includes("Inversión · Venta YPFD"), els["carga-rapida-res"].textContent);
+    igual(JSON.stringify(movs), antes.movs, "no guarda nada"); igual(JSON.stringify(tcs), antes.tcs);
+  } finally { window.setTipo=antes.setTipo; window.contextoCargaRapida=antes.ctx; window.updateInvSubcats=antes.upd; ids.forEach(id=>{ const e=els[id]; if(e) e.remove(); }); }
+});
+
 test("carga rápida: la descripción conserva acentos y mayúsculas útiles y saca el relleno de los bordes", ()=>{
   igual(cr("pagué el café de la esquina 3500 en efectivo").nota, "Café de la esquina"); igual(cr("pagué el café de la esquina 3500 en efectivo").cuenta, "Efectivo");
   igual(cr("3500").nota, ""); igual(cr("3500").ok, true, "solo el monto alcanza");
@@ -5763,7 +5816,7 @@ test("carga rápida: rellena el formulario de Gasto sin guardar nada", ()=>{
     igual(els["carga-rapida"].value, "", "limpia el campo"); cierto(els["carga-rapida-res"].textContent.includes("Revisá y tocá Guardar"), els["carga-rapida-res"].textContent);
     igual(JSON.stringify(movs), antes.movs, "no puede guardar nada"); igual(JSON.stringify(tcs), antes.tcs);
     els["carga-rapida"].value="solo texto"; const mal=cargaRapida(); igual(mal.ok, false); cierto(els["carga-rapida-res"].textContent.includes("monto")); igual(els["carga-rapida"].value, "solo texto", "si no entendió, no borra lo escrito");
-  } finally { window.setTipo=antes.setTipo; window.contextoCargaRapida=antes.ctx; window.updateSubcats=antes.upd; ids.slice(0,8).forEach(id=>els[id].remove()); }
+  } finally { window.setTipo=antes.setTipo; window.contextoCargaRapida=antes.ctx; window.updateSubcats=antes.upd; ids.forEach(id=>{ const e=els[id]; if(e) e.remove(); }); }
 });
 
 test("la carga rápida está en la pantalla de Cargar y en el service worker", async ()=>{

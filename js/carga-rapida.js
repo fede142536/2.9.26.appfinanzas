@@ -7,6 +7,23 @@
 
 const CR_RELLENO=new Set(["en","con","de","del","por","pague","pagué","gaste","gasté","compre","compré","pago","gasto","a","mi","la","el","un","una","me","cobre","cobré","use","usé"]);
 const CR_INGRESO=/^(sueldo|salario|haberes|aguinaldo|bono|honorarios|cobre|ingreso|cobro|devolucion|reintegro)$/;
+// Inversiones: palabras que dicen QUÉ se compró o vendió y cuál es la operación.
+const CR_ACTIVO={accion:"Acciones", acciones:"Acciones", cedear:"CEDEARs", cedears:"CEDEARs", etf:"CEDEARs", fci:"FCI", caucion:"Caución", cripto:"Cripto", criptomoneda:"Cripto", bitcoin:"Cripto", btc:"Cripto", eth:"Cripto",
+  bonos:"Bonos USD", on:"ONs Corporativas", ons:"ONs Corporativas", lecap:"Otros", letra:"Otros"};
+const CR_OP_VENTA=new Set(["venta","vendi","vendimos","vender","rescate","rescate","rescati"]);
+const CR_OP_COMPRA=new Set(["compra","compre","compramos","comprar","suscripcion","suscribi","suscribo"]);
+// La opción de subcategoría de inversión que corresponde a la operación ("Venta", "Compra SPY", "Rescate capital"…).
+function crElegirSubInversion(opciones, op, ticker){
+  const lista=(opciones||[]).map(o=>({o, n:crNorm(o)}));
+  const claves=op==="venta" ? ["venta","rescate","tomada"] : ["compra","suscripcion","colocada"];
+  if(op==="compra" && ticker){ const t=lista.find(x=>x.n==="compra "+crNorm(ticker)); if(t) return t.o; }
+  for(const k of claves){ const exacta=lista.find(x=>x.n===k); if(exacta) return exacta.o; }
+  for(const k of claves){ const parcial=lista.find(x=>x.n.startsWith(k)); if(parcial) return parcial.o; }
+  // Subcategorías con el nombre de la categoría delante, como las que se crean a mano ("Acciones Venta", "Acciones Compra")
+  for(const k of claves){ const palabra=lista.find(x=>x.n.split(/\s+/).includes(k)); if(palabra) return palabra.o; }
+  return "";
+}
+
 const CR_PLACEHOLDER_CUENTAS=["cuentas","tarjetas de credito"];
 
 // Minúsculas y sin acentos, pero CONSERVANDO los puntos y comas de los números (normalizarTexto los saca).
@@ -32,7 +49,7 @@ function crLeerMonto(n){
 // Interpreta `texto`. ctx = {hoy:"YYYY-MM-DD", cuentas:[…], tarjetas:[…], sugerir:(texto,tipo)=>{cat,subcat}|null, cats:tipo=>({cat:[subs]})}.
 // Devuelve {ok, motivo, tipo, importe, moneda, fecha, cuenta, tarjeta, cuotas, nota, cat, subcat, entendido:[…]}.
 function interpretarCargaRapida(texto, ctx){
-  const out={ok:false, motivo:"", tipo:"Gasto", importe:0, moneda:"ARS", fecha:ctx.hoy, cuenta:"", tarjeta:"", cuotas:0, nota:"", cat:"", subcat:"", entendido:[]};
+  const out={ok:false, motivo:"", tipo:"Gasto", importe:0, moneda:"ARS", fecha:ctx.hoy, cuenta:"", tarjeta:"", cuotas:0, nota:"", cat:"", subcat:"", ticker:"", operacion:"", entendido:[]};
   const toks=String(texto||"").trim().split(/\s+/).filter(Boolean).map(o=>({o, n:crNorm(o), u:false}));
   if(!toks.length){ out.motivo="Escribí algo, por ejemplo: nafta 15000 visa ayer"; return out; }
   const usar=(i,len)=>{ for(let k=0;k<len;k++) toks[i+k].u=true; };
@@ -106,12 +123,42 @@ function interpretarCargaRapida(texto, ctx){
     if(elegido.valor>0){ out.importe=elegido.valor; usar(elegido.i, elegido.largo); }
   }
 
-  // 6. Tipo
+  // 6. Inversión: un activo que conocés por su ticker ("ypf", "spy") o que se nombra ("acción", "cedear", "fci"), con su operación.
+  let hayInv=false, activo="", opInv="";
+  if(!out.tarjeta && !(out.cuotas>1)){
+    const conocidos=ctx.tickers||[];
+    toks.forEach((t,i)=>{
+      if(t.u) return;
+      if(CR_OP_VENTA.has(t.n)){ opInv=opInv||"venta"; usar(i,1); }
+      else if(CR_OP_COMPRA.has(t.n)){ opInv=opInv||"compra"; usar(i,1); }
+    });
+    toks.forEach((t,i)=>{
+      if(t.u || out.ticker) return;
+      const k=conocidos.find(c=>c.clave===t.n);
+      if(k){ out.ticker=k.ticker; activo=k.cat||""; usar(i,1); hayInv=true; }
+    });
+    toks.forEach((t,i)=>{
+      if(t.u || !CR_ACTIVO[t.n]) return;
+      hayInv=true; activo=activo||CR_ACTIVO[t.n]; usar(i,1);
+      // "acción ggal": lo que sigue a la palabra del activo es el ticker, si todavía no se reconoció uno
+      const sig=toks[i+1];
+      if(!out.ticker && sig && !sig.u && /^[a-z][a-z0-9]{1,6}$/.test(sig.n) && !CR_RELLENO.has(sig.n) && !CR_OP_VENTA.has(sig.n) && !CR_OP_COMPRA.has(sig.n)){
+        const k=conocidos.find(c=>c.clave===sig.n);
+        out.ticker=k ? k.ticker : sig.n.toUpperCase(); if(k && k.cat) activo=k.cat; usar(i+1,1);
+      }
+    });
+    if(!hayInv){ /* una "venta" o "compra" sin activo no es una inversión: esas palabras vuelven a la descripción */
+      toks.forEach(t=>{ if(CR_OP_VENTA.has(t.n)||CR_OP_COMPRA.has(t.n)) t.u=false; });
+      opInv="";
+    }
+  }
+  // 7. Tipo
   const restantes=toks.filter(t=>!t.u);
   if(out.tarjeta || out.cuotas>1) out.tipo="Tarjeta";
+  else if(hayInv) out.tipo="Inversion";
   else if(restantes.some(t=>CR_INGRESO.test(t.n))) out.tipo="Ingreso";
 
-  // 7. Descripción: lo que sobra, sin palabras de relleno en los bordes
+  // 8. Descripción: lo que sobra, sin palabras de relleno en los bordes
   let sobra=toks.filter(t=>!t.u);
   while(sobra.length && CR_RELLENO.has(sobra[0].n)) sobra=sobra.slice(1);
   while(sobra.length && CR_RELLENO.has(sobra[sobra.length-1].n)) sobra=sobra.slice(0,-1);
@@ -119,22 +166,40 @@ function interpretarCargaRapida(texto, ctx){
   if(nota) nota=nota.charAt(0).toUpperCase()+nota.slice(1);
   out.nota=nota;
 
-  // 8. Categoría (la misma sugerencia de la nota: tu historial primero, después reglas conocidas)
-  const tipoCat=out.tipo==="Tarjeta" ? "Gasto" : out.tipo;
-  const sug=nota && ctx.sugerir ? ctx.sugerir(nota, tipoCat) : null;
-  const catsDe=ctx.cats ? ctx.cats(out.tipo==="Tarjeta"?"Tarjeta":out.tipo) : null;
-  if(sug && sug.cat && (!catsDe || catsDe[sug.cat])){ out.cat=sug.cat; out.subcat=(sug.subcat && catsDe && (catsDe[sug.cat]||[]).includes(sug.subcat)) ? sug.subcat : ""; }
+  // 9. Categoría (la misma sugerencia de la nota: tu historial primero, después reglas conocidas)
+  if(out.tipo==="Inversion"){
+    const catsInv=ctx.cats ? ctx.cats("Inversion") : null;
+    out.operacion=opInv||"compra";
+    if(activo && (!catsInv || catsInv[activo])) out.cat=activo;
+    if(out.cat && catsInv) out.subcat=crElegirSubInversion(catsInv[out.cat], out.operacion, out.ticker);
+    out.nota=nota;   // lo que sobra, si algo: el ticker ya identifica el activo
+  } else {
+    const tipoCat=out.tipo==="Tarjeta" ? "Gasto" : out.tipo;
+    const sug=nota && ctx.sugerir ? ctx.sugerir(nota, tipoCat) : null;
+    const catsDe=ctx.cats ? ctx.cats(out.tipo==="Tarjeta"?"Tarjeta":out.tipo) : null;
+    if(sug && sug.cat && (!catsDe || catsDe[sug.cat])){ out.cat=sug.cat; out.subcat=(sug.subcat && catsDe && (catsDe[sug.cat]||[]).includes(sug.subcat)) ? sug.subcat : ""; }
+  }
 
   if(!(out.importe>0)){ out.motivo="No encontré el monto. Probá con algo como: nafta 15000 visa ayer"; return out; }
   out.ok=true;
   const m$=out.moneda==="USD" ? `USD ${String(out.importe).replace(".",",")}` : fmtS(out.importe);
-  out.entendido=[out.tipo==="Tarjeta"&&out.cuotas>1 ? `Tarjeta en ${out.cuotas} cuotas` : out.tipo, m$, out.cat?(out.cat+(out.subcat?` › ${out.subcat}`:"")):"", out.tarjeta, out.cuenta, fechaTxt||"hoy"].filter(Boolean);
+  const tipoTxt=out.tipo==="Inversion" ? `Inversión · ${out.operacion==="venta"?"Venta":"Compra"}${out.ticker?" "+out.ticker:""}` : (out.tipo==="Tarjeta"&&out.cuotas>1 ? `Tarjeta en ${out.cuotas} cuotas` : out.tipo);
+  out.entendido=[tipoTxt, m$, out.cat?(out.cat+(out.subcat?` › ${out.subcat}`:"")):"", out.tarjeta, out.cuenta, fechaTxt||"hoy"].filter(Boolean);
   return out;
 }
 
 // ── Pantalla ──
+// Los tickers que ya usaste en inversiones ("ypf" → YPFD, con la categoría en que lo cargaste), el más reciente primero.
+function tickersConocidos(lista){
+  const vistos=new Set(), out=[];
+  (lista||[]).forEach(m=>{
+    if(m.tipo!=="Inversion" || !m.ticker) return;
+    [m.ticker, m.tickerOrig].filter(Boolean).forEach(t=>{ const clave=crNorm(t); if(clave && !vistos.has(clave)){ vistos.add(clave); out.push({clave, ticker:String(m.ticker).toUpperCase(), cat:m.cat||""}); } });
+  });
+  return out;
+}
 function contextoCargaRapida(){
-  return {hoy:currentYMD(), cuentas:getCuentas(), tarjetas:getTarjetas(), sugerir:(t,tp)=>buscarSugerencia(t,tp), cats:tp=>getCats(tp)};
+  return {hoy:currentYMD(), cuentas:getCuentas(), tarjetas:getTarjetas(), tickers:tickersConocidos(movs), sugerir:(t,tp)=>buscarSugerencia(t,tp), cats:tp=>getCats(tp)};
 }
 function crPonerSelect(id, valor){
   const sel=document.getElementById(id);
@@ -158,7 +223,15 @@ function crPonerFecha(id, iso){
 // Rellena el formulario de Cargar con lo interpretado. No guarda.
 function aplicarCargaRapida(r){
   setTipo(r.tipo);
-  if(r.tipo==="Tarjeta"){
+  if(r.tipo==="Inversion"){
+    crPonerMonto("inv-importe", r.importe, typeof formatearNumeroConMiles!=="undefined" ? formatearNumeroConMiles : null);
+    if(typeof pillMoneda==="function") pillMoneda("inv-moneda", r.moneda);
+    if(crPonerSelect("inv-cat", r.cat)){ if(typeof updateInvSubcats==="function") updateInvSubcats(); crPonerSelect("inv-subcat", r.subcat); if(typeof buildInvCatChips==="function") buildInvCatChips(); }
+    const tk=document.getElementById("inv-ticker"); if(tk){ tk.value=r.ticker; if(typeof buildTickerRecientes==="function") buildTickerRecientes(); }
+    crPonerSelect("inv-cuenta", r.cuenta);
+    crPonerFecha("inv-fecha", r.fecha);
+    const nt=document.getElementById("inv-nota"); if(nt) nt.value=r.nota;
+  } else if(r.tipo==="Tarjeta"){
     document.getElementById("tc-desc").value=r.nota || r.cat || "Compra con tarjeta";
     crPonerMonto("tc-total", r.importe, typeof formatearNumeroConMiles!=="undefined" ? formatearNumeroConMiles : null);
     if(typeof pillMoneda==="function") pillMoneda("tc-moneda", r.moneda);
@@ -187,6 +260,15 @@ function cargaRapida(){
     res.innerHTML=r.ok ? `✓ Entendí: <strong>${r.entendido.map(escapeHtml).join(" · ")}</strong>${r.nota?` · “${escapeHtml(r.nota)}”`:""}. Revisá y tocá <strong>Guardar</strong>.` : escapeHtml(r.motivo);
     res.style.color=r.ok ? "var(--save)" : "var(--danger)";
   }
-  if(r.ok){ aplicarCargaRapida(r); inp.value=""; }
+  if(r.ok){
+    aplicarCargaRapida(r);
+    inp.value="";
+    // Si lo que quedó elegido en la operación no coincide con lo entendido, se avisa en vez de dejar un dato equivocado a la vista.
+    if(r.tipo==="Inversion" && res){
+      const sub=crNorm((document.getElementById("inv-subcat")||{}).value||"");
+      const ok=r.operacion==="venta" ? /venta|rescate|tomada/.test(sub) : /compra|suscripcion|colocada/.test(sub);
+      if(!ok){ res.innerHTML+=` <strong style="color:var(--warning)">⚠️ Elegí la operación (${r.operacion==="venta"?"venta":"compra"}) a mano: no encontré la opción en esa categoría.</strong>`; }
+    }
+  }
   return r;
 }
