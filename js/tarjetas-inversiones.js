@@ -1551,8 +1551,7 @@ function borrarMovInv(id,btn){
     },2500);
     return;
   }
-  movs=movs.filter(m=>m.id!==id);
-  save();
+  eliminarConDeshacer("mov", m=>m.id===id, "Inversión eliminada");
   renderInv();
 }
 

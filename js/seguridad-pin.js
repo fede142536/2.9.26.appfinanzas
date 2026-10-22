@@ -9,7 +9,7 @@
 // mientras todo ya estaba cargado en JS. Si el usuario NUNCA activó un PIN, isEncActive()
 // da false siempre y getSensitiveRaw/setSensitiveRaw se comportan exactamente igual que
 // localStorage.getItem/setItem de toda la vida: cero cambio de comportamiento ni overhead.
-const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons"];
+const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera"];
 let encKey=null;   // CryptoKey en memoria, solo durante la sesión desbloqueada (nunca se persiste)
 let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: valorJSONstring, ...}
 
@@ -147,7 +147,7 @@ document.addEventListener("visibilitychange", ()=>{
 // es lo único de esto que el usuario llega a ver.
 const NOMBRE_CLAVE_DATOS={
   fmovs3:"tus movimientos", ftcs3:"tus tarjetas", fcustom3:"tus categorías personalizadas",
-  fmetas:"tus metas de ahorro", fimphist3:"tu historial de importaciones",
+  fmetas:"tus metas de ahorro", fpapelera:"tu papelera", fimphist3:"tu historial de importaciones",
   fcatorder:"el orden de tus categorías", fpresup:"tus presupuestos",
   fcuentas:"tus cuentas", ftarjetas:"tus tarjetas guardadas", ficons:"tus íconos personalizados"
 };
@@ -212,6 +212,7 @@ function loadSensitiveIntoMemory(){
   cuentasCustom = leerJSONSeguro("fcuentas","[]","array");
   tarjetasCustom = leerJSONSeguro("ftarjetas","[]","array");
   iconsCustom = leerJSONSeguro("ficons","{}","object");
+  if(typeof cargarPapelera==="function") cargarPapelera();
   if(datosCorruptosAlArrancar.length) avisarDatosCorruptos(datosCorruptosAlArrancar);
 }
 

@@ -474,9 +474,7 @@ function borrarMovDesdeAhorroCat(id, cat, btn){
     },2500);
     return;
   }
-  movs=movs.filter(m=>m.id!==id);
-  save();
-  showToast("Movimiento eliminado");
+  eliminarConDeshacer("mov", m=>m.id===id, "Movimiento eliminado");
   renderMovs();
   renderAhorro();
   // Si todavía quedan movimientos de esta categoría, refrescar el modal; si no, cerrarlo.

@@ -123,9 +123,10 @@ async function aplicarGrupoSinCuenta(i){
   if(!g) return;
   if(!cuenta){ showToast("Elegí una cuenta para este grupo"); return; }
   await copiaAntesDeAsignarCuentas();
+  const revertir=capturarCampos(movs.filter(m=>g.ids.includes(m.id)), ["cuenta"]);
   const n=asignarCuentaAMovimientos(movs, g.ids, cuenta);
-  if(n) save();
-  showToast(`${n} ${n===1?"movimiento":"movimientos"} → ${cuenta} ✓`);
+  if(n){ save(); ofrecerDeshacerCambio(`${n} ${n===1?"movimiento":"movimientos"} → ${cuenta} ✓`, ()=>{ revertir(); renderSinCuentaDetalle(); }); }
+  else showToast("No había nada para cambiar");
   renderSinCuentaDetalle();
 }
 async function aplicarSugerenciasSinCuenta(){
@@ -134,9 +135,10 @@ async function aplicarSugerenciasSinCuenta(){
   if(!con.length) return;
   if(!await mostrarConfirm(`¿Asignar la cuenta sugerida a ${r.conSugerencia} movimientos (${con.length} grupos)? Antes guardo una copia de seguridad.`, {textoOk:"Asignar"})) return;
   await copiaAntesDeAsignarCuentas();
+  const ids=new Set(con.flatMap(g=>g.ids));
+  const revertir=capturarCampos(movs.filter(m=>ids.has(m.id)), ["cuenta"]);
   let n=0;
   con.forEach(g=>{ n+=asignarCuentaAMovimientos(movs, g.ids, g.cuenta); });
-  if(n) save();
-  showToast(`${n} movimientos con cuenta ✓`);
+  if(n){ save(); ofrecerDeshacerCambio(`${n} movimientos con cuenta ✓`, ()=>{ revertir(); renderSinCuentaDetalle(); }); }
   renderSinCuentaDetalle();
 }

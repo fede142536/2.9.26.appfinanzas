@@ -85,7 +85,7 @@ function showPage(id,btn){
   if(id==="inv" && !yaAlDia) renderInv();
   if(id==="ahorro" && !yaAlDia) renderAhorro();
   if(id==="import"){ renderImportHistory(); renderMigrarCambios(); renderTraspasos(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
-  if(id==="config"){initSeccionesConfig();renderExportStats();renderCatManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderSinCuentaCard();renderTarjetasManager();renderEstadoBackup();renderVencConfig();renderInflacion();} // liviano
+  if(id==="config"){initSeccionesConfig();renderExportStats();renderCatManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderSinCuentaCard();renderPapeleraCard();renderTarjetasManager();renderEstadoBackup();renderVencConfig();renderInflacion();} // liviano
   if(["mov","dash","tc","inv","ahorro"].includes(id)) paginaVersionRenderizada[id]=datosVersion;
   // Reponer el scroll AL FINAL, no antes: los render de arriba cambian el alto de la página y
   // si se hace primero el navegador recorta la posición al alto viejo (más corto) y quedás
@@ -232,6 +232,11 @@ function setFiltroTarjeta(t){
   filtroTarjeta=t;
   renderMovs();
 }
+// Filtro por cuenta (banco o billetera): "" = todas.
+function setFiltroCuenta(c){
+  filtroCuenta=c;
+  renderMovs();
+}
 // Aplica el sub-filtro por categoría dentro de Gastos / Ingresos
 function setFiltroCategoria(c){
   filtroCategoria=c;
@@ -373,6 +378,51 @@ function cuentaVisible(m){
   const c=String((m&&m.cuenta)||"").trim();
   return c && c!==CUENTA_SIN_ELEGIR ? c : "";
 }
+// ── Filtro por cuenta ──
+const SIN_CUENTA="__sin_cuenta__";
+// La cuenta con la que se compara: la del movimiento y, en una compra con tarjeta, el banco asociado a la tarjeta.
+const cuentaEfectiva=m=>cuentaVisible(m) || (m._isTc ? bancoDeTarjeta(m.tarjeta) : "");
+const coincideCuenta=(m, filtro)=> filtro===SIN_CUENTA ? !cuentaEfectiva(m) : cuentaEfectiva(m)===filtro;
+// Las cuentas que aparecen en `lista`, la más usada primero: [{cuenta, n}] ("" = sin cuenta elegida).
+function cuentasDeLista(lista){
+  const n={};
+  (lista||[]).forEach(m=>{ const c=cuentaEfectiva(m); n[c]=(n[c]||0)+1; });
+  return Object.entries(n).map(([cuenta,cant])=>({cuenta, n:cant})).sort((a,b)=>b.n-a.n || a.cuenta.localeCompare(b.cuenta));
+}
+// Lo que salió y lo que entró (en pesos) de `lista`: gastos e inversiones compradas salen; ingresos y rescates entran. Lo pagado
+// con el fondo de ahorro y los traspasos no pasaron por la cuenta. Las compras con tarjeta no cuentan: se pagan con el resumen.
+function resumenDeCuenta(lista){
+  let salio=0, entro=0, n=0;
+  (lista||[]).forEach(m=>{
+    if(m._isTc) return;
+    n++;
+    if(m.tipo==="Ingreso") entro+=montoARS(m);
+    else if(m.tipo==="Inversion"){ if(isInvSalida(m)) entro+=(m.importe||0); else salio+=(m.importe||0); }
+    else if(esGasto(m) && !esRetiroAhorro(m) && !esTraspaso(m)) salio+=montoARS(m);
+  });
+  const r2=x=>Math.round(x*100)/100;
+  return {n, salio:r2(salio), entro:r2(entro)};
+}
+function nombreFiltroCuenta(f){ return f===SIN_CUENTA ? "Sin cuenta elegida" : f; }
+// Dibuja los chips y el resumen del filtro. `base` es la lista de la solapa actual, ANTES de filtrar por cuenta.
+function pintarFiltroCuenta(base, filtrada){
+  const chips=document.getElementById("mov-cuenta-filtro"), res=document.getElementById("mov-cuenta-resumen");
+  if(!chips) return;
+  const aplica=filtro==="Todos"||filtro==="Gasto"||filtro==="Ingreso";
+  const cuentas=aplica ? cuentasDeLista(base) : [];
+  if(!aplica || (cuentas.length<2 && !filtroCuenta)){ chips.style.display="none"; chips.innerHTML=""; if(res){ res.style.display="none"; res.innerHTML=""; } return; }
+  const opciones=cuentas.map(c=>({v:c.cuenta||SIN_CUENTA, txt:c.cuenta||"Sin cuenta", n:c.n}));
+  if(filtroCuenta && !opciones.some(o=>o.v===filtroCuenta)) opciones.push({v:filtroCuenta, txt:nombreFiltroCuenta(filtroCuenta), n:0});
+  chips.style.display="flex";
+  chips.innerHTML=`<span class="filter-chip-label">🏦 Cuenta</span><span role="button" tabindex="0" class="filter-chip ${filtroCuenta===''?'active':''}" onclick="setFiltroCuenta('')">Todas</span>`
+    +opciones.map(o=>`<span role="button" tabindex="0" class="filter-chip ${filtroCuenta===o.v?'active':''}" onclick="setFiltroCuenta(${attrJS(o.v)})">${escapeHtml(o.txt)} <span class="txt-muted">${o.n}</span></span>`).join("");
+  if(!res) return;
+  if(!filtroCuenta){ res.style.display="none"; res.innerHTML=""; return; }
+  const r=resumenDeCuenta(filtrada);
+  res.style.display="block";
+  res.innerHTML=`<strong>${escapeHtml(nombreFiltroCuenta(filtroCuenta))}</strong> · ${r.n} ${r.n===1?"movimiento":"movimientos"} · Salió <strong>${fmtS(r.salio)}</strong> · Entró <strong>${fmtS(r.entro)}</strong> <span class="txt-muted">(en pesos)</span>`;
+}
+
 // La etiqueta que va al final del subtítulo de la fila: la cuenta (banco o billetera). En una compra con tarjeta se agrega
 // el nombre de la tarjeta solo si el subtítulo todavía no lo dice, y el banco: el de la cuenta que cargaste en esa compra o,
 // si no hay, el que le asociaste a la tarjeta en Configuración.
@@ -1340,6 +1390,10 @@ function renderMovs(){
   show=show.slice().sort(ordenCronologico);
   // Aplicar búsqueda
   if(searchQuery) show=show.filter(matchSearch);
+  // Filtro por cuenta: los chips se arman con lo de la solapa (antes de filtrar), así se ve entre qué cuentas elegir.
+  const antesDeCuenta=show;
+  if(filtroCuenta && (filtro==="Todos"||filtro==="Gasto"||filtro==="Ingreso")) show=show.filter(m=>coincideCuenta(m, filtroCuenta));
+  pintarFiltroCuenta(antesDeCuenta, show);
   const list=document.getElementById("tx-list");
   if(!show.length){
     if(searchQuery) list.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div>Sin resultados para "${escapeHtml(searchQuery)}"</div>`;
@@ -1364,9 +1418,7 @@ async function borrarMov(id, btn){
     // Si esta compra se había guardado al fondo (ver crearDepositoAhorroUSD), ese depósito no
     // comparte cambioId con las dos patas — sin este filtro extra quedaría huérfano, sumando
     // para siempre a un Fondo USD de un cambio que ya no existe.
-    movs=movs.filter(x=>x.cambioId!==m.cambioId && x.origenCambioId!==m.cambioId);
-    save();
-    showToast("Cambio de moneda eliminado");
+    eliminarConDeshacer("mov", x=>x.cambioId===m.cambioId || x.origenCambioId===m.cambioId, "Cambio de moneda eliminado");
     renderMovs();
     return;
   }
@@ -1376,17 +1428,16 @@ async function borrarMov(id, btn){
     const mesDeBaja=mesActual; // usa el mes seleccionado en la pestaña Movs
     if(await mostrarConfirm(`Este es un gasto frecuente mensual.\n\n¿Querés darlo de baja desde ${mesLbl(mesDeBaja)}? (los meses anteriores se mantienen)\n\nCancelar = eliminarlo por completo, incluyendo todos los meses anteriores.`, {textoOk:"Dar de baja", textoCancelar:"Eliminar todo"})){
       // mesFin es el último mes INCLUIDO. Para "dar de baja desde X", mesFin = mes anterior a X.
+      const revertirBaja=capturarCampos([m], ["mesFin"]);
       m.mesFin = addMonths(mesDeBaja, -1);
       save();
-      showToast(`Gasto frecuente dado de baja desde ${mesLbl(mesDeBaja)} ✓`);
+      ofrecerDeshacerCambio(`Gasto frecuente dado de baja desde ${mesLbl(mesDeBaja)} ✓`, revertirBaja);
       renderMovs();
       return;
     }
     // Si dijo cancelar, ofrecemos borrado total con segunda confirmación
     if(!await mostrarConfirm(`⚠️ Vas a eliminar el gasto frecuente y todos sus meses (incluyendo el historial). ¿Confirmás?`, {textoOk:"Eliminar todo", peligroso:true})) return;
-    movs=movs.filter(x=>x.id!==id);
-    save();
-    showToast("Gasto frecuente eliminado");
+    eliminarConDeshacer("mov", x=>x.id===id, "Gasto frecuente eliminado");
     renderMovs();
     return;
   }
@@ -1401,17 +1452,14 @@ async function borrarMov(id, btn){
     },2500);
     return;
   }
-  movs=movs.filter(m=>m.id!==id);
-  save();
+  eliminarConDeshacer("mov", m=>m.id===id, "Movimiento eliminado");
   renderMovs();
 }
 async function confirmarBorrarTc(id){
   const t=tcs.find(x=>x.id===id);
   if(!t) return;
   if(await mostrarConfirm(`¿Eliminar "${t.desc}" (${t.cuotasTotal} cuotas, ${fmt(t.total)})?`, {textoOk:"Eliminar", peligroso:true})){
-    tcs=tcs.filter(x=>x.id!==id);
-    save();
-    showToast("Tarjeta eliminada");
+    eliminarConDeshacer("tc", x=>x.id===id, "Compra con tarjeta eliminada");
     renderMovs();
     if(document.getElementById("page-tc")&&document.getElementById("page-tc").classList.contains("active")) renderTarjetas();
   }

@@ -247,7 +247,20 @@ function animarNumero(elemento, valorFinal, duracion, formatoFn){
 })();
 
 function vibrar(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
-function showToast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200);}
+let toastTimer=null;
+function showToast(msg){const t=document.getElementById("toast");clearTimeout(toastTimer);t.classList.remove("con-accion");t.textContent=msg;t.classList.add("show");toastTimer=setTimeout(()=>t.classList.remove("show"),2200);}
+// Un aviso con un botón (p. ej. "Deshacer"): dura más, para dar tiempo a tocarlo. Un aviso nuevo lo reemplaza.
+function showToastAccion(msg, textoAccion, fn, ms){
+  const t=document.getElementById("toast");
+  clearTimeout(toastTimer);
+  t.textContent="";
+  const span=document.createElement("span"); span.textContent=msg;
+  const b=document.createElement("button"); b.type="button"; b.className="toast-accion"; b.textContent=textoAccion;
+  b.onclick=()=>{ clearTimeout(toastTimer); t.classList.remove("show","con-accion"); fn(); };
+  t.append(span,b);
+  t.classList.add("show","con-accion");
+  toastTimer=setTimeout(()=>t.classList.remove("show","con-accion"), ms||7000);
+}
 
 // ═══════════════════════════════════════════
 // ACCESIBILIDAD: TECLADO

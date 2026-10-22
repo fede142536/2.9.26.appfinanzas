@@ -225,6 +225,7 @@ let custom={"Gasto":{},"Ingreso":{},"Inversion":{},"Tarjeta":{}};
 // Migración: si custom existe pero no tiene la clave Tarjeta, la agregamos
 if(!custom.Tarjeta) custom.Tarjeta={};
 let metas=[];
+let papelera=[];   // lo eliminado en los últimos 30 días (ver papelera.js)
 let importHistory=[];
 // Devuelve el mes actual "YYYY-MM" usando hora LOCAL (no UTC).
 // Importante en Argentina (UTC-3): a partir de las 21:00 del último día del mes,
@@ -247,6 +248,7 @@ let mesTc = currentYM(); // mes seleccionado en pestaña Tarjetas
 let mesInv = currentYM(); // mes seleccionado en pestaña Inversiones
 let searchQuery = ""; // búsqueda actual en Movimientos
 let filtroTarjeta = ""; // filtro por nombre de tarjeta dentro del filtro Tarjeta ("" = todas)
+let filtroCuenta = ""; // filtro por cuenta (banco/billetera) en Todos/Gasto/Ingreso ("" = todas, SIN_CUENTA = las sin cuenta elegida)
 let filtroCategoria = ""; // filtro por categoría dentro de filtros Gasto/Ingreso ("" = todas)
 let filtro="Todos";
 let dashYear=2026;
