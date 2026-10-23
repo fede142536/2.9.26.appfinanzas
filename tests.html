@@ -9237,6 +9237,39 @@ test("voz: cada error del reconocedor tiene un mensaje claro", ()=>{
   igual(mensajeErrorVoz("aborted"), "", "cancelar a propósito no es un error"); cierto(mensajeErrorVoz("otra-cosa").length>10);
 });
 
+test("voz: los miles partidos o mezclados se unen en un solo número (12 838, 12 mil 838, 1 200 000)", ()=>{
+  igual(crNumerosEnPalabras("supermercado gasto 12 838"), "supermercado gasto 12838");
+  igual(crNumerosEnPalabras("supermercado gasto 12 mil 838"), "supermercado gasto 12838");
+  igual(crNumerosEnPalabras("sueldo 1 200 000 galicia"), "sueldo 1200000 galicia");
+  igual(crNumerosEnPalabras("sueldo 1 millón 200 mil galicia"), "sueldo 1200000 galicia");
+  igual(crNumerosEnPalabras("compré spy 104 mil 500 balanz"), "compré spy 104500 balanz");
+  igual(crNumerosEnPalabras("supermercado gasto doce mil ochocientos treinta y ocho"), "supermercado gasto 12838");
+  igual(crNumerosEnPalabras("nafta 15 mil visa en 3 cuotas"), "nafta 15000 visa en 3 cuotas", "el '3 cuotas' no se pega al monto");
+  igual(crNumerosEnPalabras("nafta 15 mil 3 cuotas visa"), "nafta 15000 3 cuotas visa");
+  igual(crNumerosEnPalabras("tele 6 cuotas 100 000"), "tele 6 cuotas 100000");
+  igual(crNumerosEnPalabras("cena con 3 amigos 30000"), "cena con 3 amigos 30000", "dos números sueltos no se unen");
+  igual(crNumerosEnPalabras("pagué 12.838 hoy"), "pagué 12.838 hoy", "un número con punto no se toca");
+});
+
+test("voz: lo que se dijo en voz alta se carga bien — gasto, ingreso, inversión y tarjeta", ()=>{
+  const g=cr("supermercado gasto 12 838"); igual([g.ok, g.tipo, g.importe, g.nota, g.cat], [true, "Gasto", 12838, "Supermercado", "Supermercado"], "el caso que cargaba 838 con '12' de nota");
+  const g2=cr("Supermercado, gasto 12.838."); igual([g2.tipo, g2.importe, g2.nota], ["Gasto", 12838, "Supermercado"]);
+  const g3=cr("super gasto doce mil ochocientos treinta y ocho efectivo"); igual([g3.tipo, g3.importe, g3.cuenta, g3.cat], ["Gasto", 12838, "Efectivo", "Supermercado"]);
+  const i=cr("sueldo ingreso 1 200 000 galicia"); igual([i.tipo, i.importe, i.cuenta, i.nota, i.cat], ["Ingreso", 1200000, "Galicia", "Sueldo", "Salario"]);
+  const v=cr("vendí acciones de ypf 45 mil pesos balanz"); igual([v.tipo, v.operacion, v.ticker, v.importe, v.cuenta, v.nota], ["Inversion", "venta", "YPFD", 45000, "Balanz", ""], "'pesos' no queda en la nota");
+  const c=cr("compré spy 104 mil 500 balanz"); igual([c.tipo, c.operacion, c.ticker, c.importe], ["Inversion", "compra", "SPY", 104500]);
+  const t=cr("televisor 600 mil visa 6 cuotas"); igual([t.tipo, t.importe, t.tarjeta, t.cuotas, t.nota], ["Tarjeta", 600000, "Visa", 6, "Televisor"]);
+  igual(cr("gasto supermercado 12000").tipo, "Gasto"); igual(cr("dinero extra gasto 5000").tipo, "Gasto", "decir 'gasto' manda aunque el nombre sea de una categoría de ingresos");
+  igual(cr("ingreso dinero extra 5000").tipo, "Ingreso");
+});
+
+test("voz: transcripcionDeVoz no repite lo ya dicho cuando el celular entrega resultados acumulados", ()=>{
+  const res=(...x)=>x.map(([t,f])=>Object.assign([{transcript:t}],{isFinal:f}));
+  igual(transcripcionDeVoz(res(["supermercado", true], ["supermercado gasto", true], ["supermercado gasto 12 838", true])).texto, "supermercado gasto 12 838");
+  igual(transcripcionDeVoz(res(["supermercado gasto", true], ["12 838", true])).texto, "supermercado gasto 12 838", "tramos distintos se unen");
+  igual(transcripcionDeVoz(res(["supermercado gasto 12 838", true], ["12 838", true])).texto, "supermercado gasto 12 838", "un tramo repetido al final se ignora");
+});
+
 test("voz: el botón solo aparece si el navegador reconoce voz", ()=>{
   const b=document.createElement("button"); b.id="carga-rapida-voz"; b.style.display="none"; document.body.appendChild(b);
   const a1=window.SpeechRecognition, a2=window.webkitSpeechRecognition;
@@ -9268,6 +9301,48 @@ test("voz: dictar escucha en es-AR, muestra lo que entiende y al terminar lo man
   }
 });
 
+test("voz: sigue escuchando si no decís nada y da por terminada la frase tras una pausa", async ()=>{
+  const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; const btn=document.createElement("button"); btn.id="carga-rapida-voz";
+  document.body.append(inp,res,btn);
+  const antes={sr:window.webkitSpeechRecognition, sr2:window.SpeechRecognition, cr:window.cargaRapida, aviso:localStorage.getItem(VOZ_AVISO_KEY), sil:vozSilencioMs, esp:vozEsperaMs};
+  const sesiones=[]; let enviado=null;
+  window.SpeechRecognition=undefined; window.webkitSpeechRecognition=function(){ sesiones.push(this); this.start=()=>{}; this.stop=()=>{ this.onend&&this.onend(); }; };
+  window.cargaRapida=t=>{ enviado=t; }; localStorage.setItem(VOZ_AVISO_KEY,"1"); vozSilencioMs=80; vozEsperaMs=5000;
+  try{
+    await dictarCargaRapida();
+    igual(sesiones.length, 1); cierto(sesiones[0].continuous, "escucha de corrido");
+    sesiones[0].onerror({error:"no-speech"}); sesiones[0].onend();     // el navegador cortó por silencio: no es un error
+    igual(sesiones.length, 2, "se reinició solo"); cierto(vozEscuchando!==null, "sigue en pantalla escuchando"); igual(enviado, null); cierto(btn.classList.contains("grabando"));
+    sesiones[1].onresult({results:[Object.assign([{transcript:"supermercado gasto"}],{isFinal:false})]});
+    await new Promise(r=>setTimeout(r,30)); igual(enviado, null, "todavía espera por si seguís hablando");
+    sesiones[1].onresult({results:[Object.assign([{transcript:"supermercado gasto 12 838"}],{isFinal:true})]});
+    await new Promise(r=>setTimeout(r,200));
+    igual(enviado, "supermercado gasto 12 838", "tras la pausa se carga lo dicho"); cierto(!btn.classList.contains("grabando")); igual(vozEscuchando, null);
+  } finally {
+    window.webkitSpeechRecognition=antes.sr; window.SpeechRecognition=antes.sr2; window.cargaRapida=antes.cr; vozEscuchando=null; vozSilencioMs=antes.sil; vozEsperaMs=antes.esp;
+    if(antes.aviso===null) localStorage.removeItem(VOZ_AVISO_KEY); else localStorage.setItem(VOZ_AVISO_KEY, antes.aviso);
+    inp.remove(); res.remove(); btn.remove();
+  }
+});
+
+test("voz: tocar ⏹ corta y carga lo que hubiera; la carga rápida muestra lo que escuchó", async ()=>{
+  const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; const btn=document.createElement("button"); btn.id="carga-rapida-voz";
+  document.body.append(inp,res,btn);
+  const antes={sr:window.webkitSpeechRecognition, sr2:window.SpeechRecognition, cr:window.cargaRapida, aviso:localStorage.getItem(VOZ_AVISO_KEY)};
+  let inst=null, enviado=null;
+  window.SpeechRecognition=undefined; window.webkitSpeechRecognition=function(){ inst=this; this.start=()=>{}; this.stop=()=>{ this.onend&&this.onend(); }; };
+  window.cargaRapida=t=>{ enviado=t; }; localStorage.setItem(VOZ_AVISO_KEY,"1");
+  try{
+    await dictarCargaRapida(); inst.onresult({results:[Object.assign([{transcript:"sueldo ingreso 1 200 000 galicia"}],{isFinal:false})]});
+    await dictarCargaRapida();   // segundo toque = parar
+    igual(enviado, "sueldo ingreso 1 200 000 galicia"); igual(vozEscuchando, null);
+  } finally {
+    window.webkitSpeechRecognition=antes.sr; window.SpeechRecognition=antes.sr2; window.cargaRapida=antes.cr; vozEscuchando=null;
+    if(antes.aviso===null) localStorage.removeItem(VOZ_AVISO_KEY); else localStorage.setItem(VOZ_AVISO_KEY, antes.aviso);
+    inp.remove(); res.remove(); btn.remove();
+  }
+});
+
 test("voz: un error o el silencio avisan y no cargan nada", async ()=>{
   const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; const btn=document.createElement("button"); btn.id="carga-rapida-voz";
   document.body.append(inp,res,btn);
@@ -9275,12 +9350,14 @@ test("voz: un error o el silencio avisan y no cargan nada", async ()=>{
   let inst=null, enviado=0;
   window.SpeechRecognition=undefined; window.webkitSpeechRecognition=function(){ inst=this; this.start=()=>{}; this.stop=()=>{}; };
   window.cargaRapida=()=>{ enviado++; }; localStorage.setItem(VOZ_AVISO_KEY,"1");
+  const esperaAntes=vozEsperaMs; vozEsperaMs=0;   // sin espera: el silencio se da por vencido enseguida
   try{
     await dictarCargaRapida(); inst.onerror({error:"not-allowed"}); inst.onend();
     cierto(res.textContent.includes("micrófono"), res.textContent); igual(enviado, 0); cierto(!btn.classList.contains("grabando"));
     await dictarCargaRapida(); inst.onend();
     cierto(res.textContent.includes("No te escuché"), res.textContent); igual(enviado, 0);
   } finally {
+    vozEsperaMs=esperaAntes;
     window.webkitSpeechRecognition=antes.sr; window.SpeechRecognition=antes.sr2; window.cargaRapida=antes.cr; vozEscuchando=null;
     if(antes.aviso===null) localStorage.removeItem(VOZ_AVISO_KEY); else localStorage.setItem(VOZ_AVISO_KEY, antes.aviso);
     inp.remove(); res.remove(); btn.remove();
