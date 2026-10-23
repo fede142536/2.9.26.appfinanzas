@@ -400,6 +400,7 @@ function cargaRapida(dictado){
   if(!inp) return null;
   const texto=typeof dictado==="string" && dictado ? dictado : inp.value;
   const r=interpretarCargaRapida(texto, contextoCargaRapida());
+  let advertencia=false;
   const oido=typeof dictado==="string" && dictado ? `🎤 Escuché: “${escapeHtml(dictado)}”.<br>` : "";
   if(res){
     res.style.display="block";
@@ -413,10 +414,32 @@ function cargaRapida(dictado){
     if(r.tipo==="Inversion" && res){
       const sub=crNorm((document.getElementById("inv-subcat")||{}).value||"");
       const ok=r.operacion==="venta" ? /venta|rescate|tomada/.test(sub) : /compra|suscripcion|colocada/.test(sub);
-      if(!ok){ res.innerHTML+=` <strong style="color:var(--warning)">⚠️ Elegí la operación (${r.operacion==="venta"?"venta":"compra"}) a mano: no encontré la opción en esa categoría.</strong>`; }
+      if(!ok){ res.insertAdjacentHTML("beforeend", ` <strong style="color:var(--warning)">⚠️ Elegí la operación (${r.operacion==="venta"?"venta":"compra"}) a mano: no encontré la opción en esa categoría.</strong>`); advertencia=true; }
+    }
+    // Si todo quedó claro, un toque guarda sin bajar hasta el botón del final. Con una advertencia no se ofrece: primero hay que revisar.
+    if(res && !advertencia){
+      res.insertAdjacentHTML("beforeend", `<div style="margin-top:8px"><button type="button" class="btn-sm carga-rapida-guardar" onclick="guardarDesdeCargaRapida()">✓ Guardar ahora</button></div>`);
     }
   }
   return r;
+}
+
+// Guarda lo que la carga rápida dejó en el formulario (el mismo "Guardar" de siempre, con sus validaciones) y ofrece deshacerlo unos segundos.
+async function guardarDesdeCargaRapida(){
+  const res=document.getElementById("carga-rapida-res");
+  const idsAntes=new Set([...movs, ...tcs].map(x=>x.id));
+  await guardar();
+  const nuevosMov=movs.filter(x=>!idsAntes.has(x.id)).map(x=>x.id), nuevosTc=tcs.filter(x=>!idsAntes.has(x.id)).map(x=>x.id);
+  if(!nuevosMov.length && !nuevosTc.length) return false;   // no guardó (falta un dato): el aviso de siempre ya lo explicó
+  if(res){ res.style.display="none"; res.innerHTML=""; }
+  showToastAccion("Guardado ✓", "Deshacer", ()=>{
+    const m=new Set(nuevosMov), t=new Set(nuevosTc);
+    movs=movs.filter(x=>!m.has(x.id)); tcs=tcs.filter(x=>!t.has(x.id));
+    save();
+    if(typeof refrescarVistas==="function") refrescarVistas();
+    showToast("Guardado deshecho ✓");
+  }, DESHACER_MS);
+  return true;
 }
 
 // ═══════════════════════════════════════════
