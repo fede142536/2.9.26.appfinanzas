@@ -54,35 +54,43 @@ function crLeerMonto(n){
   return {valor:Math.round(v*mult*100)/100, explicito:/^\$/.test(n)||mult!==1};
 }
 
-// ── Números dichos con palabras ("quince mil", "dos millones doscientos mil", "tres cuotas") ──
-// Al dictar, el celular a veces escribe los números con letras. Se pasan a cifras ANTES de interpretar, pero solo si la frase no trae
-// ninguna cifra: así "cena con tres amigos 30000" no se toca (el monto ya está) y "nafta quince mil visa" sí se entiende.
+// ── Números dichos con palabras o partidos en grupos ("quince mil", "12 mil 838", "12 838", "dos millones doscientos mil") ──
+// Al dictar, el celular escribe los números como se le ocurre: con letras ("quince mil"), con espacios entre los miles ("12 838" en vez
+// de "12.838") o mezclados ("12 mil 838"). Todo eso se une en UN número ANTES de interpretar. Una corrida de palabras sueltas ("tres")
+// solo se pasa a cifras si la frase no trae ninguna cifra: así "cena con tres amigos 30000" no se toca.
 const CR_NUM_UNIDAD={cero:0,uno:1,un:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,
   veinte:20,veintiuno:21,veintiun:21,veintiuna:21,veintidos:22,veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29,
   treinta:30,cuarenta:40,cincuenta:50,sesenta:60,setenta:70,ochenta:80,noventa:90,
   cien:100,ciento:100,doscientos:200,doscientas:200,trescientos:300,trescientas:300,cuatrocientos:400,cuatrocientas:400,quinientos:500,quinientas:500,seiscientos:600,seiscientas:600,setecientos:700,setecientas:700,ochocientos:800,ochocientas:800,novecientos:900,novecientas:900};
 function crNumerosEnPalabras(texto){
   const t=String(texto||"");
-  if(/\d/.test(t)) return t;
   const toks=t.split(/\s+/).filter(Boolean);
   const n=toks.map(x=>crNorm(x));
-  const esMil=w=>w==="mil", esMillon=w=>w==="millon"||w==="millones";
-  const esNum=(w,sig)=> (w in CR_NUM_UNIDAD && (w!=="un" && w!=="una" && w!=="uno" || esMil(sig) || esMillon(sig))) || esMil(w) || esMillon(w);
+  const hayCifras=n.some(w=>/\d/.test(w));
+  const esMil=w=>w==="mil", esMillon=w=>w==="millon"||w==="millones", esEscala=w=>esMil(w)||esMillon(w);
+  const esEntero=w=>/^\d{1,9}$/.test(w||"");
+  const esPal=(w,sig)=> (w in CR_NUM_UNIDAD) && (!/^(un|una|uno)$/.test(w) || esEscala(sig));
+  const arranca=i=>{ const w=n[i], sig=n[i+1]; return esPal(w,sig) || esEscala(w) || (esEntero(w) && (esEscala(sig) || (w.length<=3 && /^\d{3}$/.test(sig||"")))); };
   const out=[];
   for(let i=0;i<toks.length;i++){
-    if(!esNum(n[i], n[i+1])){ out.push(toks[i]); continue; }
-    let j=i, total=0, cur=0;
+    if(!arranca(i)){ out.push(toks[i]); continue; }
+    let j=i, total=0, cur=0, previo="", escala=false, grupo=false, palabras=0, enteros=0;
     while(j<toks.length){
-      const w=n[j];
-      if(esNum(w, n[j+1])){
-        if(esMil(w)){ total+=(cur||1)*1000; cur=0; }
-        else if(esMillon(w)){ total+=(cur||1)*1000000; cur=0; }
-        else cur+=CR_NUM_UNIDAD[w];
-        j++;
-      }else if(w==="y" && j+1<toks.length && esNum(n[j+1], n[j+2]) && n[j+1] in CR_NUM_UNIDAD && CR_NUM_UNIDAD[n[j+1]]<10 && cur>=20) j++;   // "treinta y cinco"
+      const w=n[j], sig=n[j+1];
+      if(esEscala(w)){ if(esMil(w)){ total+=(cur||1)*1000; } else { total+=(cur||1)*1000000; } cur=0; escala=true; palabras++; previo="escala"; j++; }
+      else if(esPal(w,sig) && previo!=="int"){ cur+=CR_NUM_UNIDAD[w]; palabras++; previo="pal"; j++; }
+      else if(esEntero(w)){
+        if(previo==="" ){ cur+=Number(w); enteros++; previo="int"; j++; }
+        else if(previo==="int" && /^\d{3}$/.test(w) && (grupo || String(cur).length<=3)){ cur=cur*1000+Number(w); grupo=true; enteros++; previo="int"; j++; }   // "12 838"
+        else if(previo==="escala" && /^\d{1,3}$/.test(w) && !/^cuotas?$/.test(sig||"")){ cur+=Number(w); enteros++; previo="int"; j++; }   // "12 mil 838"
+        else break;
+      }
+      else if(w==="y" && previo==="pal" && esPal(sig, n[j+2]) && CR_NUM_UNIDAD[sig]<10 && cur>=20 && cur%10===0){ j++; }   // "treinta y cinco"
       else break;
     }
-    out.push(String(total+cur));
+    const convertir= escala || grupo || (palabras>0 && enteros===0 && !hayCifras);
+    if(convertir){ out.push(String(total+cur)); }
+    else { for(let k=i;k<j;k++) out.push(toks[k]); }
     i=j-1;
   }
   return out.join(" ");
@@ -99,8 +107,9 @@ function interpretarCargaRapida(texto, ctx){
   const libre=i=>i>=0 && i<toks.length && !toks[i].u;
   const [hy,hm,hd]=ctx.hoy.split("-").map(Number);
 
-  // 1. Moneda
+  // 1. Moneda ("pesos" no cambia nada, pero tampoco tiene que quedar en la descripción)
   toks.forEach((t,i)=>{ if(!t.u && /^(usd|u\$s|us\$|u\$d|dolar|dolares|dollars?)$/.test(t.n)){ out.moneda="USD"; usar(i,1); } });
+  toks.forEach((t,i)=>{ if(!t.u && out.moneda!=="USD" && /^(pesos|peso|ars)$/.test(t.n)) usar(i,1); });
 
   // 2. Cuotas: "3 cuotas", "en 6 cuotas"
   for(let i=0;i<toks.length-1;i++){
@@ -228,12 +237,20 @@ function interpretarCargaRapida(texto, ctx){
     }
   }
 
+  // "supermercado gasto 12000" / "sueldo ingreso 1200000": decirlo en voz alta es la forma más clara de elegir el tipo.
+  let tipoDicho="";
+  toks.forEach(t=>{
+    if(t.u) return;
+    if(t.n==="gasto"){ t.u=true; tipoDicho=tipoDicho||"Gasto"; }
+    else if(t.n==="ingreso"){ t.u=true; tipoDicho=tipoDicho||"Ingreso"; }
+  });
+
   // 7. Tipo
   const restantes=toks.filter(t=>!t.u);
   if(hayCambio) out.tipo="Cambio";
   else if(out.tarjeta || out.cuotas>1) out.tipo="Tarjeta";
   else if(hayInv) out.tipo="Inversion";
-  else if(ingresoPorVerbo || restantes.some(t=>CR_INGRESO.test(t.n))) out.tipo="Ingreso";
+  else if(tipoDicho==="Ingreso" || (tipoDicho!=="Gasto" && (ingresoPorVerbo || restantes.some(t=>CR_INGRESO.test(t.n))))) out.tipo="Ingreso";
 
   // "de mis ahorros" / "del fondo de retiro" en una venta: la plata salió de un fondo de ahorro (el formulario tilda "Sale de mis ahorros").
   if(out.tipo==="Inversion" && opInv==="venta"){
@@ -271,7 +288,7 @@ function interpretarCargaRapida(texto, ctx){
     };
     let porNombre=null;
     // "pagué", "transferí", "gasté"…: lo hiciste vos, así que el nombre de una categoría de ingresos no lo vuelve un ingreso
-    const verboSalida=toks.some(t=>/^(transferi|pague|gaste|abone|regale|preste|compre|pago)$/.test(t.n));
+    const verboSalida=tipoDicho==="Gasto" || toks.some(t=>/^(transferi|pague|gaste|abone|regale|preste|compre|pago)$/.test(t.n));
     if(out.tipo==="Gasto" || out.tipo==="Ingreso"){
       const ing=dePorNombre("Ingreso"), gas=dePorNombre("Gasto");
       if(out.tipo==="Gasto" && ing && !verboSalida && (!gas || ing.n.length>gas.n.length)){ out.tipo="Ingreso"; porNombre=ing; }
@@ -378,13 +395,15 @@ function aplicarCargaRapida(r){
     if(typeof sugerirAhorroDeMeta==="function") sugerirAhorroDeMeta();
   }
 }
-function cargaRapida(){
+function cargaRapida(dictado){
   const inp=document.getElementById("carga-rapida"), res=document.getElementById("carga-rapida-res");
   if(!inp) return null;
-  const r=interpretarCargaRapida(inp.value, contextoCargaRapida());
+  const texto=typeof dictado==="string" && dictado ? dictado : inp.value;
+  const r=interpretarCargaRapida(texto, contextoCargaRapida());
+  const oido=typeof dictado==="string" && dictado ? `🎤 Escuché: “${escapeHtml(dictado)}”.<br>` : "";
   if(res){
     res.style.display="block";
-    res.innerHTML=r.ok ? `✓ Entendí: <strong>${r.entendido.map(escapeHtml).join(" · ")}</strong>${r.nota?` · “${escapeHtml(r.nota)}”`:""}. Revisá y tocá <strong>Guardar</strong>.` : escapeHtml(r.motivo);
+    res.innerHTML=oido+(r.ok ? `✓ Entendí: <strong>${r.entendido.map(escapeHtml).join(" · ")}</strong>${r.nota?` · “${escapeHtml(r.nota)}”`:""}. Revisá y tocá <strong>Guardar</strong>.` : escapeHtml(r.motivo));
     res.style.color=r.ok ? "var(--save)" : "var(--danger)";
   }
   if(r.ok){
@@ -408,18 +427,27 @@ function cargaRapida(){
 // Google para transcribirlo, por eso la primera vez se avisa y hace falta internet. Si el navegador no lo ofrece, el botón no aparece.
 
 const VOZ_AVISO_KEY="fvozaviso";
-let vozEscuchando=null;     // la sesión de reconocimiento en curso, o null
+let vozSilencioMs=3000;        // tras la última palabra, espera esto antes de dar por terminada la frase (sin apuro para pensar)
+let vozEsperaMs=20000;         // si no decís nada, sigue escuchando hasta este tiempo antes de rendirse
+let vozEscuchando=null;        // la sesión de dictado en curso, o null
 
 const vozConstructor=()=> typeof window!=="undefined" ? (window.SpeechRecognition||window.webkitSpeechRecognition||null) : null;
 const vozDisponible=()=>!!vozConstructor();
 
 // Pura. Junta lo que va entendiendo el reconocedor: {texto, final}. `resultados` es el SpeechRecognitionResultList (o algo igual).
+// En el modo continuo de algunos celulares cada resultado repite TODO lo dicho hasta ahí ("nafta" → "nafta quince" → "nafta quince mil"):
+// si un tramo empieza con lo ya juntado lo reemplaza, y si ya está al final, se ignora.
 function transcripcionDeVoz(resultados){
   let texto="", final=true;
   for(let i=0;i<(resultados||[]).length;i++){
     const r=resultados[i];
     if(!r || !r[0]) continue;
-    texto+=(texto?" ":"")+String(r[0].transcript||"").trim();
+    const pieza=String(r[0].transcript||"").trim();
+    if(!pieza) continue;
+    const p=pieza.toLowerCase(), t=texto.toLowerCase();
+    if(!texto) texto=pieza;
+    else if(p.startsWith(t)) texto=pieza;
+    else if(!t.endsWith(p)) texto+=" "+pieza;
     if(!r.isFinal) final=false;
   }
   return {texto:texto.trim(), final};
@@ -453,8 +481,10 @@ function vozMensaje(texto, esError){
   res.textContent=texto||"";
 }
 
+const VOZ_EJEMPLOS="Ej.: “súper gasto 12 mil 800 galicia” · “sueldo ingreso 1 millón efectivo” · “televisor 600 mil visa 6 cuotas” · “vendí spy 100 mil balanz”.";
+
 async function dictarCargaRapida(){
-  if(vozEscuchando){ try{ vozEscuchando.stop(); }catch(e){ /* ya terminó */ } return; }
+  if(vozEscuchando){ vozEscuchando.parar(); return; }
   const SR=vozConstructor();
   if(!SR){ vozMensaje("Tu navegador no permite dictar. Escribí la frase en el campo.", true); return; }
   let avisado=false; try{ avisado=localStorage.getItem(VOZ_AVISO_KEY)==="1"; }catch(e){ /* sin almacenamiento */ }
@@ -465,24 +495,49 @@ async function dictarCargaRapida(){
   }
   const inp=document.getElementById("carga-rapida");
   if(!inp) return;
-  const rec=new SR();
-  rec.lang="es-AR"; rec.interimResults=true; rec.continuous=false; rec.maxAlternatives=1;
-  let ultimo={texto:"", final:false}, fallo=false;
-  rec.onresult=ev=>{
-    ultimo=transcripcionDeVoz(ev.results);
-    inp.value=ultimo.texto;
-  };
-  rec.onerror=ev=>{ fallo=true; const m=mensajeErrorVoz(ev && ev.error); if(m) vozMensaje(m, true); };
-  rec.onend=()=>{
+  // Una sesión sigue escuchando aunque el navegador corte solo (lo hace tras unos segundos de silencio): se reinicia hasta que haya
+  // frase o se acabe la espera. La frase se da por terminada vozSilencioMs después de la última palabra.
+  const ses={texto:"", inicio:Date.now(), timer:null, rec:null, manual:false, fallo:false, terminada:false};
+  const detener=()=>{ try{ ses.rec && ses.rec.stop(); }catch(e){ /* ya terminó */ } };
+  const armar=ms=>{ clearTimeout(ses.timer); ses.timer=setTimeout(detener, ms); };
+  const terminar=()=>{
+    if(ses.terminada) return;
+    ses.terminada=true; clearTimeout(ses.timer);
     vozEscuchando=null; vozPintarBoton(false);
-    if(fallo) return;
-    if(ultimo.texto.trim()) cargaRapida();
+    if(ses.fallo) return;
+    if(ses.texto.trim()) cargaRapida(ses.texto.trim());
     else vozMensaje(mensajeErrorVoz("no-speech"), true);
   };
-  try{
+  const iniciar=()=>{
+    const rec=new SR();
+    rec.lang="es-AR"; rec.interimResults=true; rec.continuous=true; rec.maxAlternatives=1;
+    rec.onresult=ev=>{
+      const t=transcripcionDeVoz(ev.results);
+      if(!t.texto) return;
+      ses.texto=t.texto; inp.value=t.texto;
+      vozMensaje("🎤 Escuchando… cuando termines, esperá un momento o tocá ⏹.", false);
+      armar(vozSilencioMs);
+    };
+    rec.onerror=ev=>{
+      const codigo=ev && ev.error;
+      if(codigo==="no-speech" || codigo==="aborted") return;   // no es un fallo: se reintenta o se avisa al final
+      ses.fallo=true; const m=mensajeErrorVoz(codigo); if(m) vozMensaje(m, true);
+    };
+    rec.onend=()=>{
+      if(ses.terminada) return;
+      const vencida=Date.now()-ses.inicio>=vozEsperaMs;
+      if(!ses.fallo && !ses.manual && !ses.texto && !vencida){ try{ iniciar(); return; }catch(e){ /* no se pudo reiniciar: se termina */ } }
+      terminar();
+    };
+    ses.rec=rec;
     rec.start();
-    vozEscuchando=rec; vozPintarBoton(true);
-    vozMensaje("🎤 Te escucho… decí, por ejemplo: “nafta quince mil visa”.", false);
+  };
+  ses.parar=()=>{ ses.manual=true; detener(); if(!ses.rec || ses.terminada) terminar(); };
+  try{
+    iniciar();
+    vozEscuchando=ses; vozPintarBoton(true);
+    armar(vozEsperaMs);
+    vozMensaje("🎤 Te escucho… decí tipo, monto y cuenta. "+VOZ_EJEMPLOS, false);
   }catch(e){
     vozEscuchando=null; vozPintarBoton(false);
     vozMensaje(mensajeErrorVoz("audio-capture"), true);
