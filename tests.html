@@ -9301,6 +9301,33 @@ test("voz: dictar escucha en es-AR, muestra lo que entiende y al terminar lo man
   }
 });
 
+test("guardar con un toque: la carga rápida ofrece 'Guardar ahora' solo cuando entendió todo", ()=>{
+  const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; document.body.append(inp,res);
+  const antes={ctx:window.contextoCargaRapida, aplicar:window.aplicarCargaRapida}; let aplicados=0;
+  window.contextoCargaRapida=()=>CR_CTX(); window.aplicarCargaRapida=()=>{ aplicados++; };
+  try{
+    cargaRapida("supermercado gasto 12 838"); cierto(res.innerHTML.includes("guardarDesdeCargaRapida()"), "falta el botón"); cierto(res.textContent.includes("Guardar ahora")); igual(aplicados, 1);
+    cargaRapida("nafta ayer visa"); cierto(!res.innerHTML.includes("guardarDesdeCargaRapida"), "sin monto no se ofrece guardar");
+  } finally { window.contextoCargaRapida=antes.ctx; window.aplicarCargaRapida=antes.aplicar; inp.remove(); res.remove(); }
+});
+
+test("guardar con un toque: guarda con el 'Guardar' de siempre, oculta el aviso y se puede deshacer", async ()=>{
+  const res=document.createElement("p"); res.id="carga-rapida-res"; res.innerHTML="algo"; document.body.appendChild(res);
+  let toastEl=document.querySelector("#toast"), toastCreado=false;   // (el getElementById de esta página devuelve un div suelto si no existe)
+  if(!toastEl){ toastEl=document.createElement("div"); toastEl.id="toast"; document.body.appendChild(toastEl); toastCreado=true; }
+  const antes={movs, tcs, guardar:window.guardar, save:window.save, refrescar:window.refrescarVistas, toast:window.showToast};
+  let guardados=0; window.save=()=>{ guardados++; return true; }; window.refrescarVistas=()=>{}; window.showToast=()=>{};
+  movs=[{id:1, tipo:"Gasto", importe:10, moneda:"ARS", cat:"X", fecha:"2026-10-01"}]; tcs=[];
+  try{
+    window.guardar=async()=>{ movs.unshift({id:2, tipo:"Gasto", importe:12838, moneda:"ARS", cat:"Supermercado", fecha:"2026-10-23"}); };
+    igual(await guardarDesdeCargaRapida(), true); igual(movs.map(m=>m.id), [2,1]); igual(res.style.display, "none"); igual(res.innerHTML, "");
+    toastEl.querySelector(".toast-accion").click();
+    igual(movs.map(m=>m.id), [1], "deshacer saca solo lo que se acaba de guardar"); cierto(guardados>=1);
+    window.guardar=async()=>{};   // el formulario no guardó (le faltaba un dato)
+    res.style.display="block"; res.innerHTML="algo"; igual(await guardarDesdeCargaRapida(), false); igual(res.innerHTML, "algo", "si no guardó, el aviso se queda");
+  } finally { movs=antes.movs; tcs=antes.tcs; window.guardar=antes.guardar; window.save=antes.save; window.refrescarVistas=antes.refrescar; window.showToast=antes.toast; res.remove(); if(toastCreado) toastEl.remove(); }
+});
+
 test("voz: sigue escuchando si no decís nada y da por terminada la frase tras una pausa", async ()=>{
   const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; const btn=document.createElement("button"); btn.id="carga-rapida-voz";
   document.body.append(inp,res,btn);
