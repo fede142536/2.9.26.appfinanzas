@@ -73,7 +73,7 @@ function chequeoDelMes(ym, ctx){
   // Gastos fijos sin marcar pagados
   const fp=frecuentesPorPagar(lista.filter(m=>m.tipo==="Gasto"));
   if(fp.total) out.push(fp.pendientes
-    ? {id:"frecuentes", estado:"pendiente", titulo:`${fp.pendientes} ${fp.pendientes===1?"gasto fijo":"gastos fijos"} sin marcar como pagado`, detalle:`Suman ${fp.ars?fmtTotal(fp.ars):""}${fp.usd?` ${fp.ars?"+ ":""}USD ${fp.usd.toFixed(2)}`:""}. Es solo una ayuda memoria, no cambia tu balance.`, accion:{txt:"Marcar"}}
+    ? {id:"frecuentes", estado:"pendiente", titulo:`${fp.pendientes} ${fp.pendientes===1?"gasto fijo":"gastos fijos"} sin marcar como pagado`, detalle:`Suman ${fp.ars?fmtTotal(fp.ars):""}${fp.usd?` ${fp.ars?"+ ":""}USD ${fmtNum2(fp.usd)}`:""}. Es solo una ayuda memoria, no cambia tu balance.`, accion:{txt:"Marcar"}}
     : {id:"frecuentes", estado:"ok", titulo:"Todos los gastos fijos están marcados como pagados", detalle:"", accion:null});
   // Resúmenes de tarjeta sin marcar pagados
   const sinPagar=resumenesDelMes(ym, ctx.movs).filter(r=>r.total>0 && r.resta>0 && !resumenMarcadoPagado(datosResumenTc(ctx.vencTc, r.tarjeta, ym), r.moneda, ctx.movs));

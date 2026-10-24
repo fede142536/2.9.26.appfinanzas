@@ -331,7 +331,7 @@ function renderMigrarCambios(){
     // eso una compra MEP en dólares se mostraba como "$0,00".
     const propio=montoPropioDeCambio(m);
     const enUSD=propio.moneda==="USD";
-    const monto=enUSD ? `USD ${propio.monto.toFixed(2)}` : fmtS(propio.monto);
+    const monto=enUSD ? `USD ${fmtNum2(propio.monto)}` : fmtS(propio.monto);
     const fecha=String(m.fecha||"").split("-").reverse().join("/");
     const pide=c.faltaPata==="usd" ? "cuántos dólares recibiste" : "cuántos pesos pagaste";
     return `<div class="inset mb-10">
@@ -366,7 +366,7 @@ async function completarCandidato(idStr){
   // hacía nada.
   const info=montoPropioDeCambio(mov);
   const enUSD=info.moneda==="USD";
-  const propio = enUSD ? `USD ${info.monto.toFixed(2)}` : fmtS(info.monto);
+  const propio = enUSD ? `USD ${fmtNum2(info.monto)}` : fmtS(info.monto);
   const pregunta = enUSD
     ? `Este movimiento dice que salieron ${propio}.\n\n¿Cuántos PESOS pagaste por esos dólares?`
     : `Este movimiento dice que salieron ${propio}.\n\n¿Cuántos DÓLARES recibiste a cambio?`;
@@ -378,7 +378,7 @@ async function completarCandidato(idStr){
   const r=completarCambioDesde(mov, falta);
   if(!r){ showToast("No pude completar este movimiento"); return; }
   const tc=tipoDeCambio(r.montoARS, r.montoUSD);
-  const resumen = `${fmtS(r.montoARS)} ↔ USD ${r.montoUSD.toFixed(2)}${tc?`\n\nTipo de cambio: ${fmtS(tc)} por dólar`:""}`;
+  const resumen = `${fmtS(r.montoARS)} ↔ USD ${fmtNum2(r.montoUSD)}${tc?`\n\nTipo de cambio: ${fmtS(tc)} por dólar`:""}`;
   if(!await mostrarConfirm(`Va a quedar así:\n\n${resumen}\n\nEl movimiento que ya tenías queda como la mitad que sale, y se agrega la mitad que entra. Su categoría no se toca.`,
     {titulo:"Confirmar", textoOk:"Completar"})) return;
 

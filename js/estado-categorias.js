@@ -678,6 +678,12 @@ function fmt(n){
   // Siempre 2 decimales, separador de miles punto, decimal coma (es-AR)
   return sign+"$"+rounded.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
 }
+// Un número con 2 decimales en formato es-AR: punto de miles y COMA decimal ("1.234,56"). Es el único formato de decimales de la app:
+// no se usa toFixed() en pantalla (pone punto). Ver también fmt(), fmtS() y fmtMoneda().
+function fmtNum2(n){
+  if(numeroRoto(n))return SIN_DATO;
+  return (Math.round(Number(n)*100)/100).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
 // fmtTotal = para TOTALES y balances (chips de resumen, balance del año, saldo de una cuenta).
 // Sin centavos: en una cifra de siete u ocho dígitos los centavos son dos dígitos que nadie va
 // a usar y que hacen más lento leer el número. En la app convivían "$14.236.967,97" arriba y
@@ -720,18 +726,18 @@ function fmtAbbr(n){
   if(n===0)return "$0";
   const abs=Math.abs(n);
   const sign=n<0?"-":"";
-  if(abs>=1000000)return sign+"$"+(abs/1000000).toFixed(1)+"M";
+  if(abs>=1000000)return sign+"$"+(abs/1000000).toFixed(1).replace(".",",")+"M";
   if(abs>=1000)return sign+"$"+(abs/1000).toFixed(0)+"K";
   return fmt(n);
 }
 function mesLbl(ym){if(!ym)return"";const[y,m]=ym.split("-");return MESES[parseInt(m)-1]+" "+y;}
-// Formatea un monto según su moneda. ARS usa el formato es-AR ($), USD usa "USD X.XX"
+// Formatea un monto según su moneda. ARS usa el formato es-AR ($), USD usa "USD X,XX" (misma coma decimal)
 function fmtMoneda(n, moneda){
   if(numeroRoto(n))return SIN_DATO;
   if(moneda==="USD"){
     const abs=Math.abs(n||0);
     const sign=(n||0)<0?"-":"";
-    return sign+"USD "+(Math.round(abs*100)/100).toFixed(2);
+    return sign+"USD "+fmtNum2(abs);
   }
   return fmt(n);
 }

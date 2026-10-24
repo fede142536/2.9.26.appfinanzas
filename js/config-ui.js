@@ -328,8 +328,8 @@ function usarResultadoCalculadora(){
   if(!campo){ cerrarCalculadora(); return; }
   // Los campos enmascarados (texto) se escriben en crudo con coma decimal y dejan que su propio
   // oninput (aplicarMascaraMiles) los formatee; los <input type="number"> (cambio-usd, inp-recup)
-  // necesitan punto decimal y sin puntos de miles.
-  campo.value = campo.type==="number" ? String(valor) : calcExpr;
+  // (y los decimales con coma de decimales.js) reciben el número con punto y sin puntos de miles.
+  campo.value = (campo.type==="number" || campo.dataset.decimalComa) ? String(valor) : calcExpr;
   campo.dispatchEvent(new Event("input", {bubbles:true}));
   cerrarCalculadora();
   campo.focus();

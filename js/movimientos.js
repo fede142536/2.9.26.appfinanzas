@@ -364,7 +364,7 @@ function marcarIngresoCobrado(id, ym){
 }
 function porCobrarFranjaHTML(items){
   if(!items.length) return "";
-  const fmt=v=>v.moneda==="USD" ? `USD ${v.monto.toFixed(2)}` : fmtS(v.monto);
+  const fmt=v=>v.moneda==="USD" ? `USD ${fmtNum2(v.monto)}` : fmtS(v.monto);
   const filas=items.map(v=>`<div class="venc-fila"><span class="venc-nombre">🔁 ${escapeHtml(v.nombre)}</span>
       <span class="venc-txt" style="color:var(--muted)">cobra el ${escapeHtml(fmtDiaMes(v.fecha))} · <strong>${fmt(v)}</strong></span>
       <button type="button" class="venc-ok venc-cobrado" aria-label="Marcar ${escapeHtml(v.nombre)} como cobrado" onclick="marcarIngresoCobrado(${Number(v.id)},${attrJS(v.ym)})">✓ Cobrado</button></div>`).join("");
@@ -525,13 +525,13 @@ function construirCuerpoTxItem(m){
     let statusBadge=""; // botón de pago/impago de un gasto frecuente, debajo del monto
     if(isInv){
       const invSign=invEsIngreso?"+":"-";
-      if(m.importeUSD>0) amt=`${invSign}USD ${(Math.round(m.importeUSD*100)/100).toFixed(2)}`;
+      if(m.importeUSD>0) amt=`${invSign}USD ${fmtNum2(Math.round(m.importeUSD*100)/100)}`;
       else amt=`${invSign}${fmtS(m.importe||0)}`;
     } else if(isTc && m.moneda==="USD"){
-      amt=`-USD ${(Math.round(m.importe*100)/100).toFixed(2)}`;
+      amt=`-USD ${fmtNum2(Math.round(m.importe*100)/100)}`;
     } else if(m.moneda==="USD"&&m.importeOrig){
       const sign=m.tipo==="Gasto"?"-":"+";
-      amt=`${sign}USD ${(Math.round(m.importeOrig*100)/100).toFixed(2)}`;
+      amt=`${sign}USD ${fmtNum2(Math.round(m.importeOrig*100)/100)}`;
     }
     // Un retiro es una COMPRA pagada con plata del fondo: se muestra con "-", igual que
     // cualquier gasto y que en los totales. El badge "DE AHORROS" aclara de dónde salió.
@@ -546,7 +546,7 @@ function construirCuerpoTxItem(m){
       if(m.frecuente){
         sub=subtituloFila([subcatVisible(m.subcat), "🔁 Mensual fijo"]);
       } else {
-        const tot=m.moneda==="USD"?`USD ${m.importeTotal.toFixed(2)}`:fmtS(m.importeTotal);
+        const tot=m.moneda==="USD"?`USD ${fmtNum2(m.importeTotal)}`:fmtS(m.importeTotal);
         sub=subtituloFila([subcatVisible(m.subcat), `Cuota ${m.nCuota}/${m.cuotasTotal}`, `${tot} total`]);
       }
     } else if(isInv){
@@ -909,10 +909,10 @@ function frecPorPagarMosaicoHTML(r){
   if(!r.total) return "";
   const listo=r.pendientes===0;
   const soloUsd=r.usd>0 && !r.ars;
-  const val=soloUsd ? `USD ${r.usd.toFixed(2)}` : fmtTotal(r.ars);
+  const val=soloUsd ? `USD ${fmtNum2(r.usd)}` : fmtTotal(r.ars);
   let sub;
   if(listo) sub="Todo pagado ✓";
-  else sub=`${r.pendientes} de ${r.total} sin pagar${r.usd>0&&!soloUsd?` · + USD ${r.usd.toFixed(2)}`:""}`;
+  else sub=`${r.pendientes} de ${r.total} sin pagar${r.usd>0&&!soloUsd?` · + USD ${fmtNum2(r.usd)}`:""}`;
   return mosaicoHTML("🔁","Frecuentes por pagar", listo?"var(--success)":"var(--warning)", val, sub,
     'data-mosaico="frec-por-pagar"');
 }
@@ -1067,7 +1067,7 @@ function renderMovs(){
         `en ${nTarjetasUnicas} ${nTarjetasUnicas===1?"tarjeta":"tarjetas"}`));
     }
     if(totalTcUSD>0){
-      mosTc.push(mosaicoHTML("$","Tarjetas USD","var(--warning)",`USD ${totalTcUSD.toFixed(2)}`,""));
+      mosTc.push(mosaicoHTML("$","Tarjetas USD","var(--warning)",`USD ${fmtNum2(totalTcUSD)}`,""));
     }
     html+=mosaicosGridHTML(mosTc);
     document.getElementById("mov-summary").innerHTML=html;
@@ -1140,7 +1140,7 @@ function renderMovs(){
       <span class="mov-summary-val" style="color:var(--danger)">${fmtTotal(gastosTotalARS)}</span>
     </div>`;
     const mosGasto=[];
-    if(gastosTotalUSD>0) mosGasto.push(mosaicoHTML("$","Gastos USD","var(--text)",`USD ${gastosTotalUSD.toFixed(2)}`,""));
+    if(gastosTotalUSD>0) mosGasto.push(mosaicoHTML("$","Gastos USD","var(--text)",`USD ${fmtNum2(gastosTotalUSD)}`,""));
     const mosFrecG=frecPorPagarMosaicoHTML(frecuentesPorPagar(todoGastos));
     if(mosFrecG) mosGasto.push(mosFrecG);
     // Mosaicos informativos cuando no hay sub-filtro de categoría (desglose de qué compone el total)
@@ -1158,7 +1158,7 @@ function renderMovs(){
         mosGasto.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(suscripcionesARS),""));
       }
       if(suscripcionesUSD>0){
-        mosGasto.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${suscripcionesUSD.toFixed(2)}`,""));
+        mosGasto.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${fmtNum2(suscripcionesUSD)}`,""));
       }
     }
     mosGasto.push(mosaicoHTML("#","Cantidad","var(--text)",String(todoGastos.length),"movimientos"));
@@ -1212,7 +1212,7 @@ function renderMovs(){
       <span class="mov-summary-val" style="color:var(--success)">${fmtTotal(ingTotalARS)}</span>
     </div>`;
     const mosIng=[];
-    if(ingTotalUSD>0) mosIng.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${ingTotalUSD.toFixed(2)}`,"por cambio"));
+    if(ingTotalUSD>0) mosIng.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${fmtNum2(ingTotalUSD)}`,"por cambio"));
     // Solo cuando no hay sub-filtro de categoría, para no confundir con totales parciales.
     if(!filtroCategoria){
       // El resultado del mes NO es rescates − suscripciones: eso es el flujo, y da negativo
@@ -1324,7 +1324,7 @@ function renderMovs(){
       mosTodos.push(mosaicoHTML("💸","Sacado de ahorros","var(--save)",fmtTotal(rp.retiradoAMano),"quedó a mano"));
     }
     if(invertidoUSD>=0.01){
-      mosTodos.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${invertidoUSD.toFixed(2)}`,subInvertidoUSD));
+      mosTodos.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${fmtNum2(invertidoUSD)}`,subInvertidoUSD));
     }
     if(invertidoARS>0){
       mosTodos.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(invertidoARS),""));
@@ -1338,14 +1338,14 @@ function renderMovs(){
       mosTodos.push(mosaicoHTML("◈","Neto inversión",colorNeto,(netoInv.ars>0?"+":"")+fmtTotal(netoInv.ars),""));
     }
     if(ingresosUSDTotal>0){
-      mosTodos.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${ingresosUSDTotal.toFixed(2)}`,""));
+      mosTodos.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${fmtNum2(ingresosUSDTotal)}`,""));
     }
     if(gastosUSDTotal>0){
-      mosTodos.push(mosaicoHTML("↑","Gastos USD","var(--danger)",`USD ${gastosUSDTotal.toFixed(2)}`,""));
+      mosTodos.push(mosaicoHTML("↑","Gastos USD","var(--danger)",`USD ${fmtNum2(gastosUSDTotal)}`,""));
     }
     if(Math.abs(netoInv.usd)>=0.01){
       const colorNetoU=netoInv.usd>=0?"var(--success)":"var(--invest)";
-      mosTodos.push(mosaicoHTML("◈","Neto inversión USD",colorNetoU,(netoInv.usd>0?"+":"")+`USD ${Math.abs(netoInv.usd).toFixed(2)}`,""));
+      mosTodos.push(mosaicoHTML("◈","Neto inversión USD",colorNetoU,(netoInv.usd>0?"+":"")+`USD ${fmtNum2(Math.abs(netoInv.usd))}`,""));
     }
     if(retirado>0){
       mosTodos.push(mosaicoHTML("💸","De ahorros","var(--save)",fmtTotal(retirado),""));
@@ -1363,7 +1363,7 @@ function renderMovs(){
       }
       if(Math.abs(t.usd)>=0.01){
         const colorU=t.usd>=0?"var(--success)":"var(--invest)";
-        mosTodos.push(mosaicoHTML("◈",`${t.ticker} USD`,colorU,(t.usd>0?"+":"")+`USD ${Math.abs(t.usd).toFixed(2)}`,""));
+        mosTodos.push(mosaicoHTML("◈",`${t.ticker} USD`,colorU,(t.usd>0?"+":"")+`USD ${fmtNum2(Math.abs(t.usd))}`,""));
       }
     });
     html+=mosaicosGridHTML(mosTodos);
@@ -1459,7 +1459,7 @@ async function borrarMov(id, btn){
   if(m && esPataDeCambio(m)){
     const info=leerCambio(patasDelCambio(m.cambioId, movs));
     const detalle = info
-      ? `${fmtS(info.montoARS)} ↔ USD ${info.montoUSD.toFixed(2)}${info.tc?` (a ${fmtS(info.tc)} por dólar)`:""}`
+      ? `${fmtS(info.montoARS)} ↔ USD ${fmtNum2(info.montoUSD)}${info.tc?` (a ${fmtS(info.tc)} por dólar)`:""}`
       : "las dos patas";
     if(!await mostrarConfirm(`Este movimiento es la mitad de un cambio de moneda.\n\n${detalle}\n\nSe eliminan las dos mitades juntas: borrar una sola dejaría el balance descuadrado.`,
       {titulo:"Eliminar el cambio", textoOk:"Eliminar las dos", peligroso:true})) return;

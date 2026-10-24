@@ -98,7 +98,7 @@ function renderTraspasos(){
     <div class="txt-xs txt-muted" style="margin-top:4px">en ${cands.length} ${cands.length===1?"movimiento":"movimientos"}. Si esa plata la seguís teniendo, no es un gasto.</div>
   </div>`;
   html+=cands.map(m=>{
-    const monto=m.moneda==="USD" ? `USD ${(m.importeOrig||0).toFixed(2)}` : fmtS(m.importe||0);
+    const monto=m.moneda==="USD" ? `USD ${fmtNum2(m.importeOrig||0)}` : fmtS(m.importe||0);
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
         <div class="u-flex1 u-min0">

@@ -89,6 +89,7 @@
 <script src="js/aumentos.js"></script>
 <script src="js/retiro-por-venta.js"></script>
 <script src="js/selector-mes.js"></script>
+<script src="js/decimales.js"></script>
 <script src="js/cierre-mes.js"></script>
 <script src="js/huella.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
@@ -1397,7 +1398,7 @@ test("ordena las categorías de mayor a menor", ()=>{
 
 test("no suma pesos con dólares en una misma categoría", ()=>{
   const html=balanceTcDelMes([SUPER_VISA, SPOTIFY], "2026-09", "categoria");
-  cierto(html.includes("USD 12.00"), "el gasto en dólares no se muestra en su moneda: " + html.slice(0,400));
+  cierto(html.includes("USD 12,00"), "el gasto en dólares no se muestra en su moneda: " + html.slice(0,400));
   cierto(html.includes("$300.000"), "se perdió el total en pesos");
 });
 
@@ -1939,7 +1940,7 @@ test("un gasto habitual faltante en USD se muestra en USD, no en pesos", ()=>{
   const a=conTarjetas([], ()=>alertasDelMomento(lista, [], "2026-09-15"));
   const alerta=a.find(x=>/gasto habitual/.test(x.titulo));
   cierto(alerta, "falta la alerta de gasto habitual: "+JSON.stringify(a.map(x=>x.titulo)));
-  cierto(alerta.detalle.includes("USD 1.29"), "tiene que mostrar el monto en USD: "+alerta.detalle);
+  cierto(alerta.detalle.includes("USD 1,29"), "tiene que mostrar el monto en USD: "+alerta.detalle);
   cierto(!/\$1,29\b/.test(alerta.detalle), "no puede mostrar el monto en USD como si fueran pesos: "+alerta.detalle);
 });
 
@@ -2235,7 +2236,7 @@ test("la card muestra el monto que ya está cargado, no $0,00", ()=>{
     movs=[MEP_INV_EN_USD];
     renderMigrarCambios();
     const txt=lista.innerText || lista.textContent;
-    cierto(txt.includes("54.21"), "no se ve el monto real: " + txt);
+    cierto(txt.includes("54,21"), "no se ve el monto real: " + txt);
     cierto(!txt.includes("$0,00"), "volvió el $0,00: " + txt);
     cierto(txt.includes("cuántos pesos pagaste"), "pide la mitad equivocada: " + txt);
   } finally { card.remove(); lista.remove(); movs=movsAntes; }
@@ -2376,7 +2377,7 @@ test("la pata en pesos se ve como gasto y la de dólares como ingreso", ()=>{
     cierto(/tx-amount gasto/.test(sale), "los pesos que salen tienen que leerse como un gasto");
     cierto(sale.includes("-$1.500"), "y con signo negativo: "+sale.slice(0,200));
     cierto(/tx-amount ingreso/.test(entra), "los dólares que entran tienen que leerse como un ingreso");
-    cierto(entra.includes("+USD 1.00"), "y con signo positivo: "+entra.slice(0,200));
+    cierto(entra.includes("+USD 1,00"), "y con signo positivo: "+entra.slice(0,200));
   });
 });
 
@@ -3545,7 +3546,7 @@ test("sin ahorros cargados la vista por categoría no queda en blanco", ()=>{
 
 test("el ranking sigue separando pesos de dólares", ()=>{
   const r=vistaAhorro("categoria", AHORROS_DEMO);
-  cierto(r.rankingHtml.includes("USD 500.00"), "se perdió el saldo en dólares: " + r.rankingHtml.slice(0,200));
+  cierto(r.rankingHtml.includes("USD 500,00"), "se perdió el saldo en dólares: " + r.rankingHtml.slice(0,200));
 });
 
 test("una categoría que solo tiene dólares no dice \"0%\" con la barra vacía", ()=>{
@@ -3767,7 +3768,7 @@ test("todos los formatos de plata distinguen roto de cero", ()=>{
   igual(fmt(NaN), "—");            igual(fmt(0), "$0,00");
   igual(fmtS(NaN), "—");           igual(fmtS(0), "$0,00");
   igual(fmtAbbr(NaN), "—");        igual(fmtAbbr(0), "$0");
-  igual(fmtMoneda(NaN,"USD"), "—");igual(fmtMoneda(0,"USD"), "USD 0.00");
+  igual(fmtMoneda(NaN,"USD"), "—");igual(fmtMoneda(0,"USD"), "USD 0,00");
   igual(fmtMoneda(NaN,"ARS"), "—");igual(fmtMoneda(0,"ARS"), "$0,00");
 });
 
@@ -5301,7 +5302,7 @@ test("la sección de Tarjetas explica los gastos administrativos y, con datos, l
     cierto(h.includes("En 2026") && h.includes("42.000"), h);
     cierto(h.includes("Septiembre 2026") && h.includes("Octubre 2026") && h.includes("+4,2%"), "falta el detalle por mes: "+h);
     cierto(h.includes("ya están dentro") || h.includes("Ya están dentro"), "tiene que aclarar que no suma al balance");
-    cierto(h.includes("USD 3.50"));
+    cierto(h.includes("USD 3,50"));
   } finally { movs=antes; }
 }));
 
@@ -7744,7 +7745,7 @@ test("eventosParaCalendario: un evento mensual sin fin por gasto frecuente con d
 test("eventosParaCalendario: los gastos frecuentes de tarjeta también; las cuotas no", ()=>conVenc({movs:[], tcs:[FREC_TC_VTO(), {...NOTEBOOK, diaVto:10}]}, ()=>{
   const e=eventosParaCalendario(HOY_ICS, movs, tcs, {});
   igual(e.length, 1); igual(e[0].uid, "enola-tc-60@enola"); igual(e[0].rrule, "RRULE:FREQ=MONTHLY;BYMONTHDAY=10");
-  cierto(e[0].descripcion.includes("Mastercard") && e[0].descripcion.includes("USD 20.00"), e[0].descripcion);
+  cierto(e[0].descripcion.includes("Mastercard") && e[0].descripcion.includes("USD 20,00"), e[0].descripcion);
 }));
 
 test("eventosParaCalendario: una tarjeta con día habitual es un evento mensual; solo se agregan sueltos los meses con otra fecha", ()=>conVenc({tcs:TCS_SEPT}, ()=>{
@@ -9731,6 +9732,60 @@ test("balance del mes: junto al disponible se ve la cuenta (ingresos − gastos 
   const lista=[{id:1,tipo:"Ingreso",cat:"Sueldo",importe:3000000,moneda:"ARS",fecha:"2026-07-05"},{id:2,tipo:"Gasto",cat:"Casa",importe:2000000,moneda:"ARS",fecha:"2026-07-06"},{id:3,tipo:"Gasto",cat:"Fondo",subcat:"A",importe:1500000,moneda:"ARS",esAhorro:true,fecha:"2026-07-07"}];
   const r=resumenDePeriodo(lista, {ars:0});
   igual([r.ingresos, r.gastos, r.ahorrado, r.balanceCaja, r.disponible], [3000000, 2000000, 1500000, 1000000, -500000], "con más ingresos que gastos, lo ahorrado puede dejar el disponible en rojo");
+});
+
+grupo("Decimales con coma");
+
+test("decimales: fmtNum2 y fmtMoneda usan coma decimal y punto de miles", ()=>{
+  igual(fmtNum2(113.09), "113,09"); igual(fmtNum2(1234.5), "1.234,50"); igual(fmtNum2(0), "0,00"); igual(fmtNum2(-5.5), "-5,50"); igual(fmtNum2(NaN), "—"); igual(fmtNum2(1.005+0.001), "1,01");
+  igual(fmtMoneda(113.09,"USD"), "USD 113,09"); igual(fmtMoneda(-2.5,"USD"), "-USD 2,50"); igual(fmtMoneda(1234567.891,"USD"), "USD 1.234.567,89");
+  igual(fmtAbbr(2160000), "$2,2M", "la abreviatura de millones también va con coma"); igual(fmtAbbr(-1250000), "-$1,3M");
+});
+
+test("decimales: la pantalla nunca arma un número con toFixed (que pone punto)", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const archivos=[...html.matchAll(/src="(js\/[\w-]+\.js)/g)].map(m=>m[1]);
+  cierto(archivos.length>20, "no se leyeron los archivos");
+  const malos=[];
+  for(const a of archivos){
+    const t=await (await fetch(a)).text();
+    t.split("\n").forEach((l,i)=>{ if(/\.toFixed\(\d\)/.test(l) && !/toFixed\(\d\)\.replace\("\.",","\)/.test(l) && !/toFixed\(0\)/.test(l) && !/^\s*\/\//.test(l)) malos.push(a+":"+(i+1)); });
+  }
+  igual(malos, [], "estos usan toFixed y muestran punto decimal: usá fmtNum2()");
+});
+
+test("decimales: los conversores puros", ()=>{
+  igual(decimalParaMostrar("22618.99"), "22618,99"); igual(decimalParaMostrar(5), "5"); igual(decimalParaMostrar("1.234,56"), "1234,56"); igual(decimalParaMostrar(""), ""); igual(decimalParaMostrar(null), ""); igual(decimalParaMostrar(0.5), "0,5");
+  igual(decimalParaCodigo("22618,99"), "22618.99"); igual(decimalParaCodigo(""), ""); igual(decimalParaCodigo("7"), "7");
+  igual(limpiarDecimalTipeado("12.5"), "12,5", "un punto tipeado es coma"); igual(limpiarDecimalTipeado("1,2,3"), "1,23"); igual(limpiarDecimalTipeado("abc12x"), "12"); igual(limpiarDecimalTipeado("-5,5"), "-5,5"); igual(limpiarDecimalTipeado("5-5"), "55");
+});
+
+test("decimales: un campo numérico muestra y acepta coma pero el código lo lee con punto", ()=>{
+  const cont=document.createElement("div"); cont.innerHTML='<input type="number" id="t-dec" inputmode="decimal" step="any" placeholder="22618.99" value="1234.5">'; document.body.appendChild(cont);
+  try{
+    const inp=cont.querySelector("#t-dec"); igual(mejorarCampoDecimal(inp), true); igual(inp.type, "text"); igual(inp.getAttribute("inputmode"), "decimal");
+    igual(inp.getAttribute("placeholder"), "22618,99", "el placeholder también"); igual(inp.value, "1234.5", "el código lee con punto"); igual(Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").get.call(inp), "1234,5", "y la pantalla muestra coma");
+    inp.value="99.75"; igual(Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").get.call(inp), "99,75"); igual(parseFloat(inp.value), 99.75);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(inp, "1500,25"); inp.dispatchEvent(new Event("input",{bubbles:true})); igual(inp.value, "1500.25"); igual(parseFloat(inp.value), 1500.25);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set.call(inp, "12.5x"); inp.dispatchEvent(new Event("input",{bubbles:true})); igual(Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").get.call(inp), "12,5", "un punto tipeado pasa a coma y se descarta lo inválido");
+    inp.value=""; igual(inp.value, ""); inp.value=0; igual(inp.value, "0");
+    igual(mejorarCampoDecimal(inp), false, "no se mejora dos veces");
+  } finally { cont.remove(); }
+});
+
+test("decimales: los campos de enteros no se tocan y los nuevos se mejoran solos", async ()=>{
+  const cont=document.createElement("div"); document.body.appendChild(cont);
+  try{
+    cont.innerHTML='<input type="number" id="t-dia" inputmode="numeric" min="1" max="31"><div><input type="number" id="t-monto" inputmode="decimal" step="any"></div>';
+    await new Promise(r=>setTimeout(r,30));
+    igual(cont.querySelector("#t-dia").type, "number", "el día sigue siendo numérico"); igual(cont.querySelector("#t-monto").type, "text"); igual(cont.querySelector("#t-monto").dataset.decimalComa, "1");
+  } finally { cont.remove(); }
+});
+
+test("decimales: las hojas de aumento y los campos de monto del index usan el formato de coma", async ()=>{
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text();
+  cierto(/js\/decimales\.js\?v=\d+/.test(html)); cierto(sw.includes("./js/decimales.js"));
+  const cal=await (await fetch("js/config-ui.js")).text(); cierto(cal.includes("campo.dataset.decimalComa"), "la calculadora tiene que entregar el número con punto a estos campos");
 });
 
 grupo("Aislamiento de los tests");

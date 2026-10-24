@@ -759,7 +759,7 @@ function renderDashUSD(){
   const netoColor=r.neto>=0?"var(--success)":"var(--danger)";
   let html=`<div class="inset">
     <div class="seccion-label">Saldo neto USD ${dashYear}</div>
-    <div style="font-size:22px;font-weight:600;color:${netoColor};margin-top:3px">${r.neto>=0?"+":""}USD ${r.neto.toFixed(2)}</div>
+    <div style="font-size:22px;font-weight:600;color:${netoColor};margin-top:3px">${r.neto>=0?"+":""}USD ${fmtNum2(r.neto)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">Lo que te entró menos lo que se te fue de la mano</div>
   </div>`;
 
@@ -777,7 +777,7 @@ function renderDashUSD(){
   items.forEach(it=>{
     html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
       <span>${it.label}</span>
-      <strong style="color:${it.color}">${it.sign}USD ${it.val.toFixed(2)}</strong>
+      <strong style="color:${it.color}">${it.sign}USD ${fmtNum2(it.val)}</strong>
     </div>`;
   });
 
@@ -787,7 +787,7 @@ function renderDashUSD(){
   if(r.ret>0){
     html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
       <span>💸 Pagado con dólares del fondo</span>
-      <strong style="color:var(--save)">USD ${r.ret.toFixed(2)}</strong>
+      <strong style="color:var(--save)">USD ${fmtNum2(r.ret)}</strong>
     </div>
     <div class="txt-micro txt-muted" style="margin-top:4px">No suma ni resta al saldo de arriba: esos dólares salieron del fondo y se gastaron en el mismo movimiento.</div>`;
   }
@@ -809,7 +809,7 @@ function renderDashUSD(){
           <div class="txt-md">${escapeHtml(m.desc)}</div>
           <div class="txt-micro txt-muted">${escapeHtml(fecha)} · ${escapeHtml(m.etiqueta)}</div>
         </div>
-        <strong class="txt-md" style="color:${color};white-space:nowrap">${signo}USD ${m.monto.toFixed(2)}</strong>
+        <strong class="txt-md" style="color:${color};white-space:nowrap">${signo}USD ${fmtNum2(m.monto)}</strong>
       </div>`;
     }).join("");
   }
@@ -847,7 +847,7 @@ function detalleResultadoInversiones(cat){
     <div style="font-size:12px;color:var(--muted);margin-top:3px">sobre ${fmtAbbr(puesto)} puestos en ${delAnio.length} ${delAnio.length===1?"operación":"operaciones"}</div>
   </div>`;
   if(Math.abs(gan.usd)>=0.01){
-    html+=`<div class="txt-xs txt-muted" style="margin-top:6px">Y ${gan.usd>=0?"+":""}USD ${gan.usd.toFixed(2)} en dólares, que se cuenta aparte.</div>`;
+    html+=`<div class="txt-xs txt-muted" style="margin-top:6px">Y ${gan.usd>=0?"+":""}USD ${fmtNum2(gan.usd)} en dólares, que se cuenta aparte.</div>`;
   }
 
   // Mes a mes de la GANANCIA, no del flujo: un mes en que solo pusiste plata no ganó nada, y

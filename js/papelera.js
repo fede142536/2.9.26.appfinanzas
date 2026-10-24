@@ -96,9 +96,9 @@ function ofrecerDeshacerCambio(msg, revertir){
 // ── Pantalla: la papelera ──
 function descripcionPapelera(e){
   const x=e.item||{};
-  if(e.kind==="tc") return {icono:"💳", titulo:escapeHtml(x.desc||"Compra con tarjeta"), detalle:`${x.tarjeta?escapeHtml(x.tarjeta)+" · ":""}${x.frecuente?"Mensual fijo":`${x.cuotasTotal||1} cuota${(x.cuotasTotal||1)===1?"":"s"}`} · ${x.moneda==="USD"?`USD ${(x.total||0).toFixed(2)}`:fmtS(x.total||0)}`};
+  if(e.kind==="tc") return {icono:"💳", titulo:escapeHtml(x.desc||"Compra con tarjeta"), detalle:`${x.tarjeta?escapeHtml(x.tarjeta)+" · ":""}${x.frecuente?"Mensual fijo":`${x.cuotasTotal||1} cuota${(x.cuotasTotal||1)===1?"":"s"}`} · ${x.moneda==="USD"?`USD ${fmtNum2(x.total||0)}`:fmtS(x.total||0)}`};
   if(e.kind==="meta") return {icono:iconoSeguro(x.emoji)||"🎯", titulo:escapeHtml(x.nombre||"Meta"), detalle:`Meta · objetivo ${fmtS(x.objetivo||0)}`};
-  const monto=x.moneda==="USD" ? `USD ${(x.importeOrig||x.importeUSD||0).toFixed(2)}` : fmtS(x.importe||0);
+  const monto=x.moneda==="USD" ? `USD ${fmtNum2(x.importeOrig||x.importeUSD||0)}` : fmtS(x.importe||0);
   const partes=[x.subcat&&x.subcat!=="Otros"?escapeHtml(x.subcat):"", x.nota?escapeHtml(String(x.nota).slice(0,28)):"", x.cuenta&&x.cuenta!=="Cuentas"?escapeHtml(x.cuenta):""].filter(Boolean);
   return {icono:x.tipo==="Ingreso"?"⬇️":x.tipo==="Inversion"?"📈":"⬆️", titulo:escapeHtml(x.cat||x.desc||x.tipo||"Movimiento")+(x.frecuente?" 🔁":""),
           detalle:`${monto}${x.fecha?` · ${escapeHtml(fmtDiaMes(x.fecha))}`:""}${partes.length?` · ${partes.join(" · ")}`:""}`};
