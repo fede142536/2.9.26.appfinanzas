@@ -577,7 +577,7 @@ function calcCuota(){
   const isFrec=document.getElementById("tc-frecuente").checked;
   const isUSD=document.getElementById("tc-moneda").value==="USD";
   const lbl=document.getElementById("tc-cuota-label");
-  const fmtCur=(v)=>isUSD?`USD ${v.toFixed(2)}`:fmt(v);
+  const fmtCur=(v)=>isUSD?`USD ${fmtNum2(v)}`:fmt(v);
   const cero=isUSD?"USD 0":"$0";
   if(isFrec){
     if(lbl) lbl.textContent="Monto mensual";

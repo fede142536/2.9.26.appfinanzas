@@ -401,7 +401,7 @@ function toggleTcFrecPagado(id, ym){
   if(typeof renderTarjetas==="function" && document.getElementById("page-tc")?.classList.contains("active")) renderTarjetas();
 }
 
-function montoVenc(v){ return v.moneda==="USD" ? `USD ${v.monto.toFixed(2)}` : fmtS(v.monto); }
+function montoVenc(v){ return v.moneda==="USD" ? `USD ${fmtNum2(v.monto)}` : fmtS(v.monto); }
 
 // Las líneas de la franja de Movimientos: "Visa vence mañana · resta $140.000", cada una con su
 // botón para marcarla pagada si ya lo hiciste.
@@ -483,7 +483,7 @@ function eventosParaCalendario(hoyISO, lista, listaTcs, vencTc){
     if(dia===null || (m.mesFin && m.mesFin<hoyYM)) return;
     const monto=getGastoFrecMontoEnMes(m, hoyYM);
     mensual(`enola-gasto-${icsSlug(m.id)}@enola`, `🔁 ${nombreGastoFrecuente(m)} vence`,
-      `Gasto frecuente · ${m.moneda==="USD" ? `USD ${monto.toFixed(2)}` : fmtS(monto)} este mes. Cargado en Enola; si ya lo pagaste, ignoralo.`,
+      `Gasto frecuente · ${m.moneda==="USD" ? `USD ${fmtNum2(monto)}` : fmtS(monto)} este mes. Cargado en Enola; si ya lo pagaste, ignoralo.`,
       m.mesInicio, dia);
   });
   (listaTcs||[]).forEach(t=>{
@@ -492,7 +492,7 @@ function eventosParaCalendario(hoyISO, lista, listaTcs, vencTc){
     if(dia===null || (t.mesFin && t.mesFin<hoyYM)) return;
     const monto=getMontoEnMes(t, hoyYM);
     mensual(`enola-tc-${icsSlug(t.id)}@enola`, `🔁 ${t.desc||"Gasto frecuente"} vence`,
-      `Con ${getTarjetaEnMes(t,hoyYM)||"tarjeta"} · ${t.moneda==="USD" ? `USD ${monto.toFixed(2)}` : fmtS(monto)} este mes. Cargado en Enola; si ya lo pagaste, ignoralo.`,
+      `Con ${getTarjetaEnMes(t,hoyYM)||"tarjeta"} · ${t.moneda==="USD" ? `USD ${fmtNum2(monto)}` : fmtS(monto)} este mes. Cargado en Enola; si ya lo pagaste, ignoralo.`,
       t.mesInicio, dia);
   });
   Object.keys(vencTc||{}).forEach(nombre=>{
@@ -814,7 +814,7 @@ function renderTcPendientes(){
       const icon=getIcon(m.cat,"💳");
       const tag=m.frecuente?"🔁 Mensual fijo":`Cuota ${m.nCuota} de ${m.cuotasTotal}`;
       const barra=m.frecuente?"":`<div class="tc-row-progreso"><div class="tc-row-progreso-fill" style="width:${Math.max(0,Math.round(m.nCuota/m.cuotasTotal*100))}%"></div></div>`;
-      const monto=m.moneda==="USD"?`USD ${(m.importe||0).toFixed(2)}`:fmtS(m.importe);
+      const monto=m.moneda==="USD"?`USD ${fmtNum2(m.importe||0)}`:fmtS(m.importe);
       const restantes=m.cuotasTotal-m.nCuota;
       const finYm=addMonths(mesTc,restantes);
       const fechaVto=m.frecuente ? fechaVencimiento(mesTc, m.diaVto) : null;
@@ -845,7 +845,7 @@ function renderTcPendientes(){
     const totalARS=meses.reduce((s,m)=>s+m.totalARS,0);
     const totalUSD=meses.reduce((s,m)=>s+m.totalUSD,0);
     const ultimo=meses[meses.length-1].ym;
-    html+=`<div class="tc-cierre">Después de ${escapeHtml(mesLbl(mesTc))} quedan <strong style="color:var(--warning)">${fmtTotal(totalARS)}</strong>${totalUSD>0?` + <strong style="color:var(--accent)">USD ${totalUSD.toFixed(2)}</strong>`:""} en ${meses.length} ${meses.length===1?"mes":"meses"}. La última cuota es en ${escapeHtml(mesLbl(ultimo))}.</div>`;
+    html+=`<div class="tc-cierre">Después de ${escapeHtml(mesLbl(mesTc))} quedan <strong style="color:var(--warning)">${fmtTotal(totalARS)}</strong>${totalUSD>0?` + <strong style="color:var(--accent)">USD ${fmtNum2(totalUSD)}</strong>`:""} en ${meses.length} ${meses.length===1?"mes":"meses"}. La última cuota es en ${escapeHtml(mesLbl(ultimo))}.</div>`;
   }
   el.innerHTML=html;
 }
@@ -869,7 +869,7 @@ function setTcVistaBarras(v){
 
 // Una fila de "Por tarjeta"/"Por categoría": nombre+monto arriba, pista de progreso debajo.
 function filaBarraTc(nombreHtml, moneda, val, max){
-  const fmt=moneda==="USD"?`USD ${val.toFixed(2)}`:fmtS(val);
+  const fmt=moneda==="USD"?`USD ${fmtNum2(val)}`:fmtS(val);
   const badge=moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
   const pct=Math.max(0, Math.round(val/max*100));
   return `<div class="tc-bar-row">
@@ -919,7 +919,7 @@ function renderTarjetas(){
       subtitulo="Sin gastos con tarjeta";
     } else {
       const partes=[];
-      if(totalMesUSD>0) partes.push(`+ USD ${totalMesUSD.toFixed(2)}`);
+      if(totalMesUSD>0) partes.push(`+ USD ${fmtNum2(totalMesUSD)}`);
       if(nCuotas>0) partes.push(`${nCuotas} en cuotas`);
       if(nFrec>0) partes.push(`${nFrec} fijos`);
       subtitulo=partes.join(" · ");
@@ -971,7 +971,7 @@ function renderTarjetas(){
 function resumenesTcHTML(ym){
   const rs=resumenesDelMes(ym, movs);
   if(!rs.length) return "";
-  const fmt=(v,mon)=>mon==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
+  const fmt=(v,mon)=>mon==="USD"?`USD ${fmtNum2(v)}`:fmtS(v);
   const vencTc=leerVencTc(), hoy=hoyLocal(), bancosTc=leerBancosTc();
   return `<div class="tc-res"><div class="tc-res-titulo">Resumen de ${escapeHtml(mesLbl(ym))}</div>`+rs.map(r=>{
     const d=datosResumenTc(vencTc, r.tarjeta, ym);
@@ -1055,7 +1055,7 @@ function cargosDeTarjetaAnio(anio, hastaYM, lista, vencTc){
 function cargosTarjetaHTML(ymSel){
   const lista=cargosDeTarjetaAnio(String(ymSel).slice(0,4), ymSel, movs, leerVencTc());
   const bancos=leerBancosTc();
-  const fmtC=(v,mon)=>mon==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
+  const fmtC=(v,mon)=>mon==="USD"?`USD ${fmtNum2(v)}`:fmtS(v);
   const titulo=`<div class="tc-res-titulo">Gastos administrativos de las tarjetas</div>`;
   if(!lista.length) return `<div class="tc-res">${titulo}<p class="tc-res-sub" style="padding:0 14px 12px;line-height:1.45">Intereses, comisiones e impuestos que la tarjeta suma a tus compras. Se calculan al marcar un resumen como pagado y vincular el gasto con el que lo pagaste: la diferencia entre lo que pagaste y las compras cargadas.</p></div>`;
   const totARS=lista.reduce((s,x)=>s+x.ARS,0), totUSD=lista.reduce((s,x)=>s+x.USD,0);
@@ -1071,7 +1071,7 @@ function cargosTarjetaHTML(ymSel){
 async function deshacerPagoTc(ym, tarjeta, moneda){
   const r=resumenTarjetaMes(ym, tarjeta, moneda, movs);
   if(!r.pagos.length) return;
-  const fmt=v=>r.moneda==="USD"?`USD ${v.toFixed(2)}`:fmtS(v);
+  const fmt=v=>r.moneda==="USD"?`USD ${fmtNum2(v)}`:fmtS(v);
   if(!await mostrarConfirm(`Se borra${r.pagos.length>1?`n ${r.pagos.length} pagos`:" el pago"} de ${fmt(r.pagado)} de este resumen. El gasto también sale de Movimientos.`,
     {titulo:"Deshacer pago", textoOk:"Deshacer"})) return;
   const ids=new Set(r.pagos.map(p=>p.id));

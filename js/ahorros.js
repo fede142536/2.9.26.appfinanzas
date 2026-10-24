@@ -131,7 +131,7 @@ function renderAhorroSaldo(fondoAcum, fondoUSD){
     </div>
     ${fondoUSD!==0?`<div class="ahorro-saldo-usd">
       <span class="ahorro-saldo-usd-label">Fondo USD</span>
-      <span class="ahorro-saldo-usd-val">USD ${fondoUSD.toFixed(2)}</span>
+      <span class="ahorro-saldo-usd-val">USD ${fmtNum2(fondoUSD)}</span>
     </div>`:""}`;
   animarNumerosDe(el);
 }
@@ -182,17 +182,17 @@ function renderUSD(){
 
   // Línea de dólares, siempre visible dentro de la card de historial (antes era #usd-card
   // completo, una card aparte con detalle siempre desplegado).
-  document.getElementById("usd-cell-cash").textContent=`USD ${cashUSD.toFixed(2)}`;
-  document.getElementById("usd-cell-fondo").textContent=`USD ${fondoUSD.toFixed(2)}`;
-  document.getElementById("usd-cell-total").textContent=`USD ${(cashUSD+fondoUSD).toFixed(2)}`;
+  document.getElementById("usd-cell-cash").textContent=`USD ${fmtNum2(cashUSD)}`;
+  document.getElementById("usd-cell-fondo").textContent=`USD ${fmtNum2(fondoUSD)}`;
+  document.getElementById("usd-cell-total").textContent=`USD ${fmtNum2(cashUSD+fondoUSD)}`;
 
   // Lo de abajo alimenta la hoja #modal-usd-detail, que se abre al tocar la línea de dólares.
   const cashColor=cashUSD>=0?"save":"negative";
   const fondoColor=fondoUSD>=0?"save":"negative";
   document.getElementById("usd-kpis").innerHTML=`
-    <div class="chip"><div class="chip-label">Cash USD</div><div class="chip-val ${cashColor}">USD ${cashUSD.toFixed(2)}</div></div>
-    <div class="chip"><div class="chip-label">Fondo USD</div><div class="chip-val ${fondoColor}">USD ${fondoUSD.toFixed(2)}</div></div>
-    <div class="chip"><div class="chip-label">Total</div><div class="chip-val save">USD ${(cashUSD+fondoUSD).toFixed(2)}</div></div>`;
+    <div class="chip"><div class="chip-label">Cash USD</div><div class="chip-val ${cashColor}">USD ${fmtNum2(cashUSD)}</div></div>
+    <div class="chip"><div class="chip-label">Fondo USD</div><div class="chip-val ${fondoColor}">USD ${fmtNum2(fondoUSD)}</div></div>
+    <div class="chip"><div class="chip-label">Total</div><div class="chip-val save">USD ${fmtNum2(cashUSD+fondoUSD)}</div></div>`;
 
   // Detalle desglosado
   let html=`<div class="seccion-label mb-8">Detalle</div>`;
@@ -207,7 +207,7 @@ function renderUSD(){
     const sign=it.signo>0?"+":"-";
     html+=`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
       <span>${it.label}</span>
-      <strong style="color:${color}">${sign}USD ${it.val.toFixed(2)}</strong>
+      <strong style="color:${color}">${sign}USD ${fmtNum2(it.val)}</strong>
     </div>`;
   });
   document.getElementById("usd-detail").innerHTML=html;
@@ -391,7 +391,7 @@ function renderAhorroRanking(){
       <div class="ahorro-rank-cat">${icon} ${escapeHtml(it.cat)}</div>
       <div class="ahorro-rank-val" style="color:${c}">
         ${it.saldoArs!==0?fmtS(it.saldoArs):""}
-        ${it.saldoUsd!==0?`<small style="color:${cUsd}">USD ${it.saldoUsd.toFixed(2)}</small>`:""}
+        ${it.saldoUsd!==0?`<small style="color:${cUsd}">USD ${fmtNum2(it.saldoUsd)}</small>`:""}
       </div>
       <div class="ahorro-rank-bar"><div class="ahorro-rank-bar-fill" style="width:${Math.round(valor/maxV*100)}%;background:${c}"></div></div>
       <div class="ahorro-rank-meta">
@@ -429,8 +429,8 @@ function showAhorroCatDetail(cat){
     <div class="seccion-label">Saldo neto</div>
     ${saldoArs!==0||depositadoArs>0||retiradoArs>0?`<div style="font-size:20px;font-weight:600;color:${colorSaldo};margin-top:3px">${fmtSignoGrande(saldoArs)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">Depositado: <span style="color:var(--save)">${fmtS(depositadoArs)}</span> · Retirado: <span style="color:var(--danger)">${fmtS(retiradoArs)}</span></div>`:""}
-    ${saldoUsd!==0||depositadoUsd>0||retiradoUsd>0?`<div style="font-size:${saldoArs!==0?'15px':'20px'};font-weight:600;color:${colorSaldoUsd};margin-top:8px">USD ${saldoUsd>=0?'+':''}${saldoUsd.toFixed(2)}</div>
-    <div style="font-size:12px;color:var(--muted);margin-top:3px">Depositado: <span style="color:var(--save)">USD ${depositadoUsd.toFixed(2)}</span> · Retirado: <span style="color:var(--danger)">USD ${retiradoUsd.toFixed(2)}</span></div>`:""}
+    ${saldoUsd!==0||depositadoUsd>0||retiradoUsd>0?`<div style="font-size:${saldoArs!==0?'15px':'20px'};font-weight:600;color:${colorSaldoUsd};margin-top:8px">USD ${saldoUsd>=0?'+':''}${fmtNum2(saldoUsd)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px">Depositado: <span style="color:var(--save)">USD ${fmtNum2(depositadoUsd)}</span> · Retirado: <span style="color:var(--danger)">USD ${fmtNum2(retiradoUsd)}</span></div>`:""}
     <div style="font-size:12px;color:var(--muted);margin-top:6px">${movsCat.length} ${movsCat.length===1?"movimiento":"movimientos"}</div>
   </div>`;
   html+=movsCat.map(m=>{
@@ -438,7 +438,7 @@ function showAhorroCatDetail(cat){
     const esUSD=m.moneda==="USD";
     const signo=esRetiro?"-":"+";
     const color=esRetiro?"var(--danger)":"var(--save)";
-    const montoTxt=esUSD?`USD ${(m.importeOrig||0).toFixed(2)}`:fmtS(m.importe||0);
+    const montoTxt=esUSD?`USD ${fmtNum2(m.importeOrig||0)}`:fmtS(m.importe||0);
     const badge=esRetiro
       ?`<span class="badge badge-danger">RETIRO</span>`
       :`<span class="badge badge-save">DEPÓSITO</span>`;

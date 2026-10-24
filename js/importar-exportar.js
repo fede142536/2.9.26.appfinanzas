@@ -149,10 +149,10 @@ async function detectarMovsAtipicos(){
 function lineaMov(m){
   const fecha=(m.fecha||"").split("-").reverse().join("/").slice(0,10);
   if(m.tipo==="Inversion"){
-    const monto=(m.importeUSD||0)>0 ? `USD ${m.importeUSD.toFixed(2)}` : fmtS(m.importe||0);
+    const monto=(m.importeUSD||0)>0 ? `USD ${fmtNum2(m.importeUSD)}` : fmtS(m.importe||0);
     return `${m.ticker||"?"} · ${m.subcat||m.cat||""} · ${monto} · ${fecha}`;
   }
-  const monto=m.moneda==="USD" ? `USD ${(m.importeOrig||0).toFixed(2)}` : fmtS(m.importe||0);
+  const monto=m.moneda==="USD" ? `USD ${fmtNum2(m.importeOrig||0)}` : fmtS(m.importe||0);
   const desc=`${m.cat||""}${m.subcat?" / "+m.subcat:""}`;
   return `${desc} · ${monto} · ${fecha}${m.nota?" · "+m.nota.slice(0,20):""}`;
 }
