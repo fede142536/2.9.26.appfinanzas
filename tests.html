@@ -9330,6 +9330,27 @@ test("guardar con un toque: guarda con el 'Guardar' de siempre, oculta el aviso 
   } finally { movs=antes.movs; tcs=antes.tcs; window.guardar=antes.guardar; window.save=antes.save; window.refrescarVistas=antes.refrescar; window.showToast=antes.toast; res.remove(); if(toastCreado) toastEl.remove(); }
 });
 
+test("voz: el caso real — 'recibí 25' + 'recibí' + 'recibí 25,000' es UNA frase de 25 mil, no tres pedazos", ()=>{
+  const res=(...x)=>x.map(([t,f])=>Object.assign([{transcript:t}],{isFinal:f}));
+  igual(transcripcionDeVoz(res(["recibí 25",true],["recibí",true],["recibí 25,000",true])).texto, "recibí 25,000", "los retoques de la misma frase se reemplazan");
+  igual(transcripcionDeVoz(res(["recibí 25",false],["recibí",false],["recibí 25,000",false])).texto, "recibí 25,000");
+  igual(transcripcionDeVoz(res(["supermercado",true],["gasto 12 mil",true])).texto, "supermercado gasto 12 mil", "tramos distintos sí se unen");
+  igual(transcripcionDeVoz(res(["recibí 25,000",true],["recibí",true])).texto, "recibí 25,000", "un retoque más corto no pisa al completo");
+  igual(vozSonLaMismaFrase("recibí 25", "recibí"), true); igual(vozSonLaMismaFrase("supermercado gasto", "12 838"), false);
+});
+
+test("voz: los miles a la inglesa ('25,000') se entienden como 25 mil, y los decimales de verdad no se tocan", ()=>{
+  igual(normalizarDictado("recibí 25,000"), "recibí 25000"); igual(normalizarDictado("gasto 1,250,000 galicia"), "gasto 1250000 galicia");
+  igual(normalizarDictado("nafta 25,50"), "nafta 25,50"); igual(normalizarDictado("netflix 5,99 dólares"), "netflix 5,99 dólares"); igual(normalizarDictado("pagué 12.838"), "pagué 12.838"); igual(normalizarDictado(""), "");
+  const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; document.body.append(inp,res);
+  const antes={ctx:window.contextoCargaRapida, aplicar:window.aplicarCargaRapida}; let aplicado=null;
+  window.contextoCargaRapida=()=>CR_CTX(); window.aplicarCargaRapida=r=>{ aplicado=r; };
+  try{
+    const r=cargaRapida("recibí 25,000"); igual([r.ok, r.tipo, r.importe, r.nota], [true, "Ingreso", 25000, ""], "antes cargaba $25 con '25,000' de nota"); igual(aplicado.importe, 25000);
+    cierto(res.textContent.includes("recibí 25,000"), "sigue mostrando lo que escuchó tal cual");
+  } finally { window.contextoCargaRapida=antes.ctx; window.aplicarCargaRapida=antes.aplicar; inp.remove(); res.remove(); }
+});
+
 test("voz: sigue escuchando si no decís nada y da por terminada la frase tras una pausa", async ()=>{
   const inp=document.createElement("input"); inp.id="carga-rapida"; const res=document.createElement("p"); res.id="carga-rapida-res"; const btn=document.createElement("button"); btn.id="carga-rapida-voz";
   document.body.append(inp,res,btn);

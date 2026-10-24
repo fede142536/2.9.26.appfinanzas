@@ -398,7 +398,7 @@ function aplicarCargaRapida(r){
 function cargaRapida(dictado){
   const inp=document.getElementById("carga-rapida"), res=document.getElementById("carga-rapida-res");
   if(!inp) return null;
-  const texto=typeof dictado==="string" && dictado ? dictado : inp.value;
+  const texto=typeof dictado==="string" && dictado ? normalizarDictado(dictado) : inp.value;
   const r=interpretarCargaRapida(texto, contextoCargaRapida());
   let advertencia=false;
   const oido=typeof dictado==="string" && dictado ? `🎤 Escuché: “${escapeHtml(dictado)}”.<br>` : "";
@@ -458,8 +458,16 @@ const vozConstructor=()=> typeof window!=="undefined" ? (window.SpeechRecognitio
 const vozDisponible=()=>!!vozConstructor();
 
 // Pura. Junta lo que va entendiendo el reconocedor: {texto, final}. `resultados` es el SpeechRecognitionResultList (o algo igual).
-// En el modo continuo de algunos celulares cada resultado repite TODO lo dicho hasta ahí ("nafta" → "nafta quince" → "nafta quince mil"):
-// si un tramo empieza con lo ya juntado lo reemplaza, y si ya está al final, se ignora.
+// En el modo continuo de algunos celulares el reconocedor entrega la MISMA frase varias veces, cada vez retocada ("recibí 25" → "recibí" →
+// "recibí 25,000"): esos resultados se REEMPLAZAN entre sí (se queda con el más completo y, si empata, el más nuevo). Solo los tramos distintos
+// ("supermercado" … pausa … "gasto 12 mil") se unen, en orden.
+const vozPalabras=t=>String(t||"").toLowerCase().split(/\s+/).filter(Boolean);
+function vozSonLaMismaFrase(a, b){
+  const A=vozPalabras(a), B=vozPalabras(b);
+  if(!A.length || !B.length) return false;
+  const comunes=A.filter(w=>B.includes(w)).length;
+  return comunes/Math.min(A.length, B.length) >= 0.5;
+}
 function transcripcionDeVoz(resultados){
   let texto="", final=true;
   for(let i=0;i<(resultados||[]).length;i++){
@@ -467,13 +475,21 @@ function transcripcionDeVoz(resultados){
     if(!r || !r[0]) continue;
     const pieza=String(r[0].transcript||"").trim();
     if(!pieza) continue;
-    const p=pieza.toLowerCase(), t=texto.toLowerCase();
-    if(!texto) texto=pieza;
-    else if(p.startsWith(t)) texto=pieza;
-    else if(!t.endsWith(p)) texto+=" "+pieza;
     if(!r.isFinal) final=false;
+    if(!texto){ texto=pieza; continue; }
+    const t=texto.toLowerCase(), p=pieza.toLowerCase();
+    if(t.includes(p)) continue;                       // ya estaba dicho
+    if(p.includes(t)) texto=pieza;                    // la misma frase, más completa
+    else if(vozSonLaMismaFrase(texto, pieza)){        // retocada: se queda con la más completa y, si empatan, la más nueva
+      if(vozPalabras(pieza).length>=vozPalabras(texto).length) texto=pieza;
+    } else texto+=" "+pieza;
   }
   return {texto:texto.trim(), final};
+}
+// Pura. Chrome a veces escribe los miles a la inglesa ("25,000" en vez de "25.000"). Con tres dígitos después de la coma es un separador de
+// miles, no un decimal: se saca. Los decimales de verdad ("25,50") quedan como están.
+function normalizarDictado(texto){
+  return String(texto||"").replace(/(^|[^\d.,])([1-9]\d{0,2}(?:,\d{3})+)(?!\d)/g, (m, pre, num)=>pre+num.replace(/,/g,""));
 }
 // Pura. Qué decirle al usuario según el código de error del reconocedor.
 function mensajeErrorVoz(codigo){
