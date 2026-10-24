@@ -242,10 +242,10 @@ function renderEditForm(m){
       </div>
       ${esFrec?`
         <div class="two-col">
-          <div class="form-group"><label class="form-label">Mes de inicio</label>
+          <div class="form-group"><label class="form-label" for="edit-frec-inicio">Mes de inicio</label>
             <input type="month" id="edit-frec-inicio" class="form-input" value="${m.mesInicio||currentYM()}">
           </div>
-          <div class="form-group"><label class="form-label">Mes de fin (opcional)</label>
+          <div class="form-group"><label class="form-label" for="edit-frec-fin">Mes de fin (opcional)</label>
             <input type="month" id="edit-frec-fin" class="form-input" value="${m.mesFin||''}">
           </div>
         </div>
@@ -259,14 +259,12 @@ function renderEditForm(m){
         <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 Registrar aumento de precio</div>
           <p style="font-size:11px;color:var(--muted);margin-bottom:8px">El nuevo monto se aplicará desde el mes elegido en adelante.</p>
-          <div class="two-col">
-            <div class="form-group"><label class="form-label">Desde el mes</label>
-              <input type="month" id="edit-frec-aum-mes" class="form-input" value="${hoyYM}">
-            </div>
-            <div class="form-group"><label class="form-label">Nuevo monto</label>
-              <div class="amount-wrap"><span class="amount-prefix edit-prefix-frec">${m.moneda==='USD'?'USD':'$'}</span>
-                <input type="number" id="edit-frec-aum-monto" class="form-input amount-input" placeholder="${montoVigente}" inputmode="decimal" step="any">
-              </div>
+          <div class="form-group"><label class="form-label" for="edit-frec-aum-mes">Desde el mes</label>
+            <input type="month" id="edit-frec-aum-mes" class="form-input" value="${hoyYM}">
+          </div>
+          <div class="form-group aum-edit-monto"><label class="form-label" for="edit-frec-aum-monto">Nuevo monto</label>
+            <div class="amount-wrap"><span class="amount-prefix edit-prefix-frec">${m.moneda==='USD'?'USD':'$'}</span>
+              <input type="number" id="edit-frec-aum-monto" class="form-input amount-input" placeholder="${montoVigente}" inputmode="decimal" step="any">
             </div>
           </div>
         </div>

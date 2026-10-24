@@ -1665,14 +1665,12 @@ function renderEditTcForm(t){
       <div style="background:var(--warning-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
         <div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 Registrar aumento de precio</div>
         <p style="font-size:11px;color:var(--muted);margin-bottom:8px">El nuevo monto se aplicará desde el mes elegido en adelante. Los meses anteriores conservan el monto que ya tenían.</p>
-        <div class="two-col">
-          <div class="form-group"><label class="form-label">Desde el mes</label>
-            <input type="month" id="edit-tc-aum-mes" class="form-input" value="${hoyYM}">
-          </div>
-          <div class="form-group"><label class="form-label">Nuevo monto</label>
-            <div class="amount-wrap"><span class="amount-prefix" id="edit-tc-aum-prefix">${t.moneda==='USD'?'USD':'$'}</span>
-              <input type="number" id="edit-tc-aum-monto" class="form-input amount-input" placeholder="${montoActual}" inputmode="decimal" step="any">
-            </div>
+        <div class="form-group"><label class="form-label" for="edit-tc-aum-mes">Desde el mes</label>
+          <input type="month" id="edit-tc-aum-mes" class="form-input" value="${hoyYM}">
+        </div>
+        <div class="form-group aum-edit-monto"><label class="form-label" for="edit-tc-aum-monto">Nuevo monto</label>
+          <div class="amount-wrap"><span class="amount-prefix" id="edit-tc-aum-prefix">${t.moneda==='USD'?'USD':'$'}</span>
+            <input type="number" id="edit-tc-aum-monto" class="form-input amount-input" placeholder="${montoActual}" inputmode="decimal" step="any">
           </div>
         </div>
       </div>
