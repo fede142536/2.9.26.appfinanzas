@@ -9857,6 +9857,17 @@ test("decimales: las hojas de aumento y los campos de monto del index usan el fo
   const cal=await (await fetch("js/config-ui.js")).text(); cierto(cal.includes("campo.dataset.decimalComa"), "la calculadora tiene que entregar el número con punto a estos campos");
 });
 
+grupo("Avisos (toast)");
+
+test("avisos: un mensaje largo se ve entero (varias líneas, dentro de la pantalla) y dura más", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const regla=css.slice(css.indexOf(".toast{"), css.indexOf("}", css.indexOf(".toast{"))+1);
+  cierto(!/white-space:\s*nowrap/.test(regla), "el aviso no puede ir en una sola línea: se corta en el celular");
+  cierto(/max-width:\s*calc\(100vw/.test(regla), "tiene que quedar dentro del ancho de la pantalla"); cierto(/overflow-wrap|word-break/.test(regla));
+  igual(duracionToast("Guardado ✓"), 2200); cierto(duracionToast("Google Calendar al día: 3 eventos creados, 1 actualizado · ☁️ copia subida a Drive y varias cosas más para leer")>3500, "un texto largo tiene que durar más");
+  igual(duracionToast("x".repeat(2000)), 7000, "con un tope");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
