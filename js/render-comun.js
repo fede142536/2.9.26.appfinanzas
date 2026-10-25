@@ -248,7 +248,9 @@ function animarNumero(elemento, valorFinal, duracion, formatoFn){
 
 function vibrar(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
 let toastTimer=null;
-function showToast(msg){const t=document.getElementById("toast");clearTimeout(toastTimer);t.classList.remove("con-accion");t.textContent=msg;t.classList.add("show");toastTimer=setTimeout(()=>t.classList.remove("show"),2200);}
+// Cuánto se queda un aviso en pantalla: 2,2 s y, si el texto es largo (se lee en varias líneas), un poco más por cada letra de más.
+function duracionToast(msg){ return Math.min(2200+Math.max(String(msg||"").length-40,0)*45, 7000); }
+function showToast(msg){const t=document.getElementById("toast");clearTimeout(toastTimer);t.classList.remove("con-accion");t.textContent=msg;t.classList.add("show");toastTimer=setTimeout(()=>t.classList.remove("show"),duracionToast(msg));}
 // Un aviso con un botón (p. ej. "Deshacer"): dura más, para dar tiempo a tocarlo. Un aviso nuevo lo reemplaza.
 function showToastAccion(msg, textoAccion, fn, ms){
   const t=document.getElementById("toast");
