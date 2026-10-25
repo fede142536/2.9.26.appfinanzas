@@ -526,7 +526,7 @@ function generarICS(eventos, diasAviso, ahora){
     if(e.rrule) lineas.push(e.rrule);
     lineas.push(`SUMMARY:${icsEscapar(e.titulo)}`,
       `DESCRIPTION:${icsEscapar(e.descripcion)}`,
-      "TRANSP:TRANSPARENT",
+      "TRANSP:TRANSPARENT", "CLASS:PRIVATE",
       "BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${icsEscapar(e.titulo)}`, trigger, "END:VALARM",
       "END:VEVENT");
   });

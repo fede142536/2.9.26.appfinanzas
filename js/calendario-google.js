@@ -19,6 +19,8 @@ const GCAL_ON_KEY="fgcalon";        // "1" cuando el usuario ya conectó
 const GCAL_MAPA_KEY="fgcalmapa";    // {clave: {id, h, f}}: qué evento de Google es cada vencimiento
 const GCAL_TOKEN_KEY="fgcaltok";    // {t, exp}
 const GCAL_ULTIMA_KEY="fgcalultima";
+const GCAL_CUENTA_KEY="fgcalcuenta";  // el mail de la cuenta de Google a la que se mandan los eventos (lo devuelve Google al crearlos)
+const GCAL_VERSION_EVENTO=2;          // sube cuando cambia la forma del evento: así los ya enviados se actualizan solos
 const GCAL_SCOPE="https://www.googleapis.com/auth/calendar.events";
 const DRIVE_SCOPE="https://www.googleapis.com/auth/drive.file";   // solo los archivos que crea esta app
 const GCAL_API="https://www.googleapis.com/calendar/v3";
@@ -48,7 +50,7 @@ function diaSiguienteISO(iso){
 }
 
 function hashEntradaGcal(e){
-  return JSON.stringify([e.titulo, e.descripcion, e.inicio, e.rrule||"", e.minutos]);
+  return JSON.stringify([e.titulo, e.descripcion, e.inicio, e.rrule||"", e.minutos, GCAL_VERSION_EVENTO]);
 }
 
 // Lo que debería haber en el calendario: los mismos eventos del archivo .ics (eventosParaCalendario), con la
@@ -81,6 +83,9 @@ function cuerpoEventoGcal(e){
     summary:e.titulo, description:e.descripcion,
     start:{date:e.inicio}, end:{date:diaSiguienteISO(e.inicio)},
     transparency:"transparent",
+    // Privado, sin invitados y sin permisos para nadie más: el evento es solo de la cuenta que dio el permiso. Si ese calendario
+    // está compartido con otra persona, "private" hace que no vea el detalle (ni los montos). Nunca se agregan `attendees`.
+    visibility:"private", guestsCanModify:false, guestsCanInviteOthers:false, guestsCanSeeOtherGuests:false,
     reminders:{useDefault:false, overrides:[{method:"popup", minutes:e.minutos}]},
     extendedProperties:{private:{enola:e.clave}}
   };
@@ -185,6 +190,8 @@ async function sincronizarCalendario(opts){
       return abortar!==null;
     };
     const guardarEvento=(e, id)=>{ mapa[e.clave]={id, h:hashEntradaGcal(e), ...(e.fecha?{f:e.fecha}:{})}; gcalGuardarMapa(mapa); };
+    // Google devuelve de quién es el calendario donde quedó el evento: se guarda para mostrar a qué cuenta se está mandando todo.
+    const anotarCuenta=r=>{ const mail=r && r.json && r.json.organizer && r.json.organizer.email; if(mail) guardarPreferencia(GCAL_CUENTA_KEY, String(mail)); };
     const crear=async e=>{
       // Si el mapa se perdió (otro celular, datos borrados) el evento puede existir: se busca por su clave.
       const busq=await gcalLlamar(deps, token, "GET", `/calendars/primary/events?maxResults=1&privateExtendedProperty=${encodeURIComponent("enola="+e.clave)}`);
@@ -193,11 +200,11 @@ async function sincronizarCalendario(opts){
       if(previo && previo.id){
         const r=await gcalLlamar(deps, token, "PATCH", `/calendars/primary/events/${encodeURIComponent(previo.id)}`, cuerpoEventoGcal(e));
         if(revisar(r)) return;
-        if(r.status>=200 && r.status<300){ guardarEvento(e, previo.id); res.actualizados++; return; }
+        if(r.status>=200 && r.status<300){ anotarCuenta(r); guardarEvento(e, previo.id); res.actualizados++; return; }
       }
       const r=await gcalLlamar(deps, token, "POST", "/calendars/primary/events", cuerpoEventoGcal(e));
       if(revisar(r)) return;
-      if(r.status>=200 && r.status<300 && r.json && r.json.id){ guardarEvento(e, r.json.id); res.creados++; } else res.errores++;
+      if(r.status>=200 && r.status<300 && r.json && r.json.id){ anotarCuenta(r); guardarEvento(e, r.json.id); res.creados++; } else res.errores++;
     };
     for(const e of plan.crear){ if(abortar) break; await crear(e); }
     for(const a of plan.actualizar){
@@ -205,7 +212,7 @@ async function sincronizarCalendario(opts){
       const r=await gcalLlamar(deps, token, "PATCH", `/calendars/primary/events/${encodeURIComponent(a.id)}`, cuerpoEventoGcal(a.entrada));
       if(revisar(r)) break;
       if(gcalNoExiste(r)){ await crear(a.entrada); continue; }     // lo borraron a mano del calendario: se vuelve a crear
-      if(r.status>=200 && r.status<300){ guardarEvento(a.entrada, a.id); res.actualizados++; } else res.errores++;
+      if(r.status>=200 && r.status<300){ anotarCuenta(r); guardarEvento(a.entrada, a.id); res.actualizados++; } else res.errores++;
     }
     if(abortar) return {...res, ok:false, motivo:abortar};
     guardarPreferencia(GCAL_ULTIMA_KEY, String(Date.now()));
