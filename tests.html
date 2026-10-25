@@ -7946,6 +7946,54 @@ test("primera sincronización: crea un evento mensual sin fin por gasto frecuent
   igual(Object.keys(gcalMapa()).sort().join(","), "enola-gasto-1@enola,enola-gasto-2@enola,enola-tc-60@enola");
 })));
 
+test("privacidad del calendario: los eventos son privados, sin invitados y solo van al calendario de la cuenta conectada", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[FREC_TC_VTO()]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  cierto(g.eventos.size===2);
+  g.eventos.forEach(ev=>{
+    igual(ev.visibility, "private", "visible solo para el dueño aunque el calendario esté compartido");
+    igual([ev.guestsCanModify, ev.guestsCanInviteOthers, ev.guestsCanSeeOtherGuests], [false,false,false]);
+    igual(ev.attendees, undefined, "nunca se invita a nadie"); igual(ev.reminders.useDefault, false);
+  });
+  cierto(g.llamadas.every(l=>/\/calendars\/primary\/events/.test(l)), "toda llamada va al calendario principal de la cuenta, a ningún otro: "+g.llamadas.join(" | "));
+  cierto(!g.llamadas.some(l=>/acl|calendarList|sendUpdates|attendees|share/i.test(l)), "no hay llamadas de permisos ni invitaciones");
+})));
+
+test("privacidad del calendario: los eventos ya enviados antes (sin 'privado') se actualizan solos", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal();
+  await sincronizarCalendario({deps:g.deps});
+  const clave="enola-gasto-1@enola", e=entradasCalendario(HOY_G, movs, tcs, {}, leerDiasAviso()).find(x=>x.clave===clave);
+  const mapa=gcalMapa(); mapa[clave].h=JSON.stringify([e.titulo, e.descripcion, e.inicio, e.rrule||"", e.minutos]);   // como lo dejaba la versión anterior
+  gcalGuardarMapa(mapa);
+  igual(calendarioPendientes(), 1, "tiene que verlo como pendiente");
+  const r=await sincronizarCalendario({deps:g.deps});
+  igual(r.actualizados, 1); igual([...g.eventos.values()][0].visibility, "private");
+  igual(calendarioPendientes(), 0);
+})));
+
+test("privacidad del calendario: la app guarda y muestra a qué cuenta de Google manda los eventos", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const g=servidorGcal(); const original=g.deps.fetch;
+  g.deps.fetch=async (u,i)=>{ const r=await original(u,i); if(i&&i.method==="POST"){ const j=await r.json(); return {status:r.status, json:async()=>({...j, organizer:{email:"yo@gmail.com"}})}; } return r; };
+  localStorage.removeItem(GCAL_CUENTA_KEY);
+  await sincronizarCalendario({deps:g.deps});
+  igual(localStorage.getItem(GCAL_CUENTA_KEY), "yo@gmail.com");
+  const el=document.createElement("p"); el.id="gcal-estado"; document.body.appendChild(el);
+  const on=localStorage.getItem(GCAL_ON_KEY), id=localStorage.getItem(GCAL_ID_KEY); localStorage.setItem(GCAL_ON_KEY,"1"); localStorage.setItem(GCAL_ID_KEY,"x.apps.googleusercontent.com");
+  try{ renderEstadoGcal(); cierto(el.textContent.includes("Conectado a yo@gmail.com"), el.textContent); }
+  finally{ el.remove(); if(on===null) localStorage.removeItem(GCAL_ON_KEY); else localStorage.setItem(GCAL_ON_KEY,on); if(id===null) localStorage.removeItem(GCAL_ID_KEY); else localStorage.setItem(GCAL_ID_KEY,id); localStorage.removeItem(GCAL_CUENTA_KEY); }
+})));
+
+test("privacidad del calendario: el archivo .ics marca los eventos como privados y no tiene organizador ni invitados", ()=>{
+  const ics=generarICS([{uid:"u1@enola", titulo:"Vence Osde", descripcion:"$168.777", inicio:"2026-11-10", rrule:"RRULE:FREQ=MONTHLY;BYMONTHDAY=10"}], 2, new Date("2026-10-25T12:00:00Z"));
+  cierto(ics.includes("CLASS:PRIVATE")); cierto(!/ATTENDEE|ORGANIZER/.test(ics), "no tiene que invitar ni nombrar a nadie");
+  igual((ics.match(/BEGIN:VEVENT/g)||[]).length, (ics.match(/CLASS:PRIVATE/g)||[]).length, "todos los eventos");
+});
+
+test("privacidad del calendario: las credenciales de Google no viajan en el backup ni en la copia de Drive", ()=>{
+  const b=JSON.stringify(armarBackup());
+  ["fgcalid","fgcaltok","fgcalmapa","fgcalcuenta","access_token"].forEach(k=>cierto(!b.includes(k), "el backup incluye "+k));
+});
+
 test("un gasto NUEVO agrega solo su evento; lo ya enviado no se vuelve a mandar", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
   const g=servidorGcal();
   await sincronizarCalendario({deps:g.deps});

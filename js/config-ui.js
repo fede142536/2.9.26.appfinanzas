@@ -971,10 +971,11 @@ function renderEstadoGcal(){
   const n=calendarioPendientes();
   const eventos=Object.keys(gcalMapa()).length;
   const ult=Number(localStorage.getItem(GCAL_ULTIMA_KEY))||0;
+  const cuenta=(localStorage.getItem(GCAL_CUENTA_KEY)||"").trim();
   let t;
   if(!gcalClienteId()) t="Sin conectar.";
   else if(!activo) t="ID guardado. Tocá “Conectar y sincronizar” para dar el permiso.";
-  else t=`✓ Conectado · ${eventos} evento${eventos===1?"":"s"} en tu calendario${ult?` · última sincronización ${textoHaceGcal(ult)}`:""}${n?` · ${n} cambio${n===1?"":"s"} sin enviar`:""}`;
+  else t=`✓ Conectado${cuenta?` a ${cuenta}`:""} · ${eventos} evento${eventos===1?"":"s"} en tu calendario${ult?` · última sincronización ${textoHaceGcal(ult)}`:""}${n?` · ${n} cambio${n===1?"":"s"} sin enviar`:""}`;
   el.textContent=t;
   const bConectar=document.getElementById("gcal-btn-conectar"), bDes=document.getElementById("gcal-btn-desconectar");
   if(bConectar) bConectar.textContent=activo ? "🔄 Sincronizar ahora" : "🔗 Conectar y sincronizar";
@@ -1122,7 +1123,7 @@ async function conectarGoogleCalendar(){
 // Desconectar solo corta la conexión: los eventos que ya están en tu calendario se quedan (la app no borra nada).
 async function desconectarGoogleCalendar(){
   if(!await mostrarConfirm("Se desconecta Google Calendar. Los eventos que ya están en tu calendario se quedan: borralos desde el calendario si no los querés.", {titulo:"Desconectar", textoOk:"Desconectar"})) return false;
-  try{ [GCAL_ON_KEY, GCAL_MAPA_KEY, GCAL_TOKEN_KEY, GCAL_ULTIMA_KEY, DRIVE_ON_KEY].forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  try{ [GCAL_ON_KEY, GCAL_MAPA_KEY, GCAL_TOKEN_KEY, GCAL_ULTIMA_KEY, GCAL_CUENTA_KEY, DRIVE_ON_KEY].forEach(k=>localStorage.removeItem(k)); }catch(e){}
   showToast("Google Calendar desconectado");
   pintarAvisoCalendario(); renderEstadoGcal();
   return true;
