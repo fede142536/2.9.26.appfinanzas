@@ -366,10 +366,11 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .tx-del{color:#ccc}
 .tx-edit{color:var(--muted)}
 /* Botón de pago/impago de un gasto frecuente: pill chica y tocable, siempre debajo del monto. */
-.js-toggle-pago{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;
+.js-toggle-pago,.js-toggle-recup{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;
   cursor:pointer;font-size:10.5px;font-weight:600;border:1px solid transparent;white-space:nowrap}
-.js-toggle-pago:active{transform:scale(.92)}
-.js-toggle-pago.badge-success{background:transparent;border-color:var(--success-light)}
+.js-toggle-pago:active,.js-toggle-recup:active{transform:scale(.92)}
+.js-toggle-pago.badge-success,.js-toggle-recup.badge-success{background:transparent;border-color:var(--success-light)}
+.js-toggle-recup.badge-accent{border-color:var(--accent-light)}
 /* NAV MONTH */
 .month-nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0}
 .month-nav button{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 13px;font-size:14px;cursor:pointer;color:var(--text)}

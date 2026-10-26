@@ -577,7 +577,7 @@ function construirCuerpoTxItem(m){
       else if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
       else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
       cat=`${escapeHtml(m.cat)}${badge}`;
-      if(!badge && m.recuperable>0) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
+      if(!badge && m.recuperable>0 && !tieneRecuperable(m)) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
       // El botón de pago/impago de un gasto frecuente (pedido del usuario, solo como ayuda
       // memoria: no cambia ningún cálculo) va debajo del monto, no en el título — ver el
       // texto que arma esta sección en el handoff de Movimientos. El texto en estado impago
@@ -589,6 +589,8 @@ function construirCuerpoTxItem(m){
           ? `<span class="badge badge-success js-toggle-pago" role="button" tabindex="0" aria-label="Pagado. Tocá para deshacerlo" data-ym="${ym}">✓ Pagado</span>`
           : `<span class="badge badge-danger js-toggle-pago" role="button" tabindex="0" aria-label="Impago. Tocá para marcarlo pagado" data-ym="${ym}">🔁 Marcar pagado</span>`;
       }
+      // Plata por recuperar (gasto compartido): botón "Cobrar" / "✓ Cobrado" debajo del monto (ver recuperable.js).
+      if(tieneRecuperable(m)) statusBadge=botonRecuperableHTML(m);
       // En un cambio, el tipo de cambio es EL dato de la operación y en la fila no se veía
       // por ningún lado: hay que abrir el editor para saber a cuánto compraste. Se saca de
       // las dos patas juntas, así que se busca la hermana.
@@ -668,6 +670,7 @@ class TxItem extends HTMLElement{
     // arriba), sino un addEventListener igual que bgLeft/bgRight. stopPropagation evita que el
     // toque también dispare el cierre del swipe si la fila estuviera revelada.
     this._conectarBadgePago();
+    this._conectarBadgeRecup();
     this._attachSwipe();
   }
   // Separado de connectedCallback para poder reconectarlo después de un repintado puntual
@@ -680,6 +683,11 @@ class TxItem extends HTMLElement{
         toggleFrecPagado(this._m.id, pagoBtn.dataset.ym);
       });
     }
+  }
+  // El botón "Cobrar / ✓ Cobrado" de un gasto con monto recuperable (ver recuperable.js). Tras cobrar, la lista se repinta entera.
+  _conectarBadgeRecup(){
+    const recupBtn=this.querySelector(".js-toggle-recup");
+    if(recupBtn) recupBtn.addEventListener("click", e=>{ e.stopPropagation(); toggleRecuperado(this._m.id); });
   }
   _cerrar(){
     const content=this.querySelector(".tx-item-content");
@@ -1350,11 +1358,9 @@ function renderMovs(){
     if(retirado>0){
       mosTodos.push(mosaicoHTML("💸","De ahorros","var(--save)",fmtTotal(retirado),""));
     }
-    // Total a recuperar (gastos compartidos)
-    const recup=mesMovs.filter(m=>esConsumo(m)&&m.recuperable>0).reduce((s,m)=>s+m.recuperable,0);
-    if(recup>0){
-      mosTodos.push(mosaicoHTML("🔁","A recuperar","var(--accent)",fmtTotal(recup),""));
-    }
+    // Lo que falta cobrar de los gastos compartidos (ver recuperable.js)
+    const mosRecup=recuperarMosaicoHTML(pendienteDeRecuperar(mesMovs));
+    if(mosRecup) mosTodos.push(mosRecup);
     // Los mosaicos por ticker van al final, ya ordenados de mayor a menor por el módulo.
     netosTicker.forEach(t=>{
       if(Math.round(t.ars)!==0){
@@ -1502,7 +1508,8 @@ async function borrarMov(id, btn){
   }
   // Una venta cargada con "Sale de mis ahorros" lleva un retiro del fondo ligado: se van juntos para no dejar el fondo descuadrado.
   const ligados=movs.some(x=>x.origenInvId===id);
-  eliminarConDeshacer("mov", x=>x.id===id || x.origenInvId===id, ligados ? "Venta eliminada junto con su retiro del fondo" : "Movimiento eliminado");
+  const conDevolucion=movs.some(x=>x.devolucionDeId===id);   // el ingreso de "Cobrar" de un gasto recuperable se va con su gasto
+  eliminarConDeshacer("mov", x=>x.id===id || x.origenInvId===id || x.devolucionDeId===id, ligados ? "Venta eliminada junto con su retiro del fondo" : conDevolucion ? "Gasto eliminado junto con su devolución" : "Movimiento eliminado");
   renderMovs();
 }
 async function confirmarBorrarTc(id){

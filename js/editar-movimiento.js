@@ -471,6 +471,7 @@ function guardarEdit(){
       if(m.esAhorro && m.usaAhorro) m.usaAhorro=false;
       m.recuperable=parseFloat(document.getElementById("edit-recup").value)||0;
     }
+    if(typeof sincronizarDevolucion==="function") sincronizarDevolucion(m);   // si ya cobraste, la devolución se pone igual
     // Un pago de resumen sigue ligado a su moneda: si se cambia acá, el resumen lo tiene que saber.
     if(m.pagoTarjeta) m.pagoTarjeta.moneda=m.moneda==="USD"?"USD":"ARS";
   } else if(m.tipo==="Inversion"){
