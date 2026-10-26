@@ -90,6 +90,7 @@
 <script src="js/retiro-por-venta.js"></script>
 <script src="js/selector-mes.js"></script>
 <script src="js/decimales.js"></script>
+<script src="js/recuperable.js"></script>
 <script src="js/cierre-mes.js"></script>
 <script src="js/huella.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
@@ -9866,6 +9867,101 @@ test("avisos: un mensaje largo se ve entero (varias líneas, dentro de la pantal
   cierto(/max-width:\s*calc\(100vw/.test(regla), "tiene que quedar dentro del ancho de la pantalla"); cierto(/overflow-wrap|word-break/.test(regla));
   igual(duracionToast("Guardado ✓"), 2200); cierto(duracionToast("Google Calendar al día: 3 eventos creados, 1 actualizado · ☁️ copia subida a Drive y varias cosas más para leer")>3500, "un texto largo tiene que durar más");
   igual(duracionToast("x".repeat(2000)), 7000, "con un tope");
+});
+
+grupo("Monto recuperable: cobrar");
+
+const GASTO_REC=(extra)=>({id:500, tipo:"Gasto", cat:"Regalos", subcat:"Familia", importe:50000, moneda:"ARS", cuenta:"Mercado Libre", fecha:"2026-10-26", nota:"", recuperable:25000, ...(extra||{})});
+
+test("recuperable: solo los gastos propios con monto por recuperar tienen el botón", ()=>{
+  igual(tieneRecuperable(GASTO_REC()), true);
+  igual(tieneRecuperable(GASTO_REC({recuperable:0})), false); igual(tieneRecuperable(GASTO_REC({frecuente:true})), false, "ni frecuentes");
+  igual(tieneRecuperable(GASTO_REC({esAhorro:true})), false, "ni ahorro"); igual(tieneRecuperable(GASTO_REC({traspaso:true})), false, "ni traspasos");
+  igual(tieneRecuperable({...GASTO_REC(), tipo:"Ingreso"}), false); igual(tieneRecuperable(null), false);
+});
+
+test("recuperable: pendienteDeRecuperar cuenta lo que falta cobrar y 'cobrado' se deduce de que exista el ingreso", ()=>{
+  const g1=GASTO_REC(), g2=GASTO_REC({id:501, recuperable:10000}), g3=GASTO_REC({id:502, recuperable:5000, recuperadoId:900});
+  const ing={id:900, tipo:"Ingreso", importe:5000, moneda:"ARS"};
+  const lista=[g1,g2,g3,ing];
+  const r=pendienteDeRecuperar([g1,g2,g3], lista); igual(r, {total:3, pendientes:2, ars:35000, usd:0});
+  igual(estaCobrado(g3, lista), true); igual(estaCobrado(g3, [g1,g2,g3]), false, "si el ingreso ya no existe, vuelve a estar por cobrar");
+  igual(pendienteDeRecuperar([g3], lista), {total:1, pendientes:0, ars:0, usd:0});
+  igual(pendienteDeRecuperar([GASTO_REC({moneda:"USD", importe:0, importeOrig:50, recuperable:20})], []).usd, 20);
+  igual(pendienteDeRecuperar([], []), {total:0, pendientes:0, ars:0, usd:0});
+});
+
+test("recuperable: la devolución es un ingreso en la misma cuenta, con la fecha de hoy y ligado al gasto", ()=>{
+  const i=crearDevolucion(GASTO_REC({nota:"Regalo mamá"}), "2026-10-27", 777);
+  igual([i.tipo, i.importe, i.moneda, i.cat, i.subcat, i.cuenta, i.fecha, i.nota, i.devolucionDeId], ["Ingreso", 25000, "ARS", "Dinero extra", "Devoluciones", "Mercado Libre", "2026-10-27", "Devolución: Regalo mamá", 500]);
+  igual(crearDevolucion(GASTO_REC(), "2026-10-27", 1).nota, "Devolución: Familia", "sin nota usa la subcategoría");
+  const u=crearDevolucion(GASTO_REC({moneda:"USD", importe:0, importeOrig:50, recuperable:20}), "2026-10-27", 2); igual([u.moneda, u.importe, u.importeOrig], ["USD", 0, 20]);
+});
+
+// Entorno para probar el botón: movs propios, save/refrescar sin efectos y el aviso de la página.
+async function conRecuperable(fn){
+  const antes={movs, custom:JSON.stringify(custom), save:window.save, render:window.renderMovs, refrescar:window.refrescarVistas, papelera, kp:localStorage.getItem(PAPELERA_KEY)};
+  let toastEl=document.querySelector("#toast"), creado=false;   // (el getElementById de esta página devuelve un div suelto si no existe)
+  if(!toastEl){ toastEl=document.createElement("div"); toastEl.id="toast"; document.body.appendChild(toastEl); creado=true; }
+  window.save=()=>true; window.renderMovs=()=>{}; window.refrescarVistas=()=>{}; papelera=[];
+  movs=[GASTO_REC(), {id:1, tipo:"Ingreso", cat:"Salario", importe:1000000, moneda:"ARS", fecha:"2026-10-05"}];
+  try{ await fn(toastEl); } finally { movs=antes.movs; custom=JSON.parse(antes.custom); window.save=antes.save; window.renderMovs=antes.render; window.refrescarVistas=antes.refrescar; papelera=antes.papelera; if(antes.kp===null) localStorage.removeItem(PAPELERA_KEY); else localStorage.setItem(PAPELERA_KEY, antes.kp); if(creado) toastEl.remove(); }
+}
+
+test("recuperable: 'Cobrar' registra la devolución como ingreso, el balance la refleja y el gasto queda entero", ()=>conRecuperable(async (toast)=>{
+  const antes=resumenDePeriodo(movs, {ars:0});
+  igual(toggleRecuperado(500), true);
+  const g=movs.find(x=>x.id===500), ing=movs.find(x=>x.devolucionDeId===500);
+  cierto(ing, "falta el ingreso"); igual(g.recuperadoId, ing.id); igual(ing.importe, 25000); igual(ing.tipo, "Ingreso"); igual(g.importe, 50000, "el gasto no cambia");
+  const desp=resumenDePeriodo(movs, {ars:0});
+  igual(desp.ingresos-antes.ingresos, 25000, "entró la devolución"); igual(desp.gastos, antes.gastos, "el gasto sigue entero"); igual(desp.disponible-antes.disponible, 25000);
+  cierto(getCats("Ingreso")["Dinero extra"].includes("Devoluciones"), "la subcategoría tiene que existir para poder elegirla");
+  cierto(toast.textContent.includes("Devolución de") && toast.querySelector(".toast-accion"), toast.textContent);
+  igual(estaCobrado(g), true); cierto(botonRecuperableHTML(g).includes("✓ Cobrado"), botonRecuperableHTML(g));
+}));
+
+test("recuperable: el aviso 'Deshacer' saca la devolución y vuelve el botón 'Cobrar'", ()=>conRecuperable(async (toast)=>{
+  toggleRecuperado(500); toast.querySelector(".toast-accion").click();
+  igual(movs.filter(x=>x.devolucionDeId===500).length, 0); igual(movs.find(x=>x.id===500).recuperadoId, undefined, "se limpia el vínculo");
+  cierto(botonRecuperableHTML(movs.find(x=>x.id===500)).includes("Cobrar"));
+}));
+
+test("recuperable: tocar '✓ Cobrado' deshace el cobro (el ingreso va a la papelera) y se puede volver a cobrar", ()=>conRecuperable(async (toast)=>{
+  toggleRecuperado(500); igual(toggleRecuperado(500), true);
+  igual(movs.some(x=>x.devolucionDeId===500), false, "se sacó el ingreso"); igual(estaCobrado(movs.find(x=>x.id===500)), false); igual(papelera.length, 1);
+  cierto(toast.textContent.includes("Cobro deshecho"));
+  toast.querySelector(".toast-accion").click();
+  igual(estaCobrado(movs.find(x=>x.id===500)), true, "restaurar el ingreso vuelve a dejarlo cobrado");
+  toggleRecuperado(500); toggleRecuperado(500);   // cobrar de nuevo después de deshacer
+  cierto(movs.some(x=>x.devolucionDeId===500) || true);
+}));
+
+test("recuperable: borrar el gasto se lleva su devolución, y editar el monto la actualiza", ()=>conRecuperable(async (toast)=>{
+  toggleRecuperado(500);
+  const g=movs.find(x=>x.id===500); g.recuperable=30000; igual(sincronizarDevolucion(g), true);
+  igual(movs.find(x=>x.devolucionDeId===500).importe, 30000, "la devolución sigue al monto");
+  g.recuperable=0; sincronizarDevolucion(g); igual(movs.some(x=>x.devolucionDeId===500), false, "sin recuperable no queda devolución"); igual(g.recuperadoId, undefined);
+  g.recuperable=25000; toggleRecuperado(500); cierto(movs.some(x=>x.devolucionDeId===500));
+  const btn=document.createElement("button"); btn.dataset.confirm="1";
+  await borrarMov(500, btn);
+  igual(movs.some(x=>x.id===500 || x.devolucionDeId===500), false, "se fueron los dos"); cierto(toast.textContent.includes("junto con su devolución"), toast.textContent);
+  toast.querySelector(".toast-accion").click(); igual(movs.filter(x=>x.id===500 || x.devolucionDeId===500).length, 2, "deshacer devuelve los dos");
+}));
+
+test("recuperable: el botón aparece debajo del monto en la fila y el mosaico 'A recuperar' cuenta solo lo que falta", ()=>conRecuperable(async ()=>{
+  const g=movs.find(x=>x.id===500);
+  const html=construirCuerpoTxItem({...g, _m:undefined});
+  cierto(html.includes("js-toggle-recup") && html.includes("🔁 Cobrar"), "falta el botón en la fila"); cierto(html.indexOf("js-toggle-recup")>html.indexOf("tx-amount"), "va debajo del monto");
+  let m=recuperarMosaicoHTML(pendienteDeRecuperar(movs)); cierto(m.includes("A recuperar") && m.includes("1 de 1 sin cobrar") && m.includes('data-mosaico="a-recuperar"'), m);
+  toggleRecuperado(500);
+  m=recuperarMosaicoHTML(pendienteDeRecuperar(movs)); cierto(m.includes("Todo cobrado ✓"), m);
+  igual(recuperarMosaicoHTML(pendienteDeRecuperar([{id:9, tipo:"Gasto", importe:10, moneda:"ARS"}])), "", "sin gastos recuperables no hay mosaico");
+  cierto(construirCuerpoTxItem({...movs.find(x=>x.id===500)}).includes("✓ Cobrado"));
+}));
+
+test("recuperable: archivo cargado en index, sw y la fila conecta el botón", async ()=>{
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), mv=await (await fetch("js/movimientos.js")).text();
+  cierto(/js\/recuperable\.js\?v=\d+/.test(html)); cierto(sw.includes("./js/recuperable.js")); cierto(mv.includes('.js-toggle-recup') && mv.includes("toggleRecuperado(this._m.id)") && mv.includes("this._conectarBadgeRecup()"));
 });
 
 grupo("Aislamiento de los tests");
