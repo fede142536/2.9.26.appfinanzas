@@ -10036,7 +10036,7 @@ async function conVentasFondo(fn){
 }
 
 test("ventas de ahorros: la hoja lista cada venta y 'Sí, salió del fondo' crea el retiro, baja el fondo y se puede deshacer", ()=>conVentasFondo(async (e)=>{
-  renderVentasFondoCard(); igual(e.card.style.display, ""); cierto(e.res.textContent.includes("1 venta parece"), e.res.textContent);
+  renderVentasFondoCard(); igual(e.card.style.display, ""); cierto(e.res.textContent.includes("1 venta tiene que revisarse"), e.res.textContent);
   abrirVentasFondo(); cierto(e.modal.classList.contains("open")); cierto(e.cuerpo.textContent.includes("SPY") && e.cuerpo.textContent.includes("Fondo de Retiro › Cedears"), e.cuerpo.textContent);
   const antes=saldoAhorroCategoria(movs, "Fondo de Retiro", "Cedears"), disp=resumenDePeriodo(movs.filter(m=>m.fecha.startsWith("2026-10")), {ars:0}).disponible;
   igual(await vincularVentaConFondo(0), true); igual(e.copias(), 1, "guarda una copia de seguridad antes del primer cambio");
@@ -10045,6 +10045,65 @@ test("ventas de ahorros: la hoja lista cada venta y 'Sí, salió del fondo' crea
   igual(Math.round((resumenDePeriodo(movs.filter(m=>m.fecha.startsWith("2026-10")), {ars:0}).disponible-disp)*100)/100, 104003.22, "y lo disponible de octubre sube una vez");
   cierto(e.cuerpo.textContent.includes("No hay ventas pendientes"), "la venta ya no figura");
   e.toast.querySelector(".toast-accion").click(); igual(movs.some(x=>x.origenInvId===10), false, "deshacer saca el retiro"); cierto(e.cuerpo.textContent.includes("SPY"));
+}));
+
+// El caso real: las ventas de SPY ya estaban cargadas como retiros del fondo ("Spy x 12") y además como ventas de inversión.
+const REAL_V=()=>[
+  {id:1, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears", importe:593121.13, moneda:"ARS", esAhorro:true, fecha:"2026-07-01", nota:"Spy x 30"},
+  {id:21, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears", importe:520382.40, moneda:"ARS", usaAhorro:true, fecha:"2026-06-18", nota:"Spy x 28", cuenta:"Balanz"},
+  {id:22, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears", importe:234828.73, moneda:"ARS", usaAhorro:true, fecha:"2026-07-07", nota:"Spy x 12", cuenta:"Balanz"},
+  {id:23, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears", importe:203337.72, moneda:"ARS", usaAhorro:true, fecha:"2026-08-04", nota:"Spy x 10", cuenta:"Balanz"},
+  {id:24, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears", importe:81772.16, moneda:"ARS", usaAhorro:true, fecha:"2026-08-27", nota:"Spy x 4", cuenta:"Balanz"},
+  VENTA_V(31,"SPY",{importe:520393.58, fecha:"2026-06-18"}), VENTA_V(32,"SPY",{importe:233674.48, fecha:"2026-07-07"}), VENTA_V(33,"SPY",{importe:202940.38, fecha:"2026-08-10"}), VENTA_V(34,"SPY",{importe:81772.16, fecha:"2026-08-27"}),
+  VENTA_V(35,"SPY",{importe:77916.38, fecha:"2026-07-13"}), VENTA_V(36,"SPY",{importe:77917.98, fecha:"2026-07-13"})];
+
+test("ventas de ahorros: una venta ya cargada como retiro del fondo se UNE con él (no se crea un segundo)", ()=>{
+  const r=ventasSinRetiro(REAL_V(), [], []);
+  const por=id=>r.find(x=>x.inv.id===id);
+  igual([por(31),por(32),por(33),por(34)].map(x=>x.retiro && x.retiro.id), [21,22,23,24], "cada venta con su retiro, también con 6 días y $400 de diferencia");
+  igual([por(35).retiro, por(36).retiro], [null, null], "sin retiro cargado: se crearía uno");
+  igual(r.length, 6);
+  const unRetiroParaDos=[...REAL_V().filter(x=>x.id!==23), VENTA_V(40,"SPY",{importe:203000, fecha:"2026-08-05"})];
+  cierto(!ventasSinRetiro(unRetiroParaDos, [], []).some(x=>x.retiro && x.retiro.id===23), "ese retiro ya no existe: no se inventa uno");
+  igual(ventasSinRetiro([...REAL_V(), {id:25, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears", importe:520000, moneda:"ARS", usaAhorro:true, fecha:"2026-06-19", nota:"Spy x 28 otra"}], [], []).find(x=>x.inv.id===31).retiro.id, 21, "elige el que más se parece");
+});
+
+test("ventas de ahorros: dos ventas casi iguales del mismo día se marcan; la que sobra es la cargada después", ()=>{
+  const r=ventasSinRetiro(REAL_V(), [], []);
+  igual(r.find(x=>x.inv.id===35).repetida, null, "la primera es la original");
+  igual(r.find(x=>x.inv.id===36).repetida && r.find(x=>x.inv.id===36).repetida.id, 35, "la segunda parece repetida de la primera");
+  igual(ventasSinRetiro(REAL_V(), [], [36]).find(x=>x.inv.id===36).repetida, null, "si confirmás que son dos ventas, no se vuelve a marcar");
+  igual(ventaRepetidaDe([VENTA_V(1,"SPY",{importe:1000}), VENTA_V(2,"SPY",{importe:1100})], VENTA_V(2,"SPY",{importe:1100})), null, "10% de diferencia no es repetida");
+  igual(ventaRepetidaDe([VENTA_V(1,"SPY"), VENTA_V(2,"KO")], VENTA_V(2,"KO")), null, "otro ticker");
+  igual(ventaRepetidaDe([VENTA_V(1,"SPY"), VENTA_V(2,"SPY",{cuenta:"Cocos"})], VENTA_V(2,"SPY",{cuenta:"Cocos"})), null, "otra cuenta");
+});
+
+test("ventas de ahorros: 'Unir con ese retiro' deja UN registro: el retiro ya cargado pasa a ser el de la venta y deja de contar como gasto", ()=>conVentasFondo(async (e)=>{
+  movs=REAL_V();
+  const mes=(ym)=>movs.filter(m=>m.fecha.startsWith(ym));
+  const antes=resumenDePeriodo(mes("2026-07"), {ars:0}), saldo0=saldoAhorroCategoria(movs, "Fondo de Retiro", "Cedears");
+  abrirVentasFondo(); const i=ventasFondoFilas.findIndex(x=>x.inv.id===32);
+  cierto(e.cuerpo.textContent.includes("Unir con ese retiro") && e.cuerpo.textContent.includes("Spy x 12"), "ofrece unir y muestra el retiro encontrado");
+  igual(await unirVentaConRetiro(i), true); igual(e.copias(), 1);
+  const r=movs.find(x=>x.id===22);
+  igual([r.origenInvId, r.traspaso, r.usaAhorro, r.importe, r.fecha], [32, true, true, 233674.48, "2026-07-07"], "toma el monto de la venta");
+  igual(movs.filter(x=>x.origenInvId===32).length, 1, "no se creó un retiro nuevo"); igual(movs.length, REAL_V().length, "no se sumó ningún movimiento");
+  igual(Math.round((saldoAhorroCategoria(movs, "Fondo de Retiro", "Cedears")-saldo0)*100)/100, 1154.25, "el fondo sigue bajando una sola vez (solo se ajusta la diferencia de monto con la venta)");
+  const desp=resumenDePeriodo(mes("2026-07"), {ars:0});
+  igual(Math.round((antes.gastos-desp.gastos)*100)/100, 234828.73, "el retiro ya no figura como gasto"); igual(Math.round((antes.ingresos-desp.ingresos)*100)/100, 234828.73, "ni como ingreso (que además duplicaba la venta)");
+  igual(desp.retiradoAMano, 233674.48);
+  e.toast.querySelector(".toast-accion").click();
+  igual([r.origenInvId, r.traspaso, r.importe], [undefined, undefined, 234828.73], "deshacer deja el retiro como estaba");
+}));
+
+test("ventas de ahorros: 'Es repetida: eliminar esta' saca la venta que sobra a la papelera y se puede deshacer", ()=>conVentasFondo(async (e)=>{
+  movs=REAL_V(); abrirVentasFondo(); const i=ventasFondoFilas.findIndex(x=>x.inv.id===36);
+  cierto(e.cuerpo.textContent.includes("Parece repetida") && e.cuerpo.textContent.includes("Es repetida: eliminar esta"));
+  const pap=papelera; papelera=[];
+  try{
+    igual(await eliminarVentaRepetida(i), true); igual(movs.some(x=>x.id===36), false); igual(movs.some(x=>x.id===35), true, "queda la original");
+    cierto(e.toast.textContent.includes("repetida de SPY eliminada")); e.toast.querySelector(".toast-accion").click(); igual(movs.some(x=>x.id===36), true, "deshacer la devuelve");
+  } finally { papelera=pap; }
 }));
 
 test("ventas de ahorros: 'No fue del fondo' la descarta y no vuelve a aparecer", ()=>conVentasFondo(async (e)=>{
