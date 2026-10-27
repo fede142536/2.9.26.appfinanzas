@@ -376,6 +376,7 @@ function renderEditForm(m){
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
+      ${bloqueSaleDeAhorroEditor(m)}
       <div class="form-group"><label class="form-label">Nota</label>
         <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
@@ -471,7 +472,6 @@ function guardarEdit(){
       if(m.esAhorro && m.usaAhorro) m.usaAhorro=false;
       m.recuperable=parseFloat(document.getElementById("edit-recup").value)||0;
     }
-    if(typeof sincronizarDevolucion==="function") sincronizarDevolucion(m);   // si ya cobraste, la devolución se pone igual
     // Un pago de resumen sigue ligado a su moneda: si se cambia acá, el resumen lo tiene que saber.
     if(m.pagoTarjeta) m.pagoTarjeta.moneda=m.moneda==="USD"?"USD":"ARS";
   } else if(m.tipo==="Inversion"){
@@ -510,7 +510,7 @@ function guardarEdit(){
     }
     m.importeUSD = mepUsdEl ? 0 : Math.round(usd*100)/100;
   }
-  if(m.tipo==="Inversion") sincronizarRetiroLigado(m, movs);   // el retiro del fondo que acompaña a una venta se pone igual
+  if(m.tipo==="Inversion"){ aplicarSaleDeAhorroEditor(m); sincronizarRetiroLigado(m, movs); }   // el retiro del fondo que acompaña a una venta se pone igual
   save();
   vibrar([15,50,15]);
   closeEditModal();

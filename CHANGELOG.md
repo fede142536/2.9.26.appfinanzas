@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v200**
+**Versión actual: v201**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,15 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 27 de octubre de 2026
+
+- **v201** · Revisar ventas que salieron de ahorros, cobros parciales del monto recuperable y recordatorios sin detalle
+  - Ventas ya cargadas que parecen haber salido de un fondo (el ticker figura en sus notas): hoja en Configuración y aviso en el Dashboard para vincularlas con un toque (con copia de seguridad y Deshacer) o descartarlas; el editor de una venta ahora tiene la casilla 'Sale de mis ahorros'.
+  - Cobrar el monto recuperable pregunta cuánto te devolvieron: se puede cobrar en partes (cada cobro es un ingreso), el botón muestra 'Faltan $X' y el mosaico 'A recuperar' cuenta lo que falta.
+  - Interruptor 'Recordatorios sin detalle': los eventos del calendario (Google y .ics) dicen 'Vence un gasto fijo' sin nombres ni montos.
+- Changelog: CHANGELOG.md generado desde el historial de git
+  scripts/generar-changelog.js arma CHANGELOG.md (un cambio por commit, agrupado por día, del más nuevo al más viejo) y scripts/changelog-hitos.md tiene el resumen por etapas que va arriba.
 
 ## 26 de octubre de 2026
 

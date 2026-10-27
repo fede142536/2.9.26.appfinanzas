@@ -952,6 +952,15 @@ function renderVencConfig(){
   const actual=leerDiasAviso();
   const opciones=VENC_AVISO_OPCIONES.includes(actual) ? VENC_AVISO_OPCIONES : [...VENC_AVISO_OPCIONES, actual].sort((a,b)=>a-b);
   sel.innerHTML=opciones.map(n=>`<option value="${n}" ${n===actual?"selected":""}>${textoAnticipacion(n)}</option>`).join("");
+  const gen=document.getElementById("cal-generico"); if(gen) gen.checked=recordatoriosGenericos();
+  renderEstadoGcal();
+}
+// El interruptor "Recordatorios sin detalle": cambia lo que se manda al calendario (los eventos ya enviados se actualizan en el próximo envío).
+function onCalGenericoCambio(chk){
+  guardarPreferencia(CAL_GENERICO_KEY, chk.checked ? "1" : "0");
+  showToast(chk.checked ? "Los recordatorios van sin nombres ni montos" : "Los recordatorios vuelven a llevar el detalle");
+  if(typeof programarSyncCalendario==="function") programarSyncCalendario();
+  if(typeof pintarAvisoCalendario==="function") pintarAvisoCalendario();
   renderEstadoGcal();
 }
 // ── Google Calendar: conexión y estado ──
