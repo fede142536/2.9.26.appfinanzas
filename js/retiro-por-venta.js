@@ -113,19 +113,59 @@ function fondoDelTicker(lista, ticker, moneda){
   return mejor ? {cat:mejor.cat, sub:mejor.sub} : null;
 }
 
-// Pura. Ventas o rescates sin retiro ligado que parecen haber salido de un fondo: [{inv, fondo:{cat,sub}, moneda, monto}], la más nueva primero.
-function ventasSinRetiro(lista, ignoradas){
-  const ign=new Set(ignoradas||[]);
+const diasEntreISO=(a,b)=>Math.abs(Math.round((Date.parse(String(a).slice(0,10)+"T00:00:00Z")-Date.parse(String(b).slice(0,10)+"T00:00:00Z"))/86400000));
+const esVentaDeInversion=m=>!!m && m.tipo==="Inversion" && isInvSalida(m) && esOperacionDeVenta(m.subcat);
+const montoDeVenta=m=>(m.importeUSD>0 && !(m.importe>0)) ? m.importeUSD : (m.importe||0);
+
+// Pura. El retiro que YA estaba cargado a mano para esa venta (un gasto "sale de mis ahorros" del mismo fondo, sin ligar a ninguna venta): el ticker
+// figura en su nota, hasta RETIRO_DIAS días de diferencia y monto parecido (±RETIRO_TOLERANCIA). Elige el más parecido que no esté en `usados`.
+const RETIRO_DIAS=10, RETIRO_TOLERANCIA=0.05;
+function retiroCargadoDeVenta(lista, inv, fondo, usados){
+  const monto=montoDeVenta(inv), usd=!!(inv.importeUSD>0 && !(inv.importe>0)), t=normalizarTexto(inv.ticker||"");
+  let mejor=null, mejorPuntaje=Infinity;
+  (lista||[]).forEach(x=>{
+    if(!esRetiroAhorro(x) || x.origenInvId || (usados && usados.has(x.id))) return;
+    if((x.cat||"Sin categoría")!==fondo.cat || (x.subcat||"")!==fondo.sub) return;
+    if((x.moneda==="USD")!==usd) return;
+    if(!normalizarTexto(x.nota||"").split(/\s+/).includes(t)) return;
+    const dias=diasEntreISO(x.fecha, inv.fecha), xm=usd ? (x.importeOrig||0) : (x.importe||0);
+    if(dias>RETIRO_DIAS || !(monto>0) || Math.abs(xm-monto)/monto>RETIRO_TOLERANCIA) return;
+    const puntaje=Math.abs(xm-monto)/monto*100+dias;
+    if(puntaje<mejorPuntaje){ mejor=x; mejorPuntaje=puntaje; }
+  });
+  return mejor;
+}
+
+// Pura. Si hay OTRA venta del mismo ticker, día y cuenta con casi el mismo monto (±0,5%), devuelve la más vieja de las dos cuando `inv` es la que sobra;
+// si `inv` es la original (o no hay otra), null. Se queda la que se cargó primero (el id más bajo).
+function ventaRepetidaDe(lista, inv){
+  const monto=montoDeVenta(inv);
+  if(!(monto>0)) return null;
+  const otras=(lista||[]).filter(w=>w!==inv && esVentaDeInversion(w) && w.ticker===inv.ticker && String(w.fecha).slice(0,10)===String(inv.fecha).slice(0,10)
+    && (w.cuenta||"")===(inv.cuenta||"") && Math.abs(montoDeVenta(w)-monto)/monto<=0.005 && (w.id||0)<(inv.id||0));
+  return otras.sort((a,b)=>(a.id||0)-(b.id||0))[0] || null;
+}
+
+// Pura. Ventas o rescates sin retiro ligado que parecen haber salido de un fondo, la más nueva primero:
+// [{inv, fondo:{cat,sub}, moneda, monto, retiro (el retiro ya cargado a mano que le corresponde, o null), repetida (la venta original si esta parece repetida, o null)}].
+// `descartadasRepetidas`: ids de ventas que ya confirmaste que NO son repetidas.
+function ventasSinRetiro(lista, ignoradas, noRepetidas){
+  const ign=new Set(ignoradas||[]), noRep=new Set(noRepetidas||[]);
   const ligadas=new Set((lista||[]).filter(x=>x && x.origenInvId).map(x=>x.origenInvId));
-  const out=[];
+  const cand=[];
   (lista||[]).forEach(m=>{
-    if(!m || m.tipo!=="Inversion" || !isInvSalida(m) || !esOperacionDeVenta(m.subcat) || ligadas.has(m.id) || ign.has(m.id)) return;
+    if(!esVentaDeInversion(m) || ligadas.has(m.id) || ign.has(m.id)) return;
     const usd=!!(m.importeUSD>0 && !(m.importe>0)), monto=usd ? m.importeUSD : m.importe;
     if(!(monto>0) || !m.ticker) return;
     const moneda=usd ? "USD" : "ARS", fondo=fondoDelTicker(lista, m.ticker, moneda);
-    if(fondo) out.push({inv:m, fondo, moneda, monto});
+    if(fondo) cand.push({inv:m, fondo, moneda, monto, retiro:null, repetida: noRep.has(m.id) ? null : ventaRepetidaDe(lista, m)});
   });
-  return out.sort((a,b)=>String(b.inv.fecha).localeCompare(String(a.inv.fecha)) || (b.inv.id||0)-(a.inv.id||0));
+  // Cada retiro cargado a mano se empareja con UNA venta: primero las que mejor encajan.
+  const usados=new Set();
+  cand.filter(c=>!c.repetida).map(c=>({c, r:retiroCargadoDeVenta(lista, c.inv, c.fondo, null)})).filter(x=>x.r)
+    .sort((a,b)=>Math.abs((a.r.importe||a.r.importeOrig)-a.c.monto)-Math.abs((b.r.importe||b.r.importeOrig)-b.c.monto))
+    .forEach(({c})=>{ const r=retiroCargadoDeVenta(lista, c.inv, c.fondo, usados); if(r){ c.retiro=r; usados.add(r.id); } });
+  return cand.sort((a,b)=>String(b.inv.fecha).localeCompare(String(a.inv.fecha)) || (b.inv.id||0)-(a.inv.id||0));
 }
 
 // Pura. Los fondos que se ofrecen para una venta (en su moneda) más el fondo del que ya está ligada, aunque su saldo sea cero.
@@ -139,35 +179,48 @@ function fondosParaVenta(lista, inv){
 
 // ── Pantalla: Configuración › Ventas que salieron de ahorros ──
 const VENTA_IGNORADAS_KEY="fventafondoignoradas";
+const VENTA_NOREPETIDA_KEY="fventanorepetidas";
 const ventasIgnoradas=()=>leerJSONSeguro(VENTA_IGNORADAS_KEY, "[]", "array");
+const ventasNoRepetidas=()=>leerJSONSeguro(VENTA_NOREPETIDA_KEY, "[]", "array");
+const ventasPorRevisar=lista=>ventasSinRetiro(lista, ventasIgnoradas(), ventasNoRepetidas());
 let ventasFondoFilas=[], ventasFondoCopiaHecha=false;
 
 const fmtMontoVenta=(v)=> v.moneda==="USD" ? fmtMoneda(v.monto,"USD") : fmtS(v.monto);
 function ventasFondoHTML(filas){
   if(!filas.length) return `<p class="txt-sm" style="margin:12px 0"><strong>✓ No hay ventas pendientes de revisar.</strong></p>`;
   const nombre=f=>escapeHtml(f.cat+(f.sub?" › "+f.sub:""));
-  const items=filas.map((v,i)=>`<div class="sc-grupo">
-      <div class="sc-top"><span><strong>${escapeHtml(v.inv.ticker)}</strong> <span class="txt-xs txt-muted">${escapeHtml(v.inv.subcat||"venta")}</span></span><span class="sc-n">${fmtMontoVenta(v)}</span></div>
-      <div class="sc-det">${escapeHtml(fmtDiaMes(v.inv.fecha))}${v.inv.cuenta&&v.inv.cuenta!=="Cuentas"?` · ${escapeHtml(v.inv.cuenta)}`:""} · Se descontaría de <strong>${nombre(v.fondo)}</strong>.</div>
+  const items=filas.map((v,i)=>{
+    const cab=`<div class="sc-top"><span><strong>${escapeHtml(v.inv.ticker)}</strong> <span class="txt-xs txt-muted">${escapeHtml(v.inv.subcat||"venta")}</span></span><span class="sc-n">${fmtMontoVenta(v)}</span></div>`;
+    const dato=`${escapeHtml(fmtDiaMes(v.inv.fecha))}${v.inv.cuenta&&v.inv.cuenta!=="Cuentas"?` · ${escapeHtml(v.inv.cuenta)}`:""}`;
+    if(v.repetida) return `<div class="sc-grupo">${cab}
+      <div class="sc-det">${dato} · ⚠️ Parece <strong>repetida</strong>: hay otra venta de ${escapeHtml(v.inv.ticker)} el mismo día por ${fmtMontoVenta({monto:montoDeVenta(v.repetida), moneda:v.moneda})}.</div>
+      <div class="sc-acc"><button type="button" class="btn-sm" onclick="eliminarVentaRepetida(${i})">Es repetida: eliminar esta</button>
+        <button type="button" class="btn-sm" onclick="ventaNoEsRepetida(${i})">Son dos ventas</button></div></div>`;
+    if(v.retiro) return `<div class="sc-grupo">${cab}
+      <div class="sc-det">${dato} · Ya la cargaste como retiro de <strong>${nombre(v.fondo)}</strong> (“${escapeHtml(v.retiro.nota||"")}”, ${escapeHtml(fmtDiaMes(v.retiro.fecha))}, ${v.moneda==="USD"?fmtMoneda(v.retiro.importeOrig||0,"USD"):fmtS(v.retiro.importe||0)}). Unirlas evita contarla dos veces.</div>
+      <div class="sc-acc"><button type="button" class="btn-sm" onclick="unirVentaConRetiro(${i})">Unir con ese retiro</button>
+        <button type="button" class="btn-sm" onclick="descartarVentaFondo(${i})">No es esa</button></div></div>`;
+    return `<div class="sc-grupo">${cab}
+      <div class="sc-det">${dato} · Se descontaría de <strong>${nombre(v.fondo)}</strong>.</div>
       <div class="sc-acc"><button type="button" class="btn-sm" onclick="vincularVentaConFondo(${i})">Sí, salió del fondo</button>
-        <button type="button" class="btn-sm" onclick="descartarVentaFondo(${i})">No fue del fondo</button></div>
-    </div>`).join("");
+        <button type="button" class="btn-sm" onclick="descartarVentaFondo(${i})">No fue del fondo</button></div></div>`;
+  }).join("");
   return `<p class="txt-sm" style="margin:12px 0 4px"><strong>${filas.length} ${filas.length===1?"venta":"ventas"} para revisar</strong></p>
-    <p class="txt-xs txt-muted" style="margin:0 0 8px;line-height:1.4">Cuando una venta sale de un fondo de ahorro, el fondo tiene que bajar y esa plata suma a lo disponible del mes de la venta (en vez de contarse como ganancia). La pista: el ticker figura en las notas de ese fondo. No se cambia nada hasta que tocás “Sí”.</p>${items}`;
+    <p class="txt-xs txt-muted" style="margin:0 0 8px;line-height:1.4">Cuando una venta sale de un fondo de ahorro, el fondo tiene que bajar y esa plata suma a lo disponible del mes de la venta (en vez de contarse como ganancia y como gasto a la vez). Si ya cargaste el retiro del fondo a mano, se <strong>une</strong> a la venta: queda un solo registro, no dos. No se cambia nada hasta que lo confirmás.</p>${items}`;
 }
 function renderVentasFondoDetalle(){
   const el=document.getElementById("ventas-fondo-detalle");
   if(!el) return;
-  ventasFondoFilas=ventasSinRetiro(movs, ventasIgnoradas());
+  ventasFondoFilas=ventasPorRevisar(movs);
   el.innerHTML=ventasFondoHTML(ventasFondoFilas);
 }
 function renderVentasFondoCard(){
   const card=document.getElementById("ventas-fondo-card");
   if(!card) return;
-  const n=ventasSinRetiro(movs, ventasIgnoradas()).length;
+  const n=ventasPorRevisar(movs).length;
   card.style.display=n ? "" : "none";
   const el=document.getElementById("ventas-fondo-resumen");
-  if(el) el.textContent=`${n} ${n===1?"venta parece haber salido":"ventas parecen haber salido"} de tus ahorros y no ${n===1?"descontó":"descontaron"} el fondo.`;
+  if(el) el.textContent=`${n} ${n===1?"venta tiene":"ventas tienen"} que revisarse: salieron de tus ahorros y el fondo no las refleja bien (o están repetidas).`;
 }
 function abrirVentasFondo(){
   if(!document.getElementById("ventas-fondo-detalle")) return;
@@ -182,13 +235,16 @@ function cerrarVentasFondo(){
   if(typeof refrescarVistas==="function") refrescarVistas();
   if(typeof renderAlertas==="function") try{ renderAlertas(); }catch(e){ /* sin Dashboard */ }
 }
+async function copiaAntesDeVentasFondo(){
+  if(ventasFondoCopiaHecha) return;
+  try{ await guardarCopiaLocal("seguridad"); }catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
+  ventasFondoCopiaHecha=true;
+}
+// Crea el retiro del fondo que acompaña a la venta (cuando no estaba cargado).
 async function vincularVentaConFondo(i){
   const v=ventasFondoFilas[i];
   if(!v) return false;
-  if(!ventasFondoCopiaHecha){
-    try{ await guardarCopiaLocal("seguridad"); }catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
-    ventasFondoCopiaHecha=true;
-  }
+  await copiaAntesDeVentasFondo();
   let idNuevo=Date.now(); while(movs.some(x=>x.id===idNuevo)) idNuevo++;
   const retiro=crearRetiroPorVenta(v.inv, v.fondo, idNuevo);
   movs.unshift(retiro);
@@ -196,6 +252,36 @@ async function vincularVentaConFondo(i){
   ofrecerDeshacerCambio(`${v.inv.ticker}: descontado de ${v.fondo.cat}${v.fondo.sub?" › "+v.fondo.sub:""} ✓`, ()=>{ movs=movs.filter(x=>x.id!==retiro.id); renderVentasFondoDetalle(); });
   renderVentasFondoDetalle();
   return true;
+}
+// Une la venta con el retiro que ya estaba cargado a mano: ese retiro pasa a ser el de la venta (deja de contar como gasto, toma su monto y fecha).
+async function unirVentaConRetiro(i){
+  const v=ventasFondoFilas[i];
+  if(!v || !v.retiro) return false;
+  await copiaAntesDeVentasFondo();
+  const r=movs.find(x=>x.id===v.retiro.id);
+  if(!r) return false;
+  const revertir=capturarCampos([r], ["origenInvId","traspaso","importe","importeOrig","moneda","fecha","cuenta"]);
+  r.origenInvId=v.inv.id; r.traspaso=true;
+  sincronizarRetiroLigado(v.inv, movs);
+  save();
+  ofrecerDeshacerCambio(`${v.inv.ticker}: unida con su retiro del fondo ✓`, ()=>{ revertir(); renderVentasFondoDetalle(); });
+  renderVentasFondoDetalle();
+  return true;
+}
+// Elimina la venta que sobra (queda la que se cargó primero). Va a la papelera, se puede deshacer.
+async function eliminarVentaRepetida(i){
+  const v=ventasFondoFilas[i];
+  if(!v || !v.repetida) return false;
+  await copiaAntesDeVentasFondo();
+  eliminarConDeshacer("mov", x=>x.id===v.inv.id, `Venta repetida de ${v.inv.ticker} eliminada`);
+  renderVentasFondoDetalle();
+  return true;
+}
+function ventaNoEsRepetida(i){
+  const v=ventasFondoFilas[i];
+  if(!v) return;
+  guardarJSONSeguro(VENTA_NOREPETIDA_KEY, [...new Set([...ventasNoRepetidas(), v.inv.id])]);
+  renderVentasFondoDetalle();
 }
 function descartarVentaFondo(i){
   const v=ventasFondoFilas[i];
@@ -206,10 +292,10 @@ function descartarVentaFondo(i){
 
 // El aviso para el Dashboard. null si no hay ventas para revisar.
 function alertaDeVentasSinRetiro(lista){
-  const n=ventasSinRetiro(lista, ventasIgnoradas()).length;
+  const n=ventasPorRevisar(lista).length;
   if(!n) return null;
   return {nivel:"info", icono:"💸", titulo:`${n} ${n===1?"venta parece haber salido":"ventas parecen haber salido"} de tus ahorros`,
-    detalle:"El fondo no bajó cuando las cargaste. Revisalas y, si salieron del fondo, vinculalas con un toque.", accion:{texto:"Revisar ventas", fn:"abrirVentasFondo"}};
+    detalle:"El fondo no las refleja bien (o están repetidas). Revisalas: si ya cargaste el retiro a mano se unen en un solo registro.", accion:{texto:"Revisar ventas", fn:"abrirVentasFondo"}};
 }
 
 // ── Editor de una inversión: la misma casilla "Sale de mis ahorros" ──

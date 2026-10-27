@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v201**
+**Versión actual: v202**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 27 de octubre de 2026
 
+- **v202** · Las ventas ya cargadas como retiro del fondo se unen en vez de duplicarse, y se detectan ventas repetidas
+  La hoja de ventas que salieron de ahorros ahora busca el retiro que ya estaba cargado a mano (ticker en la nota, hasta 10 días y 5% de diferencia): 'Unir con ese retiro' deja un solo registro (el retiro toma el monto y la fecha de la venta y deja de contar como gasto e ingreso). Si dos ventas del mismo ticker, día y cuenta tienen casi el mismo monto se marca la segunda como posible repetida, con opción de eliminarla (papelera, con Deshacer) o confirmar que son dos.
 - **v201** · Revisar ventas que salieron de ahorros, cobros parciales del monto recuperable y recordatorios sin detalle
   - Ventas ya cargadas que parecen haber salido de un fondo (el ticker figura en sus notas): hoja en Configuración y aviso en el Dashboard para vincularlas con un toque (con copia de seguridad y Deshacer) o descartarlas; el editor de una venta ahora tiene la casilla 'Sale de mis ahorros'.
   - Cobrar el monto recuperable pregunta cuánto te devolvieron: se puede cobrar en partes (cada cobro es un ingreso), el botón muestra 'Faltan $X' y el mosaico 'A recuperar' cuenta lo que falta.
