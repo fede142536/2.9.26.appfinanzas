@@ -6523,7 +6523,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 13, "esperaba las 13 casillas conocidas (frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
+  igual(cajas.length, 14, "esperaba las 14 casillas conocidas (frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);
@@ -8470,7 +8470,7 @@ test("la configuración está en 5 secciones plegables, cerradas al empezar", as
 test("ninguna tarjeta de Configuración se perdió ni quedó fuera de una sección", async ()=>{
   const cfg=await configHTML();
   TARJETAS_CONFIG.forEach(t=>cierto(cfg.includes(t), "falta la tarjeta: "+t));
-  igual((cfg.match(/<div class="card"/g)||[]).length, 18, "tienen que ser 18 tarjetas (16 + movimientos sin cuenta + papelera)");
+  igual((cfg.match(/<div class="card"/g)||[]).length, 19, "tienen que ser 19 tarjetas (16 + movimientos sin cuenta + ventas de ahorros + papelera)");
   // toda tarjeta está adentro de alguna sección: antes del primer <details> no hay ninguna
   cierto(!cfg.slice(0, cfg.indexOf('<details class="cfg-seccion"')).includes('<div class="card"'), "quedó una tarjeta suelta antes de las secciones");
   // el contenido sigue bien cerrado: tantas aperturas como cierres
@@ -9872,6 +9872,7 @@ test("avisos: un mensaje largo se ve entero (varias líneas, dentro de la pantal
 grupo("Monto recuperable: cobrar");
 
 const GASTO_REC=(extra)=>({id:500, tipo:"Gasto", cat:"Regalos", subcat:"Familia", importe:50000, moneda:"ARS", cuenta:"Mercado Libre", fecha:"2026-10-26", nota:"", recuperable:25000, ...(extra||{})});
+const COBRO_REC=(id, monto, extra)=>({id, tipo:"Ingreso", importe:monto, moneda:"ARS", cat:"Dinero extra", subcat:"Devoluciones", fecha:"2026-10-27", devolucionDeId:500, ...(extra||{})});
 
 test("recuperable: solo los gastos propios con monto por recuperar tienen el botón", ()=>{
   igual(tieneRecuperable(GASTO_REC()), true);
@@ -9880,39 +9881,51 @@ test("recuperable: solo los gastos propios con monto por recuperar tienen el bot
   igual(tieneRecuperable({...GASTO_REC(), tipo:"Ingreso"}), false); igual(tieneRecuperable(null), false);
 });
 
-test("recuperable: pendienteDeRecuperar cuenta lo que falta cobrar y 'cobrado' se deduce de que exista el ingreso", ()=>{
-  const g1=GASTO_REC(), g2=GASTO_REC({id:501, recuperable:10000}), g3=GASTO_REC({id:502, recuperable:5000, recuperadoId:900});
-  const ing={id:900, tipo:"Ingreso", importe:5000, moneda:"ARS"};
-  const lista=[g1,g2,g3,ing];
-  const r=pendienteDeRecuperar([g1,g2,g3], lista); igual(r, {total:3, pendientes:2, ars:35000, usd:0});
-  igual(estaCobrado(g3, lista), true); igual(estaCobrado(g3, [g1,g2,g3]), false, "si el ingreso ya no existe, vuelve a estar por cobrar");
-  igual(pendienteDeRecuperar([g3], lista), {total:1, pendientes:0, ars:0, usd:0});
+test("recuperable: lo cobrado se deduce de los ingresos ligados, también si cobraste en partes", ()=>{
+  const g=GASTO_REC(), c1=COBRO_REC(900, 10000), c2=COBRO_REC(901, 5000);
+  igual(montoCobrado(g, [g]), 0); igual(faltaCobrar(g, [g]), 25000); igual(estaCobrado(g, [g]), false);
+  igual(montoCobrado(g, [g,c1]), 10000); igual(faltaCobrar(g, [g,c1]), 15000); igual(estaCobrado(g, [g,c1]), false, "cobro parcial");
+  igual(faltaCobrar(g, [g,c1,c2]), 10000);
+  igual(estaCobrado(g, [g,c1,COBRO_REC(902,15000)]), true, "10.000 + 15.000 completan los 25.000");
+  igual(faltaCobrar(g, [g,COBRO_REC(903,40000)]), 0, "nunca negativo");
+  igual(faltaCobrar(g, [g,COBRO_REC(904,10000,{devolucionDeId:777})]), 25000, "un ingreso de otro gasto no cuenta");
+  igual(estaCobrado(g, [g]), false, "si el ingreso se borra, vuelve a estar por cobrar");
+});
+
+test("recuperable: pendienteDeRecuperar suma lo que falta (no el total) y cuenta los gastos con algo pendiente", ()=>{
+  const g1=GASTO_REC(), g2=GASTO_REC({id:501, recuperable:10000}), g3=GASTO_REC({id:502, recuperable:5000});
+  const lista=[g1,g2,g3, COBRO_REC(900,5000,{devolucionDeId:502}), COBRO_REC(901,10000,{devolucionDeId:500})];
+  igual(pendienteDeRecuperar([g1,g2,g3], lista), {total:3, pendientes:2, ars:25000, usd:0}, "g1 falta 15.000, g2 10.000, g3 ya está");
   igual(pendienteDeRecuperar([GASTO_REC({moneda:"USD", importe:0, importeOrig:50, recuperable:20})], []).usd, 20);
   igual(pendienteDeRecuperar([], []), {total:0, pendientes:0, ars:0, usd:0});
 });
 
-test("recuperable: la devolución es un ingreso en la misma cuenta, con la fecha de hoy y ligado al gasto", ()=>{
+test("recuperable: la devolución es un ingreso en la misma cuenta, con la fecha de hoy, ligado al gasto y por el monto cobrado", ()=>{
   const i=crearDevolucion(GASTO_REC({nota:"Regalo mamá"}), "2026-10-27", 777);
   igual([i.tipo, i.importe, i.moneda, i.cat, i.subcat, i.cuenta, i.fecha, i.nota, i.devolucionDeId], ["Ingreso", 25000, "ARS", "Dinero extra", "Devoluciones", "Mercado Libre", "2026-10-27", "Devolución: Regalo mamá", 500]);
+  igual(crearDevolucion(GASTO_REC(), "2026-10-27", 1, 10000).importe, 10000, "un cobro parcial");
   igual(crearDevolucion(GASTO_REC(), "2026-10-27", 1).nota, "Devolución: Familia", "sin nota usa la subcategoría");
   const u=crearDevolucion(GASTO_REC({moneda:"USD", importe:0, importeOrig:50, recuperable:20}), "2026-10-27", 2); igual([u.moneda, u.importe, u.importeOrig], ["USD", 0, 20]);
 });
 
-// Entorno para probar el botón: movs propios, save/refrescar sin efectos y el aviso de la página.
+// Entorno para probar el botón: movs propios, save/refrescar sin efectos, el aviso de la página y un cuadro de "cuánto te devolvieron" simulado.
 async function conRecuperable(fn){
-  const antes={movs, custom:JSON.stringify(custom), save:window.save, render:window.renderMovs, refrescar:window.refrescarVistas, papelera, kp:localStorage.getItem(PAPELERA_KEY)};
+  const antes={movs, custom:JSON.stringify(custom), save:window.save, render:window.renderMovs, refrescar:window.refrescarVistas, prompt:window.mostrarPrompt, papelera, kp:localStorage.getItem(PAPELERA_KEY)};
   let toastEl=document.querySelector("#toast"), creado=false;   // (el getElementById de esta página devuelve un div suelto si no existe)
   if(!toastEl){ toastEl=document.createElement("div"); toastEl.id="toast"; document.body.appendChild(toastEl); creado=true; }
+  const ctx={preguntas:[], respuesta:null};
   window.save=()=>true; window.renderMovs=()=>{}; window.refrescarVistas=()=>{}; papelera=[];
+  window.mostrarPrompt=async (msg, opts)=>{ ctx.preguntas.push({msg, valor:opts&&opts.valorInicial}); return ctx.respuesta===null ? (opts&&opts.valorInicial) : ctx.respuesta; };
   movs=[GASTO_REC(), {id:1, tipo:"Ingreso", cat:"Salario", importe:1000000, moneda:"ARS", fecha:"2026-10-05"}];
-  try{ await fn(toastEl); } finally { movs=antes.movs; custom=JSON.parse(antes.custom); window.save=antes.save; window.renderMovs=antes.render; window.refrescarVistas=antes.refrescar; papelera=antes.papelera; if(antes.kp===null) localStorage.removeItem(PAPELERA_KEY); else localStorage.setItem(PAPELERA_KEY, antes.kp); if(creado) toastEl.remove(); }
+  try{ await fn(toastEl, ctx); } finally { movs=antes.movs; custom=JSON.parse(antes.custom); window.save=antes.save; window.renderMovs=antes.render; window.refrescarVistas=antes.refrescar; window.mostrarPrompt=antes.prompt; papelera=antes.papelera; if(antes.kp===null) localStorage.removeItem(PAPELERA_KEY); else localStorage.setItem(PAPELERA_KEY, antes.kp); if(creado) toastEl.remove(); }
 }
 
-test("recuperable: 'Cobrar' registra la devolución como ingreso, el balance la refleja y el gasto queda entero", ()=>conRecuperable(async (toast)=>{
+test("recuperable: 'Cobrar' pregunta cuánto (ya viene lo que falta), registra el ingreso y el balance lo refleja", ()=>conRecuperable(async (toast, ctx)=>{
   const antes=resumenDePeriodo(movs, {ars:0});
-  igual(toggleRecuperado(500), true);
+  igual(await toggleRecuperado(500), true);
+  cierto(ctx.preguntas[0].msg.includes("25.000"), ctx.preguntas[0].msg); igual(ctx.preguntas[0].valor, "25000", "propone cobrar todo");
   const g=movs.find(x=>x.id===500), ing=movs.find(x=>x.devolucionDeId===500);
-  cierto(ing, "falta el ingreso"); igual(g.recuperadoId, ing.id); igual(ing.importe, 25000); igual(ing.tipo, "Ingreso"); igual(g.importe, 50000, "el gasto no cambia");
+  cierto(ing, "falta el ingreso"); igual(ing.importe, 25000); igual(ing.tipo, "Ingreso"); igual(g.importe, 50000, "el gasto no cambia");
   const desp=resumenDePeriodo(movs, {ars:0});
   igual(desp.ingresos-antes.ingresos, 25000, "entró la devolución"); igual(desp.gastos, antes.gastos, "el gasto sigue entero"); igual(desp.disponible-antes.disponible, 25000);
   cierto(getCats("Ingreso")["Dinero extra"].includes("Devoluciones"), "la subcategoría tiene que existir para poder elegirla");
@@ -9920,32 +9933,49 @@ test("recuperable: 'Cobrar' registra la devolución como ingreso, el balance la 
   igual(estaCobrado(g), true); cierto(botonRecuperableHTML(g).includes("✓ Cobrado"), botonRecuperableHTML(g));
 }));
 
-test("recuperable: el aviso 'Deshacer' saca la devolución y vuelve el botón 'Cobrar'", ()=>conRecuperable(async (toast)=>{
-  toggleRecuperado(500); toast.querySelector(".toast-accion").click();
-  igual(movs.filter(x=>x.devolucionDeId===500).length, 0); igual(movs.find(x=>x.id===500).recuperadoId, undefined, "se limpia el vínculo");
+test("recuperable: cobrar en partes — cada cobro es un ingreso, el botón dice cuánto falta y no deja pasarse", ()=>conRecuperable(async (toast, ctx)=>{
+  ctx.respuesta="10000"; igual(await toggleRecuperado(500), true);
+  const g=movs.find(x=>x.id===500);
+  igual(movs.filter(x=>x.devolucionDeId===500).map(x=>x.importe), [10000]); igual(faltaCobrar(g), 15000); igual(estaCobrado(g), false);
+  cierto(botonRecuperableHTML(g).includes("🔁 Faltan"), botonRecuperableHTML(g)); cierto(toast.textContent.includes("faltan"), toast.textContent);
+  let m=recuperarMosaicoHTML(pendienteDeRecuperar(movs)); cierto(m.includes("$15.000") && m.includes("1 de 1 sin cobrar"), m);
+  ctx.respuesta="20000"; igual(await toggleRecuperado(500), false, "no puede cobrar más de lo que falta"); cierto(toast.textContent.includes("No puede superar"), toast.textContent); igual(movs.filter(x=>x.devolucionDeId===500).length, 1);
+  ctx.respuesta=null;   // acepta lo propuesto: lo que falta
+  igual(await toggleRecuperado(500), true);
+  igual(movs.filter(x=>x.devolucionDeId===500).map(x=>x.importe).sort((a,b)=>a-b), [10000, 15000]); igual(estaCobrado(g), true);
+  cierto(recuperarMosaicoHTML(pendienteDeRecuperar(movs)).includes("Todo cobrado ✓"));
+}));
+
+test("recuperable: monto inválido o cuadro cancelado no registran nada", ()=>conRecuperable(async (toast, ctx)=>{
+  ctx.respuesta=null; const original=window.mostrarPrompt; window.mostrarPrompt=async()=>null;
+  igual(await toggleRecuperado(500), false); igual(movs.some(x=>x.devolucionDeId===500), false, "cancelar no cobra");
+  window.mostrarPrompt=async()=>"abc"; igual(await toggleRecuperado(500), false); cierto(toast.textContent.includes("Ingresá"), toast.textContent);
+  window.mostrarPrompt=async()=>"0"; igual(await toggleRecuperado(500), false);
+  window.mostrarPrompt=async()=>"12,5"; igual(await toggleRecuperado(500), true); igual(movs.find(x=>x.devolucionDeId===500).importe, 12.5, "acepta coma decimal");
+  window.mostrarPrompt=original;
+}));
+
+test("recuperable: el aviso 'Deshacer' saca el cobro y vuelve el botón 'Cobrar'", ()=>conRecuperable(async (toast)=>{
+  await toggleRecuperado(500); toast.querySelector(".toast-accion").click();
+  igual(movs.filter(x=>x.devolucionDeId===500).length, 0);
   cierto(botonRecuperableHTML(movs.find(x=>x.id===500)).includes("Cobrar"));
 }));
 
-test("recuperable: tocar '✓ Cobrado' deshace el cobro (el ingreso va a la papelera) y se puede volver a cobrar", ()=>conRecuperable(async (toast)=>{
-  toggleRecuperado(500); igual(toggleRecuperado(500), true);
-  igual(movs.some(x=>x.devolucionDeId===500), false, "se sacó el ingreso"); igual(estaCobrado(movs.find(x=>x.id===500)), false); igual(papelera.length, 1);
-  cierto(toast.textContent.includes("Cobro deshecho"));
+test("recuperable: tocar '✓ Cobrado' deshace el último cobro (el ingreso va a la papelera) y se puede restaurar", ()=>conRecuperable(async (toast, ctx)=>{
+  ctx.respuesta="10000"; await toggleRecuperado(500); ctx.respuesta=null; await toggleRecuperado(500);   // 10.000 y después los 15.000 que faltaban
+  igual(estaCobrado(movs.find(x=>x.id===500)), true);
+  igual(await toggleRecuperado(500), true);
+  igual(movs.filter(x=>x.devolucionDeId===500).map(x=>x.importe), [10000], "se sacó el último cobro"); igual(papelera.length, 1); cierto(toast.textContent.includes("Cobro deshecho"));
   toast.querySelector(".toast-accion").click();
   igual(estaCobrado(movs.find(x=>x.id===500)), true, "restaurar el ingreso vuelve a dejarlo cobrado");
-  toggleRecuperado(500); toggleRecuperado(500);   // cobrar de nuevo después de deshacer
-  cierto(movs.some(x=>x.devolucionDeId===500) || true);
 }));
 
-test("recuperable: borrar el gasto se lleva su devolución, y editar el monto la actualiza", ()=>conRecuperable(async (toast)=>{
-  toggleRecuperado(500);
-  const g=movs.find(x=>x.id===500); g.recuperable=30000; igual(sincronizarDevolucion(g), true);
-  igual(movs.find(x=>x.devolucionDeId===500).importe, 30000, "la devolución sigue al monto");
-  g.recuperable=0; sincronizarDevolucion(g); igual(movs.some(x=>x.devolucionDeId===500), false, "sin recuperable no queda devolución"); igual(g.recuperadoId, undefined);
-  g.recuperable=25000; toggleRecuperado(500); cierto(movs.some(x=>x.devolucionDeId===500));
+test("recuperable: borrar el gasto se lleva sus devoluciones, y deshacer las devuelve", ()=>conRecuperable(async (toast, ctx)=>{
+  ctx.respuesta="10000"; await toggleRecuperado(500); await toggleRecuperado(500);
   const btn=document.createElement("button"); btn.dataset.confirm="1";
   await borrarMov(500, btn);
-  igual(movs.some(x=>x.id===500 || x.devolucionDeId===500), false, "se fueron los dos"); cierto(toast.textContent.includes("junto con su devolución"), toast.textContent);
-  toast.querySelector(".toast-accion").click(); igual(movs.filter(x=>x.id===500 || x.devolucionDeId===500).length, 2, "deshacer devuelve los dos");
+  igual(movs.some(x=>x.id===500 || x.devolucionDeId===500), false, "se fueron el gasto y sus cobros"); cierto(toast.textContent.includes("junto con su devolución"), toast.textContent);
+  toast.querySelector(".toast-accion").click(); igual(movs.filter(x=>x.id===500 || x.devolucionDeId===500).length, 3, "deshacer devuelve el gasto y los dos cobros");
 }));
 
 test("recuperable: el botón aparece debajo del monto en la fila y el mosaico 'A recuperar' cuenta solo lo que falta", ()=>conRecuperable(async ()=>{
@@ -9953,7 +9983,7 @@ test("recuperable: el botón aparece debajo del monto en la fila y el mosaico 'A
   const html=construirCuerpoTxItem({...g, _m:undefined});
   cierto(html.includes("js-toggle-recup") && html.includes("🔁 Cobrar"), "falta el botón en la fila"); cierto(html.indexOf("js-toggle-recup")>html.indexOf("tx-amount"), "va debajo del monto");
   let m=recuperarMosaicoHTML(pendienteDeRecuperar(movs)); cierto(m.includes("A recuperar") && m.includes("1 de 1 sin cobrar") && m.includes('data-mosaico="a-recuperar"'), m);
-  toggleRecuperado(500);
+  await toggleRecuperado(500);
   m=recuperarMosaicoHTML(pendienteDeRecuperar(movs)); cierto(m.includes("Todo cobrado ✓"), m);
   igual(recuperarMosaicoHTML(pendienteDeRecuperar([{id:9, tipo:"Gasto", importe:10, moneda:"ARS"}])), "", "sin gastos recuperables no hay mosaico");
   cierto(construirCuerpoTxItem({...movs.find(x=>x.id===500)}).includes("✓ Cobrado"));
@@ -9962,6 +9992,131 @@ test("recuperable: el botón aparece debajo del monto en la fila y el mosaico 'A
 test("recuperable: archivo cargado en index, sw y la fila conecta el botón", async ()=>{
   const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), mv=await (await fetch("js/movimientos.js")).text();
   cierto(/js\/recuperable\.js\?v=\d+/.test(html)); cierto(sw.includes("./js/recuperable.js")); cierto(mv.includes('.js-toggle-recup') && mv.includes("toggleRecuperado(this._m.id)") && mv.includes("this._conectarBadgeRecup()"));
+});
+
+grupo("Ventas que salieron de ahorros: revisión");
+
+const FONDO_V=()=>[
+  {id:1, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"Cedears", importe:600000, moneda:"ARS", esAhorro:true, fecha:"2026-08-10", nota:"Spy x 30"},
+  {id:2, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"FCI", importe:300000, moneda:"ARS", esAhorro:true, fecha:"2026-08-12", nota:"Fondo común"}];
+const VENTA_V=(id, ticker, extra)=>({id, tipo:"Inversion", importe:104003.22, importeUSD:0, cat:"CEDEARs", subcat:"CEDEARs Venta", ticker, fecha:"2026-10-15", cuenta:"Balanz", nota:"", ...(extra||{})});
+
+test("ventas de ahorros: fondoDelTicker busca el ticker en las notas del fondo", ()=>{
+  igual(fondoDelTicker(FONDO_V(), "SPY", "ARS"), {cat:"Fondo de Retiro", sub:"Cedears"}); igual(fondoDelTicker(FONDO_V(), "spy", "ARS"), {cat:"Fondo de Retiro", sub:"Cedears"});
+  igual(fondoDelTicker(FONDO_V(), "KO", "ARS"), null); igual(fondoDelTicker(FONDO_V(), "SPY", "USD"), null, "en otra moneda no cuenta"); igual(fondoDelTicker(FONDO_V(), "", "ARS"), null);
+});
+
+test("ventas de ahorros: se detectan las ventas con pista de fondo y sin retiro ligado; el resto no", ()=>{
+  const lista=[...FONDO_V(), VENTA_V(10,"SPY"), VENTA_V(11,"KO"), VENTA_V(12,"SPY",{subcat:"CEDEARs Compra SPY"}), VENTA_V(13,"SPY",{subcat:"CEDEARs Dividendo"}), VENTA_V(14,"SPY",{fecha:"2026-09-01"}), VENTA_V(15,"SPY",{importe:0, importeUSD:0})];
+  const r=ventasSinRetiro(lista, []);
+  igual(r.map(x=>x.inv.id), [10,14], "la más nueva primero; sin pista (KO), compras, dividendos y sin monto no entran");
+  igual([r[0].fondo, r[0].moneda, r[0].monto], [{cat:"Fondo de Retiro", sub:"Cedears"}, "ARS", 104003.22]);
+  igual(ventasSinRetiro(lista, [10]).map(x=>x.inv.id), [14], "las descartadas no vuelven");
+  const conRetiro=[...lista, crearRetiroPorVenta(VENTA_V(10,"SPY"), {cat:"Fondo de Retiro", sub:"Cedears"}, 99)];
+  igual(ventasSinRetiro(conRetiro, []).map(x=>x.inv.id), [14], "la que ya tiene su retiro no se propone");
+});
+
+test("ventas de ahorros: fondosParaVenta ofrece los fondos con saldo y el fondo ya ligado aunque esté en cero", ()=>{
+  const v=VENTA_V(10,"SPY"); const r=crearRetiroPorVenta(v, {cat:"Fondo de Retiro", sub:"FCI"}, 99);
+  const lista=[...FONDO_V(), {id:3, tipo:"Gasto", cat:"Fondo de Retiro", subcat:"FCI", importe:300000, moneda:"ARS", usaAhorro:true, traspaso:true, fecha:"2026-09-01"}, v, r];
+  igual(fondosParaVenta(lista, v).map(f=>f.sub), ["Cedears", "FCI"], "FCI quedó en cero pero es el fondo ligado");
+  igual(fondosParaVenta(FONDO_V(), v).map(f=>f.sub), ["Cedears", "FCI"]);
+});
+
+// Entorno para la hoja de revisión: movs propios, sin guardar de verdad y sin tocar la copia local.
+async function conVentasFondo(fn){
+  const antes={movs, save:window.save, copia:window.guardarCopiaLocal, refrescar:window.refrescarVistas, k:localStorage.getItem(VENTA_IGNORADAS_KEY)};
+  const cuerpo=document.createElement("div"); cuerpo.id="ventas-fondo-detalle"; const modal=document.createElement("div"); modal.id="modal-ventas-fondo"; const card=document.createElement("div"); card.id="ventas-fondo-card"; const res=document.createElement("p"); res.id="ventas-fondo-resumen"; card.appendChild(res);
+  document.body.append(cuerpo, modal, card);
+  let toastEl=document.querySelector("#toast"), creado=false;
+  if(!toastEl){ toastEl=document.createElement("div"); toastEl.id="toast"; document.body.appendChild(toastEl); creado=true; }
+  let copias=0; window.save=()=>true; window.guardarCopiaLocal=async()=>{ copias++; }; window.refrescarVistas=()=>{}; localStorage.removeItem(VENTA_IGNORADAS_KEY);
+  movs=[...FONDO_V(), VENTA_V(10,"SPY")];
+  try{ await fn({cuerpo, modal, card, res, toast:toastEl, copias:()=>copias}); } finally { movs=antes.movs; window.save=antes.save; window.guardarCopiaLocal=antes.copia; window.refrescarVistas=antes.refrescar; if(antes.k===null) localStorage.removeItem(VENTA_IGNORADAS_KEY); else localStorage.setItem(VENTA_IGNORADAS_KEY, antes.k); cuerpo.remove(); modal.remove(); card.remove(); if(creado) toastEl.remove(); }
+}
+
+test("ventas de ahorros: la hoja lista cada venta y 'Sí, salió del fondo' crea el retiro, baja el fondo y se puede deshacer", ()=>conVentasFondo(async (e)=>{
+  renderVentasFondoCard(); igual(e.card.style.display, ""); cierto(e.res.textContent.includes("1 venta parece"), e.res.textContent);
+  abrirVentasFondo(); cierto(e.modal.classList.contains("open")); cierto(e.cuerpo.textContent.includes("SPY") && e.cuerpo.textContent.includes("Fondo de Retiro › Cedears"), e.cuerpo.textContent);
+  const antes=saldoAhorroCategoria(movs, "Fondo de Retiro", "Cedears"), disp=resumenDePeriodo(movs.filter(m=>m.fecha.startsWith("2026-10")), {ars:0}).disponible;
+  igual(await vincularVentaConFondo(0), true); igual(e.copias(), 1, "guarda una copia de seguridad antes del primer cambio");
+  const retiro=movs.find(x=>x.origenInvId===10); cierto(retiro); igual([retiro.cat, retiro.subcat, retiro.fecha, retiro.importe, retiro.traspaso], ["Fondo de Retiro", "Cedears", "2026-10-15", 104003.22, true]);
+  igual(Math.round((antes-saldoAhorroCategoria(movs, "Fondo de Retiro", "Cedears"))*100)/100, 104003.22, "el fondo bajó");
+  igual(Math.round((resumenDePeriodo(movs.filter(m=>m.fecha.startsWith("2026-10")), {ars:0}).disponible-disp)*100)/100, 104003.22, "y lo disponible de octubre sube una vez");
+  cierto(e.cuerpo.textContent.includes("No hay ventas pendientes"), "la venta ya no figura");
+  e.toast.querySelector(".toast-accion").click(); igual(movs.some(x=>x.origenInvId===10), false, "deshacer saca el retiro"); cierto(e.cuerpo.textContent.includes("SPY"));
+}));
+
+test("ventas de ahorros: 'No fue del fondo' la descarta y no vuelve a aparecer", ()=>conVentasFondo(async (e)=>{
+  abrirVentasFondo(); descartarVentaFondo(0);
+  igual(ventasSinRetiro(movs, ventasIgnoradas()).length, 0); cierto(e.cuerpo.textContent.includes("No hay ventas pendientes")); igual(movs.some(x=>x.origenInvId), false, "no crea nada");
+  renderVentasFondoCard(); igual(e.card.style.display, "none"); igual(alertaDeVentasSinRetiro(movs), null);
+}));
+
+test("ventas de ahorros: el Dashboard avisa con un botón para revisarlas", ()=>conVentasFondo(async ()=>{
+  const a=alertaDeVentasSinRetiro(movs); cierto(a && a.accion.fn==="abrirVentasFondo" && a.titulo.includes("1 venta parece"), JSON.stringify(a));
+  cierto(alertasDelMomento(movs, [], "2026-10-27").some(x=>x.accion && x.accion.fn==="abrirVentasFondo"), "tiene que estar en las alertas");
+}));
+
+test("ventas de ahorros: el editor de una venta tiene la casilla y crea, cambia o saca el retiro ligado", ()=>conVentasFondo(async ()=>{
+  const v=movs.find(x=>x.id===10);
+  const html=bloqueSaleDeAhorroEditor(v); cierto(html.includes('id="edit-inv-sale"') && html.includes("Fondo de Retiro › Cedears") && !html.includes(" checked"), "venta sin retiro: casilla apagada");
+  igual(bloqueSaleDeAhorroEditor({...v, subcat:"CEDEARs Compra SPY"}), "", "una compra no tiene la casilla"); igual(bloqueSaleDeAhorroEditor({tipo:"Gasto"}), "");
+  const cont=document.createElement("div"); cont.innerHTML=html; document.body.appendChild(cont);
+  try{
+    cont.querySelector("#edit-inv-sale").checked=true; aplicarSaleDeAhorroEditor(v);
+    const r=movs.find(x=>x.origenInvId===10); cierto(r, "creó el retiro"); igual([r.cat, r.subcat], ["Fondo de Retiro", "Cedears"]);
+    cont.querySelector("#edit-inv-fondo").value=fondoKey({cat:"Fondo de Retiro", sub:"FCI"}); aplicarSaleDeAhorroEditor(v);
+    igual([r.cat, r.subcat], ["Fondo de Retiro", "FCI"], "cambió de fondo sin duplicar"); igual(movs.filter(x=>x.origenInvId===10).length, 1);
+    v.importe=90000; sincronizarRetiroLigado(v, movs); igual(r.importe, 90000);
+    cont.querySelector("#edit-inv-sale").checked=false; aplicarSaleDeAhorroEditor(v);
+    igual(movs.some(x=>x.origenInvId===10), false, "destildar saca el retiro");
+  } finally { cont.remove(); }
+}));
+
+test("ventas de ahorros: tarjeta, hoja y alerta están en index y el editor las usa", async ()=>{
+  const html=await (await fetch("index.html")).text(), ed=await (await fetch("js/editar-movimiento.js")).text(), an=await (await fetch("js/analisis.js")).text();
+  cierto(html.includes('id="ventas-fondo-card"') && html.includes('id="modal-ventas-fondo"') && html.includes('id="ventas-fondo-detalle"'));
+  cierto(ed.includes("bloqueSaleDeAhorroEditor(m)") && ed.includes("aplicarSaleDeAhorroEditor(m)")); cierto(an.includes("alertaDeVentasSinRetiro"));
+});
+
+grupo("Recordatorios sin detalle");
+
+test("recordatorios sin detalle: con el interruptor, los eventos no llevan nombres ni montos pero conservan día y repetición", ()=>{
+  const k=localStorage.getItem(CAL_GENERICO_KEY);
+  const lista=[{id:1, tipo:"Gasto", frecuente:true, nota:"Osde", cat:"Salud", importe:168777, moneda:"ARS", mesInicio:"2026-05", fecha:"2026-05-01", diaVto:10}];
+  const tcsL=[{id:60, desc:"Netflix", frecuente:true, total:6, moneda:"USD", tarjeta:"Visa", mesInicio:"2026-05", diaVto:15}];
+  try{
+    localStorage.setItem(CAL_GENERICO_KEY,"0");
+    const normal=eventosParaCalendario("2026-10-25", lista, tcsL, {Visa:{dia:{vto:20}}});
+    cierto(normal.some(e=>/Salud|Osde/.test(e.titulo)) && normal.some(e=>e.descripcion.includes("168.777")) && normal.some(e=>e.titulo.includes("Netflix")), "sin el interruptor lleva el detalle: "+JSON.stringify(normal.map(e=>e.titulo)));
+    localStorage.setItem(CAL_GENERICO_KEY,"1");
+    const g=eventosParaCalendario("2026-10-25", lista, tcsL, {Visa:{dia:{vto:20}}});
+    igual(g.length, normal.length); igual(g.map(e=>[e.uid,e.inicio,e.rrule]), normal.map(e=>[e.uid,e.inicio,e.rrule]), "mismos días y repetición");
+    const texto=JSON.stringify(g.map(e=>[e.titulo,e.descripcion])); cierto(!/Osde|Netflix|Visa|168|\$|USD/.test(texto), "quedó algún nombre o monto: "+texto);
+    cierto(g.some(e=>e.titulo==="🔁 Vence un gasto fijo") && g.some(e=>e.titulo==="💳 Vence una tarjeta"), g.map(e=>e.titulo).join("|"));
+    const ics=generarICS(g, 2, new Date("2026-10-25T12:00:00Z")); cierto(!/Osde|Netflix|168/.test(ics), "el .ics también va sin detalle");
+  } finally { if(k===null) localStorage.removeItem(CAL_GENERICO_KEY); else localStorage.setItem(CAL_GENERICO_KEY,k); }
+});
+
+test("recordatorios sin detalle: al activarlo, los eventos ya enviados a Google se actualizan solos", ()=>conVenc({movs:[FREC_VTO(1,5)], tcs:[]}, ()=>conGcal(async ()=>{
+  const k=localStorage.getItem(CAL_GENERICO_KEY); localStorage.setItem(CAL_GENERICO_KEY,"0");
+  try{
+    const g=servidorGcal(); await sincronizarCalendario({deps:g.deps});
+    cierto(/vence/.test([...g.eventos.values()][0].summary), "primero con detalle");
+    localStorage.setItem(CAL_GENERICO_KEY,"1");
+    igual(calendarioPendientes(), 1, "el cambio aparece como pendiente");
+    const r=await sincronizarCalendario({deps:g.deps}); igual(r.actualizados, 1);
+    igual([...g.eventos.values()][0].summary, "🔁 Vence un gasto fijo"); igual([...g.eventos.values()][0].description, "Abrí Enola para ver cuál y cuánto.");
+  } finally { if(k===null) localStorage.removeItem(CAL_GENERICO_KEY); else localStorage.setItem(CAL_GENERICO_KEY,k); }
+})));
+
+test("recordatorios sin detalle: el interruptor está en Configuración y se guarda como preferencia", async ()=>{
+  const html=await (await fetch("index.html")).text(); cierto(html.includes('id="cal-generico"') && html.includes("onCalGenericoCambio(this)"));
+  const k=localStorage.getItem(CAL_GENERICO_KEY), chk=document.createElement("input"); chk.type="checkbox"; chk.checked=true;
+  const antes={sync:window.programarSyncCalendario, toast:window.showToast}; let sincro=0; window.programarSyncCalendario=()=>{ sincro++; }; window.showToast=()=>{};
+  try{ onCalGenericoCambio(chk); igual(recordatoriosGenericos(), true); igual(sincro, 1, "pone en marcha el envío de lo que cambió"); chk.checked=false; onCalGenericoCambio(chk); igual(recordatoriosGenericos(), false); }
+  finally { window.programarSyncCalendario=antes.sync; window.showToast=antes.toast; if(k===null) localStorage.removeItem(CAL_GENERICO_KEY); else localStorage.setItem(CAL_GENERICO_KEY,k); }
 });
 
 grupo("Aislamiento de los tests");

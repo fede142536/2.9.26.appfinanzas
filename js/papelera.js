@@ -34,7 +34,7 @@ function ponerLista(kind, nueva){ if(kind==="tc") tcs=nueva; else if(kind==="met
 
 // Vuelve a dibujar lo que pudo cambiar. Cada pantalla se protege sola: si no está, no pasa nada.
 function refrescarVistas(){
-  ["renderMovs","renderAhorro","renderInv","renderTarjetas","renderMetas","renderDashCuentas","renderConciliacionCard","renderPapeleraCard","renderSinCuentaCard"].forEach(f=>{
+  ["renderMovs","renderAhorro","renderInv","renderTarjetas","renderMetas","renderDashCuentas","renderConciliacionCard","renderPapeleraCard","renderSinCuentaCard","renderVentasFondoCard"].forEach(f=>{
     try{ if(typeof window[f]==="function") window[f](); }catch(e){ /* una pantalla sin dibujar no puede cortar el resto */ }
   });
 }

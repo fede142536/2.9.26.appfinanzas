@@ -470,6 +470,16 @@ function reglaMensual(dia){
 //    que sin pagar y de los próximos 3 meses: eventos sueltos.
 // Un gasto que ya se dio de baja (mes de fin pasado) no se agrega. El UID no cambia nunca, así que
 // volver a mandar el archivo actualiza los eventos en vez de duplicarlos.
+// "Recordatorios sin detalle": los eventos del calendario (Google y .ics) no llevan nombres ni montos, solo "Vence un gasto fijo".
+// Es para quien comparte el calendario o el celular con otra persona. Adentro de la app todo se ve igual.
+const CAL_GENERICO_KEY="fcalgenerico";
+function recordatoriosGenericos(){ try{ return localStorage.getItem(CAL_GENERICO_KEY)==="1"; }catch(e){ return false; } }
+// Pura. El mismo evento (mismo día y misma repetición) con un texto que no dice qué ni cuánto.
+function eventoSinDetalle(e){
+  const tarjeta=/^enola-(tarjeta|resumen)-/.test(String(e.uid||""));
+  return {...e, titulo: tarjeta ? "💳 Vence una tarjeta" : "🔁 Vence un gasto fijo", descripcion:"Abrí Enola para ver cuál y cuánto."};
+}
+
 function eventosParaCalendario(hoyISO, lista, listaTcs, vencTc){
   const hoyYM=String(hoyISO).slice(0,7);
   const out=[];
@@ -508,7 +518,7 @@ function eventosParaCalendario(hoyISO, lista, listaTcs, vencTc){
       descripcion:`Resumen de la tarjeta · resta ${montoVenc(v)}. Cargado en Enola; si ya lo pagaste, ignoralo.`,
       inicio:v.fecha, rrule:null});
   });
-  return out;
+  return recordatoriosGenericos() ? out.map(eventoSinDetalle) : out;
 }
 
 // `ahora` solo existe para que los tests puedan fijar el sello de tiempo.

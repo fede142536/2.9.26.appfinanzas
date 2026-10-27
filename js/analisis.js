@@ -450,6 +450,10 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
   const aumentos=typeof alertaDeAumentos==="function" ? alertaDeAumentos(lista, tcsLista, hoyYM, Number(String(hoyYMD).slice(8,10))||undefined) : null;
   if(aumentos) out.push(aumentos);
 
+  // ── Ventas que parecen haber salido de un fondo de ahorro y no lo descontaron ──
+  const ventasFondo=typeof alertaDeVentasSinRetiro==="function" ? alertaDeVentasSinRetiro(lista) : null;
+  if(ventasFondo) out.push(ventasFondo);
+
   // ── Registros a los que les falta un dato ──
   // Va al final pero se cuela primero si existe: un número que no se puede calcular ensucia
   // todas las demás cuentas, así que arreglarlo es más urgente que cualquier otro aviso.
