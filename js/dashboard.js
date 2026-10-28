@@ -367,10 +367,11 @@ function renderDashResumen(){
       + dashEnlacesAnio(year);
   }
 }
-// Los dos enlaces al pie del resumen del mes: el tablero del año completo y el resumen del año (para compartir). `year` = el año del mes que se mira.
+// Los enlaces al pie del resumen del mes: el tablero del año completo, el resumen del año (para compartir) y el informe de cualquier período. `year` = el año del mes que se mira.
 function dashEnlacesAnio(year){
   return `<div class="dash-year-links"><a href="#" class="dash-year-link" onclick="event.preventDefault();openDashYearCompleto()">Ver el año completo ›</a>`
-    + `<a href="#" class="dash-year-link" onclick="event.preventDefault();abrirResumenAnual(${Number(year)||new Date().getFullYear()})">🎉 Mi ${Number(year)||""} en Enola ›</a></div>`;
+    + `<a href="#" class="dash-year-link" onclick="event.preventDefault();abrirResumenAnual(${Number(year)||new Date().getFullYear()})">🎉 Mi ${Number(year)||""} en Enola ›</a>`
+    + `<a href="#" class="dash-year-link" onclick="event.preventDefault();abrirInforme()">📑 Informe de un período ›</a></div>`;
 }
 
 // ═══════════════════════════════════════════

@@ -93,6 +93,7 @@
 <script src="js/recuperable.js"></script>
 <script src="js/resumen-anual.js"></script>
 <script src="js/repetir.js"></script>
+<script src="js/informe-periodo.js"></script>
 <script src="js/cierre-mes.js"></script>
 <script src="js/huella.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
@@ -10320,6 +10321,101 @@ test("resumen del año: está en index, el sw, el Dashboard (no en el menú) y e
   cierto(/js\/resumen-anual\.js\?v=\d+/.test(html) && sw.includes("./js/resumen-anual.js")); cierto(html.includes('id="modal-anual"') && html.includes('id="mov-anual-aviso"'));
   const dash=await (await fetch("js/dashboard.js")).text(); cierto(dash.includes("abrirResumenAnual(") && dash.includes("dashEnlacesAnio(year)"), "el resumen del año se abre desde el Dashboard"); cierto(!html.includes("closeSideMenu();abrirResumenAnual()"), "ya no está en el menú");
   cierto(mv.includes("pintarAvisoAnual()"));
+});
+
+grupo("Informe de un período");
+
+// Tres meses de 2026 (ene–mar) y uno de 2025 para comparar. Enero: sueldo 1.000.000, alquiler cobrado 300.000, gasta 1.100.000 (400.000 de alquiler + 700.000 de tarjeta).
+const INF_MOVS=()=>{
+  const g=(id,ym,cat,sub,imp,extra)=>({id, tipo:"Gasto", cat, subcat:sub, importe:imp, moneda:"ARS", fecha:ym+"-10", ...(extra||{})});
+  const i=(id,ym,cat,imp,extra)=>({id, tipo:"Ingreso", cat, subcat:"Varios", importe:imp, moneda:"ARS", fecha:ym+"-05", ...(extra||{})});
+  return [
+    i(1,"2026-01","Salario",1000000), i(2,"2026-01","Alquiler Lujan",300000), g(3,"2026-01","Casa","Alquiler",400000,{cuenta:"Efectivo", nota:"Alquiler"}), g(4,"2026-01","Tarjeta de crédito","Pago total",700000),
+    i(5,"2026-02","Salario",950000), i(6,"2026-02","Alquiler Lujan",300000), i(7,"2026-02","Crédito",500000), g(8,"2026-02","Casa","Alquiler",400000,{cuenta:"Efectivo"}), g(9,"2026-02","Tarjeta de crédito","Pago total",1200000), g(10,"2026-02","Fondo","A",50000,{esAhorro:true}),
+    i(11,"2026-03","Salario",900000), i(12,"2026-03","Alquiler Lujan",300000), g(13,"2026-03","Casa","Alquiler",440000,{cuenta:"Efectivo"}), g(14,"2026-03","Tarjeta de crédito","Pago total",900000),
+    {id:15, tipo:"Inversion", cat:"FCI", subcat:"FCI Suscripción", ticker:"X", importe:200000, moneda:"ARS", fecha:"2026-03-12"},
+    i(21,"2025-01","Salario",700000), g(22,"2025-01","Casa","Alquiler",300000), g(23,"2025-02","Casa","Alquiler",300000), i(24,"2025-02","Salario",700000), g(25,"2025-03","Casa","Alquiler",300000), i(26,"2025-03","Salario",700000)];
+};
+const infMes=lista=>ym=>lista.filter(m=>String(m.fecha).slice(0,7)===ym);
+
+test("informe: mesesDelRango y qué se considera financiero (la 'Tarjeta de crédito' es un gasto, 'Crédito' no)", ()=>{
+  igual(mesesDelRango("2026-01","2026-04"), ["2026-01","2026-02","2026-03","2026-04"]); igual(mesesDelRango("2025-11","2026-02"), ["2025-11","2025-12","2026-01","2026-02"]);
+  igual(mesesDelRango("2026-04","2026-01"), []); igual(mesesDelRango("", "2026-01"), []); igual(mesesDelRango("2026-01","2026-01"), ["2026-01"]);
+  igual(esMovFinanciero({cat:"Crédito"}), true); igual(esMovFinanciero({cat:"Inversiones"}), true); igual(esMovFinanciero({cat:"Préstamos"}), true); igual(esMovFinanciero({cat:"Casa", subcat:"MEP"}), true);
+  igual(esMovFinanciero({cat:"Tarjeta de crédito"}), false, "es un gasto real"); igual(esMovFinanciero({cat:"Tany", subcat:"Crédito"}), false); igual(esMovFinanciero({cat:"Salario"}), false);
+});
+
+test("informe: suma el período con la misma cuenta del Balance y separa lo operativo de lo financiero", ()=>{
+  const l=INF_MOVS(), inf=agregarPeriodo("2026-01","2026-03", infMes(l), null);
+  igual([inf.hayDatos, inf.mesesConDatos], [true, 3]);
+  igual([inf.ingresos, inf.gastos, inf.ahorrado], [4250000, 4040000, 50000], "los ingresos incluyen el crédito");
+  igual(inf.ingFin, 500000, "el crédito"); igual(inf.ingOp, 3750000, "sueldos y alquileres"); igual(inf.gasOp, 4040000); igual(inf.netoOp, -290000);
+  igual(inf.depositos, 50000); igual(inf.invCompras, 200000, "la suscripción es inversión, no gasto");
+  const ene=resumenDePeriodo(l.filter(m=>m.fecha.startsWith("2026-01")), undefined), feb=resumenDePeriodo(l.filter(m=>m.fecha.startsWith("2026-02")), undefined), mar=resumenDePeriodo(l.filter(m=>m.fecha.startsWith("2026-03")), undefined);
+  igual(inf.disponible, Math.round((ene.disponible+feb.disponible+mar.disponible)*100)/100, "el disponible es la suma de los Balances de cada mes");
+  igual(inf.meses.map(x=>x.netoOp), [200000, -350000, -140000], "resultado operativo mes a mes");
+  igual(agregarPeriodo("2030-01","2030-02", infMes(l), null).hayDatos, false);
+});
+
+test("informe: categorías con su peso y sus subcategorías, ingresos por fuente y mayores gastos", ()=>{
+  const inf=agregarPeriodo("2026-01","2026-03", infMes(INF_MOVS()), null);
+  igual(inf.categorias.map(c=>[c.cat,c.monto,Math.round(c.pct)]), [["Tarjeta de crédito",2800000,69],["Casa",1240000,31]], "sin el depósito al fondo");
+  igual(inf.categorias[1].subs, [{sub:"Alquiler", monto:1240000}]);
+  igual(inf.fuentes.map(f=>[f.cat,f.monto]), [["Salario",2850000],["Alquiler Lujan",900000]], "el crédito no es un ingreso de trabajo");
+  igual(inf.gastosGrandes[0], {desc:"Pago total", cat:"Tarjeta de crédito", sub:"Pago total", monto:1200000, fecha:"2026-02-10", cuenta:""});
+  igual(inf.calidad, {gastos:6, sinCuenta:3, sinNota:5});
+});
+
+test("informe: los hallazgos dicen cuánto del déficit lo cubrió la deuda, si el sueldo bajó, qué gasto fijo subió y cómo está el dato", ()=>{
+  const inf=informeDePeriodo("2026-01","2026-03", infMes(INF_MOVS()), null);
+  const t=inf.hallazgos.map(h=>h.texto).join("\n");
+  cierto(/déficit de \$290\.000/.test(t) && t.includes("por créditos, ventas de inversiones u operaciones MEP") && t.includes("se ve mejor que la realidad"), t);
+  cierto(t.includes("“Salario” bajaron 10%") && t.includes("$1.000.000 → $900.000"), "el sueldo bajó de 1.000.000 a 900.000");
+  cierto(/Alquiler \(Casa\) pasó de \$400\.000 en Enero a \$440\.000 en Marzo \(\+10%\)/.test(t), t);
+  cierto(t.includes("69% de tus gastos") && t.includes("pagos de tarjeta de crédito"), "el peso de la tarjeta");
+  cierto(t.includes("Ahorraste $50.000") && t.includes("1.3% de tus ingresos"), t);
+  cierto(t.includes("En inversiones pusiste $200.000 y recuperaste $0"), t);
+  cierto(t.includes("El mes más holgado fue Enero 2026") && t.includes("En 2 de 3 meses gastaste más de lo que entró") && t.includes("Febrero, Marzo"), t);
+  igual(hallazgosDelPeriodo(agregarPeriodo("2030-01","2030-02", infMes([]), null), null), [], "sin datos no hay hallazgos");
+  const ok=informeDePeriodo("2026-01","2026-01", infMes([{id:1,tipo:"Ingreso",cat:"Salario",importe:1000000,moneda:"ARS",fecha:"2026-01-05"},{id:2,tipo:"Gasto",cat:"Casa",subcat:"Luz",importe:400000,moneda:"ARS",fecha:"2026-01-10"}]), null);
+  cierto(ok.hallazgos.some(h=>h.texto.includes("cerró con $600.000 a favor") && h.icono==="✅"), "con superávit lo dice");
+});
+
+test("informe: compara con el mismo período del año anterior (y avisa si tiene menos meses)", ()=>{
+  const inf=informeDePeriodo("2026-01","2026-03", infMes(INF_MOVS()), null);
+  igual(inf.anterior, {hayDatos:true, mesesConDatos:3, ingOp:2100000, gasOp:900000});
+  const casa=inf.categorias.find(c=>c.cat==="Casa"); igual([casa.antes, casa.delta], [900000, 38], "alquiler 1.240.000 contra 900.000");
+  igual(inf.categorias.find(c=>c.cat==="Tarjeta de crédito").delta, null, "sin dato del año anterior no se inventa");
+  cierto(inf.hallazgos.some(h=>h.texto.includes("ingresos de trabajo +79%") && h.texto.includes("gastos +349%")), inf.hallazgos.map(h=>h.texto).join("|"));
+  const corto=informeDePeriodo("2026-01","2026-03", infMes(INF_MOVS().filter(m=>!m.fecha.startsWith("2025-03"))), null);
+  cierto(corto.hallazgos.some(h=>h.texto.includes("2 de 3")), "avisa que el año anterior tiene menos meses");
+});
+
+test("informe: 'antes de usar la app' sale de la primera importación y el texto para compartir resume todo", ()=>{
+  igual(periodoAntesDeLaApp([{fecha:"28/5/2026"}, {fecha:"5/5/2026"}]), {desde:"2026-01", hasta:"2026-04", importacion:"2026-05-05"});
+  igual(periodoAntesDeLaApp([{fecha:"10/1/2026"}]), null, "si empezó en enero no hay nada antes"); igual(periodoAntesDeLaApp([]), null); igual(periodoAntesDeLaApp([{fecha:"???"}]), null);
+  const inf=informeDePeriodo("2026-01","2026-03", infMes(INF_MOVS()), null), txt=informeComoTexto(inf);
+  cierto(txt.startsWith("Informe de Enola · Enero 2026 a Marzo 2026") && txt.includes("Mes a mes") && txt.includes("• Casa: $1.240.000 (31%)") && txt.includes("Para tener en cuenta") && txt.endsWith("Hecho con Enola"), txt);
+});
+
+test("informe: la hoja muestra el informe, cambia de período con los chips y avisa si el rango no es válido", ()=>{
+  const ids=["informe-cuerpo","informe-desde","informe-hasta","informe-compartir","modal-informe","informe-preset-antes"], els={};
+  ids.forEach(id=>{ const e=document.createElement(id.includes("desde")||id.includes("hasta")?"input":"div"); e.id=id; document.body.appendChild(e); els[id]=e; });
+  const antes={movs, hist:importHistory, mes:window.getMesMov, gan:window.gananciaInvDelMes, ym:window.currentYM};
+  movs=INF_MOVS(); importHistory=[{fecha:"5/4/2026"}]; window.getMesMov=ym=>movs.filter(m=>String(m.fecha).slice(0,7)===ym); window.gananciaInvDelMes=()=>({ars:0,usd:0}); window.currentYM=()=>"2026-03";
+  try{
+    abrirInforme(); cierto(els["modal-informe"].classList.contains("open"));
+    igual([informeDesde, informeHasta], ["2026-01","2026-03"], "'antes de la app' = enero hasta el mes anterior a la importación (abril → marzo)"); igual(els["informe-preset-antes"].style.display, "");
+    cierto(els["informe-cuerpo"].textContent.includes("Para tener en cuenta") && els["informe-cuerpo"].textContent.includes("Tarjeta de crédito") && els["informe-cuerpo"].querySelectorAll("tbody tr").length===4, "3 meses + total");
+    informeElegir("seis"); igual([informeDesde, informeHasta], ["2025-10","2026-03"]); informeElegir("anio"); igual([informeDesde, informeHasta], ["2026-01","2026-03"]);
+    informeDesde="2026-05"; informeHasta="2026-02"; renderInforme(); cierto(els["informe-cuerpo"].textContent.includes("anterior o igual")); igual(els["informe-compartir"].style.display, "none");
+    importHistory=[]; abrirInforme(); igual(els["informe-preset-antes"].style.display, "none", "sin importaciones no hay 'antes de la app'"); igual(informeDesde, "2026-01");
+  } finally { movs=antes.movs; importHistory=antes.hist; window.getMesMov=antes.mes; window.gananciaInvDelMes=antes.gan; window.currentYM=antes.ym; Object.values(els).forEach(e=>e.remove()); }
+});
+
+test("informe: está en index, en el sw y se abre desde el Dashboard", async ()=>{
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), dash=await (await fetch("js/dashboard.js")).text();
+  cierto(/js\/informe-periodo\.js\?v=\d+/.test(html) && sw.includes("./js/informe-periodo.js")); cierto(html.includes('id="modal-informe"') && html.includes("compartirInforme()")); cierto(dash.includes("abrirInforme()"));
 });
 
 grupo("Aislamiento de los tests");
