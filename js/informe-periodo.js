@@ -13,6 +13,12 @@
 const INFORME_FINANCIERO=/^\s*(inversi[oó]n(es)?|cr[eé]ditos?|pr[eé]stamos?)\s*$/i;
 const esMovFinanciero=m=>INFORME_FINANCIERO.test(String(m.cat||"")) || /^\s*mep\s*$/i.test(String(m.subcat||""));
 
+// Pura. "2023-01" → "Ene ’23": corto pero con el año, para tablas y textos donde el rango cruza varios años.
+function mesCortoInforme(ym){
+  const x=/^(\d{4})-(\d{2})$/.exec(String(ym||"")); if(!x) return "";
+  return MESES[Number(x[2])-1].slice(0,3)+" ’"+x[1].slice(2);
+}
+
 // Pura. Los meses de desde a hasta ("YYYY-MM"), ambos incluidos. [] si el rango no es válido.
 function mesesDelRango(desde, hasta){
   if(!/^\d{4}-\d{2}$/.test(desde||"") || !/^\d{4}-\d{2}$/.test(hasta||"") || desde>hasta) return [];
@@ -70,9 +76,9 @@ function hallazgosDelPeriodo(inf, ant){
   if(inf.mesesConDatos>1){
     const con=inf.meses.filter(x=>x.hayDatos);
     const peor=con.reduce((a,b)=>b.disponible<a.disponible?b:a), mejor=con.reduce((a,b)=>b.disponible>a.disponible?b:a);
-    out.push({icono:"📅", texto:`El mes más holgado fue ${mesLbl(mejor.ym)} (${F(mejor.disponible)} disponibles) y el más ajustado, ${mesLbl(peor.ym)} (${peor.disponible<0?"−":""}${F(Math.abs(peor.disponible))}).`});
+    out.push({icono:"📅", texto:`El mes más holgado fue ${mesCortoInforme(mejor.ym)} (${F(mejor.disponible)} disponibles) y el más ajustado, ${mesCortoInforme(peor.ym)} (${peor.disponible<0?"−":""}${F(Math.abs(peor.disponible))}).`});
     const deficit=con.filter(x=>x.netoOp<0);
-    if(deficit.length) out.push({icono:"⚠️", texto:`En ${deficit.length} de ${con.length} meses gastaste más de lo que entró por trabajo, alquileres y similares: ${deficit.map(x=>mesLbl(x.ym).split(" ")[0]).join(", ")}.`});
+    if(deficit.length) out.push({icono:"⚠️", texto:`En ${deficit.length} de ${con.length} meses gastaste más de lo que entró por trabajo, alquileres y similares: ${deficit.map(x=>mesCortoInforme(x.ym)).join(", ")}.`});
   }
   if(inf.netoOp<0){
     const fin=inf.ingFin;
@@ -86,13 +92,13 @@ function hallazgosDelPeriodo(inf, ant){
   Object.entries(serie).forEach(([c,vals])=>{
     const v=vals.filter(x=>x>0);
     if(v.reduce((a,b)=>a+b,0)<inf.ingOp*0.10) return;   // solo las fuentes que pesan (un ingreso suelto cambia 200% sin que importe)
-    if(v.length>=3 && v[0]>0){ const d=v[v.length-1]/v[0]-1; if(Math.abs(d)>=0.05) out.push({icono:d<0?"📉":"📈", texto:`Tus ingresos de “${c}” ${d<0?"bajaron":"subieron"} ${pct(Math.abs(d))}% entre ${mesLbl(vals.firstYm)} y ${mesLbl(vals.lastYm)} (${F(v[0])} → ${F(v[v.length-1])} por mes).`}); }
+    if(v.length>=3 && v[0]>0){ const d=v[v.length-1]/v[0]-1; if(Math.abs(d)>=0.05) out.push({icono:d<0?"📉":"📈", texto:`Tus ingresos de “${c}” ${d<0?"bajaron":"subieron"} ${pct(Math.abs(d))}% entre ${mesCortoInforme(vals.firstYm)} y ${mesCortoInforme(vals.lastYm)} (${F(v[0])} → ${F(v[v.length-1])} por mes).`}); }
   });
   // Un gasto que se repite todos los meses y cambió de precio
   const totalGas=inf.gasOp||1;
   inf.subs.filter(s=>Object.keys(s.porMes).length>=3 && s.total/totalGas>=0.05).sort((a,b)=>b.total-a.total).slice(0,3).forEach(s=>{
     const ks=Object.keys(s.porMes).sort(), a=s.porMes[ks[0]], b=s.porMes[ks[ks.length-1]];
-    if(a>0 && Math.abs(b/a-1)>=0.06) out.push({icono:b>a?"📈":"📉", texto:`${s.sub||s.cat} (${s.cat}) pasó de ${F(a)} en ${mesLbl(ks[0]).split(" ")[0]} a ${F(b)} en ${mesLbl(ks[ks.length-1]).split(" ")[0]} (${b>a?"+":"−"}${pct(Math.abs(b/a-1))}%).`});
+    if(a>0 && Math.abs(b/a-1)>=0.06) out.push({icono:b>a?"📈":"📉", texto:`${s.sub||s.cat} (${s.cat}) pasó de ${F(a)} en ${mesCortoInforme(ks[0])} a ${F(b)} en ${mesCortoInforme(ks[ks.length-1])} (${b>a?"+":"−"}${pct(Math.abs(b/a-1))}%).`});
   });
   const tarj=inf.categorias.find(c=>/tarjeta/i.test(c.cat));
   if(tarj && tarj.pct>=15) out.push({icono:"💳", texto:`${Math.round(tarj.pct)}% de tus gastos (${F(tarj.monto)}) son pagos de tarjeta de crédito: no se ve qué compraste. Cargar el detalle de la tarjeta te diría en qué se fue de verdad.`});
@@ -137,7 +143,7 @@ function informeComoTexto(inf){
   L.push(`Ingresos ${F(inf.ingresos)} · Gastos ${F(inf.gastos)} · Ahorrado ${F(inf.ahorrado)} · Disponible ${inf.disponible<0?"−":""}${F(Math.abs(inf.disponible))}`);
   L.push(`Sin créditos ni inversiones: ingresos ${F(inf.ingOp)} · gastos ${F(inf.gasOp)} · resultado ${inf.netoOp<0?"−":""}${F(Math.abs(inf.netoOp))}`, "");
   L.push("Mes a mes (ingresos / gastos / disponible):");
-  inf.meses.filter(x=>x.hayDatos).forEach(x=>L.push(`• ${mesLbl(x.ym)}: ${F(x.ingresos)} / ${F(x.gastos)} / ${x.disponible<0?"−":""}${F(Math.abs(x.disponible))}`));
+  inf.meses.filter(x=>x.hayDatos).forEach(x=>L.push(`• ${mesCortoInforme(x.ym)}: ${F(x.ingresos)} / ${F(x.gastos)} / ${x.disponible<0?"−":""}${F(Math.abs(x.disponible))}`));
   L.push("", "En qué se fue la plata:");
   inf.categorias.slice(0,6).forEach(c=>L.push(`• ${c.cat}: ${F(c.monto)} (${Math.round(c.pct)}%)${c.delta!==null?` · ${c.delta>=0?"+":""}${c.delta}% vs año anterior`:""}`));
   if(inf.hallazgos.length){ L.push("", "Para tener en cuenta:"); inf.hallazgos.forEach(h=>L.push(`${h.icono} ${h.texto}`)); }
@@ -148,7 +154,7 @@ function informeComoTexto(inf){
 // ── Pantalla ──
 const informeFmt=n=>`${n<0?"−":""}${fmtTotal(Math.abs(n))}`;
 function informeTablaHTML(inf){
-  const filas=inf.meses.filter(x=>x.hayDatos).map(x=>`<tr><td>${escapeHtml(abrevMes3(x.ym))}</td><td>${fmtAbbr(x.ingresos)}</td><td>${fmtAbbr(x.gastos)}</td><td class="${x.disponible<0?"neg":"pos"}">${informeFmt(x.disponible)}</td><td class="${x.netoOp<0?"neg":""}">${informeFmt(x.netoOp)}</td></tr>`).join("");
+  const filas=inf.meses.filter(x=>x.hayDatos).map(x=>`<tr><td>${escapeHtml(mesCortoInforme(x.ym))}</td><td>${fmtAbbr(x.ingresos)}</td><td>${fmtAbbr(x.gastos)}</td><td class="${x.disponible<0?"neg":"pos"}">${informeFmt(x.disponible)}</td><td class="${x.netoOp<0?"neg":""}">${informeFmt(x.netoOp)}</td></tr>`).join("");
   return `<div class="informe-scroll"><table class="informe-tabla"><thead><tr><th>Mes</th><th>Ingresos</th><th>Gastos</th><th>Disponible</th><th>Sin créd./inv.</th></tr></thead><tbody>${filas}
     <tr class="total"><td>Total</td><td>${fmtAbbr(inf.ingresos)}</td><td>${fmtAbbr(inf.gastos)}</td><td class="${inf.disponible<0?"neg":"pos"}">${informeFmt(inf.disponible)}</td><td class="${inf.netoOp<0?"neg":""}">${informeFmt(inf.netoOp)}</td></tr></tbody></table></div>`;
 }
