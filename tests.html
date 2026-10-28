@@ -6487,11 +6487,11 @@ function menuLateral(html){
   return html.slice(ini, fin);
 }
 
-test("los nueve ítems del menú usan emoji, no símbolos geométricos", async ()=>{
+test("los ocho ítems del menú usan emoji, no símbolos geométricos", async ()=>{
   const html=await (await fetch("index.html")).text();
   const menu=menuLateral(html);
   const iconos=[...menu.matchAll(/<span class="nav-icon">([^<]*)<\/span>/g)].map(m=>m[1]);
-  igual(iconos.length, 9, "el menú tiene que seguir teniendo sus nueve ítems (siete pantallas + Cerrar el mes + Resumen del año)");
+  igual(iconos.length, 8, "el menú tiene que seguir teniendo sus ocho ítems (siete pantallas + Cerrar el mes): el resumen del año vive en el Dashboard");
   // Ningún símbolo suelto geométrico de los que había antes: todo emoji.
   const geometricos=iconos.filter(ic=>["≡","▣","◎","⬆","⚙"].includes(ic));
   igual(geometricos, [], "quedó algún ícono geométrico sin convertir: " + JSON.stringify(iconos));
@@ -10315,9 +10315,10 @@ test("resumen del año: la hoja muestra los números, navega entre años y compa
   } finally { movs=antes.movs; window.getMesMov=antes.mes; window.gananciaInvDelMes=antes.gan; [cuerpo,tit,modal,ant,sig,comp].forEach(e=>e.remove()); }
 });
 
-test("resumen del año: está en index, en el menú, en el sw y el aviso se pinta en Movimientos", async ()=>{
+test("resumen del año: está en index, el sw, el Dashboard (no en el menú) y el aviso se pinta en Movimientos", async ()=>{
   const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), mv=await (await fetch("js/movimientos.js")).text();
-  cierto(/js\/resumen-anual\.js\?v=\d+/.test(html) && sw.includes("./js/resumen-anual.js")); cierto(html.includes('id="modal-anual"') && html.includes('id="mov-anual-aviso"') && html.includes("abrirResumenAnual()"));
+  cierto(/js\/resumen-anual\.js\?v=\d+/.test(html) && sw.includes("./js/resumen-anual.js")); cierto(html.includes('id="modal-anual"') && html.includes('id="mov-anual-aviso"'));
+  const dash=await (await fetch("js/dashboard.js")).text(); cierto(dash.includes("abrirResumenAnual(") && dash.includes("dashEnlacesAnio(year)"), "el resumen del año se abre desde el Dashboard"); cierto(!html.includes("closeSideMenu();abrirResumenAnual()"), "ya no está en el menú");
   cierto(mv.includes("pintarAvisoAnual()"));
 });
 

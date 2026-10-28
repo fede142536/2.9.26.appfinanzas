@@ -347,7 +347,7 @@ function renderDashResumen(){
   if(!mesData){
     if(headlineEl) headlineEl.textContent=`No hay movimientos cargados en ${mesLbl(ym)}.`;
     if(subEl) subEl.textContent="";
-    if(listaEl) listaEl.innerHTML=`<a href="#" class="dash-year-link" onclick="event.preventDefault();openDashYearCompleto()">Ver el año completo ›</a>`;
+    if(listaEl) listaEl.innerHTML=dashEnlacesAnio(year);
     dashInsightsActuales=[];
     return;
   }
@@ -364,8 +364,13 @@ function renderDashResumen(){
   dashInsightAbierto=null;
   if(listaEl){
     listaEl.innerHTML=dashInsightsActuales.map((it,i)=>construirInsightHTML(it,i)).join("")
-      + `<a href="#" class="dash-year-link" onclick="event.preventDefault();openDashYearCompleto()">Ver el año completo ›</a>`;
+      + dashEnlacesAnio(year);
   }
+}
+// Los dos enlaces al pie del resumen del mes: el tablero del año completo y el resumen del año (para compartir). `year` = el año del mes que se mira.
+function dashEnlacesAnio(year){
+  return `<div class="dash-year-links"><a href="#" class="dash-year-link" onclick="event.preventDefault();openDashYearCompleto()">Ver el año completo ›</a>`
+    + `<a href="#" class="dash-year-link" onclick="event.preventDefault();abrirResumenAnual(${Number(year)||new Date().getFullYear()})">🎉 Mi ${Number(year)||""} en Enola ›</a></div>`;
 }
 
 // ═══════════════════════════════════════════
