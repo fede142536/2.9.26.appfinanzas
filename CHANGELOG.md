@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v203**
+**Versión actual: v204**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 28 de octubre de 2026
 
+- **v204** · El resumen del año pasa del menú al Dashboard
+  Se saca 'Resumen del año' del menú hamburguesa y se agrega '🎉 Mi 2026 en Enola' al pie del resumen del Dashboard, debajo de 'Ver el año completo'; abre el resumen del año del mes que se está mirando. El aviso de fin de año en Movimientos sigue igual.
 - **v203** · Repetir un movimiento con un toque y resumen del año
   - Repetir: deslizando una fila hacia la derecha (o desde el editor) aparece '🔁 Repetir': lleva a Cargar con el mismo movimiento (tipo, monto, categoría, cuenta, nota, ahorro/retiro/recuperable, ticker y cuotas) con la fecha de hoy, sin guardar nada.
   - Resumen del año: ingresos, gastos, ahorrado y lo que quedó disponible mes a mes, categorías más fuertes, mejor y peor mes, gasto más grande y comparación con el año anterior; con aviso al cerrar el año, entrada en el menú y para compartir como imagen.

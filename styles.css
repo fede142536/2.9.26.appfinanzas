@@ -803,7 +803,8 @@ canvas{width:100%!important;max-width:100%}
 .dash-insight-detalle{font-size:12px;color:var(--muted);line-height:1.45}
 .dash-insight-action{font-size:12px;font-weight:600;color:var(--accent)}
 .dash-year-link{display:block;text-align:center;font-size:12px;font-weight:600;color:var(--accent);
-  text-decoration:none;padding:8px 0 20px;cursor:pointer}
+  text-decoration:none;padding:8px 0;cursor:pointer}
+.dash-year-links{padding:0 0 20px}
 
 /* ═══════════════════════════════════════════
    CAMBIO DE MES
