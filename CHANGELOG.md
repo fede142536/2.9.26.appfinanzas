@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v204**
+**Versión actual: v205**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 28 de octubre de 2026
 
+- **v205** · Informe de un período dentro de la app
+  Un análisis de cualquier rango de meses (con atajos 'Antes de usar la app', 'Este año' y 'Últimos 6 meses'): disponible, mes a mes, separando lo operativo (sin créditos, inversiones ni MEP) de lo financiero, en qué se fue la plata con su variación contra el año anterior y subcategorías, de dónde entró, mayores gastos, ahorro e inversión, y hallazgos en palabras (déficit cubierto con deuda, sueldo o gastos fijos que cambiaron, peso de la tarjeta, calidad de los datos). Se abre desde el Dashboard y se comparte como texto.
 - **v204** · El resumen del año pasa del menú al Dashboard
   Se saca 'Resumen del año' del menú hamburguesa y se agrega '🎉 Mi 2026 en Enola' al pie del resumen del Dashboard, debajo de 'Ver el año completo'; abre el resumen del año del mes que se está mirando. El aviso de fin de año en Movimientos sigue igual.
 - **v203** · Repetir un movimiento con un toque y resumen del año
