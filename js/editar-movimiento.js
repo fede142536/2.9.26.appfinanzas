@@ -12,6 +12,7 @@ function openEditModal(id){
   editingId=id;
   document.getElementById("edit-form-content").innerHTML=renderEditForm(m);
   document.getElementById("modal-edit").classList.add("open");
+  const rep=document.getElementById("edit-repetir"); if(rep) rep.style.display = (m.frecuente || m.pagoTarjeta || m.origenInvId || m.devolucionDeId) ? "none" : "";   // lo que no se puede repetir no ofrece el botón
   // Restaurar handler de guardar para movimientos (puede haber sido cambiado por openEditTcModal)
   const btnGuardar=document.querySelector("#modal-edit .btn-primary");
   if(btnGuardar) btnGuardar.setAttribute("onclick","guardarEdit()");
@@ -32,6 +33,7 @@ function openEditCambioModal(cambioId){
   const info=leerCambio(patasDelCambio(cambioId, movs));
   if(!info){ showToast("No encontré las dos mitades de este cambio"); return; }
   editingCambioId=cambioId;
+  const rep=document.getElementById("edit-repetir"); if(rep) rep.style.display="none";
   const compra=info.sentido==="compra";
   // Si esta compra ya se guardó al fondo (ver crearDepositoAhorroUSD), la casilla arranca
   // tildada: así se puede corregir el monto al día siguiente (cuando liquida el MEP) sin
