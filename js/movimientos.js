@@ -650,15 +650,17 @@ class TxItem extends HTMLElement{
     this._openState=0; // -1: revelado hacia la izq (eliminar) · 0: cerrado · 1: revelado hacia la der (editar)
     const isTc=!!m._isTc;
     this.innerHTML=`
-      <div class="tx-swipe-bg tx-swipe-bg-left">✎ Editar</div>
+      <div class="tx-swipe-bg tx-swipe-bg-left"><span class="tx-swipe-act">✎ Editar</span><span class="tx-swipe-act tx-swipe-repetir">🔁 Repetir</span></div>
       <div class="tx-swipe-bg tx-swipe-bg-right">🗑 Eliminar</div>
       <div class="tx-item tx-item-content tx-tipo-${claseTipoDeMov(m)}">${construirCuerpoTxItem(m)}</div>`;
     // Botones grandes de las zonas reveladas por swipe (además de los chiquitos de siempre,
     // que quedan intactos dentro de tx-item-content)
     const bgLeft=this.querySelector(".tx-swipe-bg-left");
     const bgRight=this.querySelector(".tx-swipe-bg-right");
-    bgLeft.addEventListener("click", ()=>{
+    // El panel de la izquierda tiene dos botones: Editar (arriba) y Repetir (abajo, ver repetir.js).
+    bgLeft.addEventListener("click", (e)=>{
       this._cerrar();
+      if(e.target.closest && e.target.closest(".tx-swipe-repetir")){ repetirMovimiento(m.id, isTc); return; }
       if(isTc) openEditTcModal(m.id, String(m.fecha||"").slice(0,7)); else openEditModal(m.id);
     });
     bgRight.addEventListener("click", (e)=>{
@@ -938,6 +940,7 @@ function listaDelResumenFrec(){
 function pintarFranjaVencimientos(){
   if(typeof pintarAvisoCalendario==="function") pintarAvisoCalendario();
   if(typeof pintarAvisoCierre==="function") pintarAvisoCierre();
+  if(typeof pintarAvisoAnual==="function") pintarAvisoAnual();
   const el=document.getElementById("mov-arrastre");
   if(!el) return;
   const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();

@@ -91,6 +91,8 @@
 <script src="js/selector-mes.js"></script>
 <script src="js/decimales.js"></script>
 <script src="js/recuperable.js"></script>
+<script src="js/resumen-anual.js"></script>
+<script src="js/repetir.js"></script>
 <script src="js/cierre-mes.js"></script>
 <script src="js/huella.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
@@ -6485,11 +6487,11 @@ function menuLateral(html){
   return html.slice(ini, fin);
 }
 
-test("los ocho ítems del menú usan emoji, no símbolos geométricos", async ()=>{
+test("los nueve ítems del menú usan emoji, no símbolos geométricos", async ()=>{
   const html=await (await fetch("index.html")).text();
   const menu=menuLateral(html);
   const iconos=[...menu.matchAll(/<span class="nav-icon">([^<]*)<\/span>/g)].map(m=>m[1]);
-  igual(iconos.length, 8, "el menú tiene que seguir teniendo sus ocho ítems (siete pantallas + Cerrar el mes)");
+  igual(iconos.length, 9, "el menú tiene que seguir teniendo sus nueve ítems (siete pantallas + Cerrar el mes + Resumen del año)");
   // Ningún símbolo suelto geométrico de los que había antes: todo emoji.
   const geometricos=iconos.filter(ic=>["≡","▣","◎","⬆","⚙"].includes(ic));
   igual(geometricos, [], "quedó algún ícono geométrico sin convertir: " + JSON.stringify(iconos));
@@ -10176,6 +10178,147 @@ test("recordatorios sin detalle: el interruptor está en Configuración y se gua
   const antes={sync:window.programarSyncCalendario, toast:window.showToast}; let sincro=0; window.programarSyncCalendario=()=>{ sincro++; }; window.showToast=()=>{};
   try{ onCalGenericoCambio(chk); igual(recordatoriosGenericos(), true); igual(sincro, 1, "pone en marcha el envío de lo que cambió"); chk.checked=false; onCalGenericoCambio(chk); igual(recordatoriosGenericos(), false); }
   finally { window.programarSyncCalendario=antes.sync; window.showToast=antes.toast; if(k===null) localStorage.removeItem(CAL_GENERICO_KEY); else localStorage.setItem(CAL_GENERICO_KEY,k); }
+});
+
+grupo("Repetir un movimiento");
+
+const HOY_R="2026-10-28";
+test("repetir: un gasto se repite con la fecha de hoy, el mismo monto, categoría, cuenta, nota y marcas", ()=>{
+  const g={id:1, tipo:"Gasto", importe:5000, moneda:"ARS", cat:"Transporte", subcat:"SUBE", cuenta:"Galicia", nota:"Recarga", fecha:"2026-09-01", recuperable:2000, esAhorro:false};
+  const d=datosParaRepetir(g, HOY_R);
+  igual(d.r, {nota:"Recarga", cat:"Transporte", subcat:"SUBE", cuenta:"Galicia", fecha:HOY_R, tipo:"Gasto", importe:5000, moneda:"ARS"});
+  igual(d.flags, {esAhorro:false, usaAhorro:false, traspaso:false, recuperable:2000});
+  const ah=datosParaRepetir({id:2, tipo:"Gasto", importe:40000, moneda:"ARS", cat:"Fondo de Retiro", subcat:"Cedears", esAhorro:true, nota:"Spy x 1", cuenta:"Balanz", fecha:"2026-09-02"}, HOY_R);
+  igual(ah.flags.esAhorro, true, "un depósito al fondo se repite como depósito");
+  const u=datosParaRepetir({id:3, tipo:"Gasto", importe:0, importeOrig:20, moneda:"USD", cat:"Otros", subcat:"Varios", cuenta:"Cuentas", fecha:"2026-09-02"}, HOY_R);
+  igual([u.r.importe, u.r.moneda], [20, "USD"], "en dólares usa el monto en USD");
+  const i=datosParaRepetir({id:4, tipo:"Ingreso", importe:1000000, moneda:"ARS", cat:"Salario", subcat:"Salario", cuenta:"Galicia", fecha:"2026-09-05"}, HOY_R);
+  igual([i.r.tipo, i.r.importe, i.flags], ["Ingreso", 1000000, {}]);
+});
+
+test("repetir: una inversión conserva ticker y operación (sin el prefijo de la categoría) y una compra con tarjeta, sus cuotas", ()=>{
+  const v=datosParaRepetir({id:5, tipo:"Inversion", importe:104003.22, importeUSD:0, cat:"CEDEARs", subcat:"CEDEARs Venta", ticker:"SPY", cuenta:"Balanz", fecha:"2026-10-15", mep:false}, HOY_R);
+  igual([v.r.tipo, v.r.cat, v.r.subcat, v.r.ticker, v.r.importe, v.r.fecha], ["Inversion", "CEDEARs", "Venta", "SPY", 104003.22, HOY_R]);
+  const iu=datosParaRepetir({id:6, tipo:"Inversion", importe:0, importeUSD:50, cat:"Bonos USD", subcat:"Bonos USD Compra AL30", ticker:"AL30", fecha:"2026-10-15"}, HOY_R);
+  igual([iu.r.importe, iu.r.moneda, iu.r.subcat], [50, "USD", "Compra AL30"]);
+  const tc=datosParaRepetir({id:7, desc:"Televisor", tarjeta:"Visa", cat:"Casa", moneda:"ARS", total:600000, cuotasTotal:6, mesInicio:"2026-10", frecuente:false}, HOY_R);
+  igual(tc.r, {tipo:"Tarjeta", nota:"Televisor", importe:600000, moneda:"ARS", tarjeta:"Visa", cat:"Casa", cuenta:"", cuotas:6, fecha:HOY_R});
+});
+
+test("repetir: lo que no tiene sentido repetir explica por qué", ()=>{
+  cierto(datosParaRepetir({id:1, tipo:"Gasto", frecuente:true, importe:1}, HOY_R).motivo.includes("frecuentes"));
+  cierto(datosParaRepetir({id:2, tipo:"Gasto", importe:1, pagoTarjeta:{ym:"2026-10"}}, HOY_R).motivo.includes("resumen"));
+  cierto(datosParaRepetir({id:3, tipo:"Gasto", importe:1, origenInvId:9}, HOY_R).motivo.includes("venta"));
+  cierto(datosParaRepetir({id:4, tipo:"Ingreso", importe:1, devolucionDeId:9}, HOY_R).motivo.includes("Cobrar"));
+  cierto(datosParaRepetir({id:5, tipo:"Gasto", importe:1, cambioId:"c1", cambioPata:"sale"}, HOY_R).motivo.includes("Cambio"));
+  cierto(datosParaRepetir({desc:"Netflix", frecuente:true, total:6, cuotasTotal:1, _isTc:true}, HOY_R).motivo.includes("frecuentes"));
+  cierto(datosParaRepetir(null, HOY_R).motivo);
+});
+
+// Formulario mínimo para probar que repetir rellena Cargar sin guardar nada.
+async function conFormularioRepetir(fn){
+  const ids={"inp-importe":"input","inp-nota":"input","inp-fecha":"input","inp-cat":"select","inp-subcat":"select","inp-cuenta":"select","inp-moneda":"select","inp-ahorro":"input","inp-usa-ahorro":"input","inp-traspaso":"input","inp-recup-switch":"input","inp-recup":"input"};
+  const els={}; Object.entries(ids).forEach(([id,t])=>{ const e=document.createElement(t); e.id=id; if(/ahorro|traspaso|switch/.test(id)) e.type="checkbox"; document.body.appendChild(e); els[id]=e; });
+  els["inp-cat"].innerHTML="<option>Transporte</option><option>Otros</option>"; els["inp-subcat"].innerHTML="<option>SUBE</option><option>Otros</option>"; els["inp-cuenta"].innerHTML="<option>Galicia</option><option>Cuentas</option>"; els["inp-moneda"].innerHTML="<option>ARS</option><option>USD</option>";
+  const antes={movs:JSON.stringify(movs), tcs:JSON.stringify(tcs), setTipo:window.setTipo, upd:window.updateSubcats, show:window.showPage, toast:window.showToast, scroll:window.scrollTo, sug:window.sugerirAhorroDeMeta};
+  const llamadas=[]; window.setTipo=t=>llamadas.push("tipo:"+t); window.updateSubcats=()=>{}; window.showPage=p=>llamadas.push("pagina:"+p); window.scrollTo=()=>{}; window.sugerirAhorroDeMeta=()=>{};
+  const toasts=[]; window.showToast=m=>toasts.push(m);
+  try{ await fn(els, llamadas, toasts); } finally { window.setTipo=antes.setTipo; window.updateSubcats=antes.upd; window.showPage=antes.show; window.showToast=antes.toast; window.scrollTo=antes.scroll; window.sugerirAhorroDeMeta=antes.sug; Object.values(els).forEach(e=>e.remove()); igual(JSON.stringify(movs), antes.movs, "repetir no puede guardar nada"); igual(JSON.stringify(tcs), antes.tcs); }
+}
+
+test("repetir: lleva a Cargar con el formulario armado, la fecha de hoy y las marcas, sin guardar nada", ()=>conFormularioRepetir(async (els, llamadas, toasts)=>{
+  const antes=movs; movs=[{id:77, tipo:"Gasto", importe:5000, moneda:"ARS", cat:"Transporte", subcat:"SUBE", cuenta:"Galicia", nota:"Recarga", fecha:"2026-09-01", recuperable:2000, esAhorro:false}];
+  try{
+    igual(repetirMovimiento(77, false), true);
+    cierto(llamadas.includes("pagina:cargar") && llamadas.includes("tipo:Gasto"), llamadas.join(","));
+    cierto(els["inp-importe"].value.replace(/\D/g,"")==="5000", "monto: "+els["inp-importe"].value); igual(els["inp-nota"].value, "Recarga"); igual(els["inp-cat"].value, "Transporte"); igual(els["inp-cuenta"].value, "Galicia");
+    igual(els["inp-fecha"].value, currentYMD(), "con la fecha de hoy"); igual(els["inp-recup-switch"].checked, true); igual(els["inp-recup"].value, "2000");
+    cierto(toasts.some(t=>t.includes("Repetido")), toasts.join("|"));
+    igual(repetirMovimiento(999, false), false); cierto(toasts.some(t=>t.includes("No encontré")));
+    movs=[{id:78, tipo:"Gasto", importe:1, frecuente:true, cat:"Otros", moneda:"ARS"}]; igual(repetirMovimiento(78, false), false); cierto(toasts[toasts.length-1].includes("frecuentes"));
+  } finally { movs=antes; }
+}));
+
+test("repetir: el botón está en el deslizar de cada fila y en el editor, y los archivos están cargados", async ()=>{
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), mv=await (await fetch("js/movimientos.js")).text(), ed=await (await fetch("js/editar-movimiento.js")).text();
+  cierto(/js\/repetir\.js\?v=\d+/.test(html) && sw.includes("./js/repetir.js")); cierto(html.includes('id="edit-repetir"') && html.includes("repetirDesdeEditor()"));
+  cierto(mv.includes("tx-swipe-repetir") && mv.includes("repetirMovimiento(m.id, isTc)")); cierto(ed.includes('getElementById("edit-repetir")'));
+});
+
+grupo("Resumen del año");
+
+// Dos meses con datos del año 2026: abril (entra 1.000.000, gasta 400.000, ahorra 100.000) y mayo (entra 800.000, gasta 900.000).
+const ANUAL_MOVS=()=>[
+  {id:1, tipo:"Ingreso", cat:"Salario", importe:1000000, moneda:"ARS", fecha:"2026-04-05"},
+  {id:2, tipo:"Gasto", cat:"Supermercado", importe:300000, moneda:"ARS", fecha:"2026-04-08", nota:"Coto"},
+  {id:3, tipo:"Gasto", cat:"Casa", importe:100000, moneda:"ARS", fecha:"2026-04-10"},
+  {id:4, tipo:"Gasto", cat:"Fondo", subcat:"A", importe:100000, moneda:"ARS", esAhorro:true, fecha:"2026-04-12"},
+  {id:5, tipo:"Ingreso", cat:"Salario", importe:800000, moneda:"ARS", fecha:"2026-05-05"},
+  {id:6, tipo:"Gasto", cat:"Supermercado", importe:600000, moneda:"ARS", fecha:"2026-05-08", nota:"Compra grande"},
+  {id:7, tipo:"Gasto", cat:"Casa", importe:300000, moneda:"ARS", fecha:"2025-05-10"},
+  {id:8, tipo:"Ingreso", cat:"Salario", importe:500000, moneda:"ARS", fecha:"2025-05-05"}];
+const mesFnAnual=(lista)=>ym=>lista.filter(m=>String(m.fecha).slice(0,7)===ym);
+
+test("resumen del año: suma los meses con la misma cuenta que el Balance del mes", ()=>{
+  const lista=ANUAL_MOVS();
+  const r=resumenDelAnio(2026, mesFnAnual(lista), null, undefined, null);
+  igual([r.hayDatos, r.mesesConDatos, r.ingresos, r.gastos, r.ahorrado], [true, 2, 1800000, 1000000, 100000], "el depósito al fondo no cuenta como gasto");
+  igual(r.disponible, 700000, "1.800.000 − 1.000.000 − 100.000 ahorrados");
+  const abril=resumenDePeriodo(lista.filter(m=>m.fecha.startsWith("2026-04")), undefined), mayo=resumenDePeriodo(lista.filter(m=>m.fecha.startsWith("2026-05")), undefined);
+  igual(r.disponible, abril.disponible+mayo.disponible, "es la suma de los Balances de cada mes");
+  igual(r.meses.length, 12); igual(r.meses.filter(x=>x.hayDatos).map(x=>x.ym), ["2026-04","2026-05"]);
+  igual(r.ahorroNeto, 100000); igual(r.promedioGasto, 500000);
+});
+
+test("resumen del año: mejor mes, mes más caro, categorías más fuertes y gasto más grande", ()=>{
+  const r=resumenDelAnio(2026, mesFnAnual(ANUAL_MOVS()), null, undefined, null);
+  igual(r.mejorMes, {ym:"2026-04", disponible:500000}); igual(r.peorMes, {ym:"2026-05", disponible:200000}); igual(r.mesMasCaro, {ym:"2026-05", gastos:600000});
+  igual(r.top.map(c=>[c.cat,c.monto,c.pct]), [["Supermercado",900000,90],["Casa",100000,10]], "el depósito al fondo no es un gasto");
+  igual(r.mayor.desc, "Compra grande"); igual(r.mayor.monto, 600000);
+  const uno=resumenDelAnio(2026, mesFnAnual(ANUAL_MOVS().filter(m=>m.fecha.startsWith("2026-04"))), null, undefined, null);
+  igual([uno.mejorMes, uno.peorMes, uno.mesMasCaro], [null,null,null], "con un solo mes no hay mejor ni peor");
+});
+
+test("resumen del año: compara con el año anterior y no proyecta meses que no llegaron", ()=>{
+  const lista=ANUAL_MOVS(), f=mesFnAnual(lista);
+  const ant=resumenDelAnio(2025, f, null, undefined, null);
+  const r=resumenDelAnio(2026, f, null, undefined, ant);
+  igual([ant.ingresos, ant.gastos], [500000, 300000]); igual([r.dIngresos, r.dGastos], [260, 233], "ingresos +260% y gastos +233% contra 2025");
+  igual(resumenDelAnio(2026, f, null, undefined, null).dIngresos, null, "sin año anterior no hay comparación");
+  const hasta=resumenDelAnio(2026, f, null, "2026-04", null); igual([hasta.mesesConDatos, hasta.ingresos], [1, 1000000], "hastaYM corta el año en ese mes");
+  igual(resumenDelAnio(2030, f, null, undefined, null).hayDatos, false);
+});
+
+test("resumen del año: el aviso aparece al cerrar el año (2ª quincena de diciembre y enero), una vez", ()=>{
+  igual(anioParaResumen("2026-12-20", [2025,2026], null), 2026); igual(anioParaResumen("2026-12-14", [2026], null), null, "todavía es pronto");
+  igual(anioParaResumen("2027-01-10", [2026,2027], null), 2026, "en enero, el año que terminó"); igual(anioParaResumen("2027-01-21", [2026], null), null);
+  igual(anioParaResumen("2026-12-20", [2026], "2026"), null, "descartado"); igual(anioParaResumen("2026-12-20", [2025], null), null, "sin datos de ese año");
+  igual(anioParaResumen("2026-10-20", [2026], null), null);
+  igual(aniosConMovimientos(ANUAL_MOVS()), [2025, 2026]);
+});
+
+test("resumen del año: la hoja muestra los números, navega entre años y comparte", ()=>{
+  const cuerpo=document.createElement("div"); cuerpo.id="anual-cuerpo"; const tit=document.createElement("div"); tit.id="anual-titulo"; const modal=document.createElement("div"); modal.id="modal-anual";
+  const ant=document.createElement("button"); ant.id="anual-ant"; const sig=document.createElement("button"); sig.id="anual-sig"; const comp=document.createElement("button"); comp.id="anual-compartir";
+  document.body.append(cuerpo, tit, modal, ant, sig, comp);
+  const antes={movs, mes:window.getMesMov, gan:window.gananciaInvDelMes};
+  movs=ANUAL_MOVS(); window.getMesMov=ym=>movs.filter(m=>String(m.fecha).slice(0,7)===ym); window.gananciaInvDelMes=()=>({ars:0, usd:0});
+  try{
+    abrirResumenAnual(2026);
+    cierto(modal.classList.contains("open")); igual(tit.textContent, "Tu 2026");
+    cierto(cuerpo.textContent.includes("Te quedó disponible en 2026") && cuerpo.textContent.includes("$700.000"), cuerpo.textContent.slice(0,200));
+    cierto(cuerpo.textContent.includes("Supermercado") && cuerpo.textContent.includes("Tu mejor mes") && cuerpo.textContent.includes("Abril 2026"), "tiene que mostrar categorías y el mejor mes");
+    cierto(cuerpo.querySelectorAll(".anual-col").length===12, "las 12 barras"); igual(ant.disabled, false); igual(sig.disabled, true, "2026 es el último año con datos");
+    anualCambiar(-1); igual(tit.textContent, "Tu 2025"); igual(sig.disabled, false); igual(ant.disabled, true); anualCambiar(-1); igual(tit.textContent, "Tu 2025", "no sale del rango");
+    anualAnio=2030; renderResumenAnual(); cierto(cuerpo.textContent.includes("No hay movimientos en 2030")); igual(comp.style.display, "none");
+    const c=document.createElement("canvas"); dibujarResumenAnual(c, resumenDelAnio(2026, mesFnAnual(ANUAL_MOVS()), null, undefined, null)); cierto(c.width===1080 && c.height>800, "la imagen para compartir");
+  } finally { movs=antes.movs; window.getMesMov=antes.mes; window.gananciaInvDelMes=antes.gan; [cuerpo,tit,modal,ant,sig,comp].forEach(e=>e.remove()); }
+});
+
+test("resumen del año: está en index, en el menú, en el sw y el aviso se pinta en Movimientos", async ()=>{
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), mv=await (await fetch("js/movimientos.js")).text();
+  cierto(/js\/resumen-anual\.js\?v=\d+/.test(html) && sw.includes("./js/resumen-anual.js")); cierto(html.includes('id="modal-anual"') && html.includes('id="mov-anual-aviso"') && html.includes("abrirResumenAnual()"));
+  cierto(mv.includes("pintarAvisoAnual()"));
 });
 
 grupo("Aislamiento de los tests");

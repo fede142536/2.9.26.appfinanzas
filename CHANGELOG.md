@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v202**
+**Versión actual: v203**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,12 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 28 de octubre de 2026
+
+- **v203** · Repetir un movimiento con un toque y resumen del año
+  - Repetir: deslizando una fila hacia la derecha (o desde el editor) aparece '🔁 Repetir': lleva a Cargar con el mismo movimiento (tipo, monto, categoría, cuenta, nota, ahorro/retiro/recuperable, ticker y cuotas) con la fecha de hoy, sin guardar nada.
+  - Resumen del año: ingresos, gastos, ahorrado y lo que quedó disponible mes a mes, categorías más fuertes, mejor y peor mes, gasto más grande y comparación con el año anterior; con aviso al cerrar el año, entrada en el menú y para compartir como imagen.
 
 ## 27 de octubre de 2026
 

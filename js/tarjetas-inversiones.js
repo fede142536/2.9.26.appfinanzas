@@ -1580,6 +1580,7 @@ function openEditTcModal(id, ym){
   editingTcYM=/^\d{4}-\d{2}$/.test(ym||"") ? ym : currentYM();
   document.getElementById("edit-form-content").innerHTML=renderEditTcForm(t);
   document.getElementById("modal-edit").classList.add("open");
+  const rep=document.getElementById("edit-repetir"); if(rep) rep.style.display="none";   // "Repetir" del editor es solo para movimientos
   // Reemplazo el handler del botón de guardar
   const btnGuardar=document.querySelector("#modal-edit .btn-primary");
   if(btnGuardar) btnGuardar.setAttribute("onclick","guardarEditTc()");
