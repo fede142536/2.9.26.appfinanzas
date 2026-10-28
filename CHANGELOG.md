@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v205**
+**Versión actual: v206**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 28 de octubre de 2026
 
+- **v206** · Los meses del informe llevan el año en forma corta (Ene ’23)
+  En la tabla mes a mes y en los textos del informe, cada mes se muestra con el año abreviado (Ene ’23, Oct ’26) en vez de solo el nombre, para que se distingan los meses de distintos años sin escribir 'Enero 2023'.
 - **v205** · Informe de un período dentro de la app
   Un análisis de cualquier rango de meses (con atajos 'Antes de usar la app', 'Este año' y 'Últimos 6 meses'): disponible, mes a mes, separando lo operativo (sin créditos, inversiones ni MEP) de lo financiero, en qué se fue la plata con su variación contra el año anterior y subcategorías, de dónde entró, mayores gastos, ahorro e inversión, y hallazgos en palabras (déficit cubierto con deuda, sueldo o gastos fijos que cambiaron, peso de la tarjeta, calidad de los datos). Se abre desde el Dashboard y se comparte como texto.
 - **v204** · El resumen del año pasa del menú al Dashboard
