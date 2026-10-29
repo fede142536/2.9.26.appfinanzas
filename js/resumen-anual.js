@@ -67,17 +67,16 @@ function anioCabeceraHTML(r){
     </div>
     ${r.dIngresos!==null||r.dGastos!==null?`<p class="txt-xs txt-muted" style="margin:6px 0 0;text-align:center">Los porcentajes comparan con ${r.anio-1}.</p>`:""}`;
 }
-// Pura. Las frases de "Para recordar" (HTML) del año; [] si no hay nada que contar.
+// Pura. Las frases de "Para recordar" (HTML) del año; [] si no hay nada que contar. No repite lo que ya muestra Año completo en otra tarjeta:
+// el promedio mensual (línea del gráfico) y el resultado de las inversiones (Ingresos por categoría); la imagen para compartir sí lleva el promedio.
 function anioNotas(r){
   const notas=[];
   if(!r.hayDatos) return notas;
   if(r.mejorMes) notas.push(`🏆 Tu mejor mes fue <strong>${escapeHtml(mesLbl(r.mejorMes.ym))}</strong>: te quedaron ${fmtTotal(r.mejorMes.disponible)}.`);
   if(r.peorMes && r.peorMes.ym!==r.mejorMes.ym) notas.push(`📉 El más ajustado fue <strong>${escapeHtml(mesLbl(r.peorMes.ym))}</strong>: ${fmtTotal(r.peorMes.disponible)}.`);
   if(r.mesMasCaro) notas.push(`💸 Gastaste más en <strong>${escapeHtml(mesLbl(r.mesMasCaro.ym))}</strong> (${fmtTotal(r.mesMasCaro.gastos)}).`);
-  if(r.mesesConDatos>1) notas.push(`📊 Gastaste en promedio ${fmtTotal(r.promedioGasto)} por mes.`);
   if(r.mayor) notas.push(`🧾 Tu gasto más grande: <strong>${escapeHtml(r.mayor.desc)}</strong> (${fmtTotal(r.mayor.monto)}).`);
   if(r.ahorroNeto!==0) notas.push(`🏦 Lo que quedó en tus ahorros: ${r.ahorroNeto>0?"+":"−"}${fmtTotal(Math.abs(r.ahorroNeto))} (depósitos menos retiros).`);
-  if(Math.round(r.ganancia)!==0) notas.push(`📈 Resultado de tus inversiones: ${r.ganancia>0?"+":"−"}${fmtTotal(Math.abs(r.ganancia))}.`);
   return notas;
 }
 
