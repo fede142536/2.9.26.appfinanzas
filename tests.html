@@ -10313,6 +10313,8 @@ test("resumen del año: Año completo muestra la cabecera y 'Para recordar' del 
     pintarResumenAnio(2030); cierto(cab.textContent.includes("No hay movimientos en 2030")); igual(comp.style.display, "none"); igual(card.style.display, "none");
     const c=document.createElement("canvas"); dibujarResumenAnual(c, resumenDelAnio(2026, mesFnAnual(ANUAL_MOVS()), null, undefined, null)); cierto(c.width===1080 && c.height>800, "la imagen para compartir");
     igual(anioNotas({hayDatos:false}), []);
+    const frases=anioNotas(resumenDeAnio(2026)).join(" "); cierto(!frases.includes("en promedio") && !frases.includes("Resultado de tus inversiones"), "no repite lo que ya muestran el gráfico y las categorías: "+frases);
+    cierto(frases.includes("Tu gasto más grande") && frases.includes("Lo que quedó en tus ahorros") === (resumenDeAnio(2026).ahorroNeto!==0));
   } finally { movs=antes.movs; window.getMesMov=antes.mes; window.gananciaInvDelMes=antes.gan; [cab,card,notas,comp].forEach(e=>e.remove()); }
 });
 
