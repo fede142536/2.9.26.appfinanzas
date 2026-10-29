@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v207**
+**Versión actual: v208**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 29 de octubre de 2026
 
+- **v208** · El resumen del año se une a Año completo
+  La cabecera de Año completo pasa a ser el resumen del año (disponible, ingresos, gastos y ahorrado con % contra el año anterior) con botones para compartir como imagen y para abrir el informe de otro período, y 'Para recordar' queda al pie. El Dashboard tiene un solo enlace; el aviso de fin de año abre la misma pantalla. Se quita la hoja aparte 'Mi año'.
 - **v207** · El informe se comparte como imagen, con el estilo del resumen del mes
   Compartir informe arma un PNG de 1080 px (disponible, ingresos/gastos/ahorrado, resultado sin créditos ni inversiones, barras mes a mes, categorías principales y hallazgos) y lo manda por el menú de compartir o lo descarga. El texto queda como opción aparte (Como texto).
 
