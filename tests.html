@@ -10389,6 +10389,38 @@ test("informe: los meses llevan el año en forma corta (Ene ’23), en la tabla 
   cierto(informeComoTexto(inf).includes("• Ene ’26: "), "el texto para compartir también");
 });
 
+test("informe: la imagen para compartir usa el estilo del resumen del mes y crece con los hallazgos", ()=>{
+  const inf=informeDePeriodo("2026-01","2026-03", infMes(INF_MOVS()), null);
+  const c=dibujarInforme(document.createElement("canvas"), inf);
+  igual(c.width, 1080); cierto(c.height>1200, "alto "+c.height);
+  const sinHall=dibujarInforme(document.createElement("canvas"), {...inf, hallazgos:[]});
+  cierto(c.height>sinHall.height, "con hallazgos es más alta");
+  const muchos=dibujarInforme(document.createElement("canvas"), {...inf, hallazgos:Array.from({length:12},(_,i)=>({icono:"•", texto:"hallazgo número "+i+" con un texto bastante largo para que ocupe más de un renglón en la imagen compartida del informe"}))});
+  cierto(muchos.height<c.height+1400, "se limita a "+INFORME_IMG_MAX_HALLAZGOS+" hallazgos: "+muchos.height);
+  const ctx=document.createElement("canvas").getContext("2d"); ctx.font="500 28px sans-serif";
+  const r=partirEnRenglones(ctx, "uno dos tres cuatro cinco seis siete ocho nueve diez", 120);
+  cierto(r.length>1 && r.join(" ")==="uno dos tres cuatro cinco seis siete ocho nueve diez", r.join("|")); igual(partirEnRenglones(ctx,"",100), []);
+});
+
+test("informe: compartir manda la imagen (o la descarga) y el texto queda como opción aparte", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="informe-compartir-texto"') && html.includes("compartirInformeTexto()"));
+  const antes=navigator.share; let args=null;
+  const bak=[informeDesde, informeHasta]; informeDesde="2026-01"; informeHasta="2026-03";
+  const getBak=window.getMesMov; window.getMesMov=infMes(INF_MOVS());
+  try{
+    Object.defineProperty(navigator,"canShare",{value:()=>true,configurable:true});
+    Object.defineProperty(navigator,"share",{value:async a=>{ args=a; },configurable:true});
+    await compartirInforme();
+    cierto(args && args.files && args.files[0].type==="image/png" && args.files[0].name==="enola-informe-2026-01_2026-03.png", JSON.stringify(args&&Object.keys(args)));
+    args=null; await compartirInformeTexto();
+    cierto(args && /Informe de Enola/.test(args.text) && !args.files);
+  } finally {
+    delete navigator.canShare; if(antes) Object.defineProperty(navigator,"share",{value:antes,configurable:true}); else delete navigator.share;
+    window.getMesMov=getBak; [informeDesde, informeHasta]=bak;
+  }
+});
+
 test("informe: compara con el mismo período del año anterior (y avisa si tiene menos meses)", ()=>{
   const inf=informeDePeriodo("2026-01","2026-03", infMes(INF_MOVS()), null);
   igual(inf.anterior, {hayDatos:true, mesesConDatos:3, ingOp:2100000, gasOp:900000});

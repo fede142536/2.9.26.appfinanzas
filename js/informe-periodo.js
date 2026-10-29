@@ -196,11 +196,11 @@ function renderInforme(){
   const d=document.getElementById("informe-desde"), h=document.getElementById("informe-hasta");
   if(d && d.value!==informeDesde) d.value=informeDesde;
   if(h && h.value!==informeHasta) h.value=informeHasta;
-  const comp=document.getElementById("informe-compartir");
-  if(!informeRangoValido()){ cuerpo.innerHTML=`<p class="txt-sm txt-muted" style="margin:12px 0">Elegí un período: el mes de inicio tiene que ser anterior o igual al de fin.</p>`; if(comp) comp.style.display="none"; return; }
+  const comp=document.getElementById("informe-compartir"), compT=document.getElementById("informe-compartir-texto");
+  if(!informeRangoValido()){ cuerpo.innerHTML=`<p class="txt-sm txt-muted" style="margin:12px 0">Elegí un período: el mes de inicio tiene que ser anterior o igual al de fin.</p>`; if(comp) comp.style.display="none"; if(compT) compT.style.display="none"; return; }
   const inf=informeDePeriodo(informeDesde, informeHasta, getMesMov, e=>gananciaInvDelMes(e, movs));
   cuerpo.innerHTML=informeHTML(inf);
-  if(comp) comp.style.display=inf.hayDatos ? "" : "none";
+  if(comp) comp.style.display=inf.hayDatos ? "" : "none"; if(compT) compT.style.display=inf.hayDatos ? "" : "none";
 }
 function informeElegir(preset){
   const hoy=currentYM(), y=hoy.slice(0,4);
@@ -222,10 +222,91 @@ function abrirInforme(preset){
   document.getElementById("modal-informe").classList.add("open");
 }
 function cerrarInforme(){ const m=document.getElementById("modal-informe"); if(m) m.classList.remove("open"); }
-async function compartirInforme(){
-  if(!informeRangoValido()) return;
+// ── Compartir como imagen (canvas, sin librerías: PNG de 1080 px, el mismo estilo que el resumen del mes) ──
+// Pura (solo usa el contexto para medir). Parte un texto en renglones que entren en `ancho` píxeles.
+function partirEnRenglones(ctx, texto, ancho){
+  const out=[]; let cur="";
+  String(texto).split(/\s+/).filter(Boolean).forEach(w=>{
+    const prueba=cur ? cur+" "+w : w;
+    if(cur && ctx.measureText(prueba).width>ancho){ out.push(cur); cur=w; } else cur=prueba;
+  });
+  if(cur) out.push(cur);
+  return out;
+}
+const INFORME_IMG_MAX_HALLAZGOS=6;
+function dibujarInforme(canvas, inf){
+  const W=1080, pad=64, ctx=canvas.getContext("2d"), FUENTE="system-ui,-apple-system,sans-serif";
+  const cats=inf.categorias.slice(0,5);
+  const hall=inf.hallazgos.slice(0,INFORME_IMG_MAX_HALLAZGOS), masHall=inf.hallazgos.length-hall.length;
+  ctx.font=`500 28px ${FUENTE}`;
+  const bloques=hall.map(h=>partirEnRenglones(ctx, `${h.icono} ${h.texto}`, W-2*pad-8));
+  const lineasHall=bloques.reduce((a,b)=>a+b.length,0);
+  const conMeses=inf.meses.filter(x=>x.hayDatos);
+  const yBase=560+240, yCats=yBase+(inf.meses.length>12?160:120);
+  const H=yCats+cats.length*92+70+(hall.length?70+lineasHall*40+hall.length*14+(masHall>0?44:0):0)+80;
+  canvas.width=W; canvas.height=H;
+  ctx.fillStyle="#f7f6f2"; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="#1f6e68"; ctx.fillRect(0,0,W,16);
+  const txt=(t,x,y,size,color,peso,align)=>{ ctx.font=`${peso||500} ${size}px ${FUENTE}`; ctx.fillStyle=color; ctx.textAlign=align||"left"; ctx.fillText(t,x,y); };
+  txt("Enola · Informe", pad, 110, 52, "#1a1a18", 700);
+  txt(inf.desde===inf.hasta ? mesLbl(inf.desde) : `${mesLbl(inf.desde)} a ${mesLbl(inf.hasta)}`, pad, 156, 30, "#6e6d65");
+  txt("Disponible en el período", pad, 236, 30, "#6e6d65");
+  txt((inf.disponible<0?"−":"")+fmtTotal(Math.abs(inf.disponible)), pad, 316, 84, inf.disponible>=0?"#1f6e68":"#a32d2d", 700);
+  const col=(i,etq,val,color)=>{ const x=pad+i*((W-2*pad)/3); txt(etq, x, 396, 26, "#6e6d65"); txt(val, x, 442, 38, color, 700); };
+  col(0,"Ingresos",fmtTotal(inf.ingresos),"#2d7a3a"); col(1,"Gastos",fmtTotal(inf.gastos),"#a32d2d"); col(2,"Ahorrado",fmtTotal(inf.ahorrado),"#1f6e68");
+  txt("Sin créditos ni inversiones", pad, 500, 26, "#6e6d65");
+  txt((inf.netoOp<0?"−":"")+fmtTotal(Math.abs(inf.netoOp)), W-pad, 500, 30, inf.netoOp>=0?"#1f6e68":"#a32d2d", 700, "right");
+  // Barras: lo que quedó cada mes
+  txt("Mes a mes", pad, 560, 30, "#6e6d65", 700);
+  const n=Math.max(inf.meses.length,1), ancho=(W-2*pad)/n, max=Math.max(...conMeses.map(x=>Math.abs(x.disponible)),1);
+  ctx.fillStyle="#cfccc3"; ctx.fillRect(pad, yBase, W-2*pad, 3);
+  const hueco=n>24 ? 1 : n>12 ? 3 : 8, paso=n<=12 ? 1 : Math.ceil(100/ancho);
+  inf.meses.forEach((x,i)=>{
+    if(x.hayDatos){ const h=Math.max(Math.abs(x.disponible)/max*220, 6); ctx.fillStyle=x.disponible>=0?"#1f6e68":"#a32d2d";
+      if(x.disponible>=0) ctx.fillRect(pad+i*ancho+hueco, yBase-h, ancho-2*hueco, h); else ctx.fillRect(pad+i*ancho+hueco, yBase+3, ancho-2*hueco, Math.min(h,40)); }
+    if(i%paso===0) txt(n<=12 ? mesCortoInforme(x.ym).split(" ")[0] : mesCortoInforme(x.ym), pad+i*ancho+ancho/2, yBase+(n<=12 ? 66 : 76), n<=12 ? 24 : 20, "#6e6d65", 500, "center");
+  });
+  let y=yCats;
+  cats.forEach(c=>{
+    txt(c.cat, pad, y, 32, "#1a1a18", 600); txt(`${fmtTotal(c.monto)}  ·  ${Math.round(c.pct)}%`, W-pad, y, 30, "#6e6d65", 500, "right");
+    ctx.fillStyle="#e8e5df"; ctx.fillRect(pad, y+16, W-2*pad, 14);
+    ctx.fillStyle="#1f6e68"; ctx.fillRect(pad, y+16, (W-2*pad)*Math.min(c.pct,100)/100, 14);
+    y+=92;
+  });
+  if(hall.length){
+    y+=20; txt("Para tener en cuenta", pad, y, 30, "#6e6d65", 700); y+=52;
+    bloques.forEach(b=>{ b.forEach(l=>{ txt(l, pad, y, 28, "#1a1a18"); y+=40; }); y+=14; });
+    if(masHall>0) txt(`…y ${masHall} más en el informe de la app`, pad, y, 26, "#9a998f");
+  }
+  txt("Hecho con Enola", W/2, H-36, 24, "#9a998f", 500, "center");
+  return canvas;
+}
+// Manda un PNG por el menú de compartir (WhatsApp, etc.) o, si el navegador no puede, lo descarga.
+async function entregarPNG(canvas, nombre, titulo){
+  const blob=await new Promise(res=>canvas.toBlob(res,"image/png"));
+  if(!blob){ showToast("No se pudo armar la imagen"); return; }
+  let archivo=null; try{ archivo=new File([blob], nombre, {type:"image/png"}); }catch(e){ archivo=null; }
+  if(archivo && typeof navigator.canShare==="function" && navigator.canShare({files:[archivo]})){
+    try{ await navigator.share({files:[archivo], title:titulo}); return; }
+    catch(e){ if(e && e.name==="AbortError") return; }
+  }
+  const url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download=nombre; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  showToast("Imagen descargada ✓");
+}
+function informeActual(){
+  if(!informeRangoValido()) return null;
   const inf=informeDePeriodo(informeDesde, informeHasta, getMesMov, e=>gananciaInvDelMes(e, movs));
-  if(!inf.hayDatos){ showToast("No hay movimientos para compartir"); return; }
+  if(!inf.hayDatos){ showToast("No hay movimientos para compartir"); return null; }
+  return inf;
+}
+async function compartirInforme(){
+  const inf=informeActual(); if(!inf) return;
+  await entregarPNG(dibujarInforme(document.createElement("canvas"), inf), `enola-informe-${inf.desde}_${inf.hasta}.png`, "Informe de Enola");
+}
+async function compartirInformeTexto(){
+  const inf=informeActual(); if(!inf) return;
   const texto=informeComoTexto(inf);
   if(navigator.share){ try{ await navigator.share({title:"Informe de Enola", text:texto}); return; }catch(e){ if(e && e.name==="AbortError") return; } }
   try{ await navigator.clipboard.writeText(texto); showToast("Informe copiado ✓"); }
