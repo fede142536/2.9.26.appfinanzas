@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v206**
+**Versión actual: v207**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,11 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 29 de octubre de 2026
+
+- **v207** · El informe se comparte como imagen, con el estilo del resumen del mes
+  Compartir informe arma un PNG de 1080 px (disponible, ingresos/gastos/ahorrado, resultado sin créditos ni inversiones, barras mes a mes, categorías principales y hallazgos) y lo manda por el menú de compartir o lo descarga. El texto queda como opción aparte (Como texto).
 
 ## 28 de octubre de 2026
 
