@@ -33,7 +33,8 @@ function setDashYear(y,el){
 }
 // "Ver el año completo" se arma recién al abrirse (no en cada renderDash): así el canvas de
 // Chart.js no mide 0×0 por estar con display:none cuando se crea el gráfico.
-function openDashYearCompleto(){
+function openDashYearCompleto(anio){
+  if(anio) dashYear=Number(anio);
   document.getElementById("dash-resumen").style.display="none";
   document.getElementById("dash-year-full").style.display="block";
   renderDashYearCompleto();
@@ -367,11 +368,9 @@ function renderDashResumen(){
       + dashEnlacesAnio(year);
   }
 }
-// Los enlaces al pie del resumen del mes: el tablero del año completo, el resumen del año (para compartir) y el informe de cualquier período. `year` = el año del mes que se mira.
+// El enlace al pie del resumen del mes: el año completo (resumen para compartir, gráficos y, desde ahí, el informe de cualquier período). `year` = el año del mes que se mira.
 function dashEnlacesAnio(year){
-  return `<div class="dash-year-links"><a href="#" class="dash-year-link" onclick="event.preventDefault();openDashYearCompleto()">Ver el año completo ›</a>`
-    + `<a href="#" class="dash-year-link" onclick="event.preventDefault();abrirResumenAnual(${Number(year)||new Date().getFullYear()})">🎉 Mi ${Number(year)||""} en Enola ›</a>`
-    + `<a href="#" class="dash-year-link" onclick="event.preventDefault();abrirInforme()">📑 Informe de un período ›</a></div>`;
+  return `<div class="dash-year-links"><a href="#" class="dash-year-link" onclick="event.preventDefault();openDashYearCompleto(${Number(year)||new Date().getFullYear()})">Ver el año completo ›</a></div>`;
 }
 
 // ═══════════════════════════════════════════
@@ -515,23 +514,9 @@ function getDashData(year){
 function renderDashYear(){
   const catData2 = getDashData(dashYear);
   const {monthly: yearData, cats: catData} = catData2;
-  const totalIng=yearData.reduce((s,d)=>s+d.ingreso,0);
-  const totalGas=yearData.reduce((s,d)=>s+d.gasto,0);
-  const totalAho=yearData.reduce((s,d)=>s+(d.ahorrado||0),0);
-  // La suma de los balances de cada mes: lo mismo que ves en Movimientos mes a mes, sumado.
-  const bal=yearData.reduce((s,d)=>s+d.balance,0);
-
-  // "Ahorrado" aparece solo si hubo, para que ingresos − gastos − ahorrado = balance se pueda
-  // leer en pantalla sin hacer cuentas aparte.
-  document.getElementById("dash-kpis").innerHTML=`
-    <div class="chip"><div class="chip-label">Ingresos</div><div class="chip-val positive" id="chip-dash-ing">${fmtTotal(0)}</div></div>
-    <div class="chip"><div class="chip-label">Gastos</div><div class="chip-val negative" id="chip-dash-gas">${fmtTotal(0)}</div></div>
-    ${totalAho>0?`<div class="chip"><div class="chip-label">Ahorrado</div><div class="chip-val save" id="chip-dash-aho">${fmtTotal(0)}</div></div>`:""}
-    <div class="chip"><div class="chip-label">Balance</div><div class="chip-val ${bal>=0?"positive":"negative"}" id="chip-dash-bal">${fmtTotal(0)}</div></div>`;
-  animarNumero(document.getElementById("chip-dash-ing"), totalIng, 700, fmtTotal);
-  animarNumero(document.getElementById("chip-dash-gas"), totalGas, 700, fmtTotal);
-  if(totalAho>0) animarNumero(document.getElementById("chip-dash-aho"), totalAho, 700, fmtTotal);
-  animarNumero(document.getElementById("chip-dash-bal"), bal, 700, fmtTotal);
+  // La cabecera (disponible, ingresos, gastos, ahorrado y su variación contra el año anterior) es la misma
+  // que el resumen del año para compartir: una sola cuenta (resumenDelAnio) y un solo lugar.
+  pintarResumenAnio(dashYear);
 
   // Reset detalles al cambiar de año
   document.getElementById("dash-detail").innerHTML="Tocá un mes para ver el detalle";

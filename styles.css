@@ -881,13 +881,6 @@ canvas{width:100%!important;max-width:100%}
 .mes-corto .form-select{padding-left:12px;padding-right:8px}
 .aum-edit-monto .amount-input{font-size:22px;font-weight:700}
 
-.anual-barras{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;align-items:end;height:120px;margin:4px 0 2px}
-.anual-col{display:flex;flex-direction:column;align-items:center;height:100%;gap:3px}
-.anual-col span{font-size:10px;color:var(--muted);line-height:1}
-.anual-zona{flex:1;width:100%;display:flex;align-items:flex-end}
-.anual-barra{width:100%;border-radius:3px 3px 0 0;min-height:3px}
-.anual-barra.pos{background:var(--save)}
-.anual-barra.neg{background:var(--danger)}
 
 .informe-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .informe-tabla{width:100%;border-collapse:collapse;font-size:12px}

@@ -55,18 +55,22 @@ const aniosConMovimientos=lista=>[...new Set((lista||[]).map(m=>Number(String(m.
 
 // ── Pantalla ──
 const pctFlechaAnual=p=>p===null ? "" : `<span class="cierre-delta ${p>0?"sube":p<0?"baja":""}">${p>0?"▲":p<0?"▼":"="} ${Math.abs(p)}%</span>`;
-function barrasMesesHTML(r){
-  const max=Math.max(...r.meses.map(x=>Math.abs(x.disponible)), 1);
-  return `<div class="anual-barras" role="img" aria-label="Lo que te quedó disponible en cada mes">${r.meses.map((x,i)=>{
-    const h=x.hayDatos ? Math.max(Math.round(Math.abs(x.disponible)/max*100), 4) : 0;
-    return `<div class="anual-col"><div class="anual-zona">${x.hayDatos ? `<div class="anual-barra ${x.disponible>=0?"pos":"neg"}" style="height:${h}%" title="${escapeHtml(mesLbl(x.ym))}: ${escapeHtml(fmtTotal(x.disponible))}"></div>` : ""}</div><span>${MESES_INICIAL[i]}</span></div>`;
-  }).join("")}</div>`;
-}
-function resumenAnualHTML(r){
-  if(!r.hayDatos) return `<p class="txt-sm txt-muted" style="margin:12px 0">No hay movimientos en ${r.anio}.</p>`;
+// La cabecera del año (arriba de la pantalla "Año completo"): lo que te quedó, ingresos/gastos/ahorrado y cuánto cambiaron contra el año anterior.
+function anioCabeceraHTML(r){
+  if(!r.hayDatos) return `<p class="txt-sm txt-muted" style="margin:8px 0">No hay movimientos en ${r.anio}.</p>`;
   const col=r.disponible>=0 ? "var(--save)" : "var(--danger)";
-  const cats=r.top.map(c=>`<div class="cierre-cat"><div class="cierre-cat-top"><span>${getIcon(c.cat,"📦")} ${escapeHtml(c.cat)}</span><span><strong>${fmtTotal(c.monto)}</strong> <span class="txt-muted">${c.pct}%</span></span></div><div class="cierre-barra"><div style="width:${c.pct}%"></div></div></div>`).join("");
+  return `<div class="cierre-hero"><div class="txt-xs txt-muted">Te quedó disponible en ${r.anio}</div><div class="cierre-hero-num" id="dash-anio-num" style="color:${col}">${fmtTotal(r.disponible)}</div></div>
+    <div class="cierre-fila3">
+      <div><span class="txt-xs txt-muted">Ingresos</span><strong style="color:var(--success)">${fmtTotal(r.ingresos)}</strong>${pctFlechaAnual(r.dIngresos)}</div>
+      <div><span class="txt-xs txt-muted">Gastos</span><strong style="color:var(--danger)">${fmtTotal(r.gastos)}</strong>${pctFlechaAnual(r.dGastos)}</div>
+      <div><span class="txt-xs txt-muted">Ahorrado</span><strong style="color:var(--save)">${fmtTotal(r.ahorrado)}</strong></div>
+    </div>
+    ${r.dIngresos!==null||r.dGastos!==null?`<p class="txt-xs txt-muted" style="margin:6px 0 0;text-align:center">Los porcentajes comparan con ${r.anio-1}.</p>`:""}`;
+}
+// Pura. Las frases de "Para recordar" (HTML) del año; [] si no hay nada que contar.
+function anioNotas(r){
   const notas=[];
+  if(!r.hayDatos) return notas;
   if(r.mejorMes) notas.push(`🏆 Tu mejor mes fue <strong>${escapeHtml(mesLbl(r.mejorMes.ym))}</strong>: te quedaron ${fmtTotal(r.mejorMes.disponible)}.`);
   if(r.peorMes && r.peorMes.ym!==r.mejorMes.ym) notas.push(`📉 El más ajustado fue <strong>${escapeHtml(mesLbl(r.peorMes.ym))}</strong>: ${fmtTotal(r.peorMes.disponible)}.`);
   if(r.mesMasCaro) notas.push(`💸 Gastaste más en <strong>${escapeHtml(mesLbl(r.mesMasCaro.ym))}</strong> (${fmtTotal(r.mesMasCaro.gastos)}).`);
@@ -74,53 +78,32 @@ function resumenAnualHTML(r){
   if(r.mayor) notas.push(`🧾 Tu gasto más grande: <strong>${escapeHtml(r.mayor.desc)}</strong> (${fmtTotal(r.mayor.monto)}).`);
   if(r.ahorroNeto!==0) notas.push(`🏦 Lo que quedó en tus ahorros: ${r.ahorroNeto>0?"+":"−"}${fmtTotal(Math.abs(r.ahorroNeto))} (depósitos menos retiros).`);
   if(Math.round(r.ganancia)!==0) notas.push(`📈 Resultado de tus inversiones: ${r.ganancia>0?"+":"−"}${fmtTotal(Math.abs(r.ganancia))}.`);
-  return `<div class="cierre-hero"><div class="txt-xs txt-muted">Te quedó disponible en ${r.anio}</div><div class="cierre-hero-num" style="color:${col}">${fmtTotal(r.disponible)}</div></div>
-    <div class="cierre-fila3">
-      <div><span class="txt-xs txt-muted">Ingresos</span><strong style="color:var(--success)">${fmtTotal(r.ingresos)}</strong>${pctFlechaAnual(r.dIngresos)}</div>
-      <div><span class="txt-xs txt-muted">Gastos</span><strong style="color:var(--danger)">${fmtTotal(r.gastos)}</strong>${pctFlechaAnual(r.dGastos)}</div>
-      <div><span class="txt-xs txt-muted">Ahorrado</span><strong style="color:var(--save)">${fmtTotal(r.ahorrado)}</strong></div>
-    </div>
-    ${r.dIngresos!==null||r.dGastos!==null?`<p class="txt-xs txt-muted" style="margin:4px 0 0">Los porcentajes comparan con ${r.anio-1}.</p>`:""}
-    <div class="cierre-sec">Mes a mes (lo que te quedó)</div>${barrasMesesHTML(r)}
-    ${cats?`<div class="cierre-sec">En qué se fue la plata</div>${cats}`:""}
-    ${notas.length?`<div class="cierre-sec">Para recordar</div>${notas.map(n=>`<p class="cierre-nota">${n}</p>`).join("")}`:""}`;
+  return notas;
 }
 
-let anualAnio=null;
 function resumenDeAnio(anio){
   const hoyYM=currentYM(), hasta=String(anio)===hoyYM.slice(0,4) ? hoyYM : undefined;
   const ganFn=e=>gananciaInvDelMes(e, movs);
   const ant=resumenDelAnio(anio-1, getMesMov, ganFn, undefined);
   return resumenDelAnio(anio, getMesMov, ganFn, hasta, ant);
 }
-function renderResumenAnual(){
-  const cuerpo=document.getElementById("anual-cuerpo"), tit=document.getElementById("anual-titulo");
-  if(!cuerpo || !anualAnio) return;
-  const anios=aniosConMovimientos(movs);
-  if(tit) tit.textContent=`Tu ${anualAnio}`;
-  const r=resumenDeAnio(anualAnio);
-  cuerpo.innerHTML=resumenAnualHTML(r);
+// Pinta la cabecera y "Para recordar" del año que se mira en "Año completo" (dashYear).
+function pintarResumenAnio(anio){
+  const cab=document.getElementById("dash-anio-cabecera"); if(!cab) return;
+  const r=resumenDeAnio(anio);
+  cab.innerHTML=anioCabeceraHTML(r);
+  const num=document.getElementById("dash-anio-num"); if(num) animarNumero(num, r.disponible, 700, fmtTotal);
   const comp=document.getElementById("anual-compartir"); if(comp) comp.style.display=r.hayDatos?"":"none";
-  const ant=document.getElementById("anual-ant"), sig=document.getElementById("anual-sig");
-  if(ant) ant.disabled=!anios.some(a=>a<anualAnio);
-  if(sig) sig.disabled=!anios.some(a=>a>anualAnio);
+  const notas=anioNotas(r), card=document.getElementById("dash-anio-notas-card"), cont=document.getElementById("dash-anio-notas");
+  if(card) card.style.display=notas.length?"":"none";
+  if(cont) cont.innerHTML=notas.map(n=>`<p class="cierre-nota">${n}</p>`).join("");
 }
-// Abre el resumen de `anio` (por defecto el que termina o está en curso: antes de marzo el año anterior si tuvo datos, si no el actual).
+// Abre "Año completo" en `anio` (por defecto el que termina o está en curso: en enero el año anterior si tuvo datos, si no el actual). Sirve desde cualquier pestaña.
 function abrirResumenAnual(anio){
-  if(!document.getElementById("anual-cuerpo")) return;
   const hoy=hoyLocal(), anios=aniosConMovimientos(movs), y=Number(hoy.slice(0,4));
-  anualAnio=anio || (Number(hoy.slice(5,7))<=1 && anios.includes(y-1) ? y-1 : (anios.includes(y) ? y : (anios[anios.length-1]||y)));
-  renderResumenAnual();
-  document.getElementById("modal-anual").classList.add("open");
-}
-function cerrarResumenAnual(){
-  const m=document.getElementById("modal-anual");
-  if(m) m.classList.remove("open");
-}
-function anualCambiar(d){
-  const anios=aniosConMovimientos(movs), sig=d>0 ? anios.find(a=>a>anualAnio) : [...anios].reverse().find(a=>a<anualAnio);
-  if(sig===undefined) return;
-  anualAnio=sig; renderResumenAnual();
+  const a=anio || (Number(hoy.slice(5,7))<=1 && anios.includes(y-1) ? y-1 : (anios.includes(y) ? y : (anios[anios.length-1]||y)));
+  showPage("dash", document.querySelector('.nav-btn[onclick*="\'dash\'"]'));
+  openDashYearCompleto(a);
 }
 
 // ── Aviso al cerrar el año ──
@@ -179,16 +162,16 @@ function dibujarResumenAnual(canvas, r){
   return canvas;
 }
 async function compartirResumenAnual(){
-  if(!anualAnio) return;
-  const r=resumenDeAnio(anualAnio);
+  const anio=dashYear;
+  const r=resumenDeAnio(anio);
   if(!r.hayDatos){ showToast("No hay movimientos para compartir"); return; }
   const canvas=dibujarResumenAnual(document.createElement("canvas"), r);
   const blob=await new Promise(res=>canvas.toBlob(res,"image/png"));
   if(!blob){ showToast("No se pudo armar la imagen"); return; }
-  const nombre=`enola-resumen-${anualAnio}.png`;
+  const nombre=`enola-resumen-${anio}.png`;
   let archivo=null; try{ archivo=new File([blob], nombre, {type:"image/png"}); }catch(e){ archivo=null; }
   if(archivo && typeof navigator.canShare==="function" && navigator.canShare({files:[archivo]})){
-    try{ await navigator.share({files:[archivo], title:`Mi ${anualAnio} en Enola`}); return; }
+    try{ await navigator.share({files:[archivo], title:`Mi ${anio} en Enola`}); return; }
     catch(e){ if(e && e.name==="AbortError") return; }
   }
   const url=URL.createObjectURL(blob), a=document.createElement("a");

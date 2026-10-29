@@ -4714,7 +4714,9 @@ test("Movimientos, el Dashboard (mes, año, cuentas y detalle) y el PDF usan la 
   cierto(cuerpo(dash,"renderDashCuentas").includes("resumenDePeriodo("), "la tarjeta de cuentas no usa resumenDePeriodo");
   cierto(cuerpo(dash,"showCuentaDetail").includes("resumenDePeriodo("), "el detalle de una cuenta no usa resumenDePeriodo");
   cierto(cuerpo(cfg,"exportarPDF").includes("resumenDePeriodo("), "el reporte PDF no usa resumenDePeriodo");
-  cierto(cuerpo(dash,"renderDashYear").includes("d.balance"), "el balance del año no suma los balances de cada mes");
+  const anual=await (await fetch("js/resumen-anual.js")).text();
+  cierto(cuerpo(dash,"renderDashYear").includes("pintarResumenAnio("), "el balance del año sale de la cabecera del resumen anual");
+  cierto(cuerpo(anual,"resumenDelAnio").includes("resumenDePeriodo("), "la cabecera del año suma, mes a mes, la misma cuenta");
 });
 
 // ═══════════════════════════════════════════
@@ -10298,28 +10300,38 @@ test("resumen del año: el aviso aparece al cerrar el año (2ª quincena de dici
   igual(aniosConMovimientos(ANUAL_MOVS()), [2025, 2026]);
 });
 
-test("resumen del año: la hoja muestra los números, navega entre años y comparte", ()=>{
-  const cuerpo=document.createElement("div"); cuerpo.id="anual-cuerpo"; const tit=document.createElement("div"); tit.id="anual-titulo"; const modal=document.createElement("div"); modal.id="modal-anual";
-  const ant=document.createElement("button"); ant.id="anual-ant"; const sig=document.createElement("button"); sig.id="anual-sig"; const comp=document.createElement("button"); comp.id="anual-compartir";
-  document.body.append(cuerpo, tit, modal, ant, sig, comp);
+test("resumen del año: Año completo muestra la cabecera y 'Para recordar' del año elegido, y comparte", ()=>{
+  const cab=document.createElement("div"); cab.id="dash-anio-cabecera"; const card=document.createElement("div"); card.id="dash-anio-notas-card"; const notas=document.createElement("div"); notas.id="dash-anio-notas"; const comp=document.createElement("button"); comp.id="anual-compartir";
+  document.body.append(cab, card, notas, comp);
   const antes={movs, mes:window.getMesMov, gan:window.gananciaInvDelMes};
   movs=ANUAL_MOVS(); window.getMesMov=ym=>movs.filter(m=>String(m.fecha).slice(0,7)===ym); window.gananciaInvDelMes=()=>({ars:0, usd:0});
   try{
-    abrirResumenAnual(2026);
-    cierto(modal.classList.contains("open")); igual(tit.textContent, "Tu 2026");
-    cierto(cuerpo.textContent.includes("Te quedó disponible en 2026") && cuerpo.textContent.includes("$700.000"), cuerpo.textContent.slice(0,200));
-    cierto(cuerpo.textContent.includes("Supermercado") && cuerpo.textContent.includes("Tu mejor mes") && cuerpo.textContent.includes("Abril 2026"), "tiene que mostrar categorías y el mejor mes");
-    cierto(cuerpo.querySelectorAll(".anual-col").length===12, "las 12 barras"); igual(ant.disabled, false); igual(sig.disabled, true, "2026 es el último año con datos");
-    anualCambiar(-1); igual(tit.textContent, "Tu 2025"); igual(sig.disabled, false); igual(ant.disabled, true); anualCambiar(-1); igual(tit.textContent, "Tu 2025", "no sale del rango");
-    anualAnio=2030; renderResumenAnual(); cierto(cuerpo.textContent.includes("No hay movimientos en 2030")); igual(comp.style.display, "none");
+    pintarResumenAnio(2026);
+    cierto(cab.textContent.includes("Te quedó disponible en 2026") && cab.textContent.includes("Ingresos") && cab.textContent.includes("Los porcentajes comparan con 2025"), cab.textContent.slice(0,200));
+    cierto(card.style.display!=="none" && notas.textContent.includes("Tu mejor mes") && notas.textContent.includes("Abril 2026"), "el mejor mes en Para recordar");
+    igual(comp.style.display, "");
+    pintarResumenAnio(2030); cierto(cab.textContent.includes("No hay movimientos en 2030")); igual(comp.style.display, "none"); igual(card.style.display, "none");
     const c=document.createElement("canvas"); dibujarResumenAnual(c, resumenDelAnio(2026, mesFnAnual(ANUAL_MOVS()), null, undefined, null)); cierto(c.width===1080 && c.height>800, "la imagen para compartir");
-  } finally { movs=antes.movs; window.getMesMov=antes.mes; window.gananciaInvDelMes=antes.gan; [cuerpo,tit,modal,ant,sig,comp].forEach(e=>e.remove()); }
+    igual(anioNotas({hayDatos:false}), []);
+  } finally { movs=antes.movs; window.getMesMov=antes.mes; window.gananciaInvDelMes=antes.gan; [cab,card,notas,comp].forEach(e=>e.remove()); }
 });
 
-test("resumen del año: está en index, el sw, el Dashboard (no en el menú) y el aviso se pinta en Movimientos", async ()=>{
+test("resumen del año: un solo enlace desde el Dashboard, que abre Año completo en ese año", async ()=>{
+  const bak=dashYear; const lleno=document.createElement("div"); lleno.id="dash-resumen"; const full=document.createElement("div"); full.id="dash-year-full"; full.style.display="none"; document.body.append(lleno, full);
+  const render=window.renderDashYearCompleto; window.renderDashYearCompleto=()=>{};
+  try{
+    openDashYearCompleto(2025); igual(dashYear, 2025); igual(full.style.display, "block"); igual(lleno.style.display, "none");
+    openDashYearCompleto(); igual(dashYear, 2025, "sin año deja el que estaba");
+    const enl=dashEnlacesAnio(2024); cierto(enl.includes("openDashYearCompleto(2024)") && !enl.includes("abrirResumenAnual") && !enl.includes("abrirInforme"), enl);
+  } finally { window.renderDashYearCompleto=render; dashYear=bak; lleno.remove(); full.remove(); }
+});
+
+test("resumen del año: está en index (dentro de Año completo, con el informe a un botón), el sw y el aviso se pinta en Movimientos", async ()=>{
   const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), mv=await (await fetch("js/movimientos.js")).text();
-  cierto(/js\/resumen-anual\.js\?v=\d+/.test(html) && sw.includes("./js/resumen-anual.js")); cierto(html.includes('id="modal-anual"') && html.includes('id="mov-anual-aviso"'));
-  const dash=await (await fetch("js/dashboard.js")).text(); cierto(dash.includes("abrirResumenAnual(") && dash.includes("dashEnlacesAnio(year)"), "el resumen del año se abre desde el Dashboard"); cierto(!html.includes("closeSideMenu();abrirResumenAnual()"), "ya no está en el menú");
+  cierto(/js\/resumen-anual\.js\?v=\d+/.test(html) && sw.includes("./js/resumen-anual.js")); cierto(!html.includes('id="modal-anual"'), "ya no es una hoja aparte"); cierto(html.includes('id="mov-anual-aviso"'));
+  const i=html.indexOf('id="dash-year-full"'), f=html.indexOf('id="page-ahorro"'); const bloque=html.slice(i,f);
+  cierto(bloque.includes('id="dash-anio-cabecera"') && bloque.includes('id="anual-compartir"') && bloque.includes("abrirInforme()") && bloque.includes('id="dash-anio-notas-card"'), "la cabecera, compartir, el informe y Para recordar están en Año completo");
+  const dash=await (await fetch("js/dashboard.js")).text(); cierto(dash.includes("pintarResumenAnio(dashYear)") && dash.includes("dashEnlacesAnio(year)")); cierto(!html.includes("closeSideMenu();abrirResumenAnual()"), "ya no está en el menú");
   cierto(mv.includes("pintarAvisoAnual()"));
 });
 
@@ -10455,7 +10467,7 @@ test("informe: la hoja muestra el informe, cambia de período con los chips y av
 
 test("informe: está en index, en el sw y se abre desde el Dashboard", async ()=>{
   const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text(), dash=await (await fetch("js/dashboard.js")).text();
-  cierto(/js\/informe-periodo\.js\?v=\d+/.test(html) && sw.includes("./js/informe-periodo.js")); cierto(html.includes('id="modal-informe"') && html.includes("compartirInforme()")); cierto(dash.includes("abrirInforme()"));
+  cierto(/js\/informe-periodo\.js\?v=\d+/.test(html) && sw.includes("./js/informe-periodo.js")); cierto(html.includes('id="modal-informe"') && html.includes("compartirInforme()")); cierto(html.includes("abrirInforme()"), "el botón Otro período de Año completo");
 });
 
 grupo("Aislamiento de los tests");
