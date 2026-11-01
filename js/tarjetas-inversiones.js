@@ -132,6 +132,21 @@ function getTcMovsEnMes(ym){
 // dólares del Dashboard (ver resumenUSDdelAnio, que de la tarjeta solo suma lo que resta pagar).
 // Sale de tu cash o, con `usaAhorro`, del fondo de ahorro — el mismo mecanismo de siempre.
 function esPagoTarjeta(m){ return !!m && !!m.pagoTarjeta; }
+const SUBCAT_PAGO_TARJETA="Pago total";
+// Pura. El gasto que cancela el resumen de una tarjeta, igual al "Pago total" que cargarías a mano. `monto` es lo que dice el resumen y
+// `gastosAdmin` lo que la tarjeta suma encima (intereses, comisiones, impuestos, seguros): el movimiento lleva la SUMA, y los gastos
+// administrativos quedan anotados aparte para poder mostrarlos. null si falta el monto, la fecha o el mes.
+function crearPagoTarjeta({ym, tarjeta, moneda, monto, gastosAdmin, fecha, usaAhorro, cuenta, id}){
+  const mon=monedaTc(moneda), r2=x=>Math.round((Number(x)||0)*100)/100;
+  const base=r2(monto), adm=Math.max(r2(gastosAdmin),0), total=r2(base+adm);
+  if(base<=0 || !fecha || !ym) return null;
+  const f=v=>mon==="USD" ? `USD ${fmtNum2(v)}` : v%1===0 ? "$"+v.toLocaleString("es-AR") : fmtS(v);   // $15.000 si es redondo, $15.000,50 si no
+  return {id:id||Date.now(), tipo:"Gasto", cat:"Tarjeta de crédito", subcat:SUBCAT_PAGO_TARJETA, fecha,
+          nota:`Resumen ${tarjeta||"de la tarjeta"} · ${mesLbl(ym)}${adm>0 ? ` · incluye ${f(adm)} de gastos administrativos` : ""}`,
+          moneda:mon, importe: mon==="USD" ? 0 : total, importeOrig: mon==="USD" ? total : null,
+          cuenta:cuenta||"", esAhorro:false, usaAhorro:!!usaAhorro, traspaso:false, recuperable:0, tags:[],
+          pagoTarjeta:{ym, tarjeta:tarjeta||"", moneda:mon, gastosAdmin:adm}};
+}
 function monedaTc(x){ return x==="USD" ? "USD" : "ARS"; }
 
 // Lo que debe, lo que ya pagó y lo que resta de UNA tarjeta, en UNA moneda, en un mes.
@@ -168,8 +183,8 @@ function resumenesDelMes(ym, lista){
 //  · el resumen de una tarjeta, con las fechas REALES de cierre y de vencimiento de cada mes
 //    (cambian de un mes a otro: se cargan con el calendario). Opcionalmente un día habitual, que
 //    se usa en los meses donde todavía no cargaste nada. Y si ya lo pagaste: es una marca manual
-//    ("Marcar pagado"), porque el pago lo cargás vos como un gasto más y no siempre coincide con
-//    el resumen (gastos de emisión, intereses…).
+//    se pone sola al pagar desde "Pagar" (que carga el gasto, con los gastos administrativos si los hay)
+//    o al vincular un pago que ya cargaste a mano.
 //  · un gasto frecuente: su `diaVto` opcional.
 // Se avisa de lo que SIGUE sin pagar. Todo esto es una preferencia, no un dato financiero: va en
 // localStorage llano, como la fecha del último backup.
@@ -411,7 +426,7 @@ function vencimientosFranjaHTML(items, max){
   const lim=Math.max(max||3, vencidos);   // los vencidos sin pagar se muestran todos, no se esconden en "y N más"
   const filas=items.slice(0,lim).map(v=>{
     const color=v.dias<0 ? "var(--danger)" : v.dias<=1 ? "var(--warning)" : "var(--muted)";
-    const accion=v.tipo==="tarjeta" ? `abrirVincularPagoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)})`
+    const accion=v.tipo==="tarjeta" ? `abrirPagoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)})`
       : v.tipo==="frecuenteTc" ? `toggleTcFrecPagado(${Number(v.id)},${attrJS(v.ym)})`
       : `toggleFrecPagado(${Number(v.id)},${attrJS(v.ym)})`;
     return `<div class="venc-fila${v.dias<0?" venc-vencida":""}"><span class="venc-nombre">${v.tipo==="tarjeta"?"💳":"🔁"} ${escapeHtml(v.nombre)}</span>
@@ -638,6 +653,80 @@ function marcarPagadoTc(tarjeta, ym, moneda, valor, movId){
   showToast(valor===false ? "Pago desmarcado" : movId ? "✓ Vinculado a tu pago" : "✓ Marcado como pagado");
   renderTarjetas();
   if(typeof pintarFranjaVencimientos==="function") pintarFranjaVencimientos();
+}
+
+// ── Hoja "Pagar resumen": carga sola el pago, con la pregunta de los gastos administrativos ──
+// Es como cargar a mano el "Pago total" de la tarjeta: sin gastos administrativos el gasto es el monto del resumen; con ellos, el
+// resumen más los gastos, en un solo movimiento. En dólares sale por defecto del fondo en USD (casilla "Sale de mis ahorros").
+let pagoTcCtx=null;
+const fmtPagoTc=(v,usd)=>usd ? `USD ${fmtNum2(v)}` : fmtS(v);
+function abrirPagoTc(tarjeta, ym, moneda){
+  if(!document.getElementById("modal-pago-tc")) return;
+  const r=resumenTarjetaMes(ym, tarjeta, moneda, movs), usd=r.moneda==="USD";
+  pagoTcCtx={ym, tarjeta:r.tarjeta, moneda:r.moneda, admin:false};
+  document.getElementById("pago-tc-titulo").textContent=`${r.tarjeta||"Tarjeta"}${usd?" · dólares":""} · ${mesLbl(ym)}`;
+  document.getElementById("pago-tc-sub").textContent=`Resumen ${fmtPagoTc(r.total,usd)}${r.pagado>0?` · ya pagaste ${fmtPagoTc(r.pagado,usd)}`:""}`;
+  ["pago-tc-prefix","pago-tc-prefix-adm"].forEach(id=>{
+    const pre=document.getElementById(id); pre.textContent=usd?"USD":"$"; pre.parentElement.classList.toggle("amount-wrap-usd", usd);   // más lugar para "USD"
+  });
+  document.getElementById("pago-tc-monto").value=r.resta>0 ? r.resta : r.total;
+  document.getElementById("pago-tc-adm").value="";
+  document.getElementById("pago-tc-fecha").value=hoyLocal();
+  document.getElementById("pago-tc-ahorro").checked=usd;
+  document.getElementById("pago-tc-ahorro-txt").textContent=usd ? "💸 Sale de mi fondo en dólares (resta del fondo USD)" : "💸 Sale de mis ahorros (resta del fondo)";
+  document.getElementById("pago-tc-cuenta").innerHTML=getCuentas().map(c=>`<option>${escapeHtml(c)}</option>`).join("");
+  pagoTcAdmin(false);
+  document.getElementById("modal-pago-tc").classList.add("open");
+}
+function cerrarPagoTc(){
+  const m=document.getElementById("modal-pago-tc"); if(m) m.classList.remove("open");
+  pagoTcCtx=null;
+}
+// ¿Tiene gastos administrativos? No / Sí: con "Sí" aparece el campo y el total se calcula solo.
+function pagoTcAdmin(si){
+  if(pagoTcCtx) pagoTcCtx.admin=!!si;
+  document.getElementById("pago-tc-adm-wrap").style.display=si?"":"none";
+  document.getElementById("pago-tc-adm-no").classList.toggle("active", !si);
+  document.getElementById("pago-tc-adm-si").classList.toggle("active", !!si);
+  if(!si) document.getElementById("pago-tc-adm").value="";
+  pagoTcActualizarTotal();
+}
+function pagoTcMontos(){
+  const num=id=>Math.max(parseFloat(document.getElementById(id).value)||0,0);
+  const base=num("pago-tc-monto"), adm=pagoTcCtx && pagoTcCtx.admin ? num("pago-tc-adm") : 0;
+  return {base, adm, total:Math.round((base+adm)*100)/100};
+}
+function pagoTcActualizarTotal(){
+  const el=document.getElementById("pago-tc-total"); if(!el || !pagoTcCtx) return;
+  const usd=pagoTcCtx.moneda==="USD", {adm,total}=pagoTcMontos();
+  el.innerHTML=`Se registra un gasto de <strong>${fmtPagoTc(total,usd)}</strong>${adm>0?` <span class="txt-muted">(resumen + ${fmtPagoTc(adm,usd)} de gastos administrativos)</span>`:""}`;
+}
+function guardarPagoTc(){
+  const ctx=pagoTcCtx; if(!ctx) return;
+  const {base, adm}=pagoTcMontos(), fecha=document.getElementById("pago-tc-fecha").value;
+  if(base<=0){ showToast("Ingresá el monto del resumen"); return; }
+  if(ctx.admin && !(adm>0)){ showToast("Ingresá los gastos administrativos, o elegí No"); return; }
+  if(!fecha){ showToast("Poné la fecha del pago"); return; }
+  const usaAhorro=document.getElementById("pago-tc-ahorro").checked;
+  const mov=crearPagoTarjeta({ym:ctx.ym, tarjeta:ctx.tarjeta, moneda:ctx.moneda, monto:base, gastosAdmin:adm, fecha, usaAhorro, cuenta:document.getElementById("pago-tc-cuenta").value});
+  if(!mov){ showToast("No pude registrar el pago"); return; }
+  movs.unshift(mov);
+  // Queda vinculado al resumen, así "Gastos administrativos de las tarjetas" lo cuenta como cualquier otro pago vinculado.
+  guardarVencTc(conResumenPagado(leerVencTc(), ctx.tarjeta, ctx.ym, ctx.moneda, true, mov.id));
+  save();
+  vibrar([15,50,15]);
+  cerrarPagoTc();
+  showToast(`Pago registrado${usaAhorro?" · del fondo de ahorro":""} ✓`);
+  renderTarjetas();
+  if(typeof renderMovs==="function") renderMovs();
+  if(typeof renderAhorro==="function") renderAhorro();
+  if(typeof pintarFranjaVencimientos==="function") pintarFranjaVencimientos();
+}
+// "Ya lo cargué yo": cierra esta hoja y abre la de vincular un gasto ya cargado.
+function pagoTcYaCargado(){
+  const c=pagoTcCtx; if(!c) return;
+  cerrarPagoTc();
+  abrirVincularPagoTc(c.tarjeta, c.ym, c.moneda);
 }
 
 // ── Hoja "¿Cómo lo pagaste?": vincular el gasto que ya cargaste, o solo marcarlo ──
@@ -975,9 +1064,8 @@ function renderTarjetas(){
 }
 
 // ── Resúmenes del mes: fechas de cierre y vencimiento, y si ya lo pagaste ──
-// No hay un "Pagar": el pago lo cargás vos como un gasto común, porque no siempre coincide con el
-// resumen (gastos de emisión, intereses…). Acá solo se marca si ya lo hiciste, y la app avisa antes
-// de que venza.
+// "Pagar" carga el pago como un gasto común (con la pregunta de los gastos administrativos, porque lo que
+// pagás no siempre coincide con el resumen) o, si ya lo cargaste vos, lo vincula. La app avisa antes de que venza.
 function resumenesTcHTML(ym){
   const rs=resumenesDelMes(ym, movs);
   if(!rs.length) return "";
@@ -1007,13 +1095,15 @@ function resumenesTcHTML(ym){
     let sub, right;
     if(pagadoManual){
       sub=`<div class="tc-res-sub ok">✓ Pagado${movPago?` con tu gasto del ${escapeHtml(fmtDiaMes(movPago.fecha))} (${fmt(r.moneda==="USD"?(movPago.importeOrig||0):(movPago.importe||0), r.moneda)})`:""}</div>${movPago?diferenciaPagoTcHTML(r, movPago):""}`;
-      right=`<button type="button" class="tc-res-link" onclick="marcarPagadoTc(${args},false)">Deshacer</button>`;
+      right=movPago && esPagoTarjeta(movPago)
+        ? `<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${attrJS(ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)})">Deshacer</button>`
+        : `<button type="button" class="tc-res-link" onclick="marcarPagadoTc(${args},false)">Deshacer</button>`;
     } else if(pagadoLigado){
       sub=`<div class="tc-res-sub ok">✓ Pagado ${fmt(r.pagado,r.moneda)}</div>`;
       right=`<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${attrJS(ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)})">Deshacer</button>`;
     } else {
       sub=`<div class="tc-res-sub">${r.pagado>0?`Pagaste ${fmt(r.pagado,r.moneda)} · resta <strong>${fmt(r.resta,r.moneda)}</strong>`:"Sin pagar"}</div>`;
-      right=`<button type="button" class="tc-res-btn" onclick="abrirVincularPagoTc(${args})">Marcar pagado</button>`;
+      right=`<button type="button" class="tc-res-btn" onclick="abrirPagoTc(${args})">Pagar</button>`;
     }
     return `<div class="tc-res-row">
       <div class="tc-res-mid"><div class="tc-res-name">💳 ${tarjetaConBancoHTML(r.tarjeta, bancosTc)}${badge}</div>${sub}${fechas}</div>
@@ -1076,8 +1166,7 @@ function cargosTarjetaHTML(ymSel){
     <p class="tc-res-sub" style="padding:4px 14px 12px;line-height:1.45">Ya están dentro de los pagos de tarjeta que cargaste como gasto: acá solo se muestran. Solo cuentan los resúmenes con el pago vinculado.</p></div>`;
 }
 
-// Borra los pagos ligados a un resumen (cargados con una versión anterior, cuando había un botón
-// "Pagar"): eran gastos comunes, así que también salen de Movimientos.
+// Borra los pagos que la app cargó para un resumen ("Pagar"): son gastos comunes, así que también salen de Movimientos.
 async function deshacerPagoTc(ym, tarjeta, moneda){
   const r=resumenTarjetaMes(ym, tarjeta, moneda, movs);
   if(!r.pagos.length) return;
@@ -1091,6 +1180,7 @@ async function deshacerPagoTc(ym, tarjeta, moneda){
   renderTarjetas();
   renderMovs();
   renderAhorro();
+  if(typeof pintarFranjaVencimientos==="function") pintarFranjaVencimientos();
 }
 
 // ═══════════════════════════════════════════

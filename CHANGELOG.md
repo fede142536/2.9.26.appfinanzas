@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v209**
+**Versión actual: v210**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,11 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 1 de noviembre de 2026
+
+- **v210** · Pagar el resumen de la tarjeta, con la pregunta de los gastos administrativos
+  El botón Pagar de Tarjetas (y el de la franja de vencimientos) abre una hoja que carga sola el Pago total: toma el monto del resumen y pregunta si tiene gastos administrativos. Con No, el gasto es el monto del resumen; con Sí, se ingresan los gastos y el movimiento lleva la suma, anotando cuánto fueron. En dólares viene tildado que sale del fondo USD. Queda vinculado al resumen (Gastos administrativos de las tarjetas lo cuenta) y se puede deshacer. 'Ya lo cargué yo' sigue permitiendo vincular un gasto ya cargado.
 
 ## 29 de octubre de 2026
 
