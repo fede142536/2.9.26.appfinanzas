@@ -374,6 +374,8 @@ let _dialogoFocusTimer=null;
 function _dialogoCerrar(valor){
   const ov=document.getElementById("modal-dialogo");
   if(ov) ov.classList.remove("open");
+  const campo=document.getElementById("dialogo-input"), ver=document.getElementById("dialogo-ver");
+  if(campo && ver && ver.style.display!=="none"){ campo.value=""; campo.type="password"; }   // una clave no se queda escrita en la pantalla, ni a la vista
   document.removeEventListener("keydown", _dialogoTecla);
   // Si el diálogo se cierra antes de que pasen los 250ms de abajo, ese timer todavía no
   // disparó. Sin cancelarlo, el input del diálogo YA CERRADO recibía foco y selección solo
@@ -386,6 +388,17 @@ function _dialogoCerrar(valor){
 }
 
 function _dialogoCancelar(){ _dialogoCerrar(_dialogoValorCancelado()); }
+
+// Muestra u oculta lo que se escribe en un campo de clave del diálogo.
+function _dialogoVer(){
+  const input=document.getElementById("dialogo-input"), ver=document.getElementById("dialogo-ver");
+  if(!input || !ver) return;
+  const mostrar=input.type==="password";
+  input.type=mostrar ? "text" : "password";
+  ver.textContent=mostrar ? "Ocultar" : "Mostrar";
+  ver.setAttribute("aria-pressed", String(mostrar));
+  input.focus();
+}
 
 function _dialogoAceptar(){
   if(_dialogo.tipo==="prompt"){
@@ -424,6 +437,9 @@ function _dialogoAbrir(opts){
   if(opts.tipo==="prompt"){
     grupo.style.display="block";
     input.type=opts.tipoInput||"text";
+    // Un campo de clave se puede mostrar para ver lo que se escribe (se vuelve a esconder cada vez que se abre el diálogo).
+    const ver=document.getElementById("dialogo-ver");
+    if(ver){ ver.style.display=opts.tipoInput==="password" ? "" : "none"; ver.textContent="Mostrar"; ver.setAttribute("aria-pressed","false"); }
     input.inputMode=opts.inputMode||"text";
     input.placeholder=opts.placeholder||"";
     input.value=opts.valorInicial!==undefined&&opts.valorInicial!==null?String(opts.valorInicial):"";

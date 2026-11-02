@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v215**
+**Versión actual: v216**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 2 de noviembre de 2026
 
+- **v216** · Mostrar lo que se escribe al poner o cambiar la clave
+  Los diálogos que piden una clave (activar, confirmar, cambiar y desactivar el PIN, activar la huella) traen un botón Mostrar/Ocultar dentro del campo. Se abre siempre escondido y, al cerrar, la clave no queda escrita en la pantalla.
 - **v215** · Código alfanumérico de 8 a 12 caracteres como alternativa al PIN
   Además del PIN de 6 dígitos, se puede usar un código de 8 a 12 letras y números (con al menos una letra y un número, sin espacios ni símbolos; las mayúsculas cuentan; se rechazan los repetidos y los más comunes). El sobre anota el modo, y la pantalla de bloqueo muestra un campo de texto con Mostrar y Entrar (acepta Enter) en vez del teclado de números. Se puede pasar de un modo al otro desde Cambiar PIN.
 - **v214** · PIN de 6 dígitos que no se puede adivinar al instante y bloqueo automático
