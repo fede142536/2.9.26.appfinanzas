@@ -4064,7 +4064,7 @@ test("un PIN incorrecto no puede descifrar", async ()=>{
 
 // localStorage acá es el falso en memoria, así que se puede ensuciar sin miedo.
 function limpiarEstadoCifrado(){
-  ["fencblob","fencsalt","fpinhash","fpinfallos","fautolock","fpinsubir"].forEach(k=>localStorage.removeItem(k));
+  ["fencblob","fencsalt","fpinhash","fpinfallos","fautolock","fpinsubir","fbackupcifrado"].forEach(k=>localStorage.removeItem(k));
   ENC_KEYS.forEach(k=>localStorage.removeItem(k));
   encKey=null; encCache=null;
 }
@@ -10594,7 +10594,7 @@ async function conPinFalso(fn){
   const [lock, err]=[els[0].e, els[1].e]; lock.style.display="flex";
   const w=["showToast","mostrarConfirm","mostrarPrompt","mostrarAlerta","vibrar","reiniciarCopiasAuto","exportarBackup","recargarApp","setupPin"], antes={};
   w.forEach(k=>{ antes[k]=window[k]; });
-  const ctx={toasts:[], recargas:0, setups:0};
+  const ctx={toasts:[], recargas:0, setups:0, exportarBackup:antes.exportarBackup};
   window.showToast=m=>ctx.toasts.push(m); window.vibrar=()=>{}; window.reiniciarCopiasAuto=async()=>{}; window.exportarBackup=()=>{}; window.recargarApp=()=>{ ctx.recargas++; };
   window.mostrarAlerta=async()=>{}; window.mostrarConfirm=async()=>true;
   localStorage.setItem("fpinsubir", hoyLocal());   // que no salte el aviso de subir el PIN a mitad de la prueba
@@ -10808,6 +10808,97 @@ test("el diálogo de una clave deja ver lo que se escribe, se esconde de nuevo a
     const p3=mostrarPrompt("Clave otra vez:", {tipoInput:"password"}); igual([input.type, ver.textContent], ["password","Mostrar"], "se abre escondido aunque la vez anterior se haya mostrado"); _dialogoCancelar(); await p3;
   } finally { caja.remove(); }
 });
+
+const BK_SECRETO={version:1, fecha:"2026-11-02T10:00:00.000Z", app:"Enola", datos:{movs:[{id:1,tipo:"Gasto",cat:"Casa",importe:100,moneda:"ARS",fecha:"2026-10-05",nota:"SECRETO-XYZ"}], tcs:[]}};
+// Deja la app "desbloqueada" con ese PIN (un sobre rápido de prueba y la clave en memoria).
+async function conPinAbierto(pin, fn, extra){
+  await sobreDePrueba(pin, null, extra); const ab=await verificarPin(pin); encKey=ab.clave; encCache=ab.cache;
+  return fn();
+}
+
+test("backup cifrado: el sobre no deja leer los datos, trae lo necesario para derivar la clave y se abre solo con el PIN de cuando se hizo", ()=>conPinFalso(()=>conPinAbierto("482916", async ()=>{
+  cierto(backupCifradoActivo(), "con PIN activo los backups salen cifrados"); localStorage.setItem(BACKUP_CIFRADO_KEY,"0"); cierto(!backupCifradoActivo(), "se puede apagar"); localStorage.removeItem(BACKUP_CIFRADO_KEY);
+  const env=await cifrarBackup(BK_SECRETO), crudo=JSON.stringify(env);
+  cierto(esBackupCifrado(env) && !crudo.includes("SECRETO-XYZ") && !crudo.includes('"movs"'), "los datos quedaron a la vista: "+crudo.slice(0,160));
+  igual([env.enola, env.version, env.it, env.fecha, typeof env.salt], ["backup-cifrado", 1, 1000, BK_SECRETO.fecha, "string"]); cierto(!("pm" in env), "un PIN numérico no anota modo");
+  igual((await abrirBackupCifrado(env, "482916")).datos.movs[0].nota, "SECRETO-XYZ", "con el PIN bueno vuelve igual");
+  igual(await abrirBackupCifrado(env, "111111"), null, "con otro PIN no"); igual(await abrirBackupCifrado(env, ""), null);
+  igual(await abrirBackupCifrado({...env, data:env.data.slice(0,-8)+"AAAAAAAA"}, "482916"), null, "un archivo alterado no abre");
+  igual(esBackupCifrado(BK_SECRETO), false); igual(esBackupCifrado(null), false); igual(esBackupCifrado({enola:"backup-cifrado"}), false);
+})));
+
+test("abrir un backup cifrado: en el mismo celular no pide nada; en otro pide el PIN, deja reintentar y se puede cancelar", ()=>conPinFalso(async ()=>{
+  let env;
+  await conPinAbierto("482916", async ()=>{ env=await cifrarBackup(BK_SECRETO); let pedidos=0; window.mostrarPrompt=async()=>{ pedidos++; return "x"; };
+    igual((await pedirCodigoDeBackup(env)).datos.movs.length, 1); igual(pedidos, 0, "es la clave de este mismo celular: no pregunta"); });
+  // "otro celular": sin clave en memoria ni sobre propio
+  limpiarEstadoCifrado(); const toasts=[];
+  window.showToast=m=>toasts.push(m); const respuestas=["000000","482916"]; let vistos=[]; window.mostrarPrompt=async(m,o)=>{ vistos.push([m,o.inputMode]); return respuestas.shift(); };
+  const b=await pedirCodigoDeBackup(env); igual(b.datos.movs[0].nota, "SECRETO-XYZ"); igual(vistos.length, 2); cierto(vistos[0][0].includes("cifrado") && vistos[1][0].includes("No era ese"), vistos.map(v=>v[0]).join("|")); igual(vistos[0][1], "numeric");
+  window.mostrarPrompt=async()=>null; igual(await pedirCodigoDeBackup(env), null, "cancelar devuelve null");
+  let intentos=0; window.mostrarPrompt=async()=>{ intentos++; return "999999"; }; igual(await pedirCodigoDeBackup(env), null); igual(intentos, 5, "5 intentos y listo"); cierto(toasts.some(t=>t.includes("No se pudo abrir")));
+  const envA={...env, pm:"a"}; let modo=null; window.mostrarPrompt=async(m,o)=>{ modo=o.inputMode; return null; }; await pedirCodigoDeBackup(envA); igual(modo, "text", "un código alfanumérico pide teclado de texto");
+}));
+
+test("con PIN activo el backup descargado sale cifrado; con el interruptor apagado o sin PIN, en claro", ()=>conPinFalso(async (ctx)=>{
+  const BlobReal=window.Blob; let capturado=null; window.Blob=function(partes){ capturado=partes[0]; return new BlobReal(partes,{type:"application/json"}); };
+  const movsAntes=movs; movs=BK_SECRETO.datos.movs.slice();
+  try{
+    await conPinAbierto("482916", async ()=>{
+      await ctx.exportarBackup(); const env=JSON.parse(capturado);
+      cierto(esBackupCifrado(env) && !capturado.includes("SECRETO-XYZ"), "salió en claro: "+capturado.slice(0,120)); cierto(ctx.toasts.some(t=>t.includes("cifrado")), ctx.toasts.join("|"));
+      localStorage.setItem(BACKUP_CIFRADO_KEY,"0"); capturado=null; await ctx.exportarBackup(); cierto(capturado.includes("SECRETO-XYZ") && JSON.parse(capturado).datos, "con el interruptor apagado sale en claro");
+    });
+    limpiarEstadoCifrado(); capturado=null; ctx.exportarBackup(); cierto(capturado.includes("SECRETO-XYZ"), "sin PIN sale en claro, y enseguida (sin esperar)");
+  } finally { window.Blob=BlobReal; movs=movsAntes; }
+}));
+
+test("compartir el backup con PIN activo manda un archivo cifrado", ()=>conPinFalso(async ()=>{
+  const movsAntes=movs; movs=BK_SECRETO.datos.movs.slice(); let recibido=null;
+  const tenia={cs:Object.getOwnPropertyDescriptor(navigator,"canShare"), sh:Object.getOwnPropertyDescriptor(navigator,"share")};
+  Object.defineProperty(navigator,"canShare",{value:()=>true, configurable:true, writable:true}); Object.defineProperty(navigator,"share",{value:async d=>{ recibido=d; }, configurable:true, writable:true});
+  try{
+    await conPinAbierto("482916", async ()=>{
+      igual(await compartirBackup(), true); const texto=await recibido.files[0].text();
+      cierto(esBackupCifrado(JSON.parse(texto)) && !texto.includes("SECRETO-XYZ"), "el archivo compartido salió en claro");
+    });
+  } finally { ["canShare","share"].forEach(k=>{ delete navigator[k]; }); if(tenia.cs) Object.defineProperty(navigator,"canShare",tenia.cs); if(tenia.sh) Object.defineProperty(navigator,"share",tenia.sh); movs=movsAntes; localStorage.removeItem("fultimobackup"); }
+}));
+
+test("la copia de Drive sube cifrada con PIN, y al bajarla pide el PIN para abrirla", ()=>conVenc({movs:BK_SECRETO.datos.movs.slice(), tcs:[]}, ()=>conDrive(()=>conPinFalso(async ()=>{
+  await conPinAbierto("482916", async ()=>{
+    const d=servidorDrive(); const r=await subirBackupDrive({deps:d.deps}); igual([r.ok, r.subido, r.motivo], [true, true, undefined], JSON.stringify(r));
+    const subido=d.backups()[0].contenido; const crudo=typeof subido==="string" ? subido : JSON.stringify(subido);
+    cierto(esBackupCifrado(JSON.parse(crudo)) && !crudo.includes("SECRETO-XYZ"), "Drive recibió los datos en claro: "+crudo.slice(0,100));
+    const l=await leerBackupDrive(d.backups()[0].id, {deps:d.deps}); igual([l.ok, l.cifrado], [true, true]); cierto(esBackupCifrado(l.sobre) && !l.backup);
+    igual((await pedirCodigoDeBackup(l.sobre)).datos.movs[0].nota, "SECRETO-XYZ");
+  });
+  limpiarEstadoCifrado(); const d2=servidorDrive(); await subirBackupDrive({deps:d2.deps, forzar:true}); const claro=d2.backups()[0].contenido; cierto(String(typeof claro==="string"?claro:JSON.stringify(claro)).includes("SECRETO-XYZ"), "sin PIN la copia sube como siempre");
+}))));
+
+test("restaurar un archivo cifrado pide el PIN y aplica el backup de adentro; con el PIN equivocado no cambia nada", ()=>conPinFalso(async (ctx)=>{
+  let env; await conPinAbierto("482916", async ()=>{ env=await cifrarBackup(BK_SECRETO); }); limpiarEstadoCifrado();
+  const aplicarReal=window.aplicarBackup; let aplicado=null; window.aplicarBackup=b=>{ aplicado=b; return b.datos.movs.length; };
+  const stubs={rb:window.marcarBackupHecho, re:window.renderEstadoBackup}; window.marcarBackupHecho=()=>{}; window.renderEstadoBackup=()=>{};
+  const restaurar=async(texto)=>{ const input={files:[new File([texto],"b.json",{type:"application/json"})], value:"x"}; restaurarBackup(input); for(let i=0;i<60 && input.value!==""; i++) await new Promise(r=>setTimeout(r,20)); return input; };
+  try{
+    window.mostrarPrompt=async()=>"000000"; let n=0; window.mostrarPrompt=async()=>(++n<=5 ? "000000" : null);
+    await restaurar(JSON.stringify(env)); igual(aplicado, null, "con el PIN equivocado no se restaura");
+    window.mostrarPrompt=async()=>"482916"; window.mostrarConfirm=async m=>{ cierto(m.includes("1 movimientos"), m); return true; };
+    await restaurar(JSON.stringify(env)); cierto(aplicado && aplicado.datos.movs[0].nota==="SECRETO-XYZ", "restauró lo de adentro");
+    aplicado=null; await restaurar(JSON.stringify(BK_SECRETO)); cierto(aplicado && aplicado.datos.movs.length===1, "un backup en claro se sigue restaurando como siempre");
+  } finally { window.aplicarBackup=aplicarReal; window.marcarBackupHecho=stubs.rb; window.renderEstadoBackup=stubs.re; }
+}));
+
+test("Configuración ofrece cifrar los backups (activado por defecto) y avisa al apagarlo", ()=>conPinFalso(async (ctx)=>{
+  const el=document.createElement("div"); el.id="pin-status"; document.body.appendChild(el); const hs=window.renderHuellaStatus; window.renderHuellaStatus=()=>{};
+  try{
+    await sobreDePrueba("482916"); renderPinStatus(); let chk=el.querySelector("#backup-cifrado-chk"); cierto(chk && chk.checked, "viene activado");
+    window.mostrarConfirm=async()=>false; chk.checked=false; await onBackupCifradoToggle(chk); igual(chk.checked, true, "si no confirma, vuelve a quedar activado"); igual(localStorage.getItem(BACKUP_CIFRADO_KEY), null);
+    window.mostrarConfirm=async()=>true; chk.checked=false; await onBackupCifradoToggle(chk); igual(localStorage.getItem(BACKUP_CIFRADO_KEY), "0"); renderPinStatus(); cierto(!el.querySelector("#backup-cifrado-chk").checked, "apagado se ve apagado");
+    chk=el.querySelector("#backup-cifrado-chk"); chk.checked=true; await onBackupCifradoToggle(chk); igual(localStorage.getItem(BACKUP_CIFRADO_KEY), "1");
+  } finally { window.renderHuellaStatus=hs; el.remove(); localStorage.removeItem(BACKUP_CIFRADO_KEY); }
+}));
 
 grupo("Seguridad: datos de afuera no ejecutan código");
 

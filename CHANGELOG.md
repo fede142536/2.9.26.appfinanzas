@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v216**
+**Versión actual: v217**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 2 de noviembre de 2026
 
+- **v217** · Los backups salen cifrados con el PIN o código
+  Con un PIN activo, el archivo de backup, lo que se manda por el menú de compartir y la copia diaria de Drive salen cifrados con la clave del PIN (el encabezado trae la sal y las vueltas para derivarla, y nada de los datos). Se abren con el PIN o código que había cuando se hizo, en este celular (sin pedirlo) o en otro. Restaurar desde archivo, arrastrando el archivo o desde Drive detecta el cifrado y lo pide, con hasta 5 intentos. Hay un interruptor en Configuración para dejarlos sin cifrar.
 - **v216** · Mostrar lo que se escribe al poner o cambiar la clave
   Los diálogos que piden una clave (activar, confirmar, cambiar y desactivar el PIN, activar la huella) traen un botón Mostrar/Ocultar dentro del campo. Se abre siempre escondido y, al cerrar, la clave no queda escrita en la pantalla.
 - **v215** · Código alfanumérico de 8 a 12 caracteres como alternativa al PIN

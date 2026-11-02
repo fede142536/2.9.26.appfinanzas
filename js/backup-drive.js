@@ -11,7 +11,7 @@
 //
 // "Automático" acá significa "cuando abrís la app y el permiso de Google sigue vigente" (dura 1 hora y
 // una app web no puede renovarlo sola): si no, queda el aviso "copia en Drive pendiente" con su botón.
-// La copia va SIN cifrar, igual que el archivo de backup: se guarda en tu Drive, que es tuyo.
+// Con un PIN activo la copia se sube CIFRADA con la clave del PIN (ver backupCifradoActivo): en tu Drive no se puede leer sin tu PIN o código. Sin PIN, va en claro.
 // Se conservan las últimas 14 copias: las más viejas que creó la app se borran de esa carpeta.
 
 const DRIVE_ON_KEY="fdrivebk";           // "1" si la copia diaria está activada
@@ -115,7 +115,7 @@ async function subirBackupDrive(opts){
     const carpeta=await driveAsegurarCarpeta(deps, token);
     if(carpeta.error) return {...res, ok:false, motivo:driveMotivo(carpeta.error), detalle:driveDetalle(carpeta.error)};
     const nombre=nombreBackupDrive(hoy);
-    const texto=JSON.stringify(backup);
+    const texto=JSON.stringify(backupCifradoActivo() ? await cifrarBackup(backup) : backup);
     // Si ya hay una de hoy (se forzó), se actualiza esa en vez de duplicarla.
     const qHoy=`'${carpeta.id}' in parents and name='${nombre}' and trashed=false`;
     const previo=await driveLlamar(deps, token, "GET", `${DRIVE_API}/files?q=${encodeURIComponent(qHoy)}&fields=files(id)&pageSize=1`);
@@ -178,6 +178,7 @@ async function leerBackupDrive(id, opts){
     const r=await driveLlamar(deps, token, "GET", `${DRIVE_API}/files/${encodeURIComponent(id)}?alt=media`);
     if(!driveOk(r)) return {ok:false, motivo:driveMotivo(r), detalle:driveDetalle(r)};
     const backup=r.json;
+    if(esBackupCifrado(backup)) return {ok:true, cifrado:true, sobre:backup};   // se abre con el PIN o código (ver pedirCodigoDeBackup)
     if(!backup || !backup.datos || !Array.isArray(backup.datos.movs)) return {ok:false, motivo:"invalida"};
     return {ok:true, backup};
   }catch(e){ return {ok:false, motivo:"red", detalle:String(e&&e.message||e)}; }
