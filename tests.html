@@ -4064,7 +4064,7 @@ test("un PIN incorrecto no puede descifrar", async ()=>{
 
 // localStorage acá es el falso en memoria, así que se puede ensuciar sin miedo.
 function limpiarEstadoCifrado(){
-  ["fencblob","fencsalt","fpinhash"].forEach(k=>localStorage.removeItem(k));
+  ["fencblob","fencsalt","fpinhash","fpinfallos","fautolock","fpinsubir"].forEach(k=>localStorage.removeItem(k));
   ENC_KEYS.forEach(k=>localStorage.removeItem(k));
   encKey=null; encCache=null;
 }
@@ -6066,16 +6066,17 @@ async function conHuellaFalsa({prf=true, resultadoEnCrear=true, cancela=false, p
   const credAntes=Object.getOwnPropertyDescriptor(navigator,"credentials"), pkAntes=Object.getOwnPropertyDescriptor(window,"PublicKeyCredential");
   Object.defineProperty(navigator,"credentials",{value:falsa, configurable:true});
   Object.defineProperty(window,"PublicKeyCredential",{value:{isUserVerifyingPlatformAuthenticatorAvailable:async()=>plataforma}, configurable:true});
-  const antes={confirm:window.mostrarConfirm, prompt:window.mostrarPrompt, alerta:window.mostrarAlerta, toast:window.showToast, hash:localStorage.getItem("fpinhash"), h:localStorage.getItem(HUELLA_KEY)};
+  const antes={confirm:window.mostrarConfirm, prompt:window.mostrarPrompt, alerta:window.mostrarAlerta, toast:window.showToast, sobre:localStorage.getItem("fencblob"), h:localStorage.getItem(HUELLA_KEY)};
   const ctx={alertas:[], toasts:[], llamadas, secreto, pinTipeado:"1234"};
   window.showToast=t=>ctx.toasts.push(t); window.mostrarAlerta=async m=>{ ctx.alertas.push(m); }; window.mostrarPrompt=async()=>ctx.pinTipeado;
-  localStorage.setItem("fpinhash", await hashPin("1234")); localStorage.removeItem(HUELLA_KEY);
+  localStorage.removeItem("fencblob"); { const salt=randomSaltB64(); await guardarSobre(await deriveKey("1234", salt), salt, {}); }   // un PIN "1234" de verdad: un sobre que solo ese PIN abre
+  localStorage.removeItem(HUELLA_KEY);
   try{ return await fn(ctx); }
   finally{
     if(credAntes) Object.defineProperty(navigator,"credentials",credAntes); else delete navigator.credentials;
     if(pkAntes) Object.defineProperty(window,"PublicKeyCredential",pkAntes); else delete window.PublicKeyCredential;
     window.mostrarPrompt=antes.prompt; window.mostrarAlerta=antes.alerta; window.showToast=antes.toast;
-    if(antes.hash===null) localStorage.removeItem("fpinhash"); else localStorage.setItem("fpinhash", antes.hash);
+    if(antes.sobre===null) localStorage.removeItem("fencblob"); else localStorage.setItem("fencblob", antes.sobre);
     if(antes.h===null) localStorage.removeItem(HUELLA_KEY); else localStorage.setItem(HUELLA_KEY, antes.h);
   }
 }
@@ -6104,7 +6105,7 @@ test("activar la huella cuando el secreto llega recién en un segundo toque", ()
 }));
 
 test("no se activa: sin PIN, con PIN equivocado, sin PRF, sin huella en el celular o si el usuario cancela", async ()=>{
-  await conHuellaFalsa({}, async ctx=>{ localStorage.removeItem("fpinhash"); igual(await activarHuella(), false); cierto(ctx.toasts.some(t=>t.includes("Primero activá el PIN"))); igual(ctx.llamadas.crear, 0); });
+  await conHuellaFalsa({}, async ctx=>{ localStorage.removeItem("fencblob"); igual(await activarHuella(), false); cierto(ctx.toasts.some(t=>t.includes("Primero activá el PIN"))); igual(ctx.llamadas.crear, 0); });
   await conHuellaFalsa({}, async ctx=>{ ctx.pinTipeado="9999"; igual(await activarHuella(), false); cierto(ctx.toasts.some(t=>t.includes("PIN incorrecto"))); igual(ctx.llamadas.crear, 0, "con PIN equivocado ni se pide la huella"); cierto(!huellaActiva()); });
   await conHuellaFalsa({prf:false}, async ctx=>{ igual(await activarHuella(), false); cierto(ctx.alertas.some(a=>a.includes("función de seguridad")), ctx.alertas.join("|")); cierto(!huellaActiva(), "sin PRF no se guarda nada"); });
   await conHuellaFalsa({plataforma:false}, async ctx=>{ igual(await activarHuella(), false); cierto(ctx.alertas.some(a=>a.includes("huella o rostro")), ctx.alertas.join("|")); igual(ctx.llamadas.crear, 0); });
@@ -10577,6 +10578,166 @@ test("Pagar viene con la cuenta de la tarjeta puesta y el pago se guarda en esa 
     guardarPagoTc(); igual(movs[0].cuenta, "Galicia");
   } finally { if(bancosAntes===null) localStorage.removeItem("fbancotc"); else localStorage.setItem("fbancotc", bancosAntes); }
 })));
+
+grupo("Seguridad: PIN de 6 dígitos y bloqueo automático");
+
+// Un sobre con pocas iteraciones (rápido) y los datos de prueba, abierto con `pin`.
+async function sobreDePrueba(pin, datos, {it=1000, pl=6}={}){
+  const salt=randomSaltB64();
+  await guardarSobre(await deriveKey(pin, salt, it), salt, datos||{fmovs3:'[{"id":7}]'}, {it, pl});
+}
+// Prepara la pantalla de bloqueo y silencia lo que no importa; lo deja todo como estaba.
+async function conPinFalso(fn){
+  limpiarEstadoCifrado();
+  // (getElementById en esta página devuelve un div suelto si falta: por eso se busca con querySelector)
+  const els=["lock-screen","pin-error","pin-display"].map(id=>{ let e=document.querySelector("#"+id); const nuevo=!e; if(nuevo){ e=document.createElement("div"); e.id=id; document.body.appendChild(e); } return {e, nuevo, id}; });
+  const [lock, err]=[els[0].e, els[1].e]; lock.style.display="flex";
+  const w=["showToast","mostrarConfirm","mostrarPrompt","mostrarAlerta","vibrar","reiniciarCopiasAuto","exportarBackup","recargarApp","setupPin"], antes={};
+  w.forEach(k=>{ antes[k]=window[k]; });
+  const ctx={toasts:[], recargas:0, setups:0};
+  window.showToast=m=>ctx.toasts.push(m); window.vibrar=()=>{}; window.reiniciarCopiasAuto=async()=>{}; window.exportarBackup=()=>{}; window.recargarApp=()=>{ ctx.recargas++; };
+  window.mostrarAlerta=async()=>{}; window.mostrarConfirm=async()=>true;
+  localStorage.setItem("fpinsubir", hoyLocal());   // que no salte el aviso de subir el PIN a mitad de la prueba
+  const pinBak=pinBuffer, resolveBak=_unlockResolve;
+  try{ return await fn(ctx, {lock, err}); }
+  finally{ w.forEach(k=>{ window[k]=antes[k]; }); limpiarEstadoCifrado(); pinBuffer=pinBak; _unlockResolve=resolveBak; els.forEach(x=>{ if(x.nuevo) x.e.remove(); else if(x.id==="lock-screen") x.e.style.display="none"; }); }
+}
+const teclear=async pin=>{ pinBuffer=pin; await checkPin(); };
+
+test("esperaTrasFallos: los primeros 4 errores no esperan, después 30 s, 1 min, 2 min… hasta 1 hora", ()=>{
+  [0,1,2,3,4].forEach(n=>igual(esperaTrasFallos(n), 0, "intento "+n));
+  igual([5,6,7,8].map(esperaTrasFallos), [30,60,120,240]); igual(esperaTrasFallos(30), 3600, "tope de 1 hora"); igual(esperaTrasFallos(undefined), 0);
+});
+
+test("motivoPinDebil: rechaza repetidos, escaleras y los más comunes; acepta uno razonable", ()=>{
+  ["111111","000000","123456","654321","890123","121212","147258"].forEach(p=>cierto(motivoPinDebil(p)!=="", "debería rechazar "+p));
+  ["482916","270394","915038"].forEach(p=>igual(motivoPinDebil(p), "", "debería aceptar "+p));
+});
+
+test("bloqueoVencido y la opción de bloqueo automático", ()=>{
+  const t=1000000;
+  igual([bloqueoVencido("1",t,t+59999), bloqueoVencido("1",t,t+60000), bloqueoVencido("5",t,t+299999), bloqueoVencido("5",t,t+300000)], [false,true,false,true]);
+  igual([bloqueoVencido("nunca",t,t+99999999), bloqueoVencido("1",0,t), bloqueoVencido("1",null,t), bloqueoVencido("x",t,t+999999)], [false,false,false,false]);
+  localStorage.removeItem(AUTOLOCK_KEY); igual(autoLockOpcion(), "1", "por defecto, 1 minuto");
+  localStorage.setItem(AUTOLOCK_KEY, "basura"); igual(autoLockOpcion(), "1", "un valor raro vuelve al defecto");
+  const toast=window.showToast; window.showToast=()=>{};
+  try{ cambiarAutoLock("15"); igual(autoLockOpcion(), "15"); cambiarAutoLock("999"); igual(autoLockOpcion(), "15", "una opción inválida se ignora"); cambiarAutoLock("nunca"); igual(autoLockOpcion(), "nunca"); }
+  finally{ window.showToast=toast; localStorage.removeItem(AUTOLOCK_KEY); }
+});
+
+test("guardarSobre conserva las iteraciones y los dígitos del sobre al guardar datos nuevos; uno viejo sigue siendo v2", async ()=>{
+  limpiarEstadoCifrado();
+  const salt=randomSaltB64(), clave=await deriveKey("482916", salt, 1000);
+  await guardarSobre(clave, salt, {a:1}, {it:1000, pl:6});
+  igual([JSON.parse(localStorage.getItem("fencblob")).v, JSON.parse(localStorage.getItem("fencblob")).it, pinLen()], [3,1000,6]);
+  await guardarSobre(clave, salt, {a:2});   // un guardado común: sin `meta`
+  const s=JSON.parse(localStorage.getItem("fencblob")); igual([s.v, s.it, s.pl], [3,1000,6], "un guardado común no cambia con qué se abre");
+  limpiarEstadoCifrado();
+  const claveVieja=await deriveKey("1234", salt); await guardarSobre(claveVieja, salt, {a:1});
+  const v=JSON.parse(localStorage.getItem("fencblob")); igual([v.v, v.it, v.pl], [2,undefined,undefined], "sobre viejo: v2 y sin iteraciones"); igual(pinLen(), 4, "los PIN viejos son de 4 dígitos");
+  limpiarEstadoCifrado();
+});
+
+test("verificarPin: el bueno abre el sobre, el malo no, y un sobre roto no tira", async ()=>{
+  limpiarEstadoCifrado(); await sobreDePrueba("482916");
+  const ok=await verificarPin("482916"); cierto(ok && ok.clave && ok.cache.fmovs3.includes('"id":7'), "no abrió con el PIN bueno");
+  igual(await verificarPin("111111"), null); igual(await verificarPin(""), null);
+  localStorage.setItem("fencblob", "{esto no es json"); igual(await verificarPin("482916"), null, "un sobre ilegible no tira"); 
+  localStorage.setItem("fencblob", JSON.stringify({v:3,salt:"x"})); igual(await verificarPin("482916"), null, "un sobre incompleto tampoco");
+  limpiarEstadoCifrado();
+});
+
+test("desbloquear: PIN malo cuenta, a los 5 errores hay que esperar, y el bueno entra y borra la cuenta", ()=>conPinFalso(async (ctx,{lock,err})=>{
+  await sobreDePrueba("482916");
+  const resolvio=[]; _unlockResolve=()=>resolvio.push(1);
+  updatePinDisplay(); igual(document.querySelectorAll("#pin-display .pin-dot").length, 6, "la pantalla muestra 6 puntitos");
+  await teclear("111111"); cierto(err.textContent==="PIN incorrecto", err.textContent); igual(leerFallosPin().n, 1); igual(encKey, null); igual(lock.style.display, "flex");
+  for(let i=0;i<3;i++) await teclear("222222");
+  igual(leerFallosPin().n, 4); cierto(err.textContent==="PIN incorrecto", "hasta el 4º error no espera");
+  await teclear("333333"); cierto(/Esperá 30 s/.test(err.textContent), err.textContent); cierto(segundosDeEsperaPin()>0 && segundosDeEsperaPin()<=30);
+  await teclear("482916"); cierto(/Demasiados intentos/.test(err.textContent), "con la espera puesta ni siquiera prueba el PIN bueno: "+err.textContent); igual(encKey, null); igual(resolvio.length, 0);
+  localStorage.setItem(PIN_FALLOS_KEY, JSON.stringify({n:5, hasta:Date.now()-1}));   // ya pasó la espera
+  await teclear("482916");
+  cierto(!!encKey && encCache && encCache.fmovs3.includes('"id":7'), "no desbloqueó con el PIN bueno"); igual(lock.style.display, "none"); igual(resolvio.length, 1, "se resolvió checkLock");
+  igual(localStorage.getItem(PIN_FALLOS_KEY), null, "entrar borra los intentos fallidos");
+}));
+
+test("un PIN de antes del cifrado (solo hash, de 4 dígitos) se migra una vez y el hash se borra", ()=>conPinFalso(async (ctx,{lock,err})=>{
+  localStorage.setItem("fpinhash", await hashPin("1234")); localStorage.setItem("fmovs3", '[{"id":9}]');
+  igual(pinConfigurado(), true); igual(isEncActive(), false); igual(pinLen(), 4);
+  const resolvio=[]; _unlockResolve=()=>resolvio.push(1);
+  await teclear("9999"); cierto(err.textContent==="PIN incorrecto"); igual(localStorage.getItem("fmovs3"), '[{"id":9}]', "con PIN malo no se toca nada");
+  await teclear("1234");
+  cierto(isEncActive() && !!encKey, "se migró al sobre cifrado"); igual(localStorage.getItem("fpinhash"), null, "el hash se borra"); igual(localStorage.getItem("fmovs3"), null, "los datos dejaron de estar en claro");
+  const s=JSON.parse(localStorage.getItem("fencblob")); igual([s.v, s.it, s.pl], [3, KDF_ITER, 4]); igual(resolvio.length, 1);
+  cierto(ctx.toasts.some(t=>t.includes("cifrados")), "avisa del cifrado");
+}));
+
+test("un PIN con sobre y hash a la vez (el caso de los usuarios de hoy) entra con el sobre y borra el hash", ()=>conPinFalso(async (ctx)=>{
+  await sobreDePrueba("1234", null, {it:0, pl:0});   // sobre v2 de 4 dígitos
+  localStorage.setItem("fpinhash", await hashPin("1234"));
+  _unlockResolve=()=>{}; await teclear("1234");
+  cierto(!!encKey, "no entró"); igual(localStorage.getItem("fpinhash"), null, "el hash que se podía adivinar al instante se borró"); igual(pinLen(), 4);
+}));
+
+test("a quien entra con un PIN de 4 dígitos se le ofrece pasar a 6, una vez por día", ()=>conPinFalso(async (ctx)=>{
+  await sobreDePrueba("1234", null, {it:0, pl:0}); _unlockResolve=()=>{}; await teclear("1234");
+  localStorage.removeItem(PIN_SUBIR_KEY); let preguntas=0, subio=0;
+  window.mostrarConfirm=async m=>{ preguntas++; cierto(m.includes("4 dígitos") && m.includes("6 dígitos"), m); return true; }; window.setupPin=async()=>{ subio++; };
+  await ofrecerSubirPin(); igual([preguntas, subio], [1,1], "pregunta y, si acepta, abre el cambio");
+  await ofrecerSubirPin(); igual(preguntas, 1, "el mismo día no vuelve a preguntar");
+  localStorage.setItem(PIN_SUBIR_KEY, "2020-01-01"); window.mostrarConfirm=async()=>false; await ofrecerSubirPin(); igual(subio, 1, "si dice 'más tarde' no cambia nada");
+  limpiarEstadoCifrado(); await sobreDePrueba("482916"); encKey=(await verificarPin("482916")).clave; localStorage.removeItem(PIN_SUBIR_KEY); preguntas=0; window.mostrarConfirm=async()=>{ preguntas++; return true; };
+  await ofrecerSubirPin(); igual(preguntas, 0, "con un PIN de 6 dígitos no pregunta");
+}));
+
+test("activar el PIN pide 6 dígitos, rechaza los fáciles, y deja un sobre v3 sin hash", ()=>conPinFalso(async (ctx)=>{
+  localStorage.setItem("fmovs3", '[{"id":3}]');
+  const respuestas=[]; window.mostrarPrompt=async()=>respuestas.shift();
+  respuestas.push("1234"); await setupPin(); cierto(ctx.toasts.some(t=>t.includes("6 dígitos")), ctx.toasts.join("|")); igual(localStorage.getItem("fencblob"), null, "con 4 dígitos no activa nada");
+  respuestas.push("123456"); await setupPin(); cierto(ctx.toasts.some(t=>t.includes("escalera")), ctx.toasts.join("|")); igual(localStorage.getItem("fencblob"), null);
+  respuestas.push("482916","482917"); await setupPin(); cierto(ctx.toasts.some(t=>t.includes("no coinciden"))); igual(localStorage.getItem("fencblob"), null);
+  respuestas.push("482916","482916"); await setupPin();
+  const s=JSON.parse(localStorage.getItem("fencblob")); igual([s.v, s.it, s.pl], [3, KDF_ITER, 6]); igual(localStorage.getItem("fpinhash"), null, "no se guarda ningún hash"); igual(localStorage.getItem("fmovs3"), null, "los datos ya no están en claro");
+  cierto(!!encKey && encCache.fmovs3==='[{"id":3}]'); igual(pinLen(), 6); cierto(pinConfigurado());
+  const abre=await verificarPin("482916"); cierto(!!abre, "el PIN nuevo abre el sobre"); igual(await verificarPin("1234"), null);
+}));
+
+test("cambiar y desactivar el PIN comprueban el actual abriendo el sobre", ()=>conPinFalso(async (ctx)=>{
+  await sobreDePrueba("482916"); const ab=await verificarPin("482916"); encKey=ab.clave; encCache=ab.cache;
+  let setups=0; window.setupPin=async()=>{ setups++; };
+  const respuestas=["000999"]; window.mostrarPrompt=async()=>respuestas.shift();
+  await changePin(); cierto(ctx.toasts.some(t=>t.includes("PIN incorrecto"))); igual(setups, 0);
+  respuestas.push("482916"); await changePin(); igual(setups, 1, "con el PIN actual correcto abre el cambio");
+  respuestas.push("000999"); await removePin(); cierto(isEncActive(), "con PIN malo no se desactiva");
+  respuestas.push("482916"); await removePin(); igual(isEncActive(), false, "con el PIN bueno se desactiva"); igual(localStorage.getItem("fmovs3"), '[{"id":7}]', "los datos vuelven a quedar legibles");
+}));
+
+test("bloqueo automático: al volver tras el tiempo configurado recarga la app; antes, o con 'nunca', no", ()=>conPinFalso(async (ctx)=>{
+  await sobreDePrueba("482916"); const ab=await verificarPin("482916"); encKey=ab.clave; encCache=ab.cache;
+  const vsDesc=Object.getOwnPropertyDescriptor(Document.prototype,"visibilityState"); let estado="visible";
+  Object.defineProperty(document,"visibilityState",{get:()=>estado, configurable:true});
+  const cambiar=async(nuevo)=>{ estado=nuevo; document.dispatchEvent(new Event("visibilitychange")); await new Promise(r=>setTimeout(r,15)); };
+  try{
+    localStorage.setItem(AUTOLOCK_KEY,"1");
+    await cambiar("hidden"); ocultoDesdePin=Date.now()-30000; await cambiar("visible"); igual(ctx.recargas, 0, "30 s afuera con 1 minuto: no bloquea");
+    await cambiar("hidden"); ocultoDesdePin=Date.now()-61000; await cambiar("visible"); igual(ctx.recargas, 1, "61 s afuera: bloquea (recarga)");
+    bloqueandoApp=false; localStorage.setItem(AUTOLOCK_KEY,"nunca"); await cambiar("hidden"); ocultoDesdePin=Date.now()-9999999; await cambiar("visible"); igual(ctx.recargas, 1, "con 'nunca' no bloquea");
+    bloqueandoApp=false; localStorage.setItem(AUTOLOCK_KEY,"5"); await cambiar("hidden"); ocultoDesdePin=Date.now()-200000; await cambiar("visible"); igual(ctx.recargas, 1, "3 min con 5 minutos: no bloquea");
+    bloqueandoApp=false; localStorage.setItem(AUTOLOCK_KEY,"1"); encKey=null; await cambiar("hidden"); ocultoDesdePin=Date.now()-99999999; await cambiar("visible"); igual(ctx.recargas, 1, "si ya está bloqueada no hace nada");
+  } finally { delete document.visibilityState; if(vsDesc) Object.defineProperty(Document.prototype,"visibilityState",vsDesc); bloqueandoApp=false; localStorage.removeItem(AUTOLOCK_KEY); }
+}));
+
+test("Configuración muestra los dígitos del PIN, ofrece pasar a 6 y deja elegir cuándo se bloquea", ()=>conPinFalso(async ()=>{
+  const el=document.createElement("div"); el.id="pin-status"; document.body.appendChild(el); const hs=window.renderHuellaStatus; window.renderHuellaStatus=()=>{};
+  try{
+    await sobreDePrueba("1234", null, {it:0, pl:0}); renderPinStatus();
+    cierto(el.textContent.includes("4 dígitos") && el.textContent.includes("Pasar a 6 dígitos"), el.textContent); cierto(!!el.querySelector("#autolock-sel") && el.querySelectorAll("#autolock-sel option").length===4);
+    limpiarEstadoCifrado(); await sobreDePrueba("482916"); renderPinStatus();
+    cierto(el.textContent.includes("6 dígitos") && !el.textContent.includes("Pasar a 6"), el.textContent); igual(el.querySelector("#autolock-sel").value, "1");
+    limpiarEstadoCifrado(); renderPinStatus(); cierto(el.textContent.includes("Activar PIN") && !el.querySelector("#autolock-sel"));
+  } finally { window.renderHuellaStatus=hs; el.remove(); }
+}));
 
 grupo("Seguridad: datos de afuera no ejecutan código");
 

@@ -61,14 +61,14 @@ async function pedirSecreto(credId, salt){
 
 // Activa la huella. Exige el PIN actual: es lo que se va a guardar cifrado. Devuelve true si quedó activa.
 async function activarHuella(){
-  if(!localStorage.getItem("fpinhash")){ showToast("Primero activá el PIN"); return false; }
+  if(!pinConfigurado()){ showToast("Primero activá el PIN"); return false; }
   if(!await huellaDisponible()){
     await mostrarAlerta("Este celular no tiene huella o rostro configurados, o el navegador no permite usarlos acá. Configuralos en los ajustes del celular y volvé a intentar.", "Huella o rostro");
     return false;
   }
-  const pin=await mostrarPrompt("Ingresá tu PIN para activar la huella:", {titulo:"👆 Huella o rostro", tipoInput:"password", inputMode:"numeric", placeholder:"4 dígitos"});
+  const pin=await mostrarPrompt("Ingresá tu PIN para activar la huella:", {titulo:"👆 Huella o rostro", tipoInput:"password", inputMode:"numeric", placeholder:`${pinLen()} dígitos`});
   if(pin===null) return false;
-  if(await hashPin(pin)!==localStorage.getItem("fpinhash")){ showToast("PIN incorrecto"); return false; }
+  if(!await verificarPin(pin)){ showToast("PIN incorrecto"); return false; }
   try{
     const salt=crypto.getRandomValues(new Uint8Array(32));
     const cred=await navigator.credentials.create({publicKey:{
@@ -138,7 +138,7 @@ function mostrarBotonHuella(){
 async function renderHuellaStatus(){
   const el=document.getElementById("huella-status");
   if(!el) return;
-  if(!localStorage.getItem("fpinhash")){ el.innerHTML=""; return; }
+  if(!pinConfigurado()){ el.innerHTML=""; return; }
   if(huellaActiva()){
     el.innerHTML=`<p class="txt-xs" style="color:var(--success);margin:10px 0 6px">👆 Huella o rostro activados: se usan en vez de teclear el PIN.</p>
       <button class="btn-sm" style="width:100%;color:var(--danger)" onclick="desactivarHuella()">Desactivar huella</button>`;

@@ -10,6 +10,13 @@
 // da false siempre y getSensitiveRaw/setSensitiveRaw se comportan exactamente igual que
 // localStorage.getItem/setItem de toda la vida: cero cambio de comportamiento ni overhead.
 const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera"];
+// Costo de derivar la clave desde el PIN. Los sobres viejos (v2) no lo guardaban: eran 150.000. Los nuevos (v3) lo guardan en `it`, así se puede
+// subir más adelante sin romper los datos ya guardados. Un PIN de 6 dígitos son solo 1.000.000 de combinaciones: lo que lo cuida, si alguien se
+// lleva el archivo, es que cada intento cueste (1.000.000 de vueltas de PBKDF2), no el PIN en sí.
+const KDF_ITER_LEGADO=150000;
+const KDF_ITER=1000000;
+const PIN_LEN_LEGADO=4;   // los PIN de antes tenían 4 dígitos
+const PIN_LEN_NUEVO=6;
 let encKey=null;   // CryptoKey en memoria, solo durante la sesión desbloqueada (nunca se persiste)
 let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: valorJSONstring, ...}
 
@@ -17,6 +24,17 @@ let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: v
 // ver guardarSobre): mientras exista cualquiera de los dos, los datos NO están en claro.
 function isEncActive(){
   return !!(localStorage.getItem("fencblob") || localStorage.getItem("fencsalt"));
+}
+// ¿Hay un PIN? El sobre cifrado ES el PIN: no se guarda ningún hash del PIN (con 4 o 6 dígitos un hash se adivina al instante, y con él
+// el cifrado no servía de nada). Un PIN se comprueba descifrando el sobre. "fpinhash" solo lo dejan los PIN de antes del cifrado: se usa
+// una vez, para migrarlos, y se borra.
+function pinConfigurado(){
+  return isEncActive() || !!localStorage.getItem("fpinhash");
+}
+// Cuántos dígitos tiene el PIN actual: lo dice el sobre (`pl`); los de antes eran de 4.
+function pinLen(){
+  try{ const o=leerSobre(); if(o && Number.isInteger(o.pl) && o.pl>=4 && o.pl<=12) return o.pl; }catch(e){ /* sobre ilegible */ }
+  return PIN_LEN_LEGADO;
 }
 
 // ── El sobre cifrado ──
@@ -32,14 +50,20 @@ function leerSobre(){
   const crudo=localStorage.getItem("fencblob");
   if(!crudo) return null;
   const sobre=JSON.parse(crudo);
+  if(!sobre || typeof sobre!=="object") return null;
   // Formato viejo (v1): el salt vivía aparte, en "fencsalt"
   if(!sobre.salt) sobre.salt=localStorage.getItem("fencsalt");
   return sobre;
 }
 
-async function guardarSobre(clave, salt, cache){
+// `meta` ({it, pl}): iteraciones de la derivación y dígitos del PIN. Sin `meta` se conservan los del sobre que ya está guardado, para que
+// guardar datos nuevos nunca cambie con qué parámetros hay que abrirlo (y un sobre viejo siga siendo v2, sin `it`).
+async function guardarSobre(clave, salt, cache, meta){
   const {iv, data}=await encryptBlob(clave, cache);
-  localStorage.setItem("fencblob", JSON.stringify({v:2, salt, iv, data}));
+  let previo=null; try{ previo=leerSobre(); }catch(e){ previo=null; }
+  const it=meta && meta.it!==undefined ? meta.it : (previo && previo.it);
+  const pl=meta && meta.pl!==undefined ? meta.pl : (previo && previo.pl);
+  localStorage.setItem("fencblob", JSON.stringify({v:it?3:2, salt, ...(it?{it}:{}), ...(pl?{pl}:{}), iv, data}));
   // El sobre nuevo ya se basta solo: el salt suelto del formato viejo sobra.
   localStorage.removeItem("fencsalt");
 }
@@ -60,11 +84,11 @@ function randomSaltB64(){
   return bytesToB64(crypto.getRandomValues(new Uint8Array(16)));
 }
 
-async function deriveKey(pin, saltB64){
+async function deriveKey(pin, saltB64, iteraciones){
   const salt=Uint8Array.from(atob(saltB64), c=>c.charCodeAt(0));
   const baseKey=await crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    {name:"PBKDF2", salt, iterations:150000, hash:"SHA-256"},
+    {name:"PBKDF2", salt, iterations:iteraciones||KDF_ITER_LEGADO, hash:"SHA-256"},
     baseKey, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]
   );
 }
@@ -235,9 +259,11 @@ function avisarDatosCorruptos(claves){
 // ═══════════════════════════════════════════
 // PIN DE BLOQUEO (opcional)
 // ═══════════════════════════════════════════
-// Hash simple SHA-256 del PIN. NO guardamos el PIN en texto plano.
-// Esto NO es alta seguridad (alguien con acceso al dispositivo y conocimiento técnico
-// puede saltearlo) pero protege contra el típico curioso que toma tu celu.
+// El PIN es la clave del sobre cifrado (ver arriba) y se comprueba descifrándolo: no se guarda ningún hash. Los PIN de antes del cifrado
+// dejaron un hash en "fpinhash": se acepta una sola vez para migrarlos y se borra. Esto NO es seguridad militar: un PIN de 6 dígitos tiene
+// 1.000.000 de combinaciones y, si alguien se lleva el archivo del navegador, las prueba todas (cada una cuesta 1.000.000 de vueltas de PBKDF2,
+// así que no es instantáneo, pero un equipo potente lo hace en minutos u horas). Protege bien contra quien agarra tu celular.
+// Hash SHA-256 del PIN de las versiones sin cifrado: solo sirve para migrarlos (ver checkPin).
 async function hashPin(pin){
   const enc=new TextEncoder().encode(pin+"enola_salt_v1");
   const buf=await crypto.subtle.digest("SHA-256", enc);
@@ -247,7 +273,44 @@ async function hashPin(pin){
 let pinBuffer=""; // PIN que se está tipeando en la pantalla de bloqueo
 let pinSetupStep=0; // 0=ingresar, 1=confirmar (en setup)
 let pinSetupFirst=""; // primer PIN ingresado durante setup
-const PIN_LEN=4;
+
+// ── Intentos fallidos: desde el 5º, hay que esperar (30 s, 1 min, 2 min… hasta 1 hora) ──
+// Es una traba de la pantalla: frena al curioso que prueba PIN en tu celular. No frena a quien se lleva el archivo (eso lo frena el costo de
+// la derivación). Se guarda en localStorage llano porque tiene que funcionar con la app bloqueada.
+const PIN_FALLOS_KEY="fpinfallos";
+const PIN_FALLOS_LIBRES=4;   // los primeros intentos erróneos no esperan
+// Pura. Segundos de espera tras `n` intentos fallidos seguidos.
+function esperaTrasFallos(n){
+  if(!(n>PIN_FALLOS_LIBRES)) return 0;
+  return Math.min(30*Math.pow(2, n-PIN_FALLOS_LIBRES-1), 3600);
+}
+function leerFallosPin(){
+  try{ const o=JSON.parse(localStorage.getItem(PIN_FALLOS_KEY)||"null"); return {n:Math.max(0, o&&o.n|0), hasta:Number(o&&o.hasta)||0}; }
+  catch(e){ return {n:0, hasta:0}; }
+}
+// Segundos que faltan para poder volver a intentar (0 = ya se puede).
+function segundosDeEsperaPin(ahora){
+  const f=leerFallosPin();
+  return f.hasta>(ahora||Date.now()) ? Math.ceil((f.hasta-(ahora||Date.now()))/1000) : 0;
+}
+function registrarFalloPin(ahora){
+  const f=leerFallosPin(); f.n++;
+  const e=esperaTrasFallos(f.n); f.hasta=e ? (ahora||Date.now())+e*1000 : 0;
+  try{ localStorage.setItem(PIN_FALLOS_KEY, JSON.stringify(f)); }catch(err){ /* sin almacenamiento */ }
+  return f;
+}
+function limpiarFallosPin(){ try{ localStorage.removeItem(PIN_FALLOS_KEY); }catch(e){ /* sin almacenamiento */ } }
+const textoEspera=seg=>seg>=60 ? `${Math.ceil(seg/60)} min` : `${seg} s`;
+
+// Comprueba un PIN contra el sobre: devuelve {clave, cache} si abre, o null si el PIN no es. No toca el estado de la app.
+async function verificarPin(pin){
+  try{
+    const sobre=leerSobre();
+    if(!sobre || !sobre.salt || !sobre.data) return null;
+    const clave=await deriveKey(String(pin), sobre.salt, sobre.it||KDF_ITER_LEGADO);
+    return {clave, cache:await decryptBlob(clave, sobre)};
+  }catch(e){ return null; }   // con un PIN equivocado, AES-GCM falla la verificación: eso es "PIN incorrecto"
+}
 
 // Resuelve la promise de checkLock() cuando el PIN correcto fue ingresado (y ya se
 // descifraron/cargaron los datos). Ver checkPin().
@@ -260,8 +323,7 @@ let _unlockResolve=null;
 // todavía en JS (antes se cargaban igual, en paralelo, y el PIN era solo una capa visual).
 function checkLock(){
   return new Promise((resolve)=>{
-    const hash=localStorage.getItem("fpinhash");
-    if(!hash){
+    if(!pinConfigurado()){
       // No hay PIN configurado: app abierta sin bloqueo
       document.getElementById("lock-screen").style.display="none";
       resolve();
@@ -282,7 +344,13 @@ function checkLock(){
   });
 }
 
+// Los puntitos de la pantalla de bloqueo: tantos como dígitos tiene el PIN (4 los de antes, 6 los nuevos).
 function updatePinDisplay(){
+  const cont=document.getElementById("pin-display");
+  const n=pinLen();
+  if(cont && cont.querySelectorAll(".pin-dot").length!==n){
+    cont.innerHTML=Array.from({length:n}, ()=>'<span class="pin-dot"></span>').join("");
+  }
   const dots=document.querySelectorAll("#pin-display .pin-dot");
   dots.forEach((d,i)=>{
     d.classList.toggle("filled", i<pinBuffer.length);
@@ -290,11 +358,12 @@ function updatePinDisplay(){
 }
 
 function pinPress(d){
-  if(pinBuffer.length>=PIN_LEN) return;
+  const largo=pinLen();
+  if(pinBuffer.length>=largo) return;
   vibrar(15);
   pinBuffer+=d;
   updatePinDisplay();
-  if(pinBuffer.length===PIN_LEN){
+  if(pinBuffer.length===largo){
     setTimeout(checkPin, 150);
   }
 }
@@ -306,38 +375,46 @@ function pinBackspace(){
   }
 }
 
+function sacudirPin(){
+  const display=document.getElementById("pin-display");
+  if(!display) return;
+  display.style.transform="translateX(-8px)";
+  setTimeout(()=>{display.style.transform="translateX(8px)";},80);
+  setTimeout(()=>{display.style.transform="";},160);
+}
+
 async function checkPin(){
   const pinIngresado=pinBuffer;
-  const hash=await hashPin(pinIngresado);
-  const stored=localStorage.getItem("fpinhash");
+  const err=document.getElementById("pin-error");
+  // Con intentos fallidos de más hay que esperar: ni se prueba el PIN.
+  const espera=segundosDeEsperaPin();
+  if(espera>0){
+    err.textContent=`Demasiados intentos. Probá de nuevo en ${textoEspera(espera)}.`;
+    pinBuffer=""; setTimeout(updatePinDisplay, 300); sacudirPin();
+    return;
+  }
+  let ok=false;
   let migracionRecien=false; // true solo si ESTA llamada acaba de migrar un PIN legado a cifrado
-  if(hash===stored){
-    if(isEncActive()){
-      // Cifrado ya activo: derivar la clave con el PIN recién validado y descifrar el sobre.
-      try{
-        const sobre=leerSobre();
-        // Si hay salt pero no sobre, algo quedó a medias. ANTES esto desbloqueaba con datos
-        // vacíos y el primer guardado pisaba todo; ahora se avisa y no se entra, que deja
-        // los datos donde están y da chance de restaurar un backup.
-        if(!sobre || !sobre.salt || !sobre.data){
-          throw new Error("Los datos cifrados están incompletos. Restaurá un backup desde otra copia de la app.");
-        }
-        encKey=await deriveKey(pinIngresado, sobre.salt);
-        encCache=await decryptBlob(encKey, sobre);
-      }catch(err){
-        console.error("Error al descifrar datos:", err);
-        encKey=null; encCache=null;
-        document.getElementById("pin-error").textContent=`Error al descifrar: ${err.name||""} ${err.message||err}`;
-        pinBuffer="";
-        setTimeout(updatePinDisplay, 300);
-        return; // NO resolvemos: la pantalla de bloqueo sigue esperando
-      }
-    } else {
-      // PIN configurado desde una versión anterior a esta funcionalidad: todavía sin cifrar.
-      // Migramos ahora mismo, usando el PIN recién validado.
+  if(isEncActive()){
+    // Cifrado activo: el PIN es bueno si abre el sobre. No hay otro dato contra el que compararlo.
+    let sobre=null; try{ sobre=leerSobre(); }catch(e){ sobre=null; }   // un sobre ilegible cuenta como incompleto
+    // Si hay salt pero no sobre, algo quedó a medias. ANTES esto desbloqueaba con datos
+    // vacíos y el primer guardado pisaba todo; ahora se avisa y no se entra, que deja
+    // los datos donde están y da chance de restaurar un backup.
+    if(!sobre || !sobre.salt || !sobre.data){
+      err.textContent="Los datos cifrados están incompletos. Restaurá un backup desde otra copia de la app.";
+      pinBuffer=""; setTimeout(updatePinDisplay, 300);
+      return; // NO resolvemos: la pantalla de bloqueo sigue esperando
+    }
+    const abierto=await verificarPin(pinIngresado);
+    if(abierto){ encKey=abierto.clave; encCache=abierto.cache; ok=true; }
+  } else if(localStorage.getItem("fpinhash")){
+    // PIN configurado desde una versión anterior al cifrado: todavía sin cifrar. Es la única vez que se mira el hash: si el PIN
+    // es el bueno, se migra ahora mismo a un sobre cifrado y el hash se borra.
+    if(await hashPin(pinIngresado)===localStorage.getItem("fpinhash")){
       try{
         const salt=randomSaltB64();
-        encKey=await deriveKey(pinIngresado, salt);
+        encKey=await deriveKey(pinIngresado, salt, KDF_ITER);
         encCache={};
         ENC_KEYS.forEach(k=>{
           const v=localStorage.getItem(k);
@@ -345,21 +422,26 @@ async function checkPin(){
         });
         // Una sola escritura: o queda el sobre entero, o no queda nada y los datos en claro
         // siguen intactos (isEncActive() sigue en false y la app abre normal).
-        await guardarSobre(encKey, salt, encCache);
+        await guardarSobre(encKey, salt, encCache, {it:KDF_ITER, pl:pinIngresado.length});
         ENC_KEYS.forEach(k=>localStorage.removeItem(k));
-        migracionRecien=true;
-      }catch(err){
-        console.error("Error al migrar a cifrado:", err);
+        migracionRecien=true; ok=true;
+      }catch(e){
+        console.error("Error al migrar a cifrado:", e);
         encKey=null; encCache=null;
-        document.getElementById("pin-error").textContent=`Error al cifrar: ${err.name||""} ${err.message||err}`;
+        err.textContent=`Error al cifrar: ${e.name||""} ${e.message||e}`;
         pinBuffer="";
         setTimeout(updatePinDisplay, 300);
         return; // NO resolvemos: la pantalla de bloqueo sigue esperando
       }
     }
+  }
+  if(ok){
+    limpiarFallosPin();
+    localStorage.removeItem("fpinhash");   // ya no hace falta: el sobre es la única verificación
     document.getElementById("lock-screen").style.display="none";
     pinBuffer="";
     updatePinDisplay();
+    ultimaActividadPin=Date.now(); ocultoDesdePin=0;
     if(_unlockResolve){ const r=_unlockResolve; _unlockResolve=null; r(); }
     // El aviso se muestra DESPUÉS de desbloquear, y con showToast (no alert()): alert()/
     // confirm()/prompt() son diálogos nativos del navegador que en una PWA instalada (modo
@@ -369,16 +451,44 @@ async function checkPin(){
     if(migracionRecien){
       showToast("🔒 Tus datos ahora están cifrados y ligados a tu PIN. Te recomendamos descargar un backup desde Configuración por si alguna vez lo olvidás.");
     }
+    setTimeout(ofrecerSubirPin, 1800);
   } else {
-    document.getElementById("pin-error").textContent="PIN incorrecto";
+    const f=registrarFalloPin();
+    const e=esperaTrasFallos(f.n);
+    err.textContent=e>0 ? `PIN incorrecto. Esperá ${textoEspera(e)} para volver a intentar.` : "PIN incorrecto";
     pinBuffer="";
     setTimeout(updatePinDisplay, 300);
-    // Animación de shake
-    const display=document.getElementById("pin-display");
-    display.style.transform="translateX(-8px)";
-    setTimeout(()=>{display.style.transform="translateX(8px)";},80);
-    setTimeout(()=>{display.style.transform="";},160);
+    sacudirPin();
   }
+}
+
+// ── Pasar de 4 a 6 dígitos ──
+// Un PIN de 4 dígitos tiene solo 10.000 combinaciones. Al desbloquear con uno, se ofrece subirlo (como mucho una vez por día, hasta que se haga).
+const PIN_SUBIR_KEY="fpinsubir";
+async function ofrecerSubirPin(){
+  if(!pinConfigurado() || pinLen()>=PIN_LEN_NUEVO || !encKey) return;
+  // Un diálogo nuevo cancela al que está abierto (ver _dialogoAbrir): si ya hay uno (por ejemplo el recordatorio de backup), se espera a que
+  // el usuario lo responda en vez de pisarlo, y se sigue esperando hasta un minuto.
+  const abierto=()=>{ const d=document.querySelector("#modal-dialogo"); return !!(d && d.classList.contains("open")); };
+  for(let i=0; i<90 && abierto(); i++) await new Promise(r=>setTimeout(r, 700));
+  if(abierto() || !encKey) return;
+  const hoy=typeof hoyLocal==="function" ? hoyLocal() : new Date().toISOString().slice(0,10);
+  if(localStorage.getItem(PIN_SUBIR_KEY)===hoy) return;
+  try{ localStorage.setItem(PIN_SUBIR_KEY, hoy); }catch(e){ /* sin almacenamiento */ }
+  if(await mostrarConfirm(`Tu PIN tiene ${pinLen()} dígitos: alguien que pruebe todas las combinaciones lo adivina en minutos. Con ${PIN_LEN_NUEVO} dígitos es 100 veces más difícil. ¿Lo cambiás ahora?`,
+    {titulo:"🔐 Pasá tu PIN a 6 dígitos", textoOk:"Cambiarlo ahora", textoCancelar:"Más tarde"})) await setupPin();
+}
+
+// Pura. ¿Es un PIN demasiado fácil de adivinar? "" si está bien; si no, el motivo. Se rechazan los repetidos (111111), las escaleras (123456, 654321)
+// y los patrones más comunes.
+function motivoPinDebil(pin){
+  const p=String(pin||"");
+  if(/^(\d)\1+$/.test(p)) return "No uses el mismo dígito repetido.";
+  const d=[...p].map(Number);
+  if(d.every((x,i)=>i===0 || x===(d[i-1]+1)%10) || d.every((x,i)=>i===0 || x===(d[i-1]+9)%10)) return "No uses una escalera de números (123456, 654321).";
+  const comunes=["121212","123123","112233","101010","123321","159753","147258","000123","696969","520520","789456","456789","200000","100000","654123"];
+  if(comunes.includes(p)) return "Ese PIN es de los más usados: elegí otro.";
+  return "";
 }
 
 // ── Setup del PIN desde Config ──
@@ -386,29 +496,29 @@ async function checkPin(){
 // futuro se olvida el PIN, esos datos ya no son recuperables desde el dispositivo. Por eso,
 // antes de pedir el PIN nuevo, forzamos la descarga de un backup (única red de salvación).
 async function setupPin(){
-  const esActivacionNueva = !localStorage.getItem("fpinhash");
+  const esActivacionNueva = !pinConfigurado();
   if(esActivacionNueva){
-    if(!await mostrarConfirm("Antes de activar el PIN vamos a descargar un backup de tus datos. Si en el futuro olvidás el PIN, es la única forma de recuperarlos. ¿Continuamos?", {titulo:"🔐 Activar PIN", textoOk:"Descargar backup"})) return;
+    if(!await mostrarConfirm("Antes de activar el PIN vamos a descargar un backup de tus datos. Si en el futuro olvidás el PIN, es la única forma de recuperarlos. ¿Continuamos?", {titulo:"🔐 Activar PIN", textoOk:"Continuar"})) return;
     exportarBackup();
     if(!await mostrarConfirm("¿Ya guardaste el archivo de backup en un lugar seguro (Drive, mail, etc.)? Confirmá para terminar de activar el PIN.", {titulo:"🔐 Activar PIN", textoOk:"Ya lo guardé"})) return;
   }
-  const pin=await mostrarPrompt("Elegí un PIN de 4 dígitos para proteger la app:", {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"numeric", placeholder:"4 dígitos"});
+  const pin=await mostrarPrompt(`Elegí un PIN de ${PIN_LEN_NUEVO} dígitos para proteger la app:`, {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"numeric", placeholder:`${PIN_LEN_NUEVO} dígitos`});
   if(pin===null) return;
-  if(!/^\d{4}$/.test(pin)){
-    showToast("El PIN debe ser de 4 dígitos numéricos");
+  if(!new RegExp(`^\\d{${PIN_LEN_NUEVO}}$`).test(pin)){
+    showToast(`El PIN debe ser de ${PIN_LEN_NUEVO} dígitos numéricos`);
     return;
   }
+  const debil=motivoPinDebil(pin);
+  if(debil){ showToast(debil); return; }
   const pinConfirmado=await mostrarPrompt("Confirmá el PIN:", {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"numeric", placeholder:"Repetí el PIN"});
   if(pinConfirmado!==pin){
     showToast("Los PINs no coinciden");
     return;
   }
-  const hash=await hashPin(pin);
   const salt=randomSaltB64();
-  const claveNueva=await deriveKey(pin, salt);
-  // Se guarda el sobre anterior para poder volver atrás: si el guardado entra pero el hash
-  // del PIN no, quedaría un sobre que ningún PIN puede abrir. Es improbable (el hash son 64
-  // caracteres contra ~1 MB del sobre), pero el costo de equivocarse es perder todo.
+  const claveNueva=await deriveKey(pin, salt, KDF_ITER);
+  const meta={it:KDF_ITER, pl:PIN_LEN_NUEVO};
+  // Se guarda el sobre anterior para poder volver atrás si algo falla a mitad de camino.
   const sobreAnterior=localStorage.getItem("fencblob");
   try{
     if(esActivacionNueva){
@@ -418,22 +528,21 @@ async function setupPin(){
         const v=localStorage.getItem(k);
         if(v!==null) cache[k]=v;
       });
-      await guardarSobre(claveNueva, salt, cache);
-      localStorage.setItem("fpinhash", hash);
-      // Recién con el sobre y el hash ya escritos se pasa a estado cifrado y se borra el claro.
+      await guardarSobre(claveNueva, salt, cache, meta);
+      // Recién con el sobre ya escrito se pasa a estado cifrado y se borra el claro.
       encKey=claveNueva; encCache=cache;
       ENC_KEYS.forEach(k=>localStorage.removeItem(k));
     } else {
       // Cambio de PIN (desde changePin(), que ya validó el actual): re-cifrar el encCache
       // que sigue en memoria desde que se desbloqueó la sesión.
-      await guardarSobre(claveNueva, salt, encCache);
-      localStorage.setItem("fpinhash", hash);
+      await guardarSobre(claveNueva, salt, encCache, meta);
       encKey=claveNueva;
     }
+    localStorage.removeItem("fpinhash");
+    limpiarFallosPin();
   }catch(err){
     console.error("Error al guardar el PIN:", err);
-    // Dejar todo como estaba: sin esto, un sobre nuevo con el hash viejo (o al revés) deja
-    // los datos inaccesibles para siempre.
+    // Dejar todo como estaba: sin esto un sobre a medias deja los datos inaccesibles para siempre.
     if(sobreAnterior!==null) localStorage.setItem("fencblob", sobreAnterior);
     else localStorage.removeItem("fencblob");
     await mostrarAlerta(`No se pudo guardar el PIN: ${err.message||err}\n\nTus datos quedaron como estaban.`, "Error");
@@ -449,8 +558,7 @@ async function setupPin(){
 async function changePin(){
   const actual=await mostrarPrompt("Ingresá tu PIN actual:", {titulo:"Cambiar PIN", tipoInput:"password", inputMode:"numeric"});
   if(actual===null) return;
-  const hashActual=await hashPin(actual);
-  if(hashActual!==localStorage.getItem("fpinhash")){
+  if(!await verificarPin(actual)){
     showToast("PIN incorrecto");
     return;
   }
@@ -460,8 +568,7 @@ async function changePin(){
 async function removePin(){
   const actual=await mostrarPrompt("Para desactivar el PIN, ingresalo:", {titulo:"Desactivar PIN", tipoInput:"password", inputMode:"numeric"});
   if(actual===null) return;
-  const hashActual=await hashPin(actual);
-  if(hashActual!==localStorage.getItem("fpinhash")){
+  if(!await verificarPin(actual)){
     showToast("PIN incorrecto");
     return;
   }
@@ -485,6 +592,7 @@ async function removePin(){
     localStorage.removeItem("fpinhash");
     localStorage.removeItem("fencsalt");
     localStorage.removeItem("fencblob");
+    limpiarFallosPin();
     if(typeof quitarHuella==="function") quitarHuella();
     encKey=null;
     encCache=null;
@@ -495,18 +603,79 @@ async function removePin(){
   }
 }
 
+// ═══════════════════════════════════════════
+// BLOQUEO AUTOMÁTICO
+// ═══════════════════════════════════════════
+// Sin esto, la app quedaba abierta para siempre una vez desbloqueada: dejabas el celular y quien lo agarraba entraba directo. Ahora vuelve a
+// pedir el PIN cuando salís de la app o la dejás sin tocar un rato (1, 5 o 15 minutos, o nunca). Bloquear es recargar la app: así los datos
+// dejan de estar en memoria y se vuelve a la pantalla de PIN (con la huella, si la tenés, se desbloquea con un toque).
+const AUTOLOCK_KEY="fautolock";
+const AUTOLOCK_DEFECTO="1";
+const AUTOLOCK_OPCIONES=[["1","a 1 minuto"],["5","a 5 minutos"],["15","a 15 minutos"],["nunca","nunca"]];
+function autoLockOpcion(){
+  let v=null; try{ v=localStorage.getItem(AUTOLOCK_KEY); }catch(e){ /* sin almacenamiento */ }
+  return AUTOLOCK_OPCIONES.some(o=>o[0]===v) ? v : AUTOLOCK_DEFECTO;
+}
+function cambiarAutoLock(v){
+  if(!AUTOLOCK_OPCIONES.some(o=>o[0]===v)) return;
+  guardarPreferencia(AUTOLOCK_KEY, v);
+  showToast(v==="nunca" ? "La app ya no se bloquea sola" : `Se bloquea ${AUTOLOCK_OPCIONES.find(o=>o[0]===v)[1]} sin usar`);
+}
+// Pura. ¿Pasó el tiempo para bloquear? `desde` = cuándo salió de la app o tocó por última vez (ms); 0/null = no hay dato.
+function bloqueoVencido(opcion, desde, ahora){
+  if(opcion==="nunca" || !desde) return false;
+  const min=Number(opcion);
+  return Number.isFinite(min) && ahora-desde >= min*60000;
+}
+let ocultoDesdePin=0;                 // cuándo salió de la app (ms), 0 si está adentro
+let ultimaActividadPin=Date.now();    // el último toque o tecla (ms)
+// ¿Hay un PIN y la app está abierta (desbloqueada)? Con la pantalla de bloqueo puesta, encKey es null.
+const appDesbloqueadaConPin=()=>pinConfigurado() && !!encKey;
+// Recargar la app: aparte para poder reemplazarlo en las pruebas.
+function recargarApp(){ location.reload(); }
+let bloqueandoApp=false;
+async function bloquearApp(){
+  if(bloqueandoApp || !appDesbloqueadaConPin()) return;
+  bloqueandoApp=true;
+  try{
+    // Primero se guarda lo pendiente: al recargar se pierde todo lo que no llegó al disco.
+    if(encSaveTimer){ clearTimeout(encSaveTimer); await persistEncBlobNow(); }
+  }catch(e){ /* el guardado ya avisa si falla */ }
+  recargarApp();
+}
+document.addEventListener("visibilitychange", ()=>{
+  if(!appDesbloqueadaConPin()) return;
+  if(document.visibilityState==="hidden"){ ocultoDesdePin=Date.now(); return; }
+  const desde=ocultoDesdePin; ocultoDesdePin=0;
+  if(bloqueoVencido(autoLockOpcion(), desde, Date.now())) bloquearApp();
+});
+["pointerdown","keydown","touchstart","scroll","input"].forEach(ev=>
+  document.addEventListener(ev, ()=>{ ultimaActividadPin=Date.now(); }, {capture:true, passive:true}));
+// Sin tocar la pantalla: se revisa cada 15 s (un temporizador largo no sirve: el celular los frena con la app en segundo plano).
+setInterval(()=>{
+  if(!appDesbloqueadaConPin() || document.visibilityState==="hidden") return;
+  if(typeof vozEscuchando!=="undefined" && vozEscuchando) return;   // dictando por voz no es estar sin usar la app
+  if(bloqueoVencido(autoLockOpcion(), ultimaActividadPin, Date.now())) bloquearApp();
+}, 15000);
+
 // Pinta el estado actual del PIN en Config
 function renderPinStatus(){
   const el=document.getElementById("pin-status");
   if(!el) return;
-  const activo=!!localStorage.getItem("fpinhash");
+  const activo=pinConfigurado();
   if(activo){
+    const largo=pinLen();
+    const opcion=autoLockOpcion();
     el.innerHTML=`
-      <p style="font-size:12px;color:var(--success);margin-bottom:10px">✓ PIN activo. Se va a pedir cada vez que abras la app.</p>
+      <p style="font-size:12px;color:var(--success);margin-bottom:10px">✓ PIN activo (${largo} dígitos). Se va a pedir cada vez que abras la app.</p>
+      ${largo<PIN_LEN_NUEVO?`<div class="inset mb-10" style="border-left:3px solid var(--warning)"><p class="txt-sm" style="margin:0 0 8px">Tu PIN tiene ${largo} dígitos y se puede adivinar en minutos. Pasá a ${PIN_LEN_NUEVO}.</p><button class="btn-sm" style="width:100%" onclick="changePin()">Pasar a ${PIN_LEN_NUEVO} dígitos</button></div>`:""}
       <div class="u-row">
         <button class="btn-sm u-flex1" onclick="changePin()">Cambiar PIN</button>
         <button class="btn-sm" style="flex:1;color:var(--danger)" onclick="removePin()">Desactivar</button>
-      </div>`;
+      </div>
+      <div class="form-group" style="margin-top:12px"><label class="form-label" for="autolock-sel">Volver a pedir el PIN</label>
+        <select id="autolock-sel" class="form-select" onchange="cambiarAutoLock(this.value)">${AUTOLOCK_OPCIONES.map(([v,t])=>`<option value="${v}"${v===opcion?" selected":""}>${v==="nunca"?"Nunca (la app queda abierta)":`Si salís o no la usás ${t.replace("a ","")}`}</option>`).join("")}</select>
+        <p class="txt-xs txt-muted" style="margin-top:4px">Si salís de la app o la dejás sin tocar ese tiempo, vuelve a pedir el PIN.</p></div>`;
   } else {
     el.innerHTML=`
       <p class="txt-sm txt-muted mb-10">El PIN te protege si alguien toma tu celular. Es opcional.</p>
@@ -514,4 +683,3 @@ function renderPinStatus(){
   }
   if(typeof renderHuellaStatus==="function") renderHuellaStatus();
 }
-
