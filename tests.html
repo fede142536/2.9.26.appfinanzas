@@ -10791,6 +10791,24 @@ test("Configuración distingue PIN numérico de código alfanumérico y sugiere 
   } finally { window.renderHuellaStatus=hs; el.remove(); }
 }));
 
+test("el diálogo de una clave deja ver lo que se escribe, se esconde de nuevo al abrirse y no deja la clave escrita al cerrar", async ()=>{
+  const html=await (await fetch("index.html")).text(); cierto(html.includes('id="dialogo-ver"') && html.includes("_dialogoVer()"), "falta el botón Mostrar en el diálogo");
+  const caja=document.createElement("div"); caja.innerHTML=html.slice(html.indexOf('<div class="modal-overlay" id="modal-dialogo"'), html.indexOf('<!-- ', html.indexOf('id="dialogo-btn-ok"')));
+  // el diálogo de la página de pruebas puede no existir (getElementById devuelve un div suelto): se prueba con el de index.html montado
+  document.body.appendChild(caja);
+  try{
+    const p=mostrarPrompt("Clave:", {tipoInput:"password", inputMode:"text"});
+    const input=document.querySelector("#dialogo-input"), ver=document.querySelector("#dialogo-ver");
+    igual([input.type, ver.style.display, ver.textContent], ["password","","Mostrar"]);
+    input.value="Cuenta2026x"; _dialogoVer(); igual([input.type, ver.textContent, input.value], ["text","Ocultar","Cuenta2026x"], "ahora se ve lo que escribís");
+    _dialogoVer(); igual([input.type, ver.textContent], ["password","Mostrar"]); _dialogoVer();
+    _dialogoAceptar(); igual(await p, "Cuenta2026x", "el valor se devuelve igual");
+    igual([input.value, input.type], ["","password"], "al cerrar no queda la clave escrita y vuelve a esconderse");
+    const p2=mostrarPrompt("Nombre:", {tipoInput:"text"}); igual(ver.style.display, "none", "un campo de texto común no lleva botón Mostrar"); _dialogoCancelar(); await p2;
+    const p3=mostrarPrompt("Clave otra vez:", {tipoInput:"password"}); igual([input.type, ver.textContent], ["password","Mostrar"], "se abre escondido aunque la vez anterior se haya mostrado"); _dialogoCancelar(); await p3;
+  } finally { caja.remove(); }
+});
+
 grupo("Seguridad: datos de afuera no ejecutan código");
 
 const XSS_PAY=`"'><img src=x onerror=window.__xssTest=1>`;
