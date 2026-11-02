@@ -10582,15 +10582,15 @@ test("Pagar viene con la cuenta de la tarjeta puesta y el pago se guarda en esa 
 grupo("Seguridad: PIN de 6 dígitos y bloqueo automático");
 
 // Un sobre con pocas iteraciones (rápido) y los datos de prueba, abierto con `pin`.
-async function sobreDePrueba(pin, datos, {it=1000, pl=6}={}){
+async function sobreDePrueba(pin, datos, {it=1000, pl=6, pm=""}={}){
   const salt=randomSaltB64();
-  await guardarSobre(await deriveKey(pin, salt, it), salt, datos||{fmovs3:'[{"id":7}]'}, {it, pl});
+  await guardarSobre(await deriveKey(pin, salt, it), salt, datos||{fmovs3:'[{"id":7}]'}, {it, pl, pm});
 }
 // Prepara la pantalla de bloqueo y silencia lo que no importa; lo deja todo como estaba.
 async function conPinFalso(fn){
   limpiarEstadoCifrado();
   // (getElementById en esta página devuelve un div suelto si falta: por eso se busca con querySelector)
-  const els=["lock-screen","pin-error","pin-display"].map(id=>{ let e=document.querySelector("#"+id); const nuevo=!e; if(nuevo){ e=document.createElement("div"); e.id=id; document.body.appendChild(e); } return {e, nuevo, id}; });
+  const els=["lock-screen","pin-error","pin-display","pin-pad","pin-texto-wrap","pin-texto","pin-texto-ver","lock-texto"].map(id=>{ let e=document.querySelector("#"+id); const nuevo=!e; if(nuevo){ e=document.createElement(id==="pin-texto" ? "input" : "div"); e.id=id; document.body.appendChild(e); } return {e, nuevo, id}; });
   const [lock, err]=[els[0].e, els[1].e]; lock.style.display="flex";
   const w=["showToast","mostrarConfirm","mostrarPrompt","mostrarAlerta","vibrar","reiniciarCopiasAuto","exportarBackup","recargarApp","setupPin"], antes={};
   w.forEach(k=>{ antes[k]=window[k]; });
@@ -10696,7 +10696,7 @@ test("activar el PIN pide 6 dígitos, rechaza los fáciles, y deja un sobre v3 s
   const respuestas=[]; window.mostrarPrompt=async()=>respuestas.shift();
   respuestas.push("1234"); await setupPin(); cierto(ctx.toasts.some(t=>t.includes("6 dígitos")), ctx.toasts.join("|")); igual(localStorage.getItem("fencblob"), null, "con 4 dígitos no activa nada");
   respuestas.push("123456"); await setupPin(); cierto(ctx.toasts.some(t=>t.includes("escalera")), ctx.toasts.join("|")); igual(localStorage.getItem("fencblob"), null);
-  respuestas.push("482916","482917"); await setupPin(); cierto(ctx.toasts.some(t=>t.includes("no coinciden"))); igual(localStorage.getItem("fencblob"), null);
+  respuestas.push("482916","482917"); await setupPin(); cierto(ctx.toasts.some(t=>/no coinciden/i.test(t))); igual(localStorage.getItem("fencblob"), null);
   respuestas.push("482916","482916"); await setupPin();
   const s=JSON.parse(localStorage.getItem("fencblob")); igual([s.v, s.it, s.pl], [3, KDF_ITER, 6]); igual(localStorage.getItem("fpinhash"), null, "no se guarda ningún hash"); igual(localStorage.getItem("fmovs3"), null, "los datos ya no están en claro");
   cierto(!!encKey && encCache.fmovs3==='[{"id":3}]'); igual(pinLen(), 6); cierto(pinConfigurado());
@@ -10732,10 +10732,62 @@ test("Configuración muestra los dígitos del PIN, ofrece pasar a 6 y deja elegi
   const el=document.createElement("div"); el.id="pin-status"; document.body.appendChild(el); const hs=window.renderHuellaStatus; window.renderHuellaStatus=()=>{};
   try{
     await sobreDePrueba("1234", null, {it:0, pl:0}); renderPinStatus();
-    cierto(el.textContent.includes("4 dígitos") && el.textContent.includes("Pasar a 6 dígitos"), el.textContent); cierto(!!el.querySelector("#autolock-sel") && el.querySelectorAll("#autolock-sel option").length===4);
+    cierto(el.textContent.includes("4 dígitos") && el.textContent.includes("Reforzar mi PIN"), el.textContent); cierto(!!el.querySelector("#autolock-sel") && el.querySelectorAll("#autolock-sel option").length===4);
     limpiarEstadoCifrado(); await sobreDePrueba("482916"); renderPinStatus();
     cierto(el.textContent.includes("6 dígitos") && !el.textContent.includes("Pasar a 6"), el.textContent); igual(el.querySelector("#autolock-sel").value, "1");
     limpiarEstadoCifrado(); renderPinStatus(); cierto(el.textContent.includes("Activar PIN") && !el.querySelector("#autolock-sel"));
+  } finally { window.renderHuellaStatus=hs; el.remove(); }
+}));
+
+test("validarCodigo: 6 dígitos o 8 a 12 letras y números con al menos una letra y un número; rechaza lo flojo", ()=>{
+  igual(validarCodigo("482916"), {modo:"n", motivo:""}); igual(validarCodigo("123456").modo, "n"); cierto(validarCodigo("123456").motivo!=="", "el PIN fácil se rechaza igual");
+  ["Cuenta2026x","x7Kp2mQw","Mate7Rosario","zorro8Luna9"].forEach(c=>igual(validarCodigo(c), {modo:"a", motivo:""}, c));
+  [["corto1A","8 a 12"], ["muylargo1234567","8 a 12"], ["con espacio1","sin espacios"], ["clave#2026ab","sin espacios"], ["ñandu12345","sin espacios"]].forEach(([c,m])=>cierto(validarCodigo(c).motivo.includes(m), c+": "+validarCodigo(c).motivo));
+  cierto(validarCodigo("12345678").motivo.includes("letras y números"), "solo dígitos de más de 6 no es alfanumérico"); cierto(validarCodigo("abcdefghij").motivo.includes("letras y números"), "solo letras tampoco");
+  ["aaaaaaa1","a1a1a1a1","a1b2c3d4","Password1","password123","Enola2026"].forEach(c=>cierto(validarCodigo(c).motivo!=="", "debería rechazar "+c+" → "+validarCodigo(c).motivo));
+  igual(validarCodigo(null).modo, "a"); cierto(validarCodigo("").motivo!=="");
+});
+
+test("activar un código alfanumérico lo deja anotado en el sobre, abre solo con ese código y no se ofrece 'subirlo'", ()=>conPinFalso(async (ctx)=>{
+  localStorage.setItem("fmovs3", '[{"id":4}]');
+  const respuestas=["Cuenta2026x","Cuenta2026x"]; window.mostrarPrompt=async()=>respuestas.shift();
+  await setupPin();
+  const s=JSON.parse(localStorage.getItem("fencblob")); igual([s.v, s.it, s.pm, s.pl], [3, KDF_ITER, "a", undefined], "modo alfanumérico y sin largo anotado");
+  igual(pinModo(), "a"); cierto(!!(await verificarPin("Cuenta2026x")), "abre con el código"); igual(await verificarPin("cuenta2026x"), null, "las mayúsculas cuentan"); igual(await verificarPin("482916"), null);
+  igual(localStorage.getItem("fpinhash"), null); igual(localStorage.getItem("fmovs3"), null);
+  localStorage.removeItem(PIN_SUBIR_KEY); let preguntas=0; window.mostrarConfirm=async()=>{ preguntas++; return true; }; await ofrecerSubirPin(); igual(preguntas, 0, "con un código alfanumérico no se ofrece subir nada");
+  igual(opcionesPromptPin().inputMode, "text");
+}));
+
+test("pasar de un PIN numérico a un código alfanumérico limpia el largo anotado; y al revés vuelve al teclado de números", ()=>conPinFalso(async (ctx)=>{
+  await sobreDePrueba("482916"); const ab=await verificarPin("482916"); encKey=ab.clave; encCache=ab.cache;
+  igual([pinModo(), pinLen(), opcionesPromptPin().inputMode], ["n", 6, "numeric"]);
+  let respuestas=["Cuenta2026x","Cuenta2026x"]; window.mostrarPrompt=async()=>respuestas.shift();
+  await setupPin(); let s=JSON.parse(localStorage.getItem("fencblob")); igual([s.pm, s.pl], ["a", undefined], "el largo de 6 no sobrevive");
+  respuestas=["270394","270394"]; await setupPin(); s=JSON.parse(localStorage.getItem("fencblob")); igual([s.pm, s.pl], [undefined, 6], "de vuelta al PIN numérico"); igual(pinModo(), "n");
+}));
+
+test("la pantalla de bloqueo: con PIN numérico muestra el teclado y con código alfanumérico un campo de texto que acepta Enter", ()=>conPinFalso(async (ctx,{lock,err})=>{
+  const $=id=>document.querySelector("#"+id);
+  await sobreDePrueba("482916"); checkLock();
+  igual([$("pin-pad").style.display, $("pin-display").style.display, $("pin-texto-wrap").style.display], ["grid","flex","none"]); cierto($("lock-texto").textContent.includes("PIN"));
+  limpiarEstadoCifrado(); await sobreDePrueba("Cuenta2026x", null, {pm:"a", pl:0});
+  const lockP=checkLock(); let resuelto=false; lockP.then(()=>{ resuelto=true; });
+  igual([$("pin-pad").style.display, $("pin-display").style.display, $("pin-texto-wrap").style.display], ["none","none","flex"], "campo de texto en vez de teclado"); cierto($("lock-texto").textContent.includes("código"), $("lock-texto").textContent);
+  $("pin-texto").type="password"; $("pin-texto").value="Equivocado9"; await pinTextoEnviar();
+  cierto(err.textContent==="PIN incorrecto", err.textContent); igual($("pin-texto").value, "", "el campo se limpia"); igual(encKey, null); igual(leerFallosPin().n, 1);
+  $("pin-texto").value="Cuenta2026x"; await pinTextoEnviar(); await new Promise(r=>setTimeout(r,10));
+  cierto(!!encKey && resuelto, "entró con el código correcto"); igual(lock.style.display, "none"); igual($("pin-texto").value, "");
+  pinTextoMostrar(); igual($("pin-texto").type, "text"); pinTextoMostrar(); igual($("pin-texto").type, "password");
+}));
+
+test("Configuración distingue PIN numérico de código alfanumérico y sugiere el código a quien usa 6 dígitos", ()=>conPinFalso(async ()=>{
+  const el=document.createElement("div"); el.id="pin-status"; document.body.appendChild(el); const hs=window.renderHuellaStatus; window.renderHuellaStatus=()=>{};
+  try{
+    await sobreDePrueba("482916"); renderPinStatus(); cierto(el.textContent.includes("PIN activo (6 dígitos)") && el.textContent.includes("8 a 12 letras y números") && !el.textContent.includes("Reforzar"), el.textContent);
+    limpiarEstadoCifrado(); await sobreDePrueba("1234", null, {it:0, pl:0}); renderPinStatus(); cierto(el.textContent.includes("Reforzar mi PIN") && el.textContent.includes("8 a 12 letras y números"), el.textContent);
+    limpiarEstadoCifrado(); await sobreDePrueba("Cuenta2026x", null, {pm:"a", pl:0}); renderPinStatus();
+    cierto(el.textContent.includes("Código alfanumérico activo") && !el.textContent.includes("dígitos") && !el.textContent.includes("Reforzar") && !!el.querySelector("#autolock-sel"), el.textContent);
   } finally { window.renderHuellaStatus=hs; el.remove(); }
 }));
 

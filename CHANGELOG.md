@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v214**
+**Versión actual: v215**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 2 de noviembre de 2026
 
+- **v215** · Código alfanumérico de 8 a 12 caracteres como alternativa al PIN
+  Además del PIN de 6 dígitos, se puede usar un código de 8 a 12 letras y números (con al menos una letra y un número, sin espacios ni símbolos; las mayúsculas cuentan; se rechazan los repetidos y los más comunes). El sobre anota el modo, y la pantalla de bloqueo muestra un campo de texto con Mostrar y Entrar (acepta Enter) en vez del teclado de números. Se puede pasar de un modo al otro desde Cambiar PIN.
 - **v214** · PIN de 6 dígitos que no se puede adivinar al instante y bloqueo automático
   El PIN pasa a 6 dígitos (se rechazan los repetidos, las escaleras y los más comunes) y deja de guardarse un hash: se comprueba abriendo el sobre cifrado, que ahora usa 1.000.000 de vueltas de PBKDF2 guardadas en el propio sobre. Los PIN de 4 dígitos siguen entrando, se migran y se ofrece subirlos (una vez por día). Desde el 5º intento fallido hay que esperar. La app vuelve a pedir el PIN al salir o tras 1, 5 o 15 minutos sin usarla (configurable en Configuración).
 - **v213** · Correcciones de seguridad (XSS por datos importados, CSV, caché)

@@ -17,6 +17,10 @@ const KDF_ITER_LEGADO=150000;
 const KDF_ITER=1000000;
 const PIN_LEN_LEGADO=4;   // los PIN de antes tenían 4 dígitos
 const PIN_LEN_NUEVO=6;
+// Además del PIN numérico se puede usar un código alfanumérico (letras y números, de 8 a 12 caracteres): con 8 caracteres hay más de
+// 200.000.000.000.000 de combinaciones, contra 1.000.000 de un PIN de 6 dígitos. El sobre anota el modo en `pm` ("a" = alfanumérico).
+const CODIGO_MIN=8;
+const CODIGO_MAX=12;
 let encKey=null;   // CryptoKey en memoria, solo durante la sesión desbloqueada (nunca se persiste)
 let encCache=null; // cuando el cifrado está activo: copia en memoria {clave: valorJSONstring, ...}
 
@@ -35,6 +39,11 @@ function pinConfigurado(){
 function pinLen(){
   try{ const o=leerSobre(); if(o && Number.isInteger(o.pl) && o.pl>=4 && o.pl<=12) return o.pl; }catch(e){ /* sobre ilegible */ }
   return PIN_LEN_LEGADO;
+}
+// "n" = PIN numérico (teclado de números en pantalla), "a" = código alfanumérico (campo de texto).
+function pinModo(){
+  try{ const o=leerSobre(); if(o && o.pm==="a") return "a"; }catch(e){ /* sobre ilegible */ }
+  return "n";
 }
 
 // ── El sobre cifrado ──
@@ -56,14 +65,15 @@ function leerSobre(){
   return sobre;
 }
 
-// `meta` ({it, pl}): iteraciones de la derivación y dígitos del PIN. Sin `meta` se conservan los del sobre que ya está guardado, para que
+// `meta` ({it, pl, pm}): iteraciones de la derivación, dígitos del PIN y modo ("a" = alfanumérico). Sin `meta` se conservan los del sobre que ya está guardado, para que
 // guardar datos nuevos nunca cambie con qué parámetros hay que abrirlo (y un sobre viejo siga siendo v2, sin `it`).
 async function guardarSobre(clave, salt, cache, meta){
   const {iv, data}=await encryptBlob(clave, cache);
   let previo=null; try{ previo=leerSobre(); }catch(e){ previo=null; }
   const it=meta && meta.it!==undefined ? meta.it : (previo && previo.it);
   const pl=meta && meta.pl!==undefined ? meta.pl : (previo && previo.pl);
-  localStorage.setItem("fencblob", JSON.stringify({v:it?3:2, salt, ...(it?{it}:{}), ...(pl?{pl}:{}), iv, data}));
+  const pm=meta && meta.pm!==undefined ? meta.pm : (previo && previo.pm);
+  localStorage.setItem("fencblob", JSON.stringify({v:it?3:2, salt, ...(it?{it}:{}), ...(pl?{pl}:{}), ...(pm?{pm}:{}), iv, data}));
   // El sobre nuevo ya se basta solo: el salt suelto del formato viejo sobra.
   localStorage.removeItem("fencsalt");
 }
@@ -333,6 +343,7 @@ function checkLock(){
     _unlockResolve=resolve;
     pinBuffer="";
     pinSetupStep=0;
+    ajustarPantallaBloqueo();
     updatePinDisplay();
     document.getElementById("pin-error").textContent="";
     document.getElementById("lock-screen").style.display="flex";
@@ -344,6 +355,25 @@ function checkLock(){
   });
 }
 
+// La pantalla de bloqueo según el modo: con PIN numérico, los puntitos y el teclado de números; con código alfanumérico, un campo de texto.
+function ajustarPantallaBloqueo(){
+  const alfa=pinModo()==="a", ver=(id,d)=>{ const e=document.getElementById(id); if(e) e.style.display=d; };
+  ver("pin-display", alfa?"none":"flex"); ver("pin-pad", alfa?"none":"grid"); ver("pin-texto-wrap", alfa?"flex":"none");
+  const t=document.getElementById("lock-texto"); if(t) t.textContent=alfa ? "Ingresá tu código para continuar" : "Ingresá tu PIN para continuar";
+  if(alfa){ const i=document.getElementById("pin-texto"); if(i){ i.value=""; i.type="password"; setTimeout(()=>{ try{ i.focus(); }catch(e){} }, 400); } }
+}
+// El código alfanumérico se manda con el botón Entrar o con Enter (un PIN numérico se manda solo al completar los dígitos).
+async function pinTextoEnviar(){
+  const i=document.getElementById("pin-texto"); if(!i || !i.value) return;
+  pinBuffer=i.value; i.value="";
+  await checkPin();
+  if(!appDesbloqueadaConPin()){ try{ i.focus(); }catch(e){} }
+}
+function pinTextoMostrar(){
+  const i=document.getElementById("pin-texto"); if(!i) return;
+  i.type=i.type==="password" ? "text" : "password";
+  const b=document.getElementById("pin-texto-ver"); if(b) b.textContent=i.type==="password" ? "Mostrar" : "Ocultar";
+}
 // Los puntitos de la pantalla de bloqueo: tantos como dígitos tiene el PIN (4 los de antes, 6 los nuevos).
 function updatePinDisplay(){
   const cont=document.getElementById("pin-display");
@@ -466,7 +496,7 @@ async function checkPin(){
 // Un PIN de 4 dígitos tiene solo 10.000 combinaciones. Al desbloquear con uno, se ofrece subirlo (como mucho una vez por día, hasta que se haga).
 const PIN_SUBIR_KEY="fpinsubir";
 async function ofrecerSubirPin(){
-  if(!pinConfigurado() || pinLen()>=PIN_LEN_NUEVO || !encKey) return;
+  if(!pinConfigurado() || pinModo()==="a" || pinLen()>=PIN_LEN_NUEVO || !encKey) return;
   // Un diálogo nuevo cancela al que está abierto (ver _dialogoAbrir): si ya hay uno (por ejemplo el recordatorio de backup), se espera a que
   // el usuario lo responda en vez de pisarlo, y se sigue esperando hasta un minuto.
   const abierto=()=>{ const d=document.querySelector("#modal-dialogo"); return !!(d && d.classList.contains("open")); };
@@ -475,8 +505,8 @@ async function ofrecerSubirPin(){
   const hoy=typeof hoyLocal==="function" ? hoyLocal() : new Date().toISOString().slice(0,10);
   if(localStorage.getItem(PIN_SUBIR_KEY)===hoy) return;
   try{ localStorage.setItem(PIN_SUBIR_KEY, hoy); }catch(e){ /* sin almacenamiento */ }
-  if(await mostrarConfirm(`Tu PIN tiene ${pinLen()} dígitos: alguien que pruebe todas las combinaciones lo adivina en minutos. Con ${PIN_LEN_NUEVO} dígitos es 100 veces más difícil. ¿Lo cambiás ahora?`,
-    {titulo:"🔐 Pasá tu PIN a 6 dígitos", textoOk:"Cambiarlo ahora", textoCancelar:"Más tarde"})) await setupPin();
+  if(await mostrarConfirm(`Tu PIN tiene ${pinLen()} dígitos: alguien que pruebe todas las combinaciones lo adivina en minutos. Con ${PIN_LEN_NUEVO} dígitos es 100 veces más difícil, y con un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números, muchísimo más. ¿Lo cambiás ahora?`,
+    {titulo:"🔐 Reforzá tu PIN", textoOk:"Cambiarlo ahora", textoCancelar:"Más tarde"})) await setupPin();
 }
 
 // Pura. ¿Es un PIN demasiado fácil de adivinar? "" si está bien; si no, el motivo. Se rechazan los repetidos (111111), las escaleras (123456, 654321)
@@ -491,6 +521,22 @@ function motivoPinDebil(pin){
   return "";
 }
 
+// Pura. ¿Sirve este código como PIN? {modo:"n"|"a", motivo:""}: "n" = 6 dígitos, "a" = 8 a 12 letras y números (al menos una letra y un número,
+// sin espacios ni símbolos; las mayúsculas cuentan). `motivo` vacío = está bien; si no, qué corregir.
+function validarCodigo(codigo){
+  const c=String(codigo==null?"":codigo);
+  if(new RegExp(`^\\d{${PIN_LEN_NUEVO}}$`).test(c)) return {modo:"n", motivo:motivoPinDebil(c)};
+  const forma=`Usá ${PIN_LEN_NUEVO} dígitos, o un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números (sin espacios ni símbolos).`;
+  if(!new RegExp(`^[A-Za-z0-9]{${CODIGO_MIN},${CODIGO_MAX}}$`).test(c)) return {modo:"a", motivo:forma};
+  if(!/[A-Za-z]/.test(c) || !/\d/.test(c)) return {modo:"a", motivo:"Mezclá letras y números."};
+  if(new Set(c.toLowerCase()).size<5) return {modo:"a", motivo:"Usá más caracteres distintos: ese código se repite demasiado."};
+  const base=c.toLowerCase().replace(/\d+/g,"");
+  if(["password","pass","contrasena","clave","qwerty","qwertyuiop","asdfgh","asdfghjkl","abcd","abcdef","abcdefgh","enola","admin","finanzas","dinero","usuario"].includes(base)) return {modo:"a", motivo:"Ese código es de los más usados: elegí otro."};
+  return {modo:"a", motivo:""};
+}
+// Cómo pedir el código en un cuadro de diálogo, según el modo del que ya está activo.
+const opcionesPromptPin=()=>({tipoInput:"password", inputMode:pinModo()==="a" ? "text" : "numeric"});
+
 // ── Setup del PIN desde Config ──
 // Activar el PIN por primera vez cifra todos los datos sensibles y los liga a él: si en el
 // futuro se olvida el PIN, esos datos ya no son recuperables desde el dispositivo. Por eso,
@@ -502,22 +548,19 @@ async function setupPin(){
     exportarBackup();
     if(!await mostrarConfirm("¿Ya guardaste el archivo de backup en un lugar seguro (Drive, mail, etc.)? Confirmá para terminar de activar el PIN.", {titulo:"🔐 Activar PIN", textoOk:"Ya lo guardé"})) return;
   }
-  const pin=await mostrarPrompt(`Elegí un PIN de ${PIN_LEN_NUEVO} dígitos para proteger la app:`, {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"numeric", placeholder:`${PIN_LEN_NUEVO} dígitos`});
+  const pin=await mostrarPrompt(`Elegí un PIN de ${PIN_LEN_NUEVO} dígitos, o un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números (más seguro). Las mayúsculas cuentan:`,
+    {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"text", placeholder:`${PIN_LEN_NUEVO} dígitos o ${CODIGO_MIN}-${CODIGO_MAX} letras y números`});
   if(pin===null) return;
-  if(!new RegExp(`^\\d{${PIN_LEN_NUEVO}}$`).test(pin)){
-    showToast(`El PIN debe ser de ${PIN_LEN_NUEVO} dígitos numéricos`);
-    return;
-  }
-  const debil=motivoPinDebil(pin);
-  if(debil){ showToast(debil); return; }
-  const pinConfirmado=await mostrarPrompt("Confirmá el PIN:", {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"numeric", placeholder:"Repetí el PIN"});
+  const v=validarCodigo(pin);
+  if(v.motivo){ showToast(v.motivo); return; }
+  const pinConfirmado=await mostrarPrompt("Confirmá el PIN:", {titulo:"🔐 Activar PIN", tipoInput:"password", inputMode:"text", placeholder:"Repetilo"});
   if(pinConfirmado!==pin){
-    showToast("Los PINs no coinciden");
+    showToast("No coinciden");
     return;
   }
   const salt=randomSaltB64();
   const claveNueva=await deriveKey(pin, salt, KDF_ITER);
-  const meta={it:KDF_ITER, pl:PIN_LEN_NUEVO};
+  const meta={it:KDF_ITER, pl:v.modo==='a' ? 0 : PIN_LEN_NUEVO, pm:v.modo==='a' ? 'a' : ''};   // pl 0 y pm '' = no se anotan
   // Se guarda el sobre anterior para poder volver atrás si algo falla a mitad de camino.
   const sobreAnterior=localStorage.getItem("fencblob");
   try{
@@ -556,7 +599,7 @@ async function setupPin(){
 }
 
 async function changePin(){
-  const actual=await mostrarPrompt("Ingresá tu PIN actual:", {titulo:"Cambiar PIN", tipoInput:"password", inputMode:"numeric"});
+  const actual=await mostrarPrompt("Ingresá tu PIN actual:", {titulo:"Cambiar PIN", ...opcionesPromptPin()});
   if(actual===null) return;
   if(!await verificarPin(actual)){
     showToast("PIN incorrecto");
@@ -566,7 +609,7 @@ async function changePin(){
 }
 
 async function removePin(){
-  const actual=await mostrarPrompt("Para desactivar el PIN, ingresalo:", {titulo:"Desactivar PIN", tipoInput:"password", inputMode:"numeric"});
+  const actual=await mostrarPrompt("Para desactivar el PIN, ingresalo:", {titulo:"Desactivar PIN", ...opcionesPromptPin()});
   if(actual===null) return;
   if(!await verificarPin(actual)){
     showToast("PIN incorrecto");
@@ -664,11 +707,12 @@ function renderPinStatus(){
   if(!el) return;
   const activo=pinConfigurado();
   if(activo){
-    const largo=pinLen();
+    const largo=pinLen(), alfa=pinModo()==="a";
     const opcion=autoLockOpcion();
     el.innerHTML=`
-      <p style="font-size:12px;color:var(--success);margin-bottom:10px">✓ PIN activo (${largo} dígitos). Se va a pedir cada vez que abras la app.</p>
-      ${largo<PIN_LEN_NUEVO?`<div class="inset mb-10" style="border-left:3px solid var(--warning)"><p class="txt-sm" style="margin:0 0 8px">Tu PIN tiene ${largo} dígitos y se puede adivinar en minutos. Pasá a ${PIN_LEN_NUEVO}.</p><button class="btn-sm" style="width:100%" onclick="changePin()">Pasar a ${PIN_LEN_NUEVO} dígitos</button></div>`:""}
+      <p style="font-size:12px;color:var(--success);margin-bottom:10px">✓ ${alfa?"Código alfanumérico activo":`PIN activo (${largo} dígitos)`}. Se va a pedir cada vez que abras la app.</p>
+      ${!alfa && largo>=PIN_LEN_NUEVO?`<p class="txt-xs txt-muted" style="margin:-4px 0 10px">¿Querés más seguridad? Con “Cambiar PIN” podés usar un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p>`:""}
+      ${!alfa && largo<PIN_LEN_NUEVO?`<div class="inset mb-10" style="border-left:3px solid var(--warning)"><p class="txt-sm" style="margin:0 0 8px">Tu PIN tiene ${largo} dígitos y se puede adivinar en minutos. Pasá a ${PIN_LEN_NUEVO} dígitos o a un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p><button class="btn-sm" style="width:100%" onclick="changePin()">Reforzar mi PIN</button></div>`:""}
       <div class="u-row">
         <button class="btn-sm u-flex1" onclick="changePin()">Cambiar PIN</button>
         <button class="btn-sm" style="flex:1;color:var(--danger)" onclick="removePin()">Desactivar</button>
