@@ -418,12 +418,19 @@ function toggleTcFrecPagado(id, ym){
 
 function montoVenc(v){ return v.moneda==="USD" ? `USD ${fmtNum2(v.monto)}` : fmtS(v.monto); }
 
+// La franja de Movimientos muestra los primeros vencimientos; "y N más" los despliega todos.
+let vencFranjaAbierta=false;
+function alternarVencFranja(){
+  vencFranjaAbierta=!vencFranjaAbierta;
+  if(typeof pintarFranjaVencimientos==="function") pintarFranjaVencimientos();
+}
 // Las líneas de la franja de Movimientos: "Visa vence mañana · resta $140.000", cada una con su
 // botón para marcarla pagada si ya lo hiciste.
-function vencimientosFranjaHTML(items, max){
+// `abierta`: muestra todos los vencimientos; si no, los primeros y un "y N más" que los despliega.
+function vencimientosFranjaHTML(items, max, abierta){
   if(!items.length) return "";
   const vencidos=items.filter(v=>v.dias<0).length;
-  const lim=Math.max(max||3, vencidos);   // los vencidos sin pagar se muestran todos, no se esconden en "y N más"
+  const lim=abierta ? items.length : Math.max(max||3, vencidos);   // los vencidos sin pagar se muestran todos, no se esconden en "y N más"
   const filas=items.slice(0,lim).map(v=>{
     const color=v.dias<0 ? "var(--danger)" : v.dias<=1 ? "var(--warning)" : "var(--muted)";
     const accion=v.tipo==="tarjeta" ? `abrirPagoTc(${attrJS(v.tarjeta||"")},${attrJS(v.ym)},${attrJS(v.moneda)})`
@@ -433,7 +440,8 @@ function vencimientosFranjaHTML(items, max){
       <span class="venc-txt" style="color:${color}">${textoVencimiento(v.dias)}${v.tipo==="tarjeta"?" · resta":" ·"} <strong>${montoVenc(v)}</strong></span>
       <button type="button" class="venc-ok" aria-label="Marcar ${escapeHtml(v.nombre)} como pagado" onclick="${accion}">✓ Pagado</button></div>`;
   }).join("");
-  const mas=items.length>lim ? `<div class="venc-mas">y ${items.length-lim} más</div>` : "";
+  const mas=items.length>lim ? `<button type="button" class="venc-mas" aria-expanded="false" onclick="alternarVencFranja()">y ${items.length-lim} más ›</button>`
+    : abierta && items.length>Math.max(max||3, vencidos) ? `<button type="button" class="venc-mas" aria-expanded="true" onclick="alternarVencFranja()">Ver menos ‹</button>` : "";
   const titulo=vencidos ? `⚠️ ${vencidos===1?"1 vencimiento sin pagar":`${vencidos} vencimientos sin pagar`}` : "🗓 Vencimientos";
   return `<div class="venc-franja${vencidos?" venc-con-vencidos":""}"><div class="venc-titulo">${titulo}</div>${filas}${mas}</div>`;
 }

@@ -690,7 +690,7 @@ canvas{width:100%!important;max-width:100%}
 .venc-por-cobrar{background:var(--success-light);border:1px solid transparent}
 .venc-por-cobrar .venc-titulo{color:var(--success)}
 .venc-cobrado{background:var(--success)}
-.venc-mas{font-size:12px;color:var(--muted);margin-top:2px}
+.venc-mas{display:block;width:100%;padding:8px 0 2px;border:0;background:none;font-size:12px;font-weight:600;color:var(--muted);text-align:left;cursor:pointer}
 /* Copias automáticas (Config): una fila por copia con su fecha y los botones de restaurar/borrar. */
 .copia-row{display:flex;align-items:center;gap:10px;padding:10px 0}
 .copia-row+.copia-row{border-top:1px solid var(--border)}
