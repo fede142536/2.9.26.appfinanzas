@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v217**
+**Versión actual: v218**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 2 de noviembre de 2026
 
+- **v218** · Chart.js y SheetJS viven en la app, en versión fija
+  La app ya no baja código de ningún CDN: Chart.js 4.4.7 y SheetJS 0.20.3 están en js/vendor (con sus licencias y un LEEME con la versión, el origen y el SHA-256). SheetJS pasa de 0.18.5 a 0.20.3, que corrige la contaminación de prototipos y el ReDoS al abrir archivos de Excel manipulados. Funcionan sin conexión (el service worker las precachea) y un test verifica que index.html no cargue scripts de afuera y que la huella de cada archivo coincida con el LEEME.
 - **v217** · Los backups salen cifrados con el PIN o código
   Con un PIN activo, el archivo de backup, lo que se manda por el menú de compartir y la copia diaria de Drive salen cifrados con la clave del PIN (el encabezado trae la sal y las vueltas para derivarla, y nada de los datos). Se abren con el PIN o código que había cuando se hizo, en este celular (sin pedirlo) o en otro. Restaurar desde archivo, arrastrando el archivo o desde Drive detecta el cifrado y lo pide, con hasta 5 intentos. Hay un interruptor en Configuración para dejarlos sin cifrar.
 - **v216** · Mostrar lo que se escribe al poner o cambiar la clave

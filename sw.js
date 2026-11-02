@@ -9,7 +9,7 @@
 // ESTE archivo cambia. Si tocás un .js y no subís este número, los celulares que ya
 // tienen la app instalada siguen sirviendo para siempre la versión vieja desde su caché
 // (la estrategia para los assets es "cache-first") y tu cambio NO LLEGA NUNCA.
-const CACHE_VERSION = "enola-v218";
+const CACHE_VERSION = "enola-v219";
 // index.html pide el CSS y los .js con ?v=<versión> (ver scripts/subir-version.js). Así el HTML nuevo y sus
 // estilos y scripts son SIEMPRE los de la misma versión: con el nombre pelado, el service worker viejo seguía
 // sirviendo el styles.css/.js de su caché (cache-first) debajo de un HTML ya nuevo y la pantalla quedaba sin
@@ -62,7 +62,9 @@ const ASSETS = [
   "./js/backup-drive.js",
   "./js/presupuestos.js",
   "./js/seguridad-pin.js",
-  "./js/main.js"
+  "./js/main.js",
+  "./js/vendor/xlsx.full.min.js",
+  "./js/vendor/chart.umd.js"
 ];
 
 // Instalación: cachear todos los assets de la app, forzando bytes frescos (sin caché HTTP)

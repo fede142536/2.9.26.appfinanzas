@@ -3337,7 +3337,7 @@ test("la versión del HTML y la del service worker coinciden", async ()=>{
 async function archivosDelHTML(){
   const html=await (await fetch("index.html")).text();
   const css=[...html.matchAll(/<link rel="stylesheet" href="(styles\.css[^"]*)"/g)].map(m=>m[1]);
-  const js=[...html.matchAll(/<script src="(js\/[^"]+)"/g)].map(m=>m[1]);
+  const js=[...html.matchAll(/<script(?: defer)? src="(js\/[^"]+)"/g)].map(m=>m[1]);
   return {html, css, js, version:(html.match(/<meta name="enola-version" content="enola-v(\d+)"/)||[])[1]};
 }
 
@@ -10899,6 +10899,22 @@ test("Configuración ofrece cifrar los backups (activado por defecto) y avisa al
     chk=el.querySelector("#backup-cifrado-chk"); chk.checked=true; await onBackupCifradoToggle(chk); igual(localStorage.getItem(BACKUP_CIFRADO_KEY), "1");
   } finally { window.renderHuellaStatus=hs; el.remove(); localStorage.removeItem(BACKUP_CIFRADO_KEY); }
 }));
+
+// (la etiqueta de apertura se escribe con \x3C: un "menor que" seguido de la palabra script en este bloque, después de un comentario HTML de otro test, hace que el navegador no cierre el script de la página)
+test("la app no baja código de internet: Chart.js y SheetJS están en js/vendor, en versión fija y precacheados", async ()=>{
+  const html=await (await fetch("index.html")).text(), sw=await (await fetch("sw.js")).text();
+  const externos=[...html.matchAll(/\x3Cscript[^>]*\ssrc="(https?:[^"]+)"/g)].map(m=>m[1]);
+  igual(externos, [], "index.html carga scripts de afuera: "+externos.join(", "));
+  cierto(/\x3Cscript defer src="js\/vendor\/xlsx\.full\.min\.js\?v=\d+"/.test(html) && /\x3Cscript defer src="js\/vendor\/chart\.umd\.js\?v=\d+"/.test(html), "faltan las librerías locales");
+  ["./js/vendor/xlsx.full.min.js","./js/vendor/chart.umd.js"].forEach(f=>cierto(sw.slice(sw.indexOf("const ASSETS")).includes(f), "el service worker no precachea "+f));
+  const chart=await (await fetch("js/vendor/chart.umd.js")).text(), xlsx=await (await fetch("js/vendor/xlsx.full.min.js")).text();
+  cierto(/Chart\.js v4\.\d+\.\d+/.test(chart.slice(0,200)), "no es Chart.js 4.x"); cierto(chart.length>150000, "Chart.js incompleto: "+chart.length);
+  cierto(xlsx.includes("SheetJS") && /version="0\.(20\.([2-9]|\d{2,})|2[1-9]|[3-9]\d)/.test(xlsx), "SheetJS tiene que ser 0.20.2 o más nuevo (las anteriores tienen fallas conocidas)"); cierto(xlsx.length>600000, "SheetJS incompleto: "+xlsx.length);
+  const hash=async txt=>[...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt)))].map(b=>b.toString(16).padStart(2,"0")).join("");
+  const leeme=await (await fetch("js/vendor/LEEME.md")).text();
+  cierto(leeme.includes(await hash(chart)) && leeme.includes(await hash(xlsx)), "LEEME.md no coincide con los archivos: alguien tocó una librería sin actualizar su huella");
+  const reg=await (await fetch("scripts/subir-version.js")).text(); cierto(reg.includes("js\\/[\\w\\/.-]+\\.js"), "subir-version.js no sube el ?v= de js/vendor");
+});
 
 grupo("Seguridad: datos de afuera no ejecutan código");
 

@@ -29,7 +29,7 @@ const nueva = process.argv[2] ? Number(process.argv[2]) : Number(enSw[2]) + 1;
 if (!Number.isInteger(nueva) || nueva < 1) { console.error("La versión tiene que ser un entero positivo."); process.exit(1); }
 
 // index.html pide styles.css y cada js/*.js con ?v=<versión>: se suben juntos (ver el comentario de sw.js).
-const reAssets = /((?:styles\.css|js\/[\w-]+\.js)\?v=)\d+/g;
+const reAssets = /((?:styles\.css|js\/[\w\/.-]+\.js)\?v=)\d+/g;
 fs.writeFileSync(SW, sw.replace(reSw, `$1${nueva}$3`));
 fs.writeFileSync(HTML, html.replace(reHtml, `$1${nueva}$3`).replace(reAssets, `$1${nueva}`));
 console.log(`enola-v${enSw[2]} → enola-v${nueva}`);
