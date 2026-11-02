@@ -66,7 +66,7 @@ async function activarHuella(){
     await mostrarAlerta("Este celular no tiene huella o rostro configurados, o el navegador no permite usarlos acá. Configuralos en los ajustes del celular y volvé a intentar.", "Huella o rostro");
     return false;
   }
-  const pin=await mostrarPrompt("Ingresá tu PIN para activar la huella:", {titulo:"👆 Huella o rostro", tipoInput:"password", inputMode:"numeric", placeholder:`${pinLen()} dígitos`});
+  const pin=await mostrarPrompt("Ingresá tu PIN para activar la huella:", {titulo:"👆 Huella o rostro", ...opcionesPromptPin(), placeholder:pinModo()==="a" ? "Tu código" : `${pinLen()} dígitos`});
   if(pin===null) return false;
   if(!await verificarPin(pin)){ showToast("PIN incorrecto"); return false; }
   try{
