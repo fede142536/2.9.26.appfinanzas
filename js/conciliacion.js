@@ -188,7 +188,7 @@ function filasConciliacionHTML(c){
     "Es el mismo movimiento (mismo CEDEAR), pero tu fondo tiene otro monto, fecha o cantidad que la inversión cargada (la de Balanz trae el monto exacto del broker).");
   h+=sec("Inversiones sin movimiento en tu fondo de ahorro", c.faltanEnFondo.length, c.faltanEnFondo.map(f=>fila(
       titulo(f, f.inv.fecha, ladoTxt(f.lado)), fmtS(f.inv.importe),
-      [`${lineaInv(f.inv,null)}`, `No hay ${f.lado==="venta"?"un retiro":"un depósito"} de ${f.ticker||"este CEDEAR"} en tu fondo de ahorro.`], "var(--danger)",
+      [`${lineaInv(f.inv,null)}`, `No hay ${f.lado==="venta"?"un retiro":"un depósito"} de ${escapeHtml(f.ticker||"este CEDEAR")} en tu fondo de ahorro.`], "var(--danger)",
       f.ticker ? `<button type="button" class="btn-sm concil-excl" onclick="excluirTickerConcil(${attrJS(f.ticker)})">${escapeHtml(f.ticker)} no pasa por mi fondo</button>` : "")).join(""),
     "Si ese CEDEAR lo comprás y vendés con plata que ya estaba en el broker (no sale de tu fondo), tocá \"no pasa por mi fondo\": deja de compararse. No cambia ningún movimiento.");
   h+=sec("Movimientos de tu fondo de ahorro sin inversión", c.sobranEnFondo.length, c.sobranEnFondo.map(f=>fila(

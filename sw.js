@@ -9,7 +9,7 @@
 // ESTE archivo cambia. Si tocás un .js y no subís este número, los celulares que ya
 // tienen la app instalada siguen sirviendo para siempre la versión vieja desde su caché
 // (la estrategia para los assets es "cache-first") y tu cambio NO LLEGA NUNCA.
-const CACHE_VERSION = "enola-v213";
+const CACHE_VERSION = "enola-v214";
 // index.html pide el CSS y los .js con ?v=<versión> (ver scripts/subir-version.js). Así el HTML nuevo y sus
 // estilos y scripts son SIEMPRE los de la misma versión: con el nombre pelado, el service worker viejo seguía
 // sirviendo el styles.css/.js de su caché (cache-first) debajo de un HTML ya nuevo y la pantalla quedaba sin
@@ -117,8 +117,8 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(event.request, { cache: "no-store" })
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy));
+          // Solo se guardan respuestas buenas: una página de error (404/500) en la caché se serviría después sin conexión.
+          if (res.ok) { const copy = res.clone(); caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy)); }
           return res;
         })
         .catch(() => caches.match(event.request).then((r) => r || caches.match("./index.html")))
@@ -131,8 +131,8 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy));
+        // Con "caché primero", un 404 o un 500 guardado se quedaría para siempre: solo se guardan respuestas buenas.
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy)); }
         return res;
       });
     })

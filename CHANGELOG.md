@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v212**
+**Versión actual: v213**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 2 de noviembre de 2026
 
+- **v213** · Correcciones de seguridad (XSS por datos importados, CSV, caché)
+  Auditoría de seguridad: se escapan las cuentas y tarjetas de los selectores, los tickers recientes (el onclick era inyectable), los tickers de la conciliación y el tipo y el título del reporte para imprimir. El CSV exportado ya no deja que una celda se ejecute como fórmula en Excel. El service worker solo guarda respuestas buenas y el workflow de tests pasa a permisos de solo lectura.
 - **v212** · Ver todos los vencimientos de la franja de Movimientos
   El 'y N más' de la franja de vencimientos pasa a ser un botón que despliega todos los que no entraban, con 'Ver menos' para volver a esconderlos.
 - **v211** · Hoja Pagar resumen más simple y con la cuenta de la tarjeta
