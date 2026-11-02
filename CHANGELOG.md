@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v213**
+**Versión actual: v214**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 2 de noviembre de 2026
 
+- **v214** · PIN de 6 dígitos que no se puede adivinar al instante y bloqueo automático
+  El PIN pasa a 6 dígitos (se rechazan los repetidos, las escaleras y los más comunes) y deja de guardarse un hash: se comprueba abriendo el sobre cifrado, que ahora usa 1.000.000 de vueltas de PBKDF2 guardadas en el propio sobre. Los PIN de 4 dígitos siguen entrando, se migran y se ofrece subirlos (una vez por día). Desde el 5º intento fallido hay que esperar. La app vuelve a pedir el PIN al salir o tras 1, 5 o 15 minutos sin usarla (configurable en Configuración).
 - **v213** · Correcciones de seguridad (XSS por datos importados, CSV, caché)
   Auditoría de seguridad: se escapan las cuentas y tarjetas de los selectores, los tickers recientes (el onclick era inyectable), los tickers de la conciliación y el tipo y el título del reporte para imprimir. El CSV exportado ya no deja que una celda se ejecute como fórmula en Excel. El service worker solo guarda respuestas buenas y el workflow de tests pasa a permisos de solo lectura.
 - **v212** · Ver todos los vencimientos de la franja de Movimientos
