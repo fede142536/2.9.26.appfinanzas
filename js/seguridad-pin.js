@@ -701,6 +701,63 @@ setInterval(()=>{
   if(bloqueoVencido(autoLockOpcion(), ultimaActividadPin, Date.now())) bloquearApp();
 }, 15000);
 
+// ═══════════════════════════════════════════
+// BACKUPS CIFRADOS
+// ═══════════════════════════════════════════
+// Con un PIN activo los datos viven cifrados en el celular, pero el backup (el archivo, lo que se manda por el menú de compartir y la copia de Drive)
+// salía en claro: quien lo tuviera lo leía sin tu PIN. Ahora sale cifrado con la MISMA clave del PIN. El archivo trae al principio, sin cifrar, lo
+// que hace falta para volver a derivar la clave (la sal y las vueltas, que no son secretas) y nada de tus datos. Se abre con el PIN o código que
+// tenías cuando se hizo, en este celular o en otro. Sin PIN activo no hay con qué cifrar y el backup sale como siempre.
+const BACKUP_CIFRADO_KEY="fbackupcifrado";   // "0" = el usuario eligió no cifrar
+function backupCifradoActivo(){
+  let v=null; try{ v=localStorage.getItem(BACKUP_CIFRADO_KEY); }catch(e){ /* sin almacenamiento */ }
+  return pinConfigurado() && !!encKey && v!=="0";
+}
+// Pura. ¿Es el sobre de un backup cifrado de Enola?
+const esBackupCifrado=o=>!!o && typeof o==="object" && o.enola==="backup-cifrado" && typeof o.salt==="string" && typeof o.iv==="string" && typeof o.data==="string" && Number(o.it)>0;
+const backupValido=b=>!!b && !!b.datos && Array.isArray(b.datos.movs);
+async function cifrarBackup(backup){
+  const sobre=leerSobre();
+  if(!encKey || !sobre || !sobre.salt) throw new Error("Para cifrar el backup hace falta tener la app desbloqueada con PIN.");
+  const {iv, data}=await encryptBlob(encKey, backup);
+  return {enola:"backup-cifrado", version:1, app:"Enola", fecha:backup.fecha, kdf:"PBKDF2-SHA256", it:sobre.it||KDF_ITER_LEGADO, salt:sobre.salt,
+          ...(sobre.pm==="a" ? {pm:"a"} : {}), iv, data};
+}
+// El backup de adentro, o null si el código no es el que lo cifró (o el archivo está roto).
+async function abrirBackupCifrado(env, codigo){
+  try{
+    const clave=await deriveKey(String(codigo), env.salt, Number(env.it));
+    const b=await decryptBlob(clave, {iv:env.iv, data:env.data});
+    return backupValido(b) ? b : null;
+  }catch(e){ return null; }
+}
+// Abre un backup cifrado: si es de la clave de este mismo celular no pide nada; si no, pide el PIN o código (hasta 5 intentos). null si se cancela o no se puede.
+async function pedirCodigoDeBackup(env){
+  let sobre=null; try{ sobre=leerSobre(); }catch(e){ sobre=null; }
+  if(encKey && sobre && sobre.salt===env.salt && (sobre.it||KDF_ITER_LEGADO)===Number(env.it)){
+    try{ const b=await decryptBlob(encKey, {iv:env.iv, data:env.data}); if(backupValido(b)) return b; }catch(e){ /* se pide el código */ }
+  }
+  for(let i=0; i<5; i++){
+    const c=await mostrarPrompt(i===0 ? "Este backup está cifrado. Ingresá el PIN o código que tenías cuando lo hiciste:" : "No era ese. Probá de nuevo con el PIN o código que tenías cuando hiciste este backup:",
+      {titulo:"🔒 Backup cifrado", tipoInput:"password", inputMode:env.pm==="a" ? "text" : "numeric"});
+    if(c===null || c===undefined) return null;
+    const b=await abrirBackupCifrado(env, c);
+    if(b) return b;
+  }
+  showToast("No se pudo abrir el backup");
+  return null;
+}
+async function onBackupCifradoToggle(chk){
+  if(!chk.checked){
+    if(!await mostrarConfirm("Los backups (el archivo y la copia de Drive) van a salir SIN cifrar: cualquiera que los tenga puede leer todos tus datos sin tu PIN. ¿Seguro?", {titulo:"Backups sin cifrar", textoOk:"Dejar sin cifrar", peligroso:true})){ chk.checked=true; return; }
+    guardarPreferencia(BACKUP_CIFRADO_KEY, "0");
+    showToast("Los backups salen sin cifrar");
+  } else {
+    guardarPreferencia(BACKUP_CIFRADO_KEY, "1");
+    showToast("🔒 Los backups salen cifrados con tu PIN");
+  }
+}
+
 // Pinta el estado actual del PIN en Config
 function renderPinStatus(){
   const el=document.getElementById("pin-status");
@@ -717,6 +774,11 @@ function renderPinStatus(){
         <button class="btn-sm u-flex1" onclick="changePin()">Cambiar PIN</button>
         <button class="btn-sm" style="flex:1;color:var(--danger)" onclick="removePin()">Desactivar</button>
       </div>
+      <label class="opt-row" style="--chk:var(--save);margin-top:12px">
+        <span class="opt-icon">🔒</span>
+        <span class="opt-text"><span class="opt-title">Cifrar los backups</span><span class="opt-sub">El archivo, el menú de compartir y Drive. Se abren con tu PIN o código</span></span>
+        <input type="checkbox" id="backup-cifrado-chk" class="chk-custom" ${localStorage.getItem(BACKUP_CIFRADO_KEY)==="0"?"":"checked"} onchange="onBackupCifradoToggle(this)">
+      </label>
       <div class="form-group" style="margin-top:12px"><label class="form-label" for="autolock-sel">Volver a pedir el PIN</label>
         <select id="autolock-sel" class="form-select" onchange="cambiarAutoLock(this.value)">${AUTOLOCK_OPCIONES.map(([v,t])=>`<option value="${v}"${v===opcion?" selected":""}>${v==="nunca"?"Nunca (la app queda abierta)":`Si salís o no la usás ${t.replace("a ","")}`}</option>`).join("")}</select>
         <p class="txt-xs txt-muted" style="margin-top:4px">Si salís de la app o la dejás sin tocar ese tiempo, vuelve a pedir el PIN.</p></div>`;

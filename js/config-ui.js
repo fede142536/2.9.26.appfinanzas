@@ -644,14 +644,17 @@ function hoyLocal(){
 
 // Manda el backup por el menú de compartir del celular (Drive, WhatsApp, mail…): es la forma de
 // sacar una copia FUERA del dispositivo en un toque, sin cuentas ni servidores. Si el navegador
-// no lo soporta, cae a la descarga de siempre. Ojo: el archivo va sin cifrar, aunque tengas PIN.
+// no lo soporta, cae a la descarga de siempre. Con PIN activo el archivo sale cifrado (ver backupCifradoActivo).
 async function compartirBackup(){
   const nombre=`misgastos-backup-${hoyLocal()}.json`;
   let archivo=null;
   try{
-    archivo=new File([new Blob([JSON.stringify(armarBackup(),null,2)],{type:"application/json"})], nombre, {type:"application/json"});
+    const backup=armarBackup();
+    // Cifrar es una espera de unos milisegundos (la clave ya está derivada): alcanza para no perder el toque del usuario que pide navigator.share().
+    const texto=JSON.stringify(backupCifradoActivo() ? await cifrarBackup(backup) : backup, null, 2);
+    archivo=new File([new Blob([texto],{type:"application/json"})], nombre, {type:"application/json"});
   }catch(e){ archivo=null; }
-  // Sin ningún await antes: navigator.share() exige que se llame dentro del toque del usuario.
+  // Sin otro await antes: navigator.share() exige que se llame dentro del toque del usuario.
   if(archivo && typeof navigator.canShare==="function" && navigator.canShare({files:[archivo]})){
     try{
       await navigator.share({files:[archivo], title:"Backup de Enola", text:"Copia de seguridad de mis datos"});
@@ -670,7 +673,15 @@ async function compartirBackup(){
 
 function exportarBackup(){
   const backup=armarBackup();
-  const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+  // Con PIN activo se cifra primero (es asíncrono); sin PIN se baja enseguida, como siempre.
+  if(backupCifradoActivo()){
+    return cifrarBackup(backup).then(env=>descargarBackup(JSON.stringify(env,null,2), "Backup descargado y cifrado ✓"))
+      .catch(e=>{ console.error(e); showToast("No se pudo cifrar el backup"); });
+  }
+  descargarBackup(JSON.stringify(backup,null,2), "✓ Backup descargado");
+}
+function descargarBackup(texto, aviso){
+  const blob=new Blob([texto],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
   const ts=new Date().toISOString().slice(0,10);
@@ -682,7 +693,7 @@ function exportarBackup(){
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   marcarBackupHecho();
   renderEstadoBackup();
-  showToast("✓ Backup descargado");
+  showToast(aviso);
 }
 
 function restaurarBackup(input){
@@ -691,8 +702,12 @@ function restaurarBackup(input){
   const reader=new FileReader();
   reader.onload=async (e)=>{
     try{
-      const backup=JSON.parse(e.target.result);
-      if(!backup.datos||!Array.isArray(backup.datos.movs)){
+      let backup=JSON.parse(e.target.result);
+      if(esBackupCifrado(backup)){
+        backup=await pedirCodigoDeBackup(backup);   // cifrado: se abre con el PIN o código de cuando se hizo
+        if(!backup){ input.value=""; return; }
+      }
+      if(!backup||!backup.datos||!Array.isArray(backup.datos.movs)){
         showToast("❌ Archivo inválido");
         input.value="";
         return;
@@ -1079,7 +1094,11 @@ async function verBackupsDrive(){
 async function restaurarDesdeDrive(id, dia){
   const r=await leerBackupDrive(id, {interactivo:true});
   if(!r.ok){ showToast(mensajeDrive(r)); return false; }
-  const backup=r.backup;
+  let backup=r.backup;
+  if(r.cifrado){
+    backup=await pedirCodigoDeBackup(r.sobre);
+    if(!backup) return false;
+  }
   if(!await mostrarConfirm(`Volver a la copia de Drive del ${fmtDiaCopiaDrive(dia)}?\n\n• ${backup.datos.movs.length} movimientos\n• ${(backup.datos.tcs||[]).length} tarjetas\n\nReemplaza TODOS los datos actuales. Antes te guardo una copia de cómo están ahora, por si querés deshacerlo.`,
     {titulo:"Restaurar desde Drive", textoOk:"Restaurar", peligroso:true})) return false;
   try{ await guardarCopiaLocal("seguridad"); }
