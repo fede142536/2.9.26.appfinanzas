@@ -657,55 +657,84 @@ function marcarPagadoTc(tarjeta, ym, moneda, valor, movId){
 
 // ── Hoja "Pagar resumen": carga sola el pago, con la pregunta de los gastos administrativos ──
 // Es como cargar a mano el "Pago total" de la tarjeta: sin gastos administrativos el gasto es el monto del resumen; con ellos, el
-// resumen más los gastos, en un solo movimiento. En dólares sale por defecto del fondo en USD (casilla "Sale de mis ahorros").
+// resumen más los gastos, en un solo movimiento. La hoja muestra solo lo esencial (monto, gastos administrativos y el botón con el
+// total); fecha, cuenta y "sale de mis ahorros" quedan resumidos en una línea que se abre con "Cambiar". En dólares sale por defecto
+// del fondo en USD.
 let pagoTcCtx=null;
 const fmtPagoTc=(v,usd)=>usd ? `USD ${fmtNum2(v)}` : fmtS(v);
+// Pura. La cuenta de la que sale el pago: el banco que le asignaste a la tarjeta (Mastercard → Galicia); si no tiene, la del último pago
+// que cargaste de esa tarjeta; si tampoco, la que más usan sus compras. Solo vale si existe entre tus cuentas; "" si no hay ninguna.
+function cuentaParaPagoTc(tarjeta, lista, tcsLista, bancos, cuentas){
+  const nombre=tarjeta||"", norm=c=>String(c||"").trim().toLowerCase();
+  const ok=c=>(cuentas||[]).find(k=>norm(k)===norm(c))||"";
+  const banco=ok((bancos||{})[nombre]); if(banco) return banco;
+  const pagos=(lista||[]).filter(m=>esPagoTarjeta(m) && (m.pagoTarjeta.tarjeta||"")===nombre && ok(m.cuenta)).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+  if(pagos.length) return ok(pagos[0].cuenta);
+  const usos={}; (tcsLista||[]).filter(t=>(t.tarjeta||"")===nombre && ok(t.cuenta)).forEach(t=>{ const c=ok(t.cuenta); usos[c]=(usos[c]||0)+1; });
+  const top=Object.entries(usos).sort((a,b)=>b[1]-a[1])[0];
+  return top ? top[0] : "";
+}
 function abrirPagoTc(tarjeta, ym, moneda){
   if(!document.getElementById("modal-pago-tc")) return;
-  const r=resumenTarjetaMes(ym, tarjeta, moneda, movs), usd=r.moneda==="USD";
+  const r=resumenTarjetaMes(ym, tarjeta, moneda, movs), usd=r.moneda==="USD", $=id=>document.getElementById(id);
   pagoTcCtx={ym, tarjeta:r.tarjeta, moneda:r.moneda, admin:false};
-  document.getElementById("pago-tc-titulo").textContent=`${r.tarjeta||"Tarjeta"}${usd?" · dólares":""} · ${mesLbl(ym)}`;
-  document.getElementById("pago-tc-sub").textContent=`Resumen ${fmtPagoTc(r.total,usd)}${r.pagado>0?` · ya pagaste ${fmtPagoTc(r.pagado,usd)}`:""}`;
+  $("pago-tc-titulo").textContent=`${r.tarjeta||"Tarjeta"}${usd?" · dólares":""} · ${mesLbl(ym)}`;
+  $("pago-tc-sub").textContent=r.pagado>0 ? `Resumen ${fmtPagoTc(r.total,usd)} · ya pagaste ${fmtPagoTc(r.pagado,usd)}` : "";
   ["pago-tc-prefix","pago-tc-prefix-adm"].forEach(id=>{
-    const pre=document.getElementById(id); pre.textContent=usd?"USD":"$"; pre.parentElement.classList.toggle("amount-wrap-usd", usd);   // más lugar para "USD"
+    const pre=$(id); pre.textContent=usd?"USD":"$"; pre.parentElement.classList.toggle("amount-wrap-usd", usd);   // más lugar para "USD"
   });
-  document.getElementById("pago-tc-monto").value=r.resta>0 ? r.resta : r.total;
-  document.getElementById("pago-tc-adm").value="";
-  document.getElementById("pago-tc-fecha").value=hoyLocal();
-  document.getElementById("pago-tc-ahorro").checked=usd;
-  document.getElementById("pago-tc-ahorro-txt").textContent=usd ? "💸 Sale de mi fondo en dólares (resta del fondo USD)" : "💸 Sale de mis ahorros (resta del fondo)";
-  document.getElementById("pago-tc-cuenta").innerHTML=getCuentas().map(c=>`<option>${escapeHtml(c)}</option>`).join("");
+  $("pago-tc-monto").value=r.resta>0 ? r.resta : r.total;
+  $("pago-tc-adm").value="";
+  $("pago-tc-adm-chk").checked=false;
+  $("pago-tc-fecha").value=hoyLocal();
+  $("pago-tc-ahorro").checked=usd;
+  $("pago-tc-ahorro-txt").textContent=usd ? "💸 Sale de mi fondo en dólares" : "💸 Sale de mis ahorros";
+  const cuentas=getCuentas();
+  $("pago-tc-cuenta").innerHTML=cuentas.map(c=>`<option>${escapeHtml(c)}</option>`).join("");
+  const sugerida=cuentaParaPagoTc(r.tarjeta, movs, tcs, leerBancosTc(), cuentas);
+  if(sugerida) $("pago-tc-cuenta").value=sugerida;
+  $("pago-tc-det").style.display="none"; $("pago-tc-det-btn").setAttribute("aria-expanded","false");
   pagoTcAdmin(false);
-  document.getElementById("modal-pago-tc").classList.add("open");
+  $("modal-pago-tc").classList.add("open");
 }
 function cerrarPagoTc(){
   const m=document.getElementById("modal-pago-tc"); if(m) m.classList.remove("open");
   pagoTcCtx=null;
 }
-// ¿Tiene gastos administrativos? No / Sí: con "Sí" aparece el campo y el total se calcula solo.
+// ¿Tiene gastos administrativos? Con el interruptor encendido aparece el campo y el botón suma los dos montos.
 function pagoTcAdmin(si){
   if(pagoTcCtx) pagoTcCtx.admin=!!si;
+  document.getElementById("pago-tc-adm-chk").checked=!!si;
   document.getElementById("pago-tc-adm-wrap").style.display=si?"":"none";
-  document.getElementById("pago-tc-adm-no").classList.toggle("active", !si);
-  document.getElementById("pago-tc-adm-si").classList.toggle("active", !!si);
   if(!si) document.getElementById("pago-tc-adm").value="";
   pagoTcActualizarTotal();
+}
+// Abre o cierra fecha, cuenta y "sale de mis ahorros".
+function pagoTcDetalles(){
+  const d=document.getElementById("pago-tc-det"), btn=document.getElementById("pago-tc-det-btn"), abrir=d.style.display==="none";
+  d.style.display=abrir?"":"none"; btn.setAttribute("aria-expanded", String(abrir));
+  document.getElementById("pago-tc-det-ir").textContent=abrir?"Listo ▴":"Cambiar ▾";
 }
 function pagoTcMontos(){
   const num=id=>Math.max(parseFloat(document.getElementById(id).value)||0,0);
   const base=num("pago-tc-monto"), adm=pagoTcCtx && pagoTcCtx.admin ? num("pago-tc-adm") : 0;
   return {base, adm, total:Math.round((base+adm)*100)/100};
 }
+// El total va en el botón de pagar, y la línea de abajo resume cuándo y de dónde sale.
 function pagoTcActualizarTotal(){
-  const el=document.getElementById("pago-tc-total"); if(!el || !pagoTcCtx) return;
-  const usd=pagoTcCtx.moneda==="USD", {adm,total}=pagoTcMontos();
-  el.innerHTML=`Se registra un gasto de <strong>${fmtPagoTc(total,usd)}</strong>${adm>0?` <span class="txt-muted">(resumen + ${fmtPagoTc(adm,usd)} de gastos administrativos)</span>`:""}`;
+  const btn=document.getElementById("pago-tc-guardar"); if(!btn || !pagoTcCtx) return;
+  const usd=pagoTcCtx.moneda==="USD", {total}=pagoTcMontos();
+  btn.textContent=`Pagar ${fmtPagoTc(total,usd)}`;
+  const fecha=document.getElementById("pago-tc-fecha").value, cuenta=document.getElementById("pago-tc-cuenta").value;
+  const partes=[fecha===hoyLocal() ? "Hoy" : fecha ? fmtDiaMes(fecha) : "Sin fecha", cuenta||"Sin cuenta"];
+  if(document.getElementById("pago-tc-ahorro").checked) partes.push(usd ? "del fondo USD" : "de tus ahorros");
+  document.getElementById("pago-tc-det-txt").textContent=partes.join(" · ");
 }
 function guardarPagoTc(){
   const ctx=pagoTcCtx; if(!ctx) return;
   const {base, adm}=pagoTcMontos(), fecha=document.getElementById("pago-tc-fecha").value;
   if(base<=0){ showToast("Ingresá el monto del resumen"); return; }
-  if(ctx.admin && !(adm>0)){ showToast("Ingresá los gastos administrativos, o elegí No"); return; }
+  if(ctx.admin && !(adm>0)){ showToast("Ingresá los gastos administrativos, o apagá el interruptor"); return; }
   if(!fecha){ showToast("Poné la fecha del pago"); return; }
   const usaAhorro=document.getElementById("pago-tc-ahorro").checked;
   const mov=crearPagoTarjeta({ym:ctx.ym, tarjeta:ctx.tarjeta, moneda:ctx.moneda, monto:base, gastosAdmin:adm, fecha, usaAhorro, cuenta:document.getElementById("pago-tc-cuenta").value});

@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v210**
+**Versión actual: v211**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,11 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 2 de noviembre de 2026
+
+- **v211** · Hoja Pagar resumen más simple y con la cuenta de la tarjeta
+  La hoja muestra solo el monto, un interruptor de gastos administrativos y el botón con el total; fecha, cuenta y 'sale de mis ahorros' quedan resumidos en una línea que se abre con Cambiar. La cuenta viene puesta según la tarjeta (su banco asignado, si no la del último pago, si no la que más usan sus compras).
 
 ## 1 de noviembre de 2026
 

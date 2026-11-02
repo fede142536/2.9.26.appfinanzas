@@ -669,6 +669,11 @@ canvas{width:100%!important;max-width:100%}
 .sc-det{font-size:12px;color:var(--muted);margin:2px 0 6px;line-height:1.35}
 .sc-acc{display:flex;gap:8px;align-items:center}
 .sc-acc .form-select{flex:1;height:36px;padding:0 10px;font-size:13px}
+/* Hoja "Pagar resumen": una fila con interruptor y una línea que resume fecha, cuenta y origen de la plata. */
+.pago-tc-fila{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px;padding:12px 2px;cursor:pointer}
+.pago-tc-ahorro{background:var(--save-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--save);font-weight:500}
+.pago-tc-det-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin-top:10px;padding:11px 12px;border:0;border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer;text-align:left}
+.pago-tc-det-ir{color:var(--muted);font-size:12px;white-space:nowrap}
 .tc-res-btn{padding:7px 14px;border:0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--warning);color:#fff;cursor:pointer}
 /* Franja de próximos vencimientos (Movimientos, arriba de la lista). */
 .venc-wrap{margin:10px 16px 0}
