@@ -5084,7 +5084,7 @@ test("la hoja de fechas usa el calendario del sistema y la de pago tiene la preg
   cierto(/id="fechas-tc-cierre"[^>]*type="date"|type="date"[^>]*id="fechas-tc-cierre"/.test(html), "el cierre no usa un input de fecha");
   cierto(/id="fechas-tc-vto"[^>]*type="date"|type="date"[^>]*id="fechas-tc-vto"/.test(html), "el vencimiento no usa un input de fecha");
   cierto(html.includes("modal-vincular-pago"), "falta la hoja para vincular el pago ya cargado");
-  cierto(html.includes('id="modal-pago-tc"') && html.includes('id="pago-tc-adm-si"') && html.includes("¿Tiene gastos administrativos?") && html.includes("pagoTcYaCargado()"), "falta la hoja de pagar con la pregunta de gastos administrativos");
+  cierto(html.includes('id="modal-pago-tc"') && html.includes('id="pago-tc-adm-chk"') && html.includes("¿Tiene gastos administrativos?") && html.includes("pagoTcYaCargado()"), "falta la hoja de pagar con la pregunta de gastos administrativos");
 });
 
 // ── Vincular el pago que ya cargaste como gasto (sin tocar el balance) ──
@@ -6518,7 +6518,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 15, "esperaba las 15 casillas conocidas (pago-tc-ahorro, frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
+  igual(cajas.length, 16, "esperaba las 16 casillas conocidas (pago-tc-ahorro, pago-tc-adm-chk, frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);
@@ -10494,8 +10494,9 @@ const eP=id=>document.getElementById(id);
 
 test("Pagar → No: registra el monto del resumen, deja el resumen en cero y vinculado, sin gastos administrativos", ()=>conVenc({tcs:TCS_SEPT, movs:[]}, ()=>conHojaPagoTc(()=>{
   abrirPagoTc("Visa","2026-09","ARS");
-  igual(eP("pago-tc-monto").value, "160000"); igual(eP("pago-tc-adm-wrap").style.display, "none"); cierto(eP("pago-tc-total").textContent.includes("$160.000"), eP("pago-tc-total").textContent);
-  igual(eP("pago-tc-ahorro").checked, false, "en pesos no sale del fondo por defecto");
+  igual(eP("pago-tc-monto").value, "160000"); igual(eP("pago-tc-adm-wrap").style.display, "none"); cierto(eP("pago-tc-guardar").textContent.includes("$160.000"), eP("pago-tc-guardar").textContent);
+  igual(eP("pago-tc-ahorro").checked, false, "en pesos no sale del fondo por defecto"); cierto(eP("pago-tc-det").style.display==="none", "fecha y cuenta empiezan escondidas");
+  cierto(eP("pago-tc-det-txt").textContent.startsWith("Hoy"), eP("pago-tc-det-txt").textContent);
   guardarPagoTc();
   igual(movs.length, 1); const p=movs[0];
   igual([p.importe, p.cat, p.subcat, p.usaAhorro], [160000, "Tarjeta de crédito", "Pago total", false]);
@@ -10510,8 +10511,8 @@ test("Pagar → Sí: el gasto es el resumen más los gastos administrativos, en 
   pagoTcAdmin(true); igual(eP("pago-tc-adm-wrap").style.display, "");
   guardarPagoTc(); igual(movs.length, 0, "con 'Sí' sin cargar los gastos no registra nada"); cierto(toasts.some(t=>t.includes("gastos administrativos")), toasts.join("|"));
   eP("pago-tc-adm").value=15000; pagoTcActualizarTotal();
-  cierto(eP("pago-tc-total").textContent.includes("$175.000") && eP("pago-tc-total").textContent.includes("$15.000"), eP("pago-tc-total").textContent);
-  pagoTcAdmin(false); cierto(eP("pago-tc-total").textContent.includes("$160.000") && eP("pago-tc-adm").value==="", "volver a No borra los gastos");
+  cierto(eP("pago-tc-guardar").textContent.includes("$175.000"), "el botón lleva el total: "+eP("pago-tc-guardar").textContent);
+  pagoTcAdmin(false); cierto(eP("pago-tc-guardar").textContent.includes("$160.000") && eP("pago-tc-adm").value==="" && eP("pago-tc-adm-chk").checked===false, "apagar el interruptor borra los gastos");
   pagoTcAdmin(true); eP("pago-tc-adm").value=15000; eP("pago-tc-fecha").value="2026-10-05"; guardarPagoTc();
   igual(movs.length, 1); const p=movs[0];
   igual([p.importe, p.pagoTarjeta.gastosAdmin, p.fecha], [175000, 15000, "2026-10-05"]); cierto(p.nota.includes("incluye $15.000 de gastos administrativos"), p.nota);
@@ -10523,7 +10524,7 @@ test("Pagar → Sí: el gasto es el resumen más los gastos administrativos, en 
 test("Pagar una tarjeta en dólares: viene tildado que sale del fondo USD y el gasto baja ese fondo", ()=>conVenc({tcs:[VUELO_USD], movs:[{id:50, tipo:"Gasto", cat:"Ahorro", subcat:"Dólares", moneda:"USD", importe:0, importeOrig:500, fecha:"2026-08-01", esAhorro:true, usaAhorro:false}]}, ()=>conHojaPagoTc(()=>{
   abrirPagoTc("Visa","2026-09","USD");
   igual(eP("pago-tc-monto").value, "100"); igual(eP("pago-tc-prefix").textContent, "USD"); cierto(eP("pago-tc-prefix").parentElement.classList.contains("amount-wrap-usd"), "lugar para el prefijo USD"); igual(eP("pago-tc-ahorro").checked, true); cierto(eP("pago-tc-ahorro-txt").textContent.includes("dólares"), eP("pago-tc-ahorro-txt").textContent);
-  pagoTcAdmin(true); eP("pago-tc-adm").value="2.5"; pagoTcActualizarTotal(); cierto(eP("pago-tc-total").textContent.includes("USD 102,50"), eP("pago-tc-total").textContent);
+  pagoTcAdmin(true); eP("pago-tc-adm").value="2.5"; pagoTcActualizarTotal(); cierto(eP("pago-tc-guardar").textContent.includes("USD 102,50"), eP("pago-tc-guardar").textContent); cierto(eP("pago-tc-det-txt").textContent.includes("del fondo USD"), eP("pago-tc-det-txt").textContent);
   guardarPagoTc();
   const p=movs[0]; igual([p.moneda, p.importe, p.importeOrig, p.usaAhorro], ["USD", 0, 102.5, true]);
   const fondo=movs.filter(esDepositoAhorro).reduce((s,m)=>s+m.importeOrig,0)-movs.filter(esRetiroAhorro).reduce((s,m)=>s+m.importeOrig,0);
@@ -10540,6 +10541,28 @@ test("Deshacer un pago cargado por Pagar borra el gasto; 'Ya lo cargué yo' abre
   let args=null; window.abrirVincularPagoTc=(a,b,c)=>{ args=[a,b,c]; };
   abrirPagoTc("Visa","2026-09","ARS"); pagoTcYaCargado();
   igual(args, ["Visa","2026-09","ARS"]); cierto(!eP("modal-pago-tc").classList.contains("open"));
+})));
+
+test("la cuenta del pago respeta la de la tarjeta: su banco, si no el último pago, si no la que más usan sus compras", ()=>{
+  const cuentas=["Cuentas","Efectivo","Galicia","BPat"];
+  igual(cuentaParaPagoTc("Mastercard", [], [], {Mastercard:"galicia"}, cuentas), "Galicia", "el banco asignado, sin importar mayúsculas");
+  igual(cuentaParaPagoTc("Mastercard", [], [], {Mastercard:"Banco que no existe"}, cuentas), "", "un banco que no es una de tus cuentas no vale");
+  const pagos=[{...PAGO_VISA(1000,{fecha:"2026-08-05", cuenta:"Efectivo", id:1})}, {...PAGO_VISA(1000,{fecha:"2026-09-05", cuenta:"BPat", id:2})}];
+  igual(cuentaParaPagoTc("Visa", pagos, [], {}, cuentas), "BPat", "el último pago de esa tarjeta");
+  const compras=[{tarjeta:"Visa", cuenta:"Galicia"},{tarjeta:"Visa", cuenta:"Galicia"},{tarjeta:"Visa", cuenta:"BPat"},{tarjeta:"Mastercard", cuenta:"Efectivo"},{tarjeta:"Visa"}];
+  igual(cuentaParaPagoTc("Visa", [], compras, {}, cuentas), "Galicia", "la que más usan sus compras");
+  igual(cuentaParaPagoTc("Otra", [], compras, {}, cuentas), "", "sin ningún dato no inventa una");
+});
+
+test("Pagar viene con la cuenta de la tarjeta puesta y el pago se guarda en esa cuenta", ()=>conVenc({tcs:TCS_SEPT, movs:[]}, ()=>conHojaPagoTc(()=>{
+  const bancosAntes=localStorage.getItem("fbancotc"); localStorage.setItem("fbancotc", JSON.stringify({Visa:"Galicia"}));
+  try{
+    abrirPagoTc("Visa","2026-09","ARS");
+    igual(eP("pago-tc-cuenta").value, "Galicia"); cierto(eP("pago-tc-det-txt").textContent.includes("Galicia"), eP("pago-tc-det-txt").textContent);
+    pagoTcDetalles(); igual(eP("pago-tc-det").style.display, ""); eP("pago-tc-fecha").value="2026-10-05"; pagoTcActualizarTotal();
+    cierto(eP("pago-tc-det-txt").textContent.startsWith("5 oct") || eP("pago-tc-det-txt").textContent.includes("oct"), eP("pago-tc-det-txt").textContent);
+    guardarPagoTc(); igual(movs[0].cuenta, "Galicia");
+  } finally { if(bancosAntes===null) localStorage.removeItem("fbancotc"); else localStorage.setItem("fbancotc", bancosAntes); }
 })));
 
 grupo("Aislamiento de los tests");
