@@ -141,7 +141,7 @@ function buildTickerRecientes(){
   if(!recientes.length){ cont.innerHTML=""; return; }
   const actual=(document.getElementById("inv-ticker").value||"").toUpperCase();
   cont.innerHTML=`<span class="ticker-hint">Recientes</span>`+recientes.map(t=>
-    `<button type="button" class="ticker-chip${t===actual?" active":""}" onclick="pickTicker('${t.replace(/'/g,"\\'")}')">${escapeHtml(t)}</button>`
+    `<button type="button" class="ticker-chip${t===actual?" active":""}" data-ticker="${escapeHtml(t)}" onclick="pickTicker(this.dataset.ticker)">${escapeHtml(t)}</button>`
   ).join("");
 }
 function pickTicker(t){

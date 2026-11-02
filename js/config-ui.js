@@ -401,7 +401,7 @@ function exportarPDF(){
   const totalCat=catSorted.reduce((s,[,v])=>s+v,0);
 
   const titulo=desde===hasta?mesLbl(desde):`${mesLbl(desde)} – ${mesLbl(hasta)}`;
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte ${titulo}</title>
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte ${escapeHtml(titulo)}</title>
   <style>
     body{font-family:-apple-system,Helvetica,sans-serif;padding:30px;max-width:800px;margin:auto;color:#222}
     h1{margin:0 0 4px;font-size:24px}.sub{color:#666;font-size:14px;margin-bottom:24px}
@@ -418,7 +418,7 @@ function exportarPDF(){
     @media print{body{padding:15mm}}
   </style></head><body>
   <h1>Reporte de Enola</h1>
-  <div class="sub">${titulo} · Generado el ${new Date().toLocaleDateString("es-AR")}</div>
+  <div class="sub">${escapeHtml(titulo)} · Generado el ${new Date().toLocaleDateString("es-AR")}</div>
   <div class="kpis">
     <div class="kpi"><div class="kpi-label">Ingresos</div><div class="kpi-val pos">${fmtS(ing)}</div></div>
     <div class="kpi"><div class="kpi-label">Gastos</div><div class="kpi-val neg">${fmtS(gas)}</div></div>
@@ -437,7 +437,7 @@ function exportarPDF(){
       const sign=m.tipo==="Ingreso"?"+":"-";
       return `<tr>
         <td>${(m.fecha||"").split("-").reverse().slice(0,3).join("/")}</td>
-        <td>${m.tipo}${m.esAhorro?" 🏦":""}</td>
+        <td>${escapeHtml(m.tipo)}${m.esAhorro?" 🏦":""}</td>
         <td>${escapeHtml(m.cat||"")}</td>
         <td style="font-size:11px;color:#666">${escapeHtml((m.nota||"").slice(0,40))}</td>
         <td class="right ${cls}">${sign}${fmtS(m.importe)}</td>
@@ -458,6 +458,14 @@ function exportarPDF(){
 // ya "desenrollado") pensado para abrir directo en Power BI, Looker Studio o pandas/Python.
 // Reusa getMesMov()/getTcMovsEnMes() —la misma lógica de expansión mensual que ya usa el resto
 // de la app— así que cuotas y gastos frecuentes salen exactamente como los ve el usuario en pantalla.
+// Pura. Una celda de texto que empieza con = + - @ (o tab / retorno) la abre Excel o Calc como FÓRMULA (=HYPERLINK, =cmd|…): una nota o una
+// categoría importada de afuera podría ejecutar algo al abrir el CSV. Se le antepone un apóstrofo para que sea texto. Los números (incluidos los
+// negativos) no se tocan.
+function celdaSegura(v){
+  if(typeof v==="number") return String(v);
+  const s=String(v===undefined||v===null?"":v);
+  return /^[=+\-@\t\r]/.test(s) && !/^-?\d+([.,]\d+)?$/.test(s) ? "'"+s : s;
+}
 function exportarDatosBI(){
   // Rango: desde el mes más viejo con datos hasta el mes actual
   let minYM=currentYM();
@@ -509,8 +517,8 @@ function exportarDatosBI(){
 
   const columnas=["id","tipo","fecha","anio","mes","categoria","subcategoria","cuenta","tarjeta","moneda","importe_ars","importe_usd","ticker","cuota_actual","cuotas_totales","es_frecuente","es_ahorro","usa_ahorro","tags","nota"];
   const escapeCSV=v=>{
-    const s=String(v===undefined||v===null?"":v);
-    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    const s=celdaSegura(v);
+    return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
   };
   const lineas=[columnas.join(",")];
   filas.forEach(f=>lineas.push(columnas.map(c=>escapeCSV(f[c])).join(",")));

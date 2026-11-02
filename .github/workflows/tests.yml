@@ -8,6 +8,10 @@ on:
     branches: ["**"]
   pull_request:
 
+# El token del workflow solo necesita leer el código.
+permissions:
+  contents: read
+
 # Si llegan dos pushes seguidos a la misma rama, solo importa el último.
 concurrency:
   group: tests-${{ github.ref }}

@@ -10578,6 +10578,46 @@ test("Pagar viene con la cuenta de la tarjeta puesta y el pago se guarda en esa 
   } finally { if(bancosAntes===null) localStorage.removeItem("fbancotc"); else localStorage.setItem("fbancotc", bancosAntes); }
 })));
 
+grupo("Seguridad: datos de afuera no ejecutan código");
+
+const XSS_PAY=`"'><img src=x onerror=window.__xssTest=1>`;
+
+test("los selectores de cuenta y de tarjeta muestran nombres con HTML como texto, sin inyectar nada", ()=>{
+  const sel=document.createElement("select"); sel.id="sel-xss"; document.body.appendChild(sel);
+  const antes={cc:cuentasCustom, tc:tarjetasCustom};
+  try{
+    cuentasCustom=[XSS_PAY]; tarjetasCustom=[XSS_PAY];
+    buildCuentaSelect("sel-xss", XSS_PAY); cierto(!sel.querySelector("img") && [...sel.options].some(o=>o.textContent===XSS_PAY), "cuentas: "+sel.innerHTML);
+    buildCuentaSelect("sel-xss", "otra"+XSS_PAY); cierto(!sel.querySelector("img"), "una cuenta vieja que no está en la lista tampoco inyecta");
+    buildTarjetaSelect("sel-xss", XSS_PAY); cierto(!sel.querySelector("img") && [...sel.options].some(o=>o.textContent===XSS_PAY), "tarjetas: "+sel.innerHTML);
+    buildTarjetaSelect("sel-xss", "otra"+XSS_PAY); cierto(!sel.querySelector("img"));
+  } finally { cuentasCustom=antes.cc; tarjetasCustom=antes.tc; sel.remove(); }
+});
+
+test("los tickers recientes con comillas o HTML no rompen el botón y al tocarlos completan el campo tal cual", ()=>{
+  const cont=document.createElement("div"); cont.id="inv-ticker-recientes"; const inp=document.createElement("input"); inp.id="inv-ticker"; document.body.append(cont, inp);
+  const antes=movs;
+  try{
+    movs=[{id:1, tipo:"Inversion", ticker:`x"'><img src=x onerror=1>`, fecha:"2026-10-01", importe:1, moneda:"ARS"}];
+    buildTickerRecientes();
+    cierto(!cont.querySelector("img"), "no se inyectó nada: "+cont.innerHTML);
+    const btn=cont.querySelector("button.ticker-chip"); cierto(!!btn, "hay botón");
+    btn.click(); igual(inp.value, `X"'><IMG SRC=X ONERROR=1>`, "el campo recibe el ticker completo, sin ejecutar nada");
+  } finally { movs=antes; cont.remove(); inp.remove(); }
+});
+
+test("la conciliación y el reporte para imprimir escapan los tickers y los tipos de movimiento", async ()=>{
+  const h=filasConciliacionHTML({diferencias:[], faltanEnFondo:[{ticker:XSS_PAY, lado:"compra", inv:{fecha:"2026-10-01", importe:1000}}], sobranEnFondo:[{ticker:XSS_PAY, lado:"venta", fondo:{fecha:"2026-10-01", importe:1}}], duplicados:[], ok:[], excluidos:[], anteriores:[]});
+  const caja=document.createElement("div"); caja.innerHTML=h; cierto(!caja.querySelector("img") && !/<img/i.test(caja.innerHTML.replace(/&lt;img/g,"")), "la conciliación inyectó HTML");
+  const cfg=await (await fetch("js/config-ui.js")).text(); cierto(cfg.includes("<td>${escapeHtml(m.tipo)}") && cfg.includes("<title>Reporte ${escapeHtml(titulo)}</title>"), "el reporte no escapa el tipo o el título");
+});
+
+test("el CSV no deja que una celda se ejecute como fórmula en Excel", ()=>{
+  igual(celdaSegura("=HYPERLINK(\"http://x\")"), "'=HYPERLINK(\"http://x\")"); igual(celdaSegura("+54911"), "'+54911"); igual(celdaSegura("@SUM(A1)"), "'@SUM(A1)");
+  igual(celdaSegura("-texto"), "'-texto"); igual(celdaSegura("\tTAB"), "'\tTAB"); igual(celdaSegura("normal"), "normal"); igual(celdaSegura("Supermercado - Dia"), "Supermercado - Dia");
+  igual(celdaSegura(-5.5), "-5.5", "un número negativo no es una fórmula"); igual(celdaSegura("-1500"), "-1500", "ni un texto que es solo un número"); igual(celdaSegura(null), ""); igual(celdaSegura(undefined), "");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

@@ -16,10 +16,10 @@ function buildCuentaSelect(selectId, valorActual){
   if(!sel) return;
   const actual = valorActual!==undefined ? valorActual : sel.value;
   const cuentas=getCuentas();
-  let opts=cuentas.map(c=>`<option ${c===actual?"selected":""}>${c}</option>`);
+  let opts=cuentas.map(c=>`<option ${c===actual?"selected":""}>${escapeHtml(c)}</option>`);
   // Si el valor actual no está en la lista (cuenta vieja de un import, por ejemplo), agregarla igual
   if(actual && !cuentas.includes(actual)){
-    opts.unshift(`<option selected>${actual}</option>`);
+    opts.unshift(`<option selected>${escapeHtml(actual)}</option>`);
   }
   sel.innerHTML=opts.join("");
 }
@@ -117,9 +117,9 @@ function buildTarjetaSelect(selectId, valorActual){
   if(!sel) return;
   const actual = valorActual!==undefined ? valorActual : sel.value;
   const tarjetas=getTarjetas();
-  let opts=tarjetas.map(t=>`<option ${t===actual?"selected":""}>${t}</option>`);
+  let opts=tarjetas.map(t=>`<option ${t===actual?"selected":""}>${escapeHtml(t)}</option>`);
   if(actual && !tarjetas.includes(actual)){
-    opts.unshift(`<option selected>${actual}</option>`);
+    opts.unshift(`<option selected>${escapeHtml(actual)}</option>`);
   }
   sel.innerHTML=opts.join("");
 }
