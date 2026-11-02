@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v211**
+**Versión actual: v212**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 2 de noviembre de 2026
 
+- **v212** · Ver todos los vencimientos de la franja de Movimientos
+  El 'y N más' de la franja de vencimientos pasa a ser un botón que despliega todos los que no entraban, con 'Ver menos' para volver a esconderlos.
 - **v211** · Hoja Pagar resumen más simple y con la cuenta de la tarjeta
   La hoja muestra solo el monto, un interruptor de gastos administrativos y el botón con el total; fecha, cuenta y 'sale de mis ahorros' quedan resumidos en una línea que se abre con Cambiar. La cuenta viene puesta según la tarjeta (su banco asignado, si no la del último pago, si no la que más usan sus compras).
 

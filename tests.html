@@ -4856,6 +4856,19 @@ test("la franja muestra nombre, cuándo vence y cuánto, y resume lo que sobra",
   igual(vencimientosFranjaHTML([]), "");
 });
 
+test("la franja deja desplegar los vencimientos que no entran: 'y N más' los abre y 'Ver menos' los vuelve a esconder", ()=>{
+  const item=(n,d)=>({tipo:"tarjeta", nombre:n, dias:d, monto:1000, moneda:"ARS"});
+  const todos=[item("Visa",1), item("Master",-2), item("Amex",3), item("Cabal",5), item("Naranja",8)];
+  const cerrada=vencimientosFranjaHTML(todos);
+  cierto(cerrada.includes("y 2 más ›") && cerrada.includes("alternarVencFranja()") && !cerrada.includes("Cabal") && !cerrada.includes("Ver menos"), cerrada);
+  const abierta=vencimientosFranjaHTML(todos, undefined, true);
+  cierto(abierta.includes("Cabal") && abierta.includes("Naranja") && abierta.includes("Ver menos") && !abierta.includes("y 2 más"), abierta);
+  cierto(!vencimientosFranjaHTML(todos.slice(0,3), undefined, true).includes("Ver menos"), "sin nada escondido no ofrece 'Ver menos'");
+  const antes=vencFranjaAbierta, pf=window.pintarFranjaVencimientos; let repintada=0; window.pintarFranjaVencimientos=()=>{ repintada++; };
+  try{ vencFranjaAbierta=false; alternarVencFranja(); igual(vencFranjaAbierta, true); igual(repintada, 1); alternarVencFranja(); igual(vencFranjaAbierta, false); }
+  finally{ vencFranjaAbierta=antes; window.pintarFranjaVencimientos=pf; }
+});
+
 test("Movimientos muestra la franja de vencimientos en 'Todos' del mes actual", ()=>{
   const hoy=new Date().getDate();
   return conVenc({tcs:[{id:1, desc:"Notebook", total:120000, cuotasTotal:12, mesInicio:currentYM(), tarjeta:"Visa", moneda:"ARS"}], venc:{Visa:hoy}}, ()=>{
