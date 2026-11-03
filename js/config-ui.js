@@ -355,6 +355,16 @@ function applyTheme(){
   } else {
     document.documentElement.setAttribute("data-theme", t);
   }
+  // Color de la barra del sistema (theme-color) = fondo de la app. En "auto" siguen al sistema (dos metas con media);
+  // si la persona fuerza un tema, las dos pasan a ese color.
+  const oscuro=document.documentElement.getAttribute("data-theme")==="dark";
+  const metas=document.querySelectorAll('meta[name="theme-color"]');
+  if(metas.length===2){
+    if(t==="auto"){
+      metas[0].setAttribute("content","#f7f6f2"); metas[0].setAttribute("media","(prefers-color-scheme: light)");
+      metas[1].setAttribute("content","#000000"); metas[1].setAttribute("media","(prefers-color-scheme: dark)");
+    } else metas.forEach(m=>{ m.removeAttribute("media"); m.setAttribute("content", oscuro?"#000000":"#f7f6f2"); });
+  }
   // Marcar botones activos al entrar
   setTimeout(()=>{
     document.querySelectorAll(".theme-btn").forEach(b=>{

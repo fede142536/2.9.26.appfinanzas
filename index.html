@@ -8,7 +8,7 @@
      'unsafe-inline' en script-src es por los onclick="…" y los dos bloques de script del propio HTML (no se pueden sacar sin reescribir los botones).
      Si se agrega un servicio nuevo hay que sumarlo acá (hay un test que lo recuerda). Ver js/vendor/LEEME.md: las librerías ya viven en la app. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://www.googleapis.com https://accounts.google.com/gsi/ https://api.argentinadatos.com https://apis.datos.gob.ar; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'; manifest-src 'self'">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Enola</title>
 <!-- La versión que este HTML espera. index.html se pide SIEMPRE a la red (ver sw.js), así
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
@@ -17,7 +17,19 @@
 <meta name="enola-version" content="enola-v222">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1c6ca8">
+<!-- Color de la barra del sistema = color de fondo de la app (claro #f7f6f2 / oscuro #000). Los dos primeros siguen al sistema; applyTheme() (config-ui.js)
+     y el script de abajo ajustan el color cuando la persona fuerza un tema. color-scheme: que los controles nativos y el fondo previo al CSS ya salgan del tema correcto. -->
+<meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<script>
+/* Tema antes del primer dibujo: sin destello blanco al abrir la app en oscuro. La misma regla que applyTheme() (config-ui.js). */
+(function(){ try{
+  var t=localStorage.getItem("ftheme")||"auto", dark=t==="dark"||(t==="auto"&&window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.setAttribute("data-theme", dark?"dark":"light");
+  if(t!=="auto"){ document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){ m.removeAttribute("media"); m.setAttribute("content", dark?"#000000":"#f7f6f2"); }); }
+}catch(e){} })();
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Enola">
