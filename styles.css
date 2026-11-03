@@ -872,6 +872,83 @@ canvas{width:100%!important;max-width:100%}
 .mes-desde-izq{animation:mesDesdeIzquierda .26s cubic-bezier(.22,.9,.35,1)}
 
 /* ═══════════════════════════════════════════
+   [AAA sistema] REGLAS GLOBALES
+   ═══════════════════════════════════════════
+   Reglas transversales (tacto, foco, selección, safe areas, estados). Van acá, antes del bloque de
+   movimiento reducido, para pisar a los componentes sin tocar sus reglas. Los tokens están al principio. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation;scroll-padding-top:64px}
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-wrap:break-word}
+::selection{background:var(--accent-light);color:var(--text)}
+*{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+/* Controles nativos: heredan la tipografía de la app (sin esto el textarea sale en monoespaciada y el input en la fuente del sistema). */
+button,input,select,textarea{font-family:inherit;letter-spacing:inherit;font-variant-numeric:inherit}
+.seg-btn.active,.currency-pill.active{background:var(--surface-2)}
+/* Un control deshabilitado se ve apagado y no engaña al dedo. */
+button:disabled,.btn-primary:disabled,.btn-sm:disabled,input:disabled,select:disabled{opacity:.5;cursor:not-allowed}
+/* Foco del teclado sobre rellenos sólidos: el anillo azul se perdería sobre un botón azul. */
+.btn-primary:focus-visible,.filter-chip.active:focus-visible,.year-tab.active:focus-visible{outline-color:var(--text)}
+/* Campos: borde ≥3:1 (WCAG 1.4.11), alto táctil, y el mismo anillo de foco en toda la app. */
+.form-input,.form-select,.form-textarea{border-color:var(--border-strong);min-height:var(--tap)}
+.form-textarea{min-height:64px}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--muted);opacity:.85}
+.form-input:focus-visible,.form-select:focus-visible,.form-textarea:focus-visible{outline:none}
+#page-cargar .card .form-input,#page-cargar .card .form-select,#page-cargar .card .form-textarea{border-color:var(--border-strong)}
+.chk-custom{background:var(--border-strong)}
+.chk-custom:checked{background:var(--chk,var(--accent))}
+/* Base de componentes: radios y bordes de la escala (botón = mismo radio que el input). */
+.btn-primary{border-radius:var(--radius-md);min-height:var(--tap)}
+.btn-sm{border-radius:var(--radius-sm);min-height:36px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border-color:var(--border-strong);transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.modal{border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding-bottom:calc(32px + var(--safe-b))}
+.modal-handle{width:40px;height:5px;border-radius:var(--radius-pill);background:var(--border-strong);opacity:.55}
+.toast{top:calc(16px + var(--safe-t))}
+#fab-cargar{right:calc(24px + var(--safe-r))}
+#fab-calculadora{right:calc(16px + var(--safe-r))}
+/* Piso de legibilidad: nada de texto por debajo de 10 px. */
+.badge{font-size:var(--fs-micro);padding:2px 7px}
+.chip-label{font-size:var(--fs-micro)}
+.seg-btn-count{opacity:1;color:var(--muted)}
+.seg-btn.active .seg-btn-count{color:var(--muted)}
+.tx-del{color:var(--muted)}
+
+/* OBJETIVOS TÁCTILES (≥44×44). Botones-ícono: el elemento mide 44. Chips, píldoras y enlaces chicos
+   conservan su dibujo y ganan un área clicable invisible de 44 con ::after (no cambia el layout). */
+#hamburger-btn{width:var(--tap);height:var(--tap);top:6px;left:8px}
+.side-menu-close{min-width:var(--tap);min-height:var(--tap);display:inline-flex;align-items:center;justify-content:center;padding:0;margin:-6px -8px -6px 0}
+.mov-icon-btn{width:var(--tap);height:var(--tap)}
+.mov-topbar-arrow{width:var(--tap);height:var(--tap)}
+.cierre-x{min-width:var(--tap);min-height:var(--tap);margin:-12px -10px -12px -6px;display:inline-flex;align-items:center;justify-content:center}
+.tx-del,.tx-edit{min-width:var(--tap);min-height:var(--tap);padding:0;display:inline-flex;align-items:center;justify-content:center}
+.date-chip{min-height:var(--tap)}
+.date-cal-btn{width:var(--tap);height:var(--tap)}
+#page-cargar>.type-toggle .type-btn{min-height:var(--tap)}
+.tc-col{flex-basis:var(--tap)}
+.filter-chip,.year-tab,.seg-btn,.btn-sm,.currency-pill,.field-link,.copia-borrar,.tc-res-btn,.venc-ok,.tc-res-link,.dash-insight-action,.dash-year-link,.meta-edit{position:relative}
+.meta-edit{position:absolute}
+.filter-chip::after,.year-tab::after,.seg-btn::after,.btn-sm::after,.currency-pill::after,.field-link::after,.copia-borrar::after,.tc-res-btn::after,.venc-ok::after,.tc-res-link::after,.dash-insight-action::after,.dash-year-link::after,.meta-edit::after,.chk-custom::before{
+  content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
+.chk-custom::before{width:max(100%,var(--tap));height:var(--tap)}
+#mes-label,.js-toggle-pago,.inv-mes-btn{position:relative}
+#mes-label::after,.js-toggle-pago::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
+.amount-hero .amount-input{min-width:var(--tap)}
+/* Botones de solo símbolo (×, ✎) escritos con style="background:none…" en listas: conservan su tamaño, ganan área clicable de 44. */
+button[style*="background:none"]:not([style*="position"]){position:relative}
+button[style*="background:none"]::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
+/* Interruptor un poco más grande (46×28): se ve y se toca mejor; el área clicable llega a 44 de alto con ::before. */
+.chk-custom{width:46px;height:28px}
+.chk-custom::after{top:3px;left:3px;width:22px;height:22px}
+.chk-custom:checked::after{left:21px}
+/* Red de seguridad: botones con color:#fff escrito en línea (HTML o JS) sobre un relleno semántico. En el tema
+   oscuro los rellenos son claros y el blanco no se lee: --on-solid decide. */
+button[style*="color:#fff"],label.btn-primary[style*="color:#fff"],button[style*="color: rgb(255, 255, 255)"]{color:var(--on-solid)!important}
+/* Estado :active parejo: todo lo que se toca devuelve señal al instante. */
+.filter-chip,.year-tab,.seg-btn,.btn-sm,.tc-res-btn,.venc-ok,.mov-icon-btn,.mov-topbar-arrow,.side-menu-close,.cierre-x,.tx-del,.tx-edit,.copia-borrar,.meta-edit{transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.filter-chip:active,.year-tab:active,.seg-btn:active,.btn-sm:active,.tc-res-btn:active,.venc-ok:active{transform:scale(.96)}
+.mov-icon-btn:active,.mov-topbar-arrow:active,.side-menu-close:active,.cierre-x:active,.tx-del:active,.tx-edit:active,.copia-borrar:active{background:var(--border)}
+.field-link:active{opacity:.6}
+.nav-btn:active,.pin-key:active{transition-duration:var(--dur-1)}
+
+/* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO
    ═══════════════════════════════════════════
    Quien activó "reducir movimiento" en su teléfono lo hizo por algo — mareo, vértigo, o
