@@ -14,15 +14,22 @@
      --accent   azul · acción, selección, enlaces     (6,8:1 · 7,3:1)
      --danger   rojo · gasto, error, borrar            (8,0:1 · 6,7:1)
      --success  verde · ingreso, ok                    (6,6:1 · 8,5:1)
-     --warning  ámbar · tarjeta, aviso                 (5,9:1 · 8,0:1)  [en claro es un ocre: el ámbar vivo no llega a 4,5:1 como texto]
-     --warning-fill  el ámbar vivo para RELLENOS sin texto (barras de progreso): ≥3:1 sobre la tarjeta.
-     --invest   violeta · inversión                    (7,8:1 · 6,9:1)
+     --warning  ámbar · tarjeta, aviso                 (6,3:1 · 8,0:1)  [en claro es un ocre naranja: el ámbar vivo no llega a 4,5:1 como texto]
+     --warning-fill   ámbar vivo para RELLENOS sin texto (barras de progreso), ≥3:1 sobre la tarjeta.
+     --warning-solid + --on-warning-solid   botón ámbar con texto oscuro (ámbar vivo #e0a030, 7,5:1)
+     Texto GRANDE en ámbar (la cifra de Tarjetas, ≥24 px): --warning-fill (3,8:1 sobre blanco, 3,5:1 sobre --bg).: así el botón conserva la calidez.
+   --invest   violeta · inversión                    (7,8:1 · 6,9:1)
      --save     teal · ahorro                          (7,4:1 · 8,5:1)
      Los 6 tonos de texto cumplen AA (≥4,5:1) sobre --bg, --surface y todos los -light, en ambos temas.
    --on-solid   color del texto SOBRE un relleno sólido semántico (botón, chip activo): blanco en claro,
                 casi negro en oscuro (los tonos del oscuro son claros). Nunca escribas color:var(--on-solid) sobre un relleno.
    --border-strong  borde de controles (inputs, interruptor apagado): ≥3:1 sobre la tarjeta (WCAG 1.4.11).
    --surface-2  superficie elevada SOBRE un fondo --border (segmento activo de un segmentado, píldora activa): blanco en claro, gris #3a3a3c en oscuro.
+   --muted-on-tint  texto chico atenuado SOBRE fondos tintados (track de segmentados, chips, mosaicos): ≥7:1 en claro, ≥6,8:1 en oscuro.
+   --banner-bg/-fg  cartel de "versión vieja" (index.html, estilos en línea a propósito: tiene que verse aunque el CSS esté viejo).
+   --muted-on-tint  texto chico atenuado SOBRE fondos tintados (track de segmentados, chips, mosaicos): ≥7:1 en claro, ≥6,8:1 en oscuro.
+   --banner-bg/-fg  cartel de "versión vieja" (index.html, estilos en línea a propósito: tiene que verse aunque el CSS esté viejo).
+   --border-mid  borde de botones con texto (el texto ya los identifica; no exigen 3:1): botón secundario .btn-sm.
    --border     divisor decorativo (líneas, fondo de segmentados). No lo uses como único borde de un control.
    --focus      anillo de foco del teclado.
 
@@ -33,13 +40,13 @@
    ESPACIADO · grilla de 4 px: --sp-1 4 · --sp-2 8 · --sp-3 12 · --sp-4 16 (margen lateral de página) · --sp-5 24 · --sp-6 32.
    TIPOGRAFÍA · Plus Jakarta Sans. Escala corta: --fs-micro 10 · --fs-xs 11 · --fs-sm 12 · --fs-md 13 ·
            --fs-base 15 (cuerpo, inputs) · --fs-lg 17 (títulos de pantalla) · --fs-xl 22 · --fs-hero 44 (importe).
-           Cifras siempre tabulares (ya está en body). Pesos: 400 cuerpo · 500 énfasis · 600 rótulos y botones · 700 cifras y títulos.
+           Cifras siempre tabulares (ya está en body). Hoy la escala es el OBJETIVO: quedan tamaños sueltos en reglas de cada pantalla (aaa/sistema/TAMANOS_SUELTOS.md). Pesos: 400 cuerpo · 500 énfasis · 600 rótulos y botones · 700 cifras y títulos.
    TÁCTIL · --tap 44px: todo lo que se toca mide (o tiene área clicable de) 44×44. Ver el bloque [AAA sistema] más abajo.
    ═══════════════════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#f7f6f2;--surface:#fff;--border:#e8e5df;--border-strong:#8a887f;--text:#1a1a18;--muted:#55544d;
+  --bg:#f7f6f2;--surface:#fff;--border:#e8e5df;--border-strong:#8a887f;--border-mid:#b8b5ab;--text:#1a1a18;--muted:#55544d;
   --accent:#175e96;--accent-light:#e5f0fb;--danger:#962828;--danger-light:#fcebeb;
-  --success:#226a33;--success-light:#e8f5eb;--warning:#8c5a05;--warning-fill:#b87410;--warning-light:#faeeda;
+  --success:#226a33;--success-light:#e8f5eb;--warning:#924f00;--warning-fill:#b87410;--warning-solid:#e0a030;--on-warning-solid:#2a1800;--muted-on-tint:#4a493f;--banner-bg:#924f00;--banner-fg:#fff;--warning-light:#faeeda;
   --invest:#4b43ab;--invest-light:#eeedfe;--save:#175f5f;--save-light:#e0f5f5;
   --surface-2:#fff;--on-solid:#fff;--focus:var(--accent);--grad-fin:black;
   --radius:14px;--radius-sm:8px;--radius-md:12px;--radius-lg:20px;--radius-pill:999px;
@@ -53,9 +60,9 @@
   color-scheme:light;
 }
 [data-theme="dark"]{
-  --bg:#000000;--surface:#1c1c1e;--border:rgba(255,255,255,.1);--border-strong:#727275;--text:#e8e6e0;--muted:#aaa8a0;
+  --bg:#000000;--surface:#1c1c1e;--border:rgba(255,255,255,.1);--border-strong:#727275;--border-mid:rgba(255,255,255,.26);--text:#e8e6e0;--muted:#aaa8a0;
   --accent:#66b0ee;--accent-light:#1d3045;--danger:#ee8383;--danger-light:#3a2020;
-  --success:#84c68e;--success-light:#1f3322;--warning:#e5a652;--warning-fill:#e5a652;--warning-light:#3a2c18;
+  --success:#84c68e;--success-light:#1f3322;--warning:#e5a652;--warning-fill:#e5a652;--warning-solid:#e5a652;--on-warning-solid:#0b0b0c;--muted-on-tint:#c2c0b8;--banner-bg:#e5a652;--banner-fg:#0b0b0c;--warning-solid:#e5a652;--on-warning-solid:#0b0b0c;--muted-on-tint:#c2c0b8;--banner-bg:#e5a652;--banner-fg:#0b0b0c;--warning-light:#3a2c18;
   --invest:#a69ce8;--invest-light:#26223a;--save:#66c6c6;--save-light:#1a3535;
   --surface-2:#3a3a3c;--on-solid:#0b0b0c;--grad-fin:white;
   --shadow:0 8px 24px rgba(0,0,0,.6);--shadow-sm:0 1px 3px rgba(0,0,0,.5);--shadow-pop:0 10px 30px rgba(0,0,0,.7);
@@ -99,7 +106,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .side-menu-title{font-size:16px;font-weight:700;letter-spacing:-.3px}
 .side-menu-close{background:none;border:none;font-size:22px;color:var(--muted);cursor:pointer;padding:4px 8px;line-height:1}
 /* Ítems del menú: lista vertical, ícono a la izquierda, texto grande — reemplaza el look de tab bar */
-.nav-btn{width:100%;text-align:left;padding:13px 18px;border:none;background:none;font-size:15px;font-weight:500;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:14px;transition:background-color .2s ease}
+.nav-btn{width:100%;text-align:left;padding:13px 18px;border:none;background:none;font-size:var(--fs-base);font-weight:500;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:14px;transition:background-color var(--dur-2) var(--ease)}
 .nav-btn:active{background:var(--bg)}
 .nav-btn.active{color:var(--accent);background:var(--accent-light);font-weight:600}
 .nav-icon{font-size:19px;line-height:1;width:26px;text-align:center;flex-shrink:0}
@@ -112,23 +119,23 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 @keyframes pageEnter{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
 .page.active{display:block;animation:pageEnter .25s ease}
 .header{background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:13px 16px 13px 58px;position:sticky;top:0;z-index:50}
-.header h1{font-size:17px;font-weight:600;letter-spacing:-.4px}
-.header p{font-size:12px;color:var(--muted);margin-top:2px}
+.header h1{font-size:var(--fs-lg);font-weight:600;letter-spacing:-.4px}
+.header p{font-size:var(--fs-sm);color:var(--muted);margin-top:2px}
 @keyframes slideUpFade{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
 /* Destello breve en el select de cuenta cuando se autocompleta por predicción */
 @keyframes cuentaSugeridaFlash{0%{box-shadow:0 0 0 3px var(--accent-light);border-color:var(--accent)}100%{box-shadow:none;border-color:var(--border)}}
 .cuenta-sugerida-flash{animation:cuentaSugeridaFlash .7s ease}
-.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:15px;margin:10px 16px;box-shadow:var(--shadow);animation:slideUpFade .4s ease forwards}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:var(--sp-4);margin:10px 16px;box-shadow:var(--shadow);animation:slideUpFade .4s ease forwards}
 /* Que el toque se sienta. En el celular no hay hover: sin esto, tocar una fila o un chip no
    devuelve ninguna señal hasta que la pantalla cambia, y se siente trabado. */
-.chip,.tx-item{transition:transform .12s ease}
+.chip,.tx-item{transition:transform var(--dur-1) var(--ease)}
 .chip:active{transform:scale(.97)}
 .tx-item:active{transform:scale(.99)}
-.card-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+.card-title{font-size:var(--fs-xs);font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
 /* FORM */
-.form-group{margin-bottom:18px}
-.form-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px;display:block}
-.form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;background:transparent;color:var(--text);appearance:none;-webkit-appearance:none;outline:none;transition:border-color .15s,box-shadow .15s}
+.form-group{margin-bottom:var(--sp-4)}
+.form-label{font-size:var(--fs-sm);font-weight:600;color:var(--muted);margin-bottom:7px;display:block}
+.form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:var(--radius-md);font-size:var(--fs-base);background:transparent;color:var(--text);appearance:none;-webkit-appearance:none;outline:none;transition:border-color var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease)}
 .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);background:transparent;box-shadow:0 0 0 3px var(--accent-light)}
 .form-textarea{resize:none;height:64px}
 /* CHECKBOX CUSTOM → SWITCH
@@ -139,7 +146,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    variable --chk en el style="" de cada input, igual que --tema-color en la pantalla de Cargar.*/
 .chk-custom{appearance:none;-webkit-appearance:none;width:36px;height:22px;flex-shrink:0;
   border-radius:999px;background:var(--border);position:relative;cursor:pointer;
-  transition:background-color .15s ease,transform .12s ease}
+  transition:background-color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .chk-custom::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;
   border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s ease}
 .chk-custom:checked{background:var(--chk,var(--accent))}
@@ -156,7 +163,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 /* AMOUNT */
 
 /* BUTTONS */
-.btn-primary{width:100%;padding:13px;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;position:relative;overflow:hidden}
+.btn-primary{width:100%;padding:13px;border:none;border-radius:var(--radius-md);font-size:var(--fs-base);font-weight:600;cursor:pointer;transition:transform var(--dur-1) var(--ease),box-shadow var(--dur-2) var(--ease);position:relative;overflow:hidden}
 /* Ripple effect: span absoluto inyectado por JS en el punto exacto del toque, que se expande
    y desvanece. rgba negro semitransparente funciona razonablemente bien tanto sobre los
    fondos de color de .btn-primary como sobre los claros de .pin-key/.type-btn. */
@@ -165,10 +172,10 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .btn-gasto{background:var(--danger);background:linear-gradient(135deg,var(--danger),color-mix(in srgb,var(--danger) 78%,var(--grad-fin)));color:var(--on-solid)}
 .btn-ingreso{background:var(--success);background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 78%,var(--grad-fin)));color:var(--on-solid)}
 .btn-inversion{background:var(--invest);background:linear-gradient(135deg,var(--invest),color-mix(in srgb,var(--invest) 78%,var(--grad-fin)));color:var(--on-solid)}
-.btn-tarjeta{background:var(--warning);background:linear-gradient(135deg,var(--warning),color-mix(in srgb,var(--warning) 78%,var(--grad-fin)));color:var(--on-solid)}
+.btn-tarjeta{background:var(--warning-solid);background:linear-gradient(135deg,var(--warning-solid),color-mix(in srgb,var(--warning-solid) 82%,var(--grad-fin)));color:var(--on-warning-solid)}
 .btn-cambio{background:var(--accent);background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 78%,var(--grad-fin)));color:var(--on-solid)}
 .btn-primary:active{transform:scale(.97)}
-.btn-sm{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap}
+.btn-sm{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:var(--fs-sm);background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap}
 .amount-wrap{position:relative}
 .amount-prefix{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--muted)}
 .amount-input{padding-left:28px!important;font-size:22px!important;font-weight:500}
@@ -316,7 +323,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    abajo; fondo hundido como .inset porque es información secundaria, no una acción. */
 .info-line{margin:10px 16px 0;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--muted);text-align:center;line-height:1.4}
 .chip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 7px;text-align:center}
-.chip-label{font-size:9.5px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.chip-label{font-size:var(--fs-micro);color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
 .chip-val{font-size:14px;font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.3px}
 .chip-val.positive{color:var(--success)}.chip-val.negative{color:var(--danger)}.chip-val.warn{color:var(--warning)}.chip-val.invest{color:var(--invest)}.chip-val.save{color:var(--save)}
 /* TX LIST */
@@ -473,7 +480,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .seg-btn{flex:1;height:32px;border:none;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;
   background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:4px}
 .seg-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
-.seg-btn-count{font-size:10.5px;opacity:.6}
+.seg-btn-count{font-size:var(--fs-xs)}
 
 /* BARS */
 .bar-wrap{display:flex;flex-direction:column;gap:8px}
@@ -514,7 +521,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
   transform:translateY(28px);transition:transform .24s cubic-bezier(.22,.9,.35,1)}
 .modal-overlay.open .modal{transform:translateY(0)}
 .modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px}
-.modal-title{font-size:16px;font-weight:600;margin-bottom:14px}
+.modal-title{font-size:var(--fs-lg);font-weight:600;margin-bottom:14px}
 /* TARJETA CARDS */
 /* MISC */
 
@@ -527,7 +534,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .inv-row-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .inv-row-top{display:flex;align-items:center;gap:6px}
 .inv-row-ticker{font-size:14px;font-weight:700;letter-spacing:.3px}
-.inv-row-badge{font-size:9.5px;font-weight:700;letter-spacing:.3px;padding:2px 6px;border-radius:6px}
+.inv-row-badge{font-size:var(--fs-micro);font-weight:700;letter-spacing:.3px;padding:2px 6px;border-radius:6px}
 .inv-row-badge.entra{background:var(--invest-light);color:var(--invest)}
 .inv-row-badge.sale{background:var(--success-light);color:var(--success)}
 .inv-row-sub{font-size:12px;color:var(--muted)}
@@ -601,7 +608,7 @@ canvas{width:100%!important;max-width:100%}
 /* Badge: la etiquetita al lado de un título (AHORRO, DE AHORROS, 🔁 FRECUENTE, USD, …).
    Estaba inline 21 veces con 9 ortografías: padding 1px 5px vs 1px 6px, radio 6px vs 8px,
    con y sin font-weight. Ahora hay una sola y todas se ven igual. */
-.badge{display:inline-block;font-size:9px;padding:1px 6px;border-radius:8px;font-weight:500;vertical-align:middle}
+.badge{display:inline-block;font-size:var(--fs-micro);padding:2px 7px;border-radius:8px;font-weight:500;vertical-align:middle}
 .badge-save{background:var(--save-light);color:var(--save)}
 .badge-danger{background:var(--danger-light);color:var(--danger)}
 .badge-success{background:var(--success-light);color:var(--success)}
@@ -620,10 +627,10 @@ canvas{width:100%!important;max-width:100%}
 
 /* Escala de texto. Los tamaños ya existían de hecho, repartidos en cientos de style=""; esto
    solo les pone nombre para que dejen de multiplicarse. */
-.txt-micro{font-size:10px}
-.txt-xs{font-size:11px}
-.txt-sm{font-size:12px}
-.txt-md{font-size:13px}
+.txt-micro{font-size:var(--fs-micro)}
+.txt-xs{font-size:var(--fs-xs)}
+.txt-sm{font-size:var(--fs-sm)}
+.txt-md{font-size:var(--fs-md)}
 .txt-muted{color:var(--muted)}
 .txt-strong{font-weight:600}
 .txt-medium{font-weight:500}
@@ -722,7 +729,7 @@ canvas{width:100%!important;max-width:100%}
 .pago-tc-ahorro{background:var(--save-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--save);font-weight:500}
 .pago-tc-det-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin-top:10px;padding:11px 12px;border:0;border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer;text-align:left}
 .pago-tc-det-ir{color:var(--muted);font-size:12px;white-space:nowrap}
-.tc-res-btn{padding:7px 14px;border:0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--warning);color:var(--on-solid);cursor:pointer}
+.tc-res-btn{padding:7px 14px;border:0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--warning-solid);color:var(--on-warning-solid);cursor:pointer}
 /* Franja de próximos vencimientos (Movimientos, arriba de la lista). */
 .venc-wrap{margin:10px 16px 0}
 .venc-franja{background:var(--warning-light);border-radius:var(--radius);padding:10px 14px}
@@ -730,11 +737,11 @@ canvas{width:100%!important;max-width:100%}
 .venc-fila{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;padding:4px 0}
 .venc-nombre{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .venc-txt{text-align:right;flex:1;min-width:0}
-.venc-ok{flex-shrink:0;border:0;border-radius:var(--radius-sm);background:var(--warning);color:var(--on-solid);font-size:11px;font-weight:600;padding:5px 9px;cursor:pointer}
+.venc-ok{flex-shrink:0;border:0;border-radius:var(--radius-sm);background:var(--warning-solid);color:var(--on-warning-solid);font-size:var(--fs-xs);font-weight:600;padding:5px 9px;cursor:pointer}
 .venc-franja.venc-con-vencidos{background:var(--danger-light,var(--warning-light));border:1px solid var(--danger)}
 .venc-con-vencidos .venc-titulo{color:var(--danger)}
 .venc-vencida .venc-nombre{color:var(--danger)}
-.venc-vencida .venc-ok{background:var(--danger)}
+.venc-vencida .venc-ok{background:var(--danger);color:var(--on-solid)}
 .venc-por-cobrar{background:var(--success-light);border:1px solid transparent}
 .venc-por-cobrar .venc-titulo{color:var(--success)}
 .venc-cobrado{background:var(--success)}
@@ -870,82 +877,6 @@ canvas{width:100%!important;max-width:100%}
 @keyframes mesDesdeIzquierda{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
 .mes-desde-der{animation:mesDesdeDerecha .26s cubic-bezier(.22,.9,.35,1)}
 .mes-desde-izq{animation:mesDesdeIzquierda .26s cubic-bezier(.22,.9,.35,1)}
-
-/* ═══════════════════════════════════════════
-   [AAA sistema] REGLAS GLOBALES
-   ═══════════════════════════════════════════
-   Reglas transversales (tacto, foco, selección, safe areas, estados). Van acá, antes del bloque de
-   movimiento reducido, para pisar a los componentes sin tocar sus reglas. Los tokens están al principio. */
-html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation;scroll-padding-top:64px}
-body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-wrap:break-word}
-::selection{background:var(--accent-light);color:var(--text)}
-*{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
-/* Controles nativos: heredan la tipografía de la app (sin esto el textarea sale en monoespaciada y el input en la fuente del sistema). */
-button,input,select,textarea{font-family:inherit;letter-spacing:inherit;font-variant-numeric:inherit}
-.seg-btn.active,.currency-pill.active{background:var(--surface-2)}
-/* Un control deshabilitado se ve apagado y no engaña al dedo. */
-button:disabled,.btn-primary:disabled,.btn-sm:disabled,input:disabled,select:disabled{opacity:.5;cursor:not-allowed}
-/* Foco del teclado sobre rellenos sólidos: el anillo azul se perdería sobre un botón azul. */
-.btn-primary:focus-visible,.filter-chip.active:focus-visible,.year-tab.active:focus-visible{outline-color:var(--text)}
-/* Campos: borde ≥3:1 (WCAG 1.4.11), alto táctil, y el mismo anillo de foco en toda la app. */
-.form-input,.form-select,.form-textarea{border-color:var(--border-strong);min-height:var(--tap)}
-.form-textarea{min-height:64px}
-.form-input::placeholder,.form-textarea::placeholder{color:var(--muted);opacity:.85}
-.form-input:focus-visible,.form-select:focus-visible,.form-textarea:focus-visible{outline:none}
-#page-cargar .card .form-input,#page-cargar .card .form-select,#page-cargar .card .form-textarea{border-color:var(--border-strong)}
-.chk-custom{background:var(--border-strong)}
-.chk-custom:checked{background:var(--chk,var(--accent))}
-/* Base de componentes: radios y bordes de la escala (botón = mismo radio que el input). */
-.btn-primary{border-radius:var(--radius-md);min-height:var(--tap)}
-.btn-sm{border-radius:var(--radius-sm);min-height:36px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  border-color:var(--border-strong);transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
-.modal{border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding-bottom:calc(32px + var(--safe-b))}
-.modal-handle{width:40px;height:5px;border-radius:var(--radius-pill);background:var(--border-strong);opacity:.55}
-.toast{top:calc(16px + var(--safe-t))}
-#fab-cargar{right:calc(24px + var(--safe-r))}
-#fab-calculadora{right:calc(16px + var(--safe-r))}
-/* Piso de legibilidad: nada de texto por debajo de 10 px. */
-.badge{font-size:var(--fs-micro);padding:2px 7px}
-.chip-label{font-size:var(--fs-micro)}
-.seg-btn-count{opacity:1;color:var(--muted)}
-.seg-btn.active .seg-btn-count{color:var(--muted)}
-.tx-del{color:var(--muted)}
-
-/* OBJETIVOS TÁCTILES (≥44×44). Botones-ícono: el elemento mide 44. Chips, píldoras y enlaces chicos
-   conservan su dibujo y ganan un área clicable invisible de 44 con ::after (no cambia el layout). */
-#hamburger-btn{width:var(--tap);height:var(--tap);top:6px;left:8px}
-.side-menu-close{min-width:var(--tap);min-height:var(--tap);display:inline-flex;align-items:center;justify-content:center;padding:0;margin:-6px -8px -6px 0}
-.mov-icon-btn{width:var(--tap);height:var(--tap)}
-.mov-topbar-arrow{width:var(--tap);height:var(--tap)}
-.cierre-x{min-width:var(--tap);min-height:var(--tap);margin:-12px -10px -12px -6px;display:inline-flex;align-items:center;justify-content:center}
-.tx-del,.tx-edit{min-width:var(--tap);min-height:var(--tap);padding:0;display:inline-flex;align-items:center;justify-content:center}
-.date-chip{min-height:var(--tap)}
-.date-cal-btn{width:var(--tap);height:var(--tap)}
-#page-cargar>.type-toggle .type-btn{min-height:var(--tap)}
-.tc-col{flex-basis:var(--tap)}
-.filter-chip,.year-tab,.seg-btn,.btn-sm,.currency-pill,.field-link,.copia-borrar,.tc-res-btn,.venc-ok,.tc-res-link,.dash-insight-action,.dash-year-link,.meta-edit{position:relative}
-.meta-edit{position:absolute}
-.filter-chip::after,.year-tab::after,.seg-btn::after,.btn-sm::after,.currency-pill::after,.field-link::after,.copia-borrar::after,.tc-res-btn::after,.venc-ok::after,.tc-res-link::after,.dash-insight-action::after,.dash-year-link::after,.meta-edit::after,.chk-custom::before{
-  content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
-.chk-custom::before{width:max(100%,var(--tap));height:var(--tap)}
-#mes-label,.js-toggle-pago{position:relative}
-#mes-label::after,.js-toggle-pago::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
-/* Botones de solo símbolo (×, ✎) escritos con style="background:none…" en listas: conservan su tamaño, ganan área clicable de 44. */
-button[style*="background:none"]:not([style*="position"]){position:relative}
-button[style*="background:none"]::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
-/* Interruptor un poco más grande (46×28): se ve y se toca mejor; el área clicable llega a 44 de alto con ::before. */
-.chk-custom{width:46px;height:28px}
-.chk-custom::after{top:3px;left:3px;width:22px;height:22px}
-.chk-custom:checked::after{left:21px}
-/* Red de seguridad: botones con color:#fff escrito en línea (HTML o JS) sobre un relleno semántico. En el tema
-   oscuro los rellenos son claros y el blanco no se lee: --on-solid decide. */
-button[style*="color:#fff"],label.btn-primary[style*="color:#fff"],button[style*="color: rgb(255, 255, 255)"]{color:var(--on-solid)!important}
-/* Estado :active parejo: todo lo que se toca devuelve señal al instante. */
-.filter-chip,.year-tab,.seg-btn,.btn-sm,.tc-res-btn,.venc-ok,.mov-icon-btn,.mov-topbar-arrow,.side-menu-close,.cierre-x,.tx-del,.tx-edit,.copia-borrar,.meta-edit{transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
-.filter-chip:active,.year-tab:active,.seg-btn:active,.btn-sm:active,.tc-res-btn:active,.venc-ok:active{transform:scale(.96)}
-.mov-icon-btn:active,.mov-topbar-arrow:active,.side-menu-close:active,.cierre-x:active,.tx-del:active,.tx-edit:active,.copia-borrar:active{background:var(--border)}
-.field-link:active{opacity:.6}
-.nav-btn:active,.pin-key:active{transition-duration:var(--dur-1)}
 
 /* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO
