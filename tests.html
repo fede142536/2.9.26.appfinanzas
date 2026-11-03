@@ -10978,7 +10978,9 @@ test("la política de seguridad de contenido está, es cerrada y cubre todos los
   const hosts=new Set([...js.matchAll(/(?:url:\s*|const (?:GCAL_API|DRIVE_API|DRIVE_UPLOAD)\s*=\s*)"(https:\/\/[^\/"]+)/g)].map(x=>x[1]));
   cierto(hosts.size>=3, "no encontré los pedidos de red: "+[...hosts].join(","));
   hosts.forEach(h=>cierto(pol["connect-src"].some(c=>c===h || c.startsWith(h+"/")), h+" no está en connect-src: se bloquearía en la app"));
-  cierto(pol["connect-src"].includes("'self'") && pol["font-src"].includes("https://fonts.gstatic.com") && pol["style-src"].includes("https://fonts.googleapis.com"), "faltan las tipografías o el propio sitio");
+  cierto(pol["connect-src"].includes("'self'") && pol["font-src"].join(" ")==="'self'" && !html.includes("fonts.googleapis.com") && !html.includes("fonts.gstatic.com"), "la tipografía tiene que ser propia: ni Google Fonts en el HTML ni en la política");
+  const css=await (await fetch("styles.css")).text(); [400,500,600,700].forEach(w=>cierto(css.includes("fonts/plus-jakarta-sans-"+w+".woff2"), "falta el @font-face de "+w));
+  const sw=await (await fetch("sw.js")).text(); [400,500,600,700].forEach(w=>cierto(sw.includes("./fonts/plus-jakarta-sans-"+w+".woff2"), "el service worker no precachea la letra "+w));
 });
 
 grupo("Seguridad: datos de afuera no ejecutan código");
