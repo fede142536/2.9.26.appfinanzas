@@ -10964,6 +10964,23 @@ test("restaurar un backup pasa por sanearBackupDatos, y los nombres nuevos tambi
   cierto(imp.includes("nombreSeguro(cCat") && imp.includes("nombreSeguro(cSubcat") && imp.includes("nombreSeguro(cCuenta"), "la importación de Excel no usa nombreSeguro"); cierto(fc.includes('nombreSeguro(document.getElementById("inv-ticker")'), "el ticker no usa nombreSeguro");
 });
 
+test("la política de seguridad de contenido está, es cerrada y cubre todos los pedidos de red de la app", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const m=html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"/); cierto(!!m, "index.html no tiene la política de seguridad");
+  const pol=Object.fromEntries(m[1].split(";").map(x=>x.trim()).filter(Boolean).map(x=>{ const [k,...v]=x.split(/\s+/); return [k,v]; }));
+  igual(pol["default-src"], ["'self'"]); igual(pol["object-src"], ["'none'"]); igual(pol["base-uri"], ["'self'"]); igual(pol["form-action"], ["'self'"]); igual(pol["worker-src"], ["'self'"]);
+  Object.entries(pol).forEach(([k,v])=>{ cierto(!v.includes("*") && !v.includes("http:") && !v.includes("https:"), k+" es demasiado abierta: "+v.join(" ")); });
+  igual(pol["script-src"], ["'self'","'unsafe-inline'","https://accounts.google.com/gsi/client"], "solo el propio sitio y el inicio de sesión de Google pueden cargar scripts");
+  cierto(!pol["img-src"].includes("https://evil.example") && pol["img-src"].join(" ")==="'self' data: blob:", "las imágenes solo salen del propio sitio");
+  cierto(html.indexOf("Content-Security-Policy")<html.indexOf("<link") && html.indexOf("Content-Security-Policy")<html.indexOf("\x3Cscript"), "la política tiene que venir antes de cualquier recurso");
+  // todo lo que la app pide por la red tiene que estar en connect-src
+  const js=(await Promise.all(["inflacion","calendario-google","backup-drive"].map(n=>fetch("js/"+n+".js").then(r=>r.text())))).join("\n");
+  const hosts=new Set([...js.matchAll(/(?:url:\s*|const (?:GCAL_API|DRIVE_API|DRIVE_UPLOAD)\s*=\s*)"(https:\/\/[^\/"]+)/g)].map(x=>x[1]));
+  cierto(hosts.size>=3, "no encontré los pedidos de red: "+[...hosts].join(","));
+  hosts.forEach(h=>cierto(pol["connect-src"].some(c=>c===h || c.startsWith(h+"/")), h+" no está en connect-src: se bloquearía en la app"));
+  cierto(pol["connect-src"].includes("'self'") && pol["font-src"].includes("https://fonts.gstatic.com") && pol["style-src"].includes("https://fonts.googleapis.com"), "faltan las tipografías o el propio sitio");
+});
+
 grupo("Seguridad: datos de afuera no ejecutan código");
 
 const XSS_PAY=`"'><img src=x onerror=window.__xssTest=1>`;

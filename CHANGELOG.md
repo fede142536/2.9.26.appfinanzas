@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v219**
+**Versión actual: v220**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 3 de noviembre de 2026
 
+- **v220** · Política de seguridad de contenido
+  La app declara a qué puede conectarse: solo ella misma, Google (Calendar, Drive e inicio de sesión), las dos fuentes de inflación y las tipografías de Google. Aunque algún día se colara un script, no podría mandar los datos a otro sitio (fetch, imágenes y formularios quedan cortados). Se probó la app entera con la política puesta (gráficos, descargas, importación de Excel, reporte para imprimir, service worker) sin ninguna violación, y que el envío a un sitio ajeno sí se bloquea. Un test verifica que cada pedido de red del código esté permitido.
 - **v219** · Los backups y los nombres nuevos se validan antes de usarse
   Restaurar un backup (archivo, Drive o copia del celular) limpia lo que un archivo armado a mano o dañado podría traer: registros que no son objetos, movimientos de un tipo desconocido, importes que no son números, textos larguísimos y etiquetas mal formadas. Los nombres reservados (__proto__, constructor, toString…) en categorías, cuentas, tarjetas y tickers, que hacían desaparecer plata de los totales, llevan un guion bajo al entrar desde un backup, un Excel o al escribirlos a mano. Un backup normal pasa sin cambios.
 
