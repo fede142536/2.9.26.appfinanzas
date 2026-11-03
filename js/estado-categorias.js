@@ -741,3 +741,54 @@ function fmtMoneda(n, moneda){
   }
   return fmt(n);
 }
+
+
+// ═══════════════════════════════════════════
+// DATOS DE AFUERA: nombres seguros y backup validado
+// ═══════════════════════════════════════════
+// Todo lo que entra de afuera (un backup, un Excel) o se escribe a mano termina como nombre de categoría, cuenta, tarjeta o ticker, y esos
+// nombres se usan como CLAVE de diccionarios en toda la app (totales por categoría, presupuestos, íconos…). Un nombre como "__proto__" o
+// "constructor" rompe esos diccionarios sin avisar: el monto desaparece del total o da NaN. Por eso se les agrega un guion bajo al entrar.
+const NOMBRES_RESERVADOS=new Set(["__proto__","constructor","prototype","toString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","toLocaleString","__defineGetter__","__defineSetter__","__lookupGetter__","__lookupSetter__"]);
+// Pura. El mismo nombre, salvo que sea uno reservado: ese queda con un "_" al final. Lo que no es texto vuelve igual.
+function nombreSeguro(s){
+  return typeof s==="string" && NOMBRES_RESERVADOS.has(s) ? s+"_" : s;
+}
+const TIPOS_DE_MOVIMIENTO=["Gasto","Ingreso","Inversion","Cambio","Tarjeta"];
+const MAX_TEXTO_BACKUP=2000;
+const esObjetoPlano=x=>!!x && typeof x==="object" && !Array.isArray(x);
+
+// Pura (modifica `datos` en el lugar y cuenta lo que tocó). Deja un backup listo para usar sin que un archivo armado a mano pueda romper la app:
+//  · listas que traen cualquier cosa que no sea un registro (null, textos, números) → se descartan esos elementos
+//  · movimientos con un tipo que la app no conoce → se descartan
+//  · nombres reservados (__proto__, constructor…) en categorías, cuentas, tarjetas y tickers, y en las claves de los diccionarios → llevan "_"
+//  · importes que no son números → se corrigen (un texto numérico se convierte; si no, queda en 0)
+//  · textos larguísimos → se cortan; etiquetas que no son una lista de textos → se vacían
+// Un backup normal de la app pasa SIN cambios (ver el test con un backup real). Devuelve {descartados, renombrados, corregidos, total}.
+function sanearBackupDatos(datos){
+  const r={descartados:0, renombrados:0, corregidos:0};
+  if(!esObjetoPlano(datos)) return {...r, total:0};
+  const lista=(arr, ok)=>{ if(!Array.isArray(arr)) return []; const out=arr.filter(x=>esObjetoPlano(x) && (!ok || ok(x))); r.descartados+=arr.length-out.length; return out; };
+  const nombre=(o,k)=>{ if(typeof o[k]==="string"){ const n=nombreSeguro(o[k]); if(n!==o[k]){ o[k]=n; r.renombrados++; } } };
+  const clavesSeguras=o=>{ if(!esObjetoPlano(o)) return o; let hay=false; const out={}; for(const k of Object.keys(o)){ const nk=nombreSeguro(k); if(nk!==k){ hay=true; r.renombrados++; } out[nk]=o[k]; } return hay ? out : o; };
+  const numero=(o,k)=>{ if(o[k]===undefined || o[k]===null || (typeof o[k]==="number" && isFinite(o[k]))) return;
+    const n=typeof o[k]==="string" && o[k].trim()!=="" ? Number(o[k]) : NaN; o[k]=isFinite(n) ? n : 0; r.corregidos++; };
+  const texto=(o,k)=>{ if(o[k]===undefined || o[k]===null) return; if(typeof o[k]!=="string"){ o[k]=""; r.corregidos++; } else if(o[k].length>MAX_TEXTO_BACKUP){ o[k]=o[k].slice(0,MAX_TEXTO_BACKUP); r.corregidos++; } };
+  const etiquetas=o=>{ if(o.tags===undefined) return; if(!Array.isArray(o.tags) || o.tags.some(t=>typeof t!=="string")){ o.tags=Array.isArray(o.tags) ? o.tags.filter(t=>typeof t==="string") : []; r.corregidos++; } };
+  const textos=["nota","desc","nombre","banco","motivo"], nombres=["cat","subcat","cuenta","tarjeta","ticker","tickerOrig","cuentaDestino"], importes=["importe","importeOrig","importeUSD","total","monto"];
+
+  datos.movs=lista(datos.movs, m=>typeof m.tipo==="string" && TIPOS_DE_MOVIMIENTO.includes(m.tipo));
+  datos.movs.forEach(m=>{ nombres.forEach(k=>nombre(m,k)); textos.forEach(k=>texto(m,k)); importes.forEach(k=>numero(m,k)); etiquetas(m);
+    if(m.id!==undefined && !(typeof m.id==="number" && isFinite(m.id))){ const n=Number(m.id); m.id=isFinite(n) && m.id!=="" ? n : Date.now()+r.corregidos; r.corregidos++; } });
+  if(datos.tcs!==undefined){ datos.tcs=lista(datos.tcs); datos.tcs.forEach(t=>{ nombres.forEach(k=>nombre(t,k)); textos.forEach(k=>texto(t,k)); importes.forEach(k=>numero(t,k)); etiquetas(t);
+    (Array.isArray(t.tarjetas) ? t.tarjetas : []).forEach(c=>{ if(esObjetoPlano(c)){ nombre(c,"tarjeta"); importes.forEach(k=>numero(c,k)); } }); }); }
+  if(datos.metas!==undefined){ datos.metas=lista(datos.metas); datos.metas.forEach(m=>{ nombres.forEach(k=>nombre(m,k)); textos.forEach(k=>texto(m,k)); importes.concat(["objetivo","montoObjetivo","montoInicial"]).forEach(k=>numero(m,k)); }); }
+  if(datos.importHistory!==undefined){ datos.importHistory=lista(datos.importHistory); datos.importHistory.forEach(h=>{ textos.forEach(k=>texto(h,k)); }); }
+  ["cuentasCustom","tarjetasCustom"].forEach(k=>{ if(datos[k]===undefined) return; const arr=Array.isArray(datos[k]) ? datos[k] : []; const out=arr.filter(x=>typeof x==="string" && x.trim()!=="").map(x=>{ const n=nombreSeguro(x); if(n!==x) r.renombrados++; return n; }); r.descartados+=arr.length-out.length; datos[k]=out; });
+  if(datos.custom!==undefined){ if(!esObjetoPlano(datos.custom)){ datos.custom={Gasto:{},Ingreso:{},Inversion:{},Tarjeta:{}}; r.descartados++; }
+    for(const t of Object.keys(datos.custom)){ const porTipo=clavesSeguras(datos.custom[t]); if(!esObjetoPlano(porTipo)){ datos.custom[t]={}; r.descartados++; continue; }
+      for(const c of Object.keys(porTipo)){ if(Array.isArray(porTipo[c])){ const subs=porTipo[c].filter(x=>typeof x==="string"); r.descartados+=porTipo[c].length-subs.length; porTipo[c]=subs.map(x=>{ const n=nombreSeguro(x); if(n!==x) r.renombrados++; return n; }); } else { porTipo[c]=[]; r.corregidos++; } }
+      datos.custom[t]=porTipo; } }
+  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
+  return {...r, total:r.descartados+r.renombrados+r.corregidos};
+}
