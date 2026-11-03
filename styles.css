@@ -879,6 +879,123 @@ canvas{width:100%!important;max-width:100%}
 .mes-desde-izq{animation:mesDesdeIzquierda .26s cubic-bezier(.22,.9,.35,1)}
 
 /* ═══════════════════════════════════════════
+   [AAA sistema] REGLAS GLOBALES
+   ═══════════════════════════════════════════
+   Reglas transversales (tacto, foco, selección, safe areas, estados). Van acá, antes del bloque de
+   movimiento reducido, para pisar a los componentes sin tocar sus reglas. Los tokens están al principio. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation;scroll-padding-top:64px}
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-wrap:break-word}
+::selection{background:var(--accent-light);color:var(--text)}
+*{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+/* Controles nativos: heredan la tipografía de la app (sin esto el textarea sale en monoespaciada y el input en la fuente del sistema).
+   Plus Jakarta es más ancha que la del sistema: lo que no entra se corta con "…" en vez de quedar mocho. */
+button,input,select,textarea{font-family:inherit;letter-spacing:inherit;font-variant-numeric:inherit}
+input,select{text-overflow:ellipsis}
+.type-btn{word-spacing:.25em}
+/* Un control deshabilitado se ve apagado y no engaña al dedo (vale para disabled y para aria-disabled="true").
+   Los botones-ícono pierden también el fondo de :active. */
+button:disabled,.btn-primary:disabled,.btn-sm:disabled,input:disabled,select:disabled,[aria-disabled="true"]{opacity:.4;cursor:default}
+button:disabled:active,button[aria-disabled="true"]:active{transform:none;background-color:transparent}
+button:disabled,button[aria-disabled="true"]{-webkit-user-select:none;user-select:none}
+/* FOCO del teclado. Una sola regla para todo campo y botón: anillo de 2px (--focus) con separación.
+   Los campos de la app apagan el outline de :focus a propósito (usan borde + halo); acá se vuelve a dar una señal ≥3:1 con
+   :focus-visible. El !important es por los inputs con outline:none escrito en línea (monto de depósito). */
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--focus)!important;outline-offset:1px}
+.form-input:focus-visible,.form-select:focus-visible,.form-textarea:focus-visible{border-color:var(--focus)}
+#page-cargar .card .form-input:focus-visible,#page-cargar .card .form-select:focus-visible,#page-cargar .card .form-textarea:focus-visible,
+#page-cargar .amount-hero .amount-input:focus-visible{border-color:var(--tema-color,var(--accent));outline-color:var(--tema-color,var(--accent))!important}
+#page-cargar .amount-hero .amount-input:focus-visible{outline-offset:6px;border-radius:var(--radius-sm)}
+.mov-search-row input:focus-visible{border-color:var(--focus)}
+.btn-primary:focus-visible,.filter-chip.active:focus-visible,.year-tab.active:focus-visible{outline-color:var(--text)}
+/* Campos: borde ≥3:1 (WCAG 1.4.11), alto táctil, placeholder legible. */
+.form-input,.form-select,.form-textarea{border-color:var(--border-strong);min-height:var(--tap)}
+.form-textarea{min-height:64px}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--muted);opacity:.85}
+#page-cargar .card .form-input,#page-cargar .card .form-select,#page-cargar .card .form-textarea{border-color:var(--border-strong)}
+/* Select: flecha propia (la nativa está apagada con appearance:none y no se veía que fuera desplegable), y el texto largo
+   termina en "…" sin pisar la flecha. El trazo de la flecha es --muted en cada tema. */
+.form-select{padding-right:28px;text-overflow:ellipsis;white-space:nowrap;background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2355544d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+[data-theme="dark"] .form-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aaa8a0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#page-cargar .card .form-select{padding-right:28px;background-color:var(--bg);background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2355544d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+[data-theme="dark"] #page-cargar .card .form-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aaa8a0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+.mes-corto .form-select{padding-right:30px}
+.chk-custom{background:var(--border-strong)}
+.chk-custom:checked{background:var(--chk,var(--accent))}
+/* Base de componentes: botón = mismo radio que el input; el "Ver" de un aviso no debe pesar más que el aviso. */
+.btn-primary{min-height:var(--tap)}
+.btn-sm{border-radius:var(--radius-sm);min-height:36px;display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);
+  border-color:var(--border-mid);transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.modal{border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding-bottom:calc(var(--sp-6) + var(--safe-b))}
+.modal-handle{width:40px;height:5px;border-radius:var(--radius-pill);background:var(--border-strong);opacity:.55}
+.toast{top:calc(var(--sp-4) + var(--safe-t))}
+#fab-cargar{right:calc(var(--sp-5) + var(--safe-r))}
+#fab-calculadora{right:calc(var(--sp-4) + var(--safe-r))}
+/* Piso de legibilidad: nada de texto por debajo de 10 px. Texto chico sobre fondos tintados: --muted-on-tint (≥7:1). */
+.seg-btn,.seg-btn-count,.tx-cuenta,.mov-mosaic-sub,.currency-pill,.date-chip{color:var(--muted-on-tint)}
+.seg-btn.active,.currency-pill.active{color:var(--text);background:var(--surface-2)}
+.tx-del{color:var(--muted)}
+/* Botón ámbar sólido: el ámbar vivo con texto oscuro (también los escritos en línea con background:var(--warning)). */
+/* Cifra protagonista en ámbar (texto grande: alcanza con 3:1): el ámbar vivo en vez del ocre de texto chico. */
+div[style*="font-size:34px"][style*="color:var(--warning)"]{color:var(--warning-fill)!important}
+button[style*="background:var(--warning)"]{background:var(--warning-solid)!important;color:var(--on-warning-solid)!important}
+
+/* OBJETIVOS TÁCTILES (≥44×44). Hay TRES herramientas, según dónde viva el control:
+   1) Botones-ícono: el elemento mide 44.
+   2) Chips y botones chicos DENTRO de un contenedor con scroll u overflow:hidden (.filter-row, .year-tabs, .tc-res): un halo ::after
+      se recorta ahí, así que la caja es REAL: 44 de alto con bordes transparentes de 8 px, y el dibujo (28 px) se pinta solo en
+      el área del padding (background-clip) con el aro como sombra interior. Se ve igual que antes y se toca en 44.
+   3) Controles sueltos (sin recorte): halo invisible ::after de 44, no cambia el layout. NO usarlo dentro de overflow ≠ visible. */
+#hamburger-btn{width:var(--tap);height:var(--tap);top:6px;left:8px}
+.side-menu-close{min-width:var(--tap);min-height:var(--tap);display:inline-flex;align-items:center;justify-content:center;padding:0;margin:-6px -8px -6px 0}
+.mov-icon-btn{width:var(--tap);height:var(--tap)}
+.mov-topbar-arrow{width:var(--tap);height:var(--tap)}
+.cierre-x{min-width:var(--tap);min-height:var(--tap);margin:-12px -10px -12px -6px;display:inline-flex;align-items:center;justify-content:center}
+.tx-del,.tx-edit{min-width:var(--tap);min-height:var(--tap);padding:0;display:inline-flex;align-items:center;justify-content:center}
+/* El glifo × queda bajo el centro de su caja en Plus Jakarta: se sube para alinear con el texto vecino. */
+.tx-del,.side-menu-close,.cierre-x,.copia-borrar{padding-bottom:.14em}
+.date-chip{min-height:var(--tap)}
+.date-cal-btn{width:var(--tap);height:var(--tap)}
+#page-cargar>.type-toggle .type-btn{min-height:var(--tap)}
+.tc-col{flex-basis:var(--tap)}
+/* (2) caja real con borde transparente */
+.filter-chip,.year-tab,.tc-res-btn,.venc-ok{box-sizing:border-box;min-height:var(--tap);
+  border-width:8px 0!important;border-style:solid;border-block-color:transparent!important;background-clip:padding-box!important;padding-block:0}
+.tc-res-btn,.venc-ok{display:inline-flex;align-items:center;justify-content:center}
+.filter-chip,.year-tab{display:inline-block;line-height:28px;text-align:center;white-space:nowrap;border-radius:var(--radius-pill);box-shadow:inset 0 0 0 1px var(--border);margin-block:-3px}
+.filter-chip.active,.year-tab.active{box-shadow:inset 0 0 0 1px var(--accent)}
+.tc-res-btn,.venc-ok{border-radius:var(--radius-sm)/calc(var(--radius-sm) + 8px);margin-block:-8px}
+.filter-row,.year-tabs{padding-top:var(--sp-2);padding-bottom:var(--sp-1)}
+.tc-res-link{border-block:15px solid transparent;margin-block:-15px;position:relative}
+.dash-year-link{display:flex;align-items:center;justify-content:center;min-height:var(--tap)}
+label:has(>input[type="checkbox"]:not(.chk-custom)){min-height:var(--tap);display:flex;align-items:center;gap:var(--sp-2)}
+.dash-insight-action{display:flex;align-items:center;min-height:var(--tap)}
+/* (3) halo ::after, solo para controles SIN recorte */
+.seg-btn,.btn-sm,.currency-pill,.field-link,.copia-borrar,.meta-edit,#mes-label,.js-toggle-pago{position:relative}
+.meta-edit{position:absolute}
+.seg-btn::after,.btn-sm::after,.currency-pill::after,.field-link::after,.copia-borrar::after,.meta-edit::after,#mes-label::after,.js-toggle-pago::after,.chk-custom::before{
+  content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
+.chk-custom::before{height:var(--tap)}
+/* Botones de solo símbolo (×, ✎) escritos con style="background:none…" en listas: conservan su tamaño, ganan halo de 44. */
+button[style*="background:none"]:not([style*="position"]){position:relative}
+button[style*="background:none"]::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
+/* Interruptor un poco más grande (46×28): se ve y se toca mejor. */
+.chk-custom{width:46px;height:28px}
+.chk-custom::after{top:3px;left:3px;width:22px;height:22px}
+.chk-custom:checked::after{left:21px}
+/* Red de seguridad: botones con color:#fff escrito en línea (HTML o JS) sobre un relleno semántico. En el tema
+   oscuro los rellenos son claros y el blanco no se lee: --on-solid decide. */
+button[style*="color:#fff"],label.btn-primary[style*="color:#fff"],button[style*="color: rgb(255, 255, 255)"]{color:var(--on-solid)!important}
+button[style*="background:var(--warning)"]{color:var(--on-warning-solid)!important}
+/* Estado :active parejo: todo lo que se toca devuelve señal al instante. */
+.filter-chip,.year-tab,.seg-btn,.btn-sm,.tc-res-btn,.venc-ok,.mov-icon-btn,.mov-topbar-arrow,.side-menu-close,.cierre-x,.tx-del,.tx-edit,.copia-borrar,.meta-edit{transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.filter-chip:active,.year-tab:active,.seg-btn:active,.btn-sm:active,.tc-res-btn:active,.venc-ok:active{transform:scale(.96)}
+.mov-icon-btn:active,.mov-topbar-arrow:active,.side-menu-close:active,.cierre-x:active,.tx-del:active,.tx-edit:active,.copia-borrar:active{background:var(--border)}
+.field-link:active{opacity:.6}
+.nav-btn:active,.pin-key:active{transition-duration:var(--dur-1)}
+
+/* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO
    ═══════════════════════════════════════════
    Quien activó "reducir movimiento" en su teléfono lo hizo por algo — mareo, vértigo, o
