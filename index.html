@@ -47,10 +47,10 @@
 <!-- Aviso de versión desactualizada. Los estilos van inline a propósito: styles.css también
      se sirve desde caché, y este cartel tiene que verse bien justamente cuando lo cacheado
      quedó viejo. -->
-<div id="version-vieja" role="alert" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#ba7517;color:#fff;padding:10px 14px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.25)">
+<div id="version-vieja" role="alert" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:var(--banner-bg,#924f00);color:var(--banner-fg,#fff);padding:10px 14px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:var(--shadow-pop,0 2px 10px rgba(0,0,0,.25))">
   <div style="max-width:560px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between">
     <span id="version-vieja-msg" style="flex:1;min-width:0"></span>
-    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:#fff;color:#8a5610;border:none;border-radius:8px;padding:8px 14px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
+    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:var(--banner-fg,#fff);color:var(--banner-bg,#924f00);border:none;border-radius:8px;padding:12px 16px;min-height:44px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
   </div>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -131,11 +131,11 @@
 </div>
 
 <!-- DRAG & DROP GLOBAL: overlay que aparece al arrastrar un archivo sobre la app (Excel/CSV/JSON) -->
-<div id="drop-overlay" style="display:none;position:fixed;inset:0;background:rgba(28,108,168,.88);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:32px;pointer-events:none">
+<div id="drop-overlay" style="display:none;position:fixed;inset:0;background:var(--accent,#175e96);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:32px;pointer-events:none">
   <div>
     <div style="font-size:56px;margin-bottom:14px">📂</div>
-    <div style="font-size:20px;font-weight:700;color:#fff">Soltá el archivo acá</div>
-    <div style="font-size:13px;color:#fff;opacity:.85;margin-top:6px">Excel (.xlsx/.xls/.csv) o backup (.json)</div>
+    <div style="font-size:20px;font-weight:700;color:var(--on-solid,#fff)">Soltá el archivo acá</div>
+    <div style="font-size:13px;color:var(--on-solid,#fff);margin-top:6px">Excel (.xlsx/.xls/.csv) o backup (.json)</div>
   </div>
 </div>
 
