@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v220**
+**Versión actual: v221**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 3 de noviembre de 2026
 
+- **v221** · La tipografía vive en la app
+  Plus Jakarta Sans (400, 500, 600 y 700, licencia OFL) se sirve desde fonts/: la app ya no hace ningún pedido a Google Fonts, no hay parpadeo de letra al abrir y funciona igual sin conexión. La política de seguridad queda más cerrada (font-src solo 'self').
 - **v220** · Política de seguridad de contenido
   La app declara a qué puede conectarse: solo ella misma, Google (Calendar, Drive e inicio de sesión), las dos fuentes de inflación y las tipografías de Google. Aunque algún día se colara un script, no podría mandar los datos a otro sitio (fetch, imágenes y formularios quedan cortados). Se probó la app entera con la política puesta (gráficos, descargas, importación de Excel, reporte para imprimir, service worker) sin ninguna violación, y que el envío a un sitio ajeno sí se bloquea. Un test verifica que cada pedido de red del código esté permitido.
 - **v219** · Los backups y los nombres nuevos se validan antes de usarse
