@@ -928,9 +928,8 @@ button:disabled,.btn-primary:disabled,.btn-sm:disabled,input:disabled,select:dis
 .filter-chip::after,.year-tab::after,.seg-btn::after,.btn-sm::after,.currency-pill::after,.field-link::after,.copia-borrar::after,.tc-res-btn::after,.venc-ok::after,.tc-res-link::after,.dash-insight-action::after,.dash-year-link::after,.meta-edit::after,.chk-custom::before{
   content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
 .chk-custom::before{width:max(100%,var(--tap));height:var(--tap)}
-#mes-label,.js-toggle-pago,.inv-mes-btn{position:relative}
+#mes-label,.js-toggle-pago{position:relative}
 #mes-label::after,.js-toggle-pago::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
-.amount-hero .amount-input{min-width:var(--tap)}
 /* Botones de solo símbolo (×, ✎) escritos con style="background:none…" en listas: conservan su tamaño, ganan área clicable de 44. */
 button[style*="background:none"]:not([style*="position"]){position:relative}
 button[style*="background:none"]::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
