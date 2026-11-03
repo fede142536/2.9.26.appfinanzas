@@ -27,7 +27,7 @@ function buildCuentaSelect(selectId, valorActual){
 async function agregarCuentaRapida(selectId){
   const nombre=await mostrarPrompt("Nombre de la cuenta nueva:", {titulo:"Nueva cuenta", placeholder:"Ej: Mercado Pago, Ualá, Brubank", textoOk:"Agregar"});
   if(!nombre) return;
-  const limpio=nombre.trim();
+  const limpio=nombreSeguro(nombre.trim());
   if(!limpio) return;
   if(getCuentas().some(c=>c.toLowerCase()===limpio.toLowerCase())){
     showToast("Esa cuenta ya existe");
@@ -127,7 +127,7 @@ function buildTarjetaSelect(selectId, valorActual){
 async function agregarTarjetaRapida(selectId){
   const nombre=await mostrarPrompt("Nombre de la tarjeta:", {titulo:"Nueva tarjeta", placeholder:"Ej: Visa Santander, Mastercard BBVA", textoOk:"Agregar"});
   if(!nombre) return;
-  const limpio=nombre.trim();
+  const limpio=nombreSeguro(nombre.trim());
   if(!limpio) return;
   if(getTarjetas().some(t=>t.toLowerCase()===limpio.toLowerCase())){
     showToast("Esa tarjeta ya existe");
@@ -159,7 +159,7 @@ async function borrarTarjetaCustom(nombre){
 async function renombrarTarjeta(nombreActual){
   const nuevo=await mostrarPrompt(`Nuevo nombre para "${nombreActual}":`, {titulo:"Renombrar tarjeta", valorInicial:nombreActual, textoOk:"Renombrar"});
   if(nuevo===null) return;
-  const limpio=nuevo.trim();
+  const limpio=nombreSeguro(nuevo.trim());
   if(!limpio || limpio===nombreActual) return;
   if(getTarjetas().some(t=>t.toLowerCase()===limpio.toLowerCase() && t!==nombreActual)){
     showToast("Ya existe una tarjeta con ese nombre");
@@ -229,10 +229,10 @@ function closeCatModal(){
 }
 function guardarNuevaCat(){
   const t=document.getElementById("new-cat-tipo").value;
-  const nombre=document.getElementById("new-cat-name").value.trim();
+  const nombre=nombreSeguro(document.getElementById("new-cat-name").value.trim());
   const subsRaw=document.getElementById("new-cat-subs").value.trim();
   if(!nombre){showToast("Ingresá un nombre");return;}
-  const subs=subsRaw?subsRaw.split(",").map(s=>s.trim()).filter(Boolean):["Otros"];
+  const subs=subsRaw?subsRaw.split(",").map(s=>nombreSeguro(s.trim())).filter(Boolean):["Otros"];
   if(!custom[t])custom[t]={};custom[t][nombre]=subs;
   if(iconoSeguro(nuevoCatIcono)){ iconsCustom[nombre]=iconoSeguro(nuevoCatIcono); saveIconsCustom(); }
   save();
@@ -303,7 +303,7 @@ function renderCatManager(){
 async function agregarSubcat(tipo, cat){
   const nombre=await mostrarPrompt(`Nueva subcategoría para "${cat}":`, {titulo:"Nueva subcategoría", textoOk:"Agregar"});
   if(!nombre) return;
-  const limpio=nombre.trim();
+  const limpio=nombreSeguro(nombre.trim());
   if(!limpio) return;
   // Verificar duplicado
   const actuales=getCats(tipo)[cat]||[];

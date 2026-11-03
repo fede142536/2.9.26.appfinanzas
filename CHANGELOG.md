@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v218**
+**Versión actual: v219**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,11 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 3 de noviembre de 2026
+
+- **v219** · Los backups y los nombres nuevos se validan antes de usarse
+  Restaurar un backup (archivo, Drive o copia del celular) limpia lo que un archivo armado a mano o dañado podría traer: registros que no son objetos, movimientos de un tipo desconocido, importes que no son números, textos larguísimos y etiquetas mal formadas. Los nombres reservados (__proto__, constructor, toString…) en categorías, cuentas, tarjetas y tickers, que hacían desaparecer plata de los totales, llevan un guion bajo al entrar desde un backup, un Excel o al escribirlos a mano. Un backup normal pasa sin cambios.
 
 ## 2 de noviembre de 2026
 

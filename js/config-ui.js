@@ -738,6 +738,12 @@ function restaurarBackup(input){
 // recordatorio: eso lo decide quien llama (un archivo de afuera cuenta como backup hecho; una
 // copia automática del mismo celular, no). Devuelve la cantidad de movimientos.
 function aplicarBackup(backup){
+  // Un archivo armado a mano (o dañado) no tiene que poder romper la app: se limpia antes de usarlo. Un backup normal pasa sin cambios.
+  const saneo=sanearBackupDatos(backup.datos);
+  if(saneo.total>0){
+    console.warn("Backup saneado:", saneo);
+    setTimeout(()=>{ if(typeof showToast==="function") showToast(`Se corrigieron ${saneo.total} dato${saneo.total===1?"":"s"} raro${saneo.total===1?"":"s"} del backup${saneo.descartados?` (${saneo.descartados} descartado${saneo.descartados===1?"":"s"})`:""}`); }, 2500);
+  }
   movs=backup.datos.movs||[];
   tcs=backup.datos.tcs||[];
   custom=backup.datos.custom||{Gasto:{},Ingreso:{},Inversion:{},Tarjeta:{}};

@@ -10916,6 +10916,54 @@ test("la app no baja código de internet: Chart.js y SheetJS están en js/vendor
   const reg=await (await fetch("scripts/subir-version.js")).text(); cierto(reg.includes("js\\/[\\w\\/.-]+\\.js"), "subir-version.js no sube el ?v= de js/vendor");
 });
 
+test("nombreSeguro: los nombres que rompen los diccionarios llevan un guion bajo; el resto vuelve igual", ()=>{
+  ["__proto__","constructor","prototype","toString","valueOf","hasOwnProperty"].forEach(n=>igual(nombreSeguro(n), n+"_", n));
+  ["Casa","constructor2","Constructor","proto","","  x"].forEach(n=>igual(nombreSeguro(n), n)); igual(nombreSeguro(5), 5); igual(nombreSeguro(null), null); igual(nombreSeguro(undefined), undefined);
+  const cat={}; cat[nombreSeguro("__proto__")]=500; cat[nombreSeguro("constructor")]=300; igual(Object.keys(cat).length, 2, "ya no se pierden en el diccionario"); igual(cat["__proto__"], Object.prototype, "el prototipo queda intacto");
+});
+
+test("un categoría llamada __proto__ o constructor ya no hace desaparecer plata de los totales", ()=>{
+  const mk=(cat,imp)=>({id:Math.random(),tipo:"Gasto",cat:nombreSeguro(cat),subcat:"x",importe:imp,moneda:"ARS",fecha:"2026-10-05",nota:"t",esAhorro:false,usaAhorro:false,tags:[]});
+  const lista=[mk("Casa",100),mk("__proto__",500),mk("constructor",300)];
+  const inf=informeDePeriodo("2026-10","2026-10",()=>lista,null);
+  igual(inf.categorias.map(c=>[c.cat,c.monto]).sort(), [["Casa",100],["__proto__",500].map((x,i)=>i?x:x+"_"),["constructor_",300]].sort(), "los 900 están en el informe");
+  igual(inf.categorias.reduce((s,c)=>s+c.monto,0), 900);
+});
+
+test("sanearBackupDatos: un backup normal pasa sin ningún cambio", ()=>{
+  const datos={movs:[{id:1,tipo:"Gasto",cat:"Casa",subcat:"Luz",importe:1200.5,importeOrig:null,moneda:"ARS",fecha:"2026-10-05",nota:"luz",cuenta:"Galicia",tags:["a"],cambios:[],pagos:{"2026-10":true}},
+    {id:2,tipo:"Inversion",cat:"Inversiones",subcat:"CEDEAR",importe:5000,importeUSD:10,moneda:"ARS",ticker:"SPY",fecha:"2026-10-06",nota:""},{id:3,tipo:"Ingreso",cat:"Salario",subcat:"",importe:90000,moneda:"ARS",fecha:"2026-10-01"}],
+    tcs:[{id:5,desc:"Notebook",total:120000,cuotasTotal:12,mesInicio:"2026-10",tarjeta:"Visa",moneda:"ARS"}], metas:[{id:1,nombre:"Viaje",objetivo:100000}], importHistory:[{id:1,nombre:"x.xlsx",fecha:"5/5/2026",registros:3}],
+    cuentasCustom:["Mercado Libre"], tarjetasCustom:[], custom:{Gasto:{Mascotas:["Comida","Vet"]},Ingreso:{},Inversion:{},Tarjeta:{}}, presupuestos:{Casa:50000}, catOrder:{Gasto:["Casa","Auto"]}, iconsCustom:{Mascotas:"🐕"}, bancosTarjeta:{Visa:"BPat"}, mesesCerrados:{"2026-09":true}, vencimientosTc:{}};
+  const copia=JSON.parse(JSON.stringify(datos)); const r=sanearBackupDatos(datos);
+  igual(r, {descartados:0, renombrados:0, corregidos:0, total:0}); igual(datos, copia, "un backup bueno no se toca");
+});
+
+test("sanearBackupDatos: limpia lo que un archivo armado a mano o dañado podría traer", ()=>{
+  const datos={movs:[null, "texto", 5, [], {tipo:"<img src=x onerror=1>", cat:"x"}, {tipo:123},
+      {id:"7",tipo:"Gasto",cat:"__proto__",subcat:"constructor",cuenta:"prototype",tarjeta:"toString",ticker:"valueOf",importe:"1500",importeOrig:"abc",importeUSD:{a:1},nota:"x".repeat(5000),tags:["ok",5,null]},
+      {tipo:"Gasto",cat:"Casa",importe:NaN,nota:{raro:1}}],
+    tcs:[1, null, {id:2,tarjeta:"constructor",total:"900",tarjetas:[{tarjeta:"__proto__",importe:"5"}, 7]}], metas:"no es lista", importHistory:[{nombre:"a".repeat(3000)}],
+    cuentasCustom:["constructor","",5,"Bien"], tarjetasCustom:"mal", custom:{Gasto:JSON.parse('{"__proto__":["a"],"Ok":["constructor",3]}'), Ingreso:5}, presupuestos:JSON.parse('{"__proto__":1,"Casa":2}'), iconsCustom:[], catOrder:"x"};
+  const r=sanearBackupDatos(datos);
+  cierto(r.descartados>=6 && r.renombrados>=8 && r.corregidos>=6 && r.total===r.descartados+r.renombrados+r.corregidos, JSON.stringify(r));
+  igual(datos.movs.length, 2, "solo quedan los dos registros con tipo conocido"); const m=datos.movs[0];
+  igual([m.cat,m.subcat,m.cuenta,m.tarjeta,m.ticker], ["__proto___","constructor_","prototype_","toString_","valueOf_"]); igual([m.importe,m.importeOrig,m.importeUSD,m.id], [1500,0,0,7]); igual([m.nota.length, m.tags], [2000, ["ok"]]);
+  igual([datos.movs[1].importe, datos.movs[1].nota], [0, ""], "un NaN y un objeto como nota se corrigen");
+  igual(datos.tcs.length, 1); igual([datos.tcs[0].tarjeta, datos.tcs[0].total, datos.tcs[0].tarjetas[0].tarjeta, datos.tcs[0].tarjetas[0].importe], ["constructor_", 900, "__proto___", 5]);
+  igual(datos.metas, []); igual(datos.importHistory[0].nombre.length, 2000); igual(datos.cuentasCustom, ["constructor_","Bien"]); igual(datos.tarjetasCustom, []);
+  igual(Object.keys(datos.custom.Gasto).sort(), ["Ok","__proto___"]); igual(datos.custom.Gasto.Ok, ["constructor_"]); igual(datos.custom.Ingreso, {}); igual(Object.keys(datos.presupuestos).sort(), ["Casa","__proto___"]); igual(datos.iconsCustom, {}); igual(datos.catOrder, {});
+  igual(sanearBackupDatos(null), {descartados:0,renombrados:0,corregidos:0,total:0}); igual(sanearBackupDatos([]).total, 0);
+});
+
+test("restaurar un backup pasa por sanearBackupDatos, y los nombres nuevos también (cuentas, tarjetas, categorías, importación)", async ()=>{
+  const cfg=await (await fetch("js/config-ui.js")).text(), cuentas=await (await fetch("js/cuentas-tarjetas-categorias.js")).text(), imp=await (await fetch("js/importar-exportar.js")).text(), fc=await (await fetch("js/form-cargar.js")).text();
+  const cuerpo=(js,n)=>{ const i=js.indexOf("function "+n+"("); return js.slice(i, js.indexOf("\n}\n", i)+3); };
+  cierto(cuerpo(cfg,"aplicarBackup").includes("sanearBackupDatos(backup.datos)"), "aplicarBackup no sanea el backup");
+  ["agregarCuentaRapida","agregarTarjetaRapida","renombrarTarjeta","agregarSubcat","guardarNuevaCat"].forEach(f=>cierto(cuerpo(cuentas,f).includes("nombreSeguro("), f+" no usa nombreSeguro"));
+  cierto(imp.includes("nombreSeguro(cCat") && imp.includes("nombreSeguro(cSubcat") && imp.includes("nombreSeguro(cCuenta"), "la importación de Excel no usa nombreSeguro"); cierto(fc.includes('nombreSeguro(document.getElementById("inv-ticker")'), "el ticker no usa nombreSeguro");
+});
+
 grupo("Seguridad: datos de afuera no ejecutan código");
 
 const XSS_PAY=`"'><img src=x onerror=window.__xssTest=1>`;

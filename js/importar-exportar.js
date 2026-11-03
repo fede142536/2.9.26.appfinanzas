@@ -299,11 +299,11 @@ function handleXlsx(input){
         parsed.push({
           id:Date.now()+i,
           tipo,importe,moneda,
-          cat:   cCat   ?(String(r[cCat]   ||"").trim()||"Otros")  :"Otros",
-          subcat:cSubcat?(String(r[cSubcat]||"").trim()||"Varios")  :"Varios",
-          cuenta:cCuenta?String(r[cCuenta]||"").trim()              :"",
+          cat:   nombreSeguro(cCat   ?(String(r[cCat]   ||"").trim()||"Otros")  :"Otros"),
+          subcat:nombreSeguro(cSubcat?(String(r[cSubcat]||"").trim()||"Varios")  :"Varios"),
+          cuenta:nombreSeguro(cCuenta?String(r[cCuenta]||"").trim()              :""),
           fecha,
-          nota:  cNota  ?String(r[cNota]  ||"").trim()              :"",
+          nota:  (cNota  ?String(r[cNota]  ||"").trim()              :"").slice(0,MAX_TEXTO_BACKUP),
           _source:"excel"
         });
       });

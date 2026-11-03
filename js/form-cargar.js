@@ -725,7 +725,7 @@ async function guardarSinFreno(){
   if(tipo==="Inversion"){
     const importeInv=parseFloat(limpiarImporte(document.getElementById("inv-importe").value))||0;
     const isUSDInv=document.getElementById("inv-moneda").value==="USD";
-    const ticker=document.getElementById("inv-ticker").value.trim();
+    const ticker=nombreSeguro(document.getElementById("inv-ticker").value.trim());
     if(importeInv<=0){showToast("Ingresá un importe válido");return;}
     if(!ticker){showToast("Ingresá el ticker o fondo");return;}
     const cat=document.getElementById("inv-cat").value;
