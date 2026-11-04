@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v221**
+**Versión actual: v224**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,15 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 4 de noviembre de 2026
 
+- AAA anio: Año completo, Informe, Cierre del mes e imágenes compartibles
+  - Cifras que se achican o pasan a columna (adiós desborde 402>390 con importes de 12 dígitos), variación con color de buena/mala noticia
+  - Año sin movimientos: año actual + invitación, sin 'undefined'
+  - Barras por categoría de 44 px con tokens (oscuro), detalle del mes en grilla, gráfico con meses sin rotar
+  - Presets del informe envuelven (desborde a 360), botones de 44, notas con ícono en columna
+  - Imágenes: alto medido (el pie ya no pisa el último renglón), tipografía de la app, importes largos achicados, contraste AA
+  - Tests: 3 nuevos y uno actualizado por el estado vacío
+- AAA dashboard: selector de mes con tope deshabilitado, tarjetas accesibles (cabecera role=button, accion real), vacio con salida, ritmo y tokens
+- **v224** · AAA tanda 1 (bloqueo, navegación, movimientos, cargar)
 - Tests: el aviso del bloqueo con un solo botón cicla el foco (ajuste tras integrar navegación y bloqueo)
 - Bloqueo (AAA r2): aviso de espera que persiste, teclado sin saltos, detalles apaisado y foco con error
 - Navegación (AAA r2): cartel que no tapa menú ni hojas, perro que se repliega, hojas con nombre, íconos de trazo
