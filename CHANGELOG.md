@@ -23,8 +23,45 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ---
 
+## 4 de noviembre de 2026
+
+- Sistema (ronda 3, cierre): texto oscuro en botones ámbar y reparto 1,5/1 de Categoría y Subcategoría
+- Sistema (ronda 3): sin texto cortado en Cargar, ritmo de chips, foco del importe, selects, alineación y contraste
+  - Selector de tipo de Cargar: se quita el word-spacing global (cortaba "Cambio" a 360 px); solo "↑ Gasto/↓ Ingreso/◈ Inv./▣ Tarj." llevan .2em.
+  - Chips y pestañas: caja de 44 con borde transparente de 8,5 px y margen negativo igual; paso de 33 px y hueco de 6 px como en la base; mismo ancho (padding lateral compensa el borde); presets del informe sin +8 px.
+  - Importe de Cargar: el anillo de foco va en .amount-hero (:has(:focus-visible)), alrededor de "$" y cifra, sin el halo viejo del input.
+  - Selects: padding-right 24 px, flecha a 8 px; Categoría/Subcategoría en 1,7/1 (entra "Supermercado ⭐" a 360 px). …
+
 ## 3 de noviembre de 2026
 
+- Sistema: foco visible en todos los campos, select con flecha y elipsis, tacto real y estado deshabilitado
+  - Foco: input/select/textarea:focus-visible con anillo 2 px (>=6,8:1) también en Cargar (usa --tema-color) y búsqueda.
+  - Select: flecha propia, texto largo con puntos suspensivos (no más 'Supermercadc').
+  - Tacto: se corrige el patrón ::after, que no funciona dentro de overflow. Chips, 'Pagar', enlaces de cierre y acciones de insight pasan a caja real de 44 px; el resto conserva el halo. Área real medida con elementFromPoint: 6 controles <44 (antes 12).
+  - [aria-disabled=true] y :disabled con estilo propio. Glifo x alineado, .btn-sm con borde suave, texto grande ámbar.
+- Sistema: ámbar más cálido, --muted-on-tint y adopción de tokens en los componentes base
+  - --warning ocre naranja #924f00 (6,3:1); botón ámbar con texto oscuro (--warning-solid/--on-warning-solid); --warning-fill para barras.
+  - --muted-on-tint, --border-mid, --banner-bg/-fg y --surface-2 documentados.
+  - Componentes base (.header, .card, .form-*, .btn-*, .nav-btn, .badge, .chip-label, utilidades .txt-*) usan --fs-*, --sp-*, --dur-* y --ease; .badge, .chip-label e .inv-row-badge ya no bajan de 10 px.
+- Sistema: cartel de versión y zona de soltar archivo con tokens (contraste >=4,5:1 en claro y oscuro)
+  - #version-vieja: de #ba7517/#fff (3,72:1) a --banner-bg/--banner-fg con fallback (6,3:1 claro, 9:1 oscuro); botón Actualizar de 44 px.
+  - #drop-overlay: de azul crudo rgba(28,108,168,.88) a --accent y texto --on-solid.
+- Sistema: limpieza de reglas sin efecto
+- Sistema: reglas globales de tacto, foco, estados y controles
+  - Objetivos táctiles de 44 px: botones-ícono reales; chips, píldoras y enlaces con área clicable invisible de 44 (::after).
+  - :focus-visible sin pisar radios, borde de controles >=3:1, interruptor 46x28, controles nativos con la tipografía de la app (el textarea salía monoespaciado).
+  - Estados :active parejos, :disabled, selección, scrollbars, safe areas en modal/toast/botones flotantes.
+  - Red de seguridad para botones con color:#fff escrito en línea.
+- Sistema: tokens documentados y contraste AA/AAA en claro y oscuro
+  - Guía de tokens al inicio de styles.css (color, forma, sombra, movimiento, espaciado, tipografía, táctil).
+  - --muted y los 6 tonos semánticos oscurecidos/aclarados para llegar a >=4,5:1 sobre fondo, tarjeta y fondos suaves (la mayoría >=6,5:1 y >=7:1 sobre blanco).
+  - Nuevos tokens: --on-solid, --border-strong, --surface-2, --warning-fill, radios, sombras, curvas, escala de espaciado y tipográfica, safe areas.
+  - color:#fff sobre rellenos semánticos pasa a var(--on-solid) (en oscuro los rellenos son claros).
+- Sistema: theme-color claro/oscuro, color-scheme, tema antes del primer dibujo, zoom habilitado y manifest alineado
+  - theme-color y color de arranque del manifest = fondo de la app (#f7f6f2 claro, #000 oscuro); applyTheme() actualiza el meta si se fuerza un tema.
+  - Script mínimo en el head que fija data-theme antes del primer dibujo (sin destello blanco al abrir en oscuro).
+  - Se quita maximum-scale=1.0 del viewport (accesibilidad: se puede hacer zoom).
+  - manifest: dir y categories.
 - **v221** · La tipografía vive en la app
   Plus Jakarta Sans (400, 500, 600 y 700, licencia OFL) se sirve desde fonts/: la app ya no hace ningún pedido a Google Fonts, no hay parpadeo de letra al abrir y funciona igual sin conexión. La política de seguridad queda más cerrada (font-src solo 'self').
 - **v220** · Política de seguridad de contenido

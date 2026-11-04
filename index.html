@@ -8,16 +8,28 @@
      'unsafe-inline' en script-src es por los onclick="…" y los dos bloques de script del propio HTML (no se pueden sacar sin reescribir los botones).
      Si se agrega un servicio nuevo hay que sumarlo acá (hay un test que lo recuerda). Ver js/vendor/LEEME.md: las librerías ya viven en la app. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://www.googleapis.com https://accounts.google.com/gsi/ https://api.argentinadatos.com https://apis.datos.gob.ar; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self'; manifest-src 'self'">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Enola</title>
 <!-- La versión que este HTML espera. index.html se pide SIEMPRE a la red (ver sw.js), así
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v222">
+<meta name="enola-version" content="enola-v223">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1c6ca8">
+<!-- Color de la barra del sistema = color de fondo de la app (claro #f7f6f2 / oscuro #000). Los dos primeros siguen al sistema; applyTheme() (config-ui.js)
+     y el script de abajo ajustan el color cuando la persona fuerza un tema. color-scheme: que los controles nativos y el fondo previo al CSS ya salgan del tema correcto. -->
+<meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<script>
+/* Tema antes del primer dibujo: sin destello blanco al abrir la app en oscuro. La misma regla que applyTheme() (config-ui.js). */
+(function(){ try{
+  var t=localStorage.getItem("ftheme")||"auto", dark=t==="dark"||(t==="auto"&&window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.setAttribute("data-theme", dark?"dark":"light");
+  if(t!=="auto"){ document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){ m.removeAttribute("media"); m.setAttribute("content", dark?"#000000":"#f7f6f2"); }); }
+}catch(e){} })();
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Enola">
@@ -27,18 +39,18 @@
 <!-- Chart.js y SheetJS viven en js/vendor (versiones fijas, ver js/vendor/LEEME.md): la app no baja código de ningún CDN.
      defer es IMPORTANTE, no cosmético: el HTML se parsea sin esperar estos archivos, así la pantalla nunca queda en blanco por una carga lenta
      (los gráficos y el Excel se protegen solos si todavía no están; ver renderChartMensualBI y handleXlsx). -->
-<script defer src="js/vendor/xlsx.full.min.js?v=222"></script>
-<script defer src="js/vendor/chart.umd.js?v=222"></script>
-<link rel="stylesheet" href="styles.css?v=222">
+<script defer src="js/vendor/xlsx.full.min.js?v=223"></script>
+<script defer src="js/vendor/chart.umd.js?v=223"></script>
+<link rel="stylesheet" href="styles.css?v=223">
 </head>
 <body>
 <!-- Aviso de versión desactualizada. Los estilos van inline a propósito: styles.css también
      se sirve desde caché, y este cartel tiene que verse bien justamente cuando lo cacheado
      quedó viejo. -->
-<div id="version-vieja" role="alert" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#ba7517;color:#fff;padding:10px 14px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.25)">
+<div id="version-vieja" role="alert" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:var(--banner-bg,#924f00);color:var(--banner-fg,#fff);padding:10px 14px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:var(--shadow-pop,0 2px 10px rgba(0,0,0,.25))">
   <div style="max-width:560px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between">
     <span id="version-vieja-msg" style="flex:1;min-width:0"></span>
-    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:#fff;color:#8a5610;border:none;border-radius:8px;padding:8px 14px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
+    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:var(--banner-fg,#fff);color:var(--banner-bg,#924f00);border:none;border-radius:8px;padding:12px 16px;min-height:44px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
   </div>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -119,11 +131,11 @@
 </div>
 
 <!-- DRAG & DROP GLOBAL: overlay que aparece al arrastrar un archivo sobre la app (Excel/CSV/JSON) -->
-<div id="drop-overlay" style="display:none;position:fixed;inset:0;background:rgba(28,108,168,.88);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:32px;pointer-events:none">
+<div id="drop-overlay" style="display:none;position:fixed;inset:0;background:var(--accent,#145283);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:32px;pointer-events:none">
   <div>
     <div style="font-size:56px;margin-bottom:14px">📂</div>
-    <div style="font-size:20px;font-weight:700;color:#fff">Soltá el archivo acá</div>
-    <div style="font-size:13px;color:#fff;opacity:.85;margin-top:6px">Excel (.xlsx/.xls/.csv) o backup (.json)</div>
+    <div style="font-size:20px;font-weight:700;color:var(--on-solid,#fff)">Soltá el archivo acá</div>
+    <div style="font-size:13px;color:var(--on-solid,#fff);margin-top:6px">Excel (.xlsx/.xls/.csv) o backup (.json)</div>
   </div>
 </div>
 
@@ -1474,43 +1486,43 @@
      existiría y showPage() se cortaría con un TypeError dejando la pantalla a medio pintar. -->
 <button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento"></button>
 
-<script src="js/estado-categorias.js?v=222"></script>
-<script src="js/resultado-inversiones.js?v=222"></script>
-<script src="js/render-comun.js?v=222"></script>
-<script src="js/form-cargar.js?v=222"></script>
-<script src="js/movimientos.js?v=222"></script>
-<script src="js/editar-movimiento.js?v=222"></script>
-<script src="js/tarjetas-inversiones.js?v=222"></script>
-<script src="js/analisis.js?v=222"></script>
-<script src="js/cambio-moneda.js?v=222"></script>
-<script src="js/traspasos.js?v=222"></script>
-<script src="js/dashboard.js?v=222"></script>
-<script src="js/inflacion.js?v=222"></script>
-<script src="js/ahorros.js?v=222"></script>
-<script src="js/conciliacion.js?v=222"></script>
-<script src="js/papelera.js?v=222"></script>
-<script src="js/carga-rapida.js?v=222"></script>
-<script src="js/atajos.js?v=222"></script>
-<script src="js/aumentos.js?v=222"></script>
-<script src="js/retiro-por-venta.js?v=222"></script>
-<script src="js/selector-mes.js?v=222"></script>
-<script src="js/decimales.js?v=222"></script>
-<script src="js/recuperable.js?v=222"></script>
-<script src="js/resumen-anual.js?v=222"></script>
-<script src="js/repetir.js?v=222"></script>
-<script src="js/informe-periodo.js?v=222"></script>
-<script src="js/cierre-mes.js?v=222"></script>
-<script src="js/huella.js?v=222"></script>
-<script src="js/cuentas-sugeridas.js?v=222"></script>
-<script src="js/graficos-interactivos.js?v=222"></script>
-<script src="js/importar-exportar.js?v=222"></script>
-<script src="js/cuentas-tarjetas-categorias.js?v=222"></script>
-<script src="js/config-ui.js?v=222"></script>
-<script src="js/calendario-google.js?v=222"></script>
-<script src="js/backup-drive.js?v=222"></script>
-<script src="js/presupuestos.js?v=222"></script>
-<script src="js/seguridad-pin.js?v=222"></script>
-<script src="js/main.js?v=222"></script>
+<script src="js/estado-categorias.js?v=223"></script>
+<script src="js/resultado-inversiones.js?v=223"></script>
+<script src="js/render-comun.js?v=223"></script>
+<script src="js/form-cargar.js?v=223"></script>
+<script src="js/movimientos.js?v=223"></script>
+<script src="js/editar-movimiento.js?v=223"></script>
+<script src="js/tarjetas-inversiones.js?v=223"></script>
+<script src="js/analisis.js?v=223"></script>
+<script src="js/cambio-moneda.js?v=223"></script>
+<script src="js/traspasos.js?v=223"></script>
+<script src="js/dashboard.js?v=223"></script>
+<script src="js/inflacion.js?v=223"></script>
+<script src="js/ahorros.js?v=223"></script>
+<script src="js/conciliacion.js?v=223"></script>
+<script src="js/papelera.js?v=223"></script>
+<script src="js/carga-rapida.js?v=223"></script>
+<script src="js/atajos.js?v=223"></script>
+<script src="js/aumentos.js?v=223"></script>
+<script src="js/retiro-por-venta.js?v=223"></script>
+<script src="js/selector-mes.js?v=223"></script>
+<script src="js/decimales.js?v=223"></script>
+<script src="js/recuperable.js?v=223"></script>
+<script src="js/resumen-anual.js?v=223"></script>
+<script src="js/repetir.js?v=223"></script>
+<script src="js/informe-periodo.js?v=223"></script>
+<script src="js/cierre-mes.js?v=223"></script>
+<script src="js/huella.js?v=223"></script>
+<script src="js/cuentas-sugeridas.js?v=223"></script>
+<script src="js/graficos-interactivos.js?v=223"></script>
+<script src="js/importar-exportar.js?v=223"></script>
+<script src="js/cuentas-tarjetas-categorias.js?v=223"></script>
+<script src="js/config-ui.js?v=223"></script>
+<script src="js/calendario-google.js?v=223"></script>
+<script src="js/backup-drive.js?v=223"></script>
+<script src="js/presupuestos.js?v=223"></script>
+<script src="js/seguridad-pin.js?v=223"></script>
+<script src="js/main.js?v=223"></script>
 
 <script>
 // ═══════════════════════════════════════════
