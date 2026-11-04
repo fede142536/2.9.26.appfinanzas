@@ -351,15 +351,15 @@
     <div class="form-group"><label class="form-label" for="fechas-tc-vto">Fecha de vencimiento</label>
       <input type="date" id="fechas-tc-vto" class="form-input"></div>
     <div class="form-group">
-      <label style="--chk:var(--warning);display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--warning-light);border-radius:var(--radius-sm)">
+      <label class="pago-tc-fila pago-tc-rep" style="--chk:var(--warning)">
+        <span>🔁 Repetir estos días los meses siguientes</span>
         <input type="checkbox" id="fechas-tc-repetir" class="chk-custom">
-        <span style="color:var(--warning);font-weight:500">🔁 Repetir estos días los meses siguientes</span>
       </label>
     </div>
     <p class="txt-xs txt-muted" style="margin-bottom:6px;line-height:1.45">Te aviso unos días antes de que venza, hasta que lo marques como pagado. Dejá una fecha vacía para quitarla.</p>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn-sm u-flex1" onclick="cerrarFechasTc()">Cancelar</button>
-      <button class="btn-primary" style="flex:2;background:var(--warning);color:#fff;padding:11px" onclick="guardarFechasTc()">Guardar fechas</button>
+      <button class="btn-primary btn-tc" style="flex:2" onclick="guardarFechasTc()">Guardar fechas</button>
     </div>
   </div>
 </div>
@@ -402,9 +402,9 @@
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn-sm u-flex1" onclick="cerrarPagoTc()">Cancelar</button>
-      <button class="btn-primary" id="pago-tc-guardar" style="flex:2;background:var(--warning);color:#fff;padding:11px" onclick="guardarPagoTc()">Pagar</button>
+      <button class="btn-primary btn-tc" id="pago-tc-guardar" style="flex:2" onclick="guardarPagoTc()">Pagar</button>
     </div>
-    <button type="button" class="tc-res-link" style="width:100%;margin-top:10px;text-align:center" onclick="pagoTcYaCargado()">Ya lo cargué yo: vincular mi gasto ›</button>
+    <button type="button" class="pago-tc-ya" onclick="pagoTcYaCargado()">Ya lo cargué yo: vincular mi gasto ›</button>
   </div>
 </div>
 

@@ -1315,6 +1315,61 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 /* DIÁLOGO (alerta / confirmación / prompt): el mensaje en el cuerpo de 15 px de la app. */
 .dialogo-mensaje{font-size:var(--fs-base);color:var(--text);line-height:1.5;margin-bottom:var(--sp-4);white-space:pre-line}
 
+/* ═══════════════════════════════════════
+   [AAA tarjetas] Tarjetas (#page-tc) y sus hojas (#modal-fechas-tc, #modal-pago-tc, #modal-vincular-pago) — ronda 1
+   Va antes de "MOVIMIENTO REDUCIDO" para pisar las reglas de la pantalla sin tocarlas. Tokens del sistema (GUIA.md).
+   ═══════════════════════════════════════ */
+/* "A pagar este mes": la cifra protagonista baja sola si no entra (--n = largo del texto final, lo pone el JS); antes era 34 px fijos en línea y
+   un total de 13 dígitos casi tocaba los bordes a 360 px. */
+.tc-hero{container-type:inline-size;display:flex;flex-direction:column;align-items:center;gap:2px;padding:var(--sp-4) var(--sp-4) var(--sp-1)}
+.tc-hero-monto{font-size:clamp(22px,calc(100cqw / (var(--n,8) * .56)),34px);font-weight:700;letter-spacing:-.035em;line-height:1.15;color:var(--warning-fill);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-hero-sub{font-size:var(--fs-sm);color:var(--muted);text-align:center}
+.tc-seg{margin-top:var(--sp-3)}
+/* Línea de tiempo: las barras informan el monto, así que su borde va a ≥3:1 (relleno suave + aro; antes el relleno solo daba 1,2:1 a 1,7:1). */
+.tc-col-usd{width:5px;height:5px}
+.tc-col[data-t="pasado"] .tc-col-bar{box-shadow:inset 0 0 0 1.5px var(--border-strong)}
+.tc-col[data-t="futuro"] .tc-col-bar{box-shadow:inset 0 0 0 1.5px var(--warning-fill)}
+.tc-col[aria-pressed="true"] .tc-col-bar{box-shadow:none}
+/* Compras de este mes */
+.tc-sec-label{padding:var(--sp-4) var(--sp-4) var(--sp-2);font-size:var(--fs-sm);font-weight:600}
+.tc-lista{margin:0 var(--sp-4);padding:0;overflow:hidden}
+.tc-row+.tc-row{border-top:1px solid var(--border)}
+.tc-row{min-height:68px}
+.tc-row:focus-visible{outline-offset:-2px}
+/* Descripción y detalle pasan a una segunda línea (antes "Mensual…" / "Compra …" con importes largos); recién ahí cortan con "…". */
+.tc-row-desc{font-size:var(--fs-base);white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow-wrap:anywhere}
+.tc-row-sub span{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
+.tc-row-monto{font-size:var(--fs-base)}
+.tc-row-fin{font-size:var(--fs-xs)}
+/* El avance va en su propia línea: al lado del texto se comía el ancho y cortaba "Cuota 1 de 1" ("Mercado Pago · Cuota …"). */
+.tc-row-progreso{width:min(100%,96px)}
+.tc-cierre{font-size:var(--fs-sm);padding-bottom:var(--sp-4)}
+/* A 360 px "Mastercard · 🔁 Mensual fijo" no entraba (le faltaban ~7 px): fila un poco más compacta en pantallas angostas. */
+@media (max-width:380px){
+  .tc-row{gap:10px;padding-inline:12px}
+  .tc-row-icon{width:32px;height:32px}
+}
+.tc-vacio{margin:var(--sp-4) var(--sp-4) 0}
+/* Resúmenes: el nombre baja a dos líneas (con "Tarjeta con nom…" se perdía el nombre), el ✎ viaja pegado a la última palabra. */
+.tc-res-titulo{font-size:var(--fs-xs)}
+.tc-res-name{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;font-size:var(--fs-base);line-height:1.3}
+.tc-res-monto{font-size:var(--fs-base);white-space:nowrap}
+.tc-res-nota{padding:var(--sp-1) 14px 12px;line-height:1.45}
+.tc-res-btn{min-width:88px;font-size:var(--fs-sm)}
+/* "Deshacer" era un enlace de 11 px subrayado: ahora es un botón secundario del mismo tamaño que "Pagar". */
+.tc-res-btn.tc-res-btn-sec{background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1px var(--border-mid)}
+.tc-res-btn.tc-res-btn-sec:active{background:var(--bg)}
+/* Hojas */
+.pago-tc-det-btn{min-height:var(--tap)}
+.pago-tc-rep{background:var(--warning-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:var(--fs-md);font-weight:500;color:var(--warning)}
+.pago-tc-ya{display:flex;align-items:center;justify-content:center;width:100%;min-height:var(--tap);margin-top:var(--sp-2);border:0;background:none;color:var(--accent);font:inherit;font-size:var(--fs-md);font-weight:600;cursor:pointer}
+.btn-primary.btn-tc{background:var(--warning-solid);color:var(--on-warning-solid)}
+.vinc-pago-op{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:2px var(--sp-3);min-height:var(--tap);font-size:var(--fs-md)}
+.vinc-pago-t{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.vinc-pago-m{white-space:nowrap;text-align:right}
+.vinc-pago-c{grid-column:1/-1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-sm)}
+.vinc-pago-solo{grid-template-columns:1fr;justify-items:center;align-items:center}
+
 /* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO
    ═══════════════════════════════════════════

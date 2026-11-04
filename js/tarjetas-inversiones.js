@@ -591,6 +591,12 @@ function generarICSPrueba(ahora, enMinutos){
   return lineas.map(icsPlegar).join("\r\n")+"\r\n";
 }
 
+// [AAA tarjetas] Salida del vacío de la pantalla Tarjetas: abre Cargar con el tipo "Tarjeta" ya elegido.
+function abrirCargaTarjeta(){
+  abrirCarga();
+  if(typeof setTipo==="function") setTipo("Tarjeta");
+}
+
 // "5 nov": para las fechas de cierre y vencimiento en las filas.
 function fmtDiaMes(iso){ return `${Number(String(iso).slice(8,10))} ${abrevMes3(String(iso).slice(0,7)).toLowerCase()}`; }
 
@@ -899,8 +905,8 @@ function renderTcTimeline(){
     const trama = d.incompleto ? ";background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.2) 0 3px,transparent 3px 6px)" : "";
     const colBg = sel ? "var(--warning-light)" : "transparent";
     const lblStyle = sel ? "color:var(--warning);font-weight:700" : "";
-    const totalTxt = d.incompleto ? "monto incompleto" : fmtTotal(d.ars);
-    return `<button type="button" class="tc-col" style="background:${colBg}" aria-pressed="${sel}"
+    const totalTxt = (d.incompleto ? "monto incompleto" : fmtTotal(d.ars)) + (d.usd ? ", incluye USD" : "");
+    return `<button type="button" class="tc-col" data-t="${pasado?"pasado":d.ym===hoyYM?"actual":"futuro"}" style="background:${colBg}" aria-pressed="${sel}"
         aria-label="${escapeHtml(mesLbl(d.ym))}: ${escapeHtml(totalTxt)}" onclick="irAMesTc(${attrJS(d.ym)})">
       ${d.usd?'<span class="tc-col-usd"></span>':""}
       <span class="tc-col-bar" style="height:${alto}px;background:${barColor}${trama}"></span>
@@ -940,27 +946,32 @@ function renderTcPendientes(){
   const ordenado=[...ars, ...usd];
   const bancosTc=leerBancosTc();
 
-  let html=`<div class="seccion-label" style="padding:14px 20px 6px;font-size:12px;font-weight:600">Compras de este mes</div>`;
+  let html="";
   if(!ordenado.length){
-    html+=`<div class="card" style="margin:0 16px"><p style="font-size:13px;color:var(--muted);text-align:center;padding:24px;margin:0">Sin gastos en ${escapeHtml(mesLbl(mesTc))}</p></div>`;
+    // [AAA tarjetas] Vacío con guía y salida (antes: "Sin gastos en …" suelto dentro de una tarjeta).
+    html+=`<div class="empty tc-vacio"><div class="empty-icon" aria-hidden="true">💳</div>
+      <div class="empty-titulo">Sin compras con tarjeta en ${escapeHtml(mesLbl(mesTc))}</div>
+      <div class="empty-guia">Las compras en cuotas y los gastos fijos que cargues con tarjeta aparecen acá, mes a mes.</div>
+      <button type="button" class="btn-primary empty-cta" onclick="abrirCargaTarjeta()">Cargar una compra con tarjeta</button></div>`;
   } else {
+    html+=`<div class="seccion-label tc-sec-label">Compras de este mes</div>`;
     // Tocar la fila abre el mismo modal de edición que usa Movimientos: hoy esta pantalla no
     // tenía ningún acceso para corregir una compra con tarjeta.
-    html+=`<div class="card" style="margin:0 16px;padding:0;overflow:hidden">`+ordenado.map((m,i)=>{
+    html+=`<div class="card tc-lista">`+ordenado.map((m,i)=>{
       const icon=getIcon(m.cat,"💳");
       const tag=m.frecuente?"🔁 Mensual fijo":`Cuota ${m.nCuota} de ${m.cuotasTotal}`;
-      const barra=m.frecuente?"":`<div class="tc-row-progreso"><div class="tc-row-progreso-fill" style="width:${Math.max(0,Math.round(m.nCuota/m.cuotasTotal*100))}%"></div></div>`;
+      const barra=m.frecuente?"":`<div class="tc-row-progreso" role="img" aria-label="Cuota ${m.nCuota} de ${m.cuotasTotal}"><div class="tc-row-progreso-fill" style="width:${Math.max(0,Math.round(m.nCuota/m.cuotasTotal*100))}%"></div></div>`;
       const monto=m.moneda==="USD"?`USD ${fmtNum2(m.importe||0)}`:fmtS(m.importe);
       const restantes=m.cuotasTotal-m.nCuota;
       const finYm=addMonths(mesTc,restantes);
       const fechaVto=m.frecuente ? fechaVencimiento(mesTc, m.diaVto) : null;
       const finTxt=m.frecuente ? (fechaVto ? (m.pagado?"✓ pagado":`vence ${fmtDiaMes(fechaVto)}`) : "")
                                : (restantes<=0?"última cuota":`termina ${abrevMes3(finYm).toLowerCase()} ${finYm.slice(2,4)}`);
-      return `<div class="tc-row"${i>0?' style="border-top:1px solid var(--border)"':""} onclick="openEditTcModal(${m.id},${attrJS(mesTc)})">
+      return `<div class="tc-row" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" onclick="openEditTcModal(${m.id},${attrJS(mesTc)})">
         <div class="tc-row-icon">${icon}</div>
         <div class="tc-row-mid">
           <div class="tc-row-desc">${escapeHtml(m.desc||"")}</div>
-          <div class="tc-row-sub"><span>${tarjetaConBancoHTML(m.tarjeta, bancosTc)} · ${tag}</span>${barra}</div>
+          <div class="tc-row-sub"><span>${tarjetaConBancoHTML(m.tarjeta, bancosTc)} · ${tag}</span></div>${barra}
         </div>
         <div class="tc-row-right">
           <div class="tc-row-monto">${monto}</div>
@@ -974,7 +985,7 @@ function renderTcPendientes(){
   // mesesConCuotasPendientes sigue siendo inclusiva del mes que se le pasa, sin cambios.
   const meses=mesesConCuotasPendientes(addMonths(mesTc,1));
   if(!meses.length){
-    html+=`<div class="tc-cierre">No quedan cuotas después de este mes.</div>`;
+    if(ordenado.length) html+=`<div class="tc-cierre">No quedan cuotas después de este mes.</div>`;
   } else if(meses.some(m=>m.incompleto)){
     html+=`<div class="tc-cierre">Hay una compra sin monto, así que el total no se puede calcular. Está en el aviso del Dashboard.</div>`;
   } else {
@@ -1060,17 +1071,18 @@ function renderTarjetas(){
       if(nFrec>0) partes.push(`${nFrec} fijos`);
       subtitulo=partes.join(" · ");
     }
-    let html=`<div style="padding:18px 20px 4px;display:flex;flex-direction:column;align-items:center;gap:2px">
+    // [AAA tarjetas] El total es la cifra protagonista: --n (largo del texto final) la achica sola si no entra (ver .tc-hero-monto).
+    let html=`<div class="tc-hero">
       <div class="seccion-label">${esMesActual?"A pagar este mes":"A pagar en "+escapeHtml(mesLbl(ymSel))}</div>
-      <div style="font-size:34px;font-weight:700;letter-spacing:-1.2px;color:var(--warning)" data-animar="${totalMesARS}">${fmtTotal(0)}</div>
-      <div style="font-size:12px;color:var(--muted)">${escapeHtml(subtitulo)}</div>
+      <div class="tc-hero-monto" style="--n:${fmtTotal(totalMesARS).length}" data-animar="${totalMesARS}">${fmtTotal(0)}</div>
+      <div class="tc-hero-sub">${escapeHtml(subtitulo)}</div>
     </div>`;
 
     if(cantidadMes>0){
       // Selector Por tarjeta/Por categoría: reusa .seg-filter de Movimientos (mismo aspecto;
       // el handoff pide 14px de margen arriba en vez de 16px, diferencia mínima que no
       // justifica una clase aparte).
-      html+=`<div class="seg-filter" style="margin-top:14px">
+      html+=`<div class="seg-filter tc-seg">
         <button class="seg-btn${tcVistaBarras==="tarjeta"?" active":""}" onclick="setTcVistaBarras('tarjeta')">Por tarjeta</button>
         <button class="seg-btn${tcVistaBarras==="categoria"?" active":""}" onclick="setTcVistaBarras('categoria')">Por categoría</button>
       </div>`;
@@ -1126,18 +1138,18 @@ function resumenesTcHTML(ym){
       if(!pagado) color=dias<0?"var(--danger)":dias<=1?"var(--warning)":"var(--muted)";
       partes.push(`Vence ${fmtDiaMes(d.vto)}${pagado?"":` (${textoDias(dias)})`}`);
     }
-    const fechas=`<button type="button" class="tc-res-link tc-res-fechas" style="color:${color}" onclick="abrirFechasTc(${attrJS(r.tarjeta)},${attrJS(ym)})">📅 ${partes.length?escapeHtml(partes.join(" · "))+" ✎":"Cargar cierre y vencimiento"}</button>`;
+    const fechas=`<button type="button" class="tc-res-link tc-res-fechas" style="color:${color}" onclick="abrirFechasTc(${attrJS(r.tarjeta)},${attrJS(ym)})">📅 ${partes.length?escapeHtml(partes.join(" · "))+"\u00a0✎":"Cargar cierre y vencimiento"}</button>`;
 
     const args=`${attrJS(r.tarjeta)},${attrJS(ym)},${attrJS(r.moneda)}`;
     let sub, right;
     if(pagadoManual){
       sub=`<div class="tc-res-sub ok">✓ Pagado${movPago?` con tu gasto del ${escapeHtml(fmtDiaMes(movPago.fecha))} (${fmt(r.moneda==="USD"?(movPago.importeOrig||0):(movPago.importe||0), r.moneda)})`:""}</div>${movPago?diferenciaPagoTcHTML(r, movPago):""}`;
       right=movPago && esPagoTarjeta(movPago)
-        ? `<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${attrJS(ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)})">Deshacer</button>`
-        : `<button type="button" class="tc-res-link" onclick="marcarPagadoTc(${args},false)">Deshacer</button>`;
+        ? `<button type="button" class="tc-res-btn tc-res-btn-sec" onclick="deshacerPagoTc(${attrJS(ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)})">Deshacer</button>`
+        : `<button type="button" class="tc-res-btn tc-res-btn-sec" onclick="marcarPagadoTc(${args},false)">Deshacer</button>`;
     } else if(pagadoLigado){
       sub=`<div class="tc-res-sub ok">✓ Pagado ${fmt(r.pagado,r.moneda)}</div>`;
-      right=`<button type="button" class="tc-res-link" onclick="deshacerPagoTc(${attrJS(ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)})">Deshacer</button>`;
+      right=`<button type="button" class="tc-res-btn tc-res-btn-sec" onclick="deshacerPagoTc(${attrJS(ym)},${attrJS(r.tarjeta)},${attrJS(r.moneda)})">Deshacer</button>`;
     } else {
       sub=`<div class="tc-res-sub">${r.pagado>0?`Pagaste ${fmt(r.pagado,r.moneda)} · resta <strong>${fmt(r.resta,r.moneda)}</strong>`:"Sin pagar"}</div>`;
       right=`<button type="button" class="tc-res-btn" onclick="abrirPagoTc(${args})">Pagar</button>`;
@@ -1194,13 +1206,13 @@ function cargosTarjetaHTML(ymSel){
   const bancos=leerBancosTc();
   const fmtC=(v,mon)=>mon==="USD"?`USD ${fmtNum2(v)}`:fmtS(v);
   const titulo=`<div class="tc-res-titulo">Gastos administrativos de las tarjetas</div>`;
-  if(!lista.length) return `<div class="tc-res">${titulo}<p class="tc-res-sub" style="padding:0 14px 12px;line-height:1.45">Intereses, comisiones e impuestos que la tarjeta suma a tus compras. Se calculan al marcar un resumen como pagado y vincular el gasto con el que lo pagaste: la diferencia entre lo que pagaste y las compras cargadas.</p></div>`;
+  if(!lista.length) return `<div class="tc-res">${titulo}<p class="tc-res-sub tc-res-nota">Intereses, comisiones e impuestos que la tarjeta suma a tus compras. Se calculan al marcar un resumen como pagado y vincular el gasto con el que lo pagaste: la diferencia entre lo que pagaste y las compras cargadas.</p></div>`;
   const totARS=lista.reduce((s,x)=>s+x.ARS,0), totUSD=lista.reduce((s,x)=>s+x.USD,0);
   const totTxt=[totARS?fmtC(totARS,"ARS"):"", totUSD?fmtC(totUSD,"USD"):""].filter(Boolean).join(" + ") || fmtC(0,"ARS");
   const filas=lista.slice().reverse().map(x=>`<div class="tc-cargo-mes"><div class="tc-cargo-cab"><span>${escapeHtml(mesLbl(x.ym))}</span><strong>${[x.ARS?fmtC(x.ARS,"ARS"):"", x.USD?fmtC(x.USD,"USD"):""].filter(Boolean).join(" + ")||fmtC(0,"ARS")}</strong></div>`
     +x.items.map(i=>`<div class="tc-cargo-det"><span>${tarjetaConBancoHTML(i.tarjeta, bancos)}${i.moneda==="USD"?" (USD)":""}</span><span>${i.cargo>=0?fmtC(i.cargo,i.moneda):`−${fmtC(-i.cargo,i.moneda)}`}${i.compras>0?` · ${i.pct>0?"+":""}${String(i.pct).replace(".",",")}%`:""}</span></div>`).join("")+`</div>`).join("");
   return `<div class="tc-res">${titulo}<div class="tc-cargo-total">En ${escapeHtml(String(ymSel).slice(0,4))}: <strong>${totTxt}</strong></div>${filas}
-    <p class="tc-res-sub" style="padding:4px 14px 12px;line-height:1.45">Ya están dentro de los pagos de tarjeta que cargaste como gasto: acá solo se muestran. Solo cuentan los resúmenes con el pago vinculado.</p></div>`;
+    <p class="tc-res-sub tc-res-nota">Ya están dentro de los pagos de tarjeta que cargaste como gasto: acá solo se muestran. Solo cuentan los resúmenes con el pago vinculado.</p></div>`;
 }
 
 // Borra los pagos que la app cargó para un resumen ("Pagar"): son gastos comunes, así que también salen de Movimientos.
