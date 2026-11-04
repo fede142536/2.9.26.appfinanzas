@@ -377,7 +377,7 @@ function _cajaDeCapa(capa){ return capa.id==="side-menu" ? capa : (capa.querySel
 // arriba hay una pantalla propia (bloqueo / bienvenida), que maneja su foco sola.
 function _capaSuperior(){
   const candidatas=Array.from(document.querySelectorAll(_CAPAS));
-  ["lock-screen","onboarding-screen"].forEach(id=>{ const el=document.getElementById(id); if(el && getComputedStyle(el).display!=="none") candidatas.push(el); });
+  ["lock-screen","onboarding-screen"].forEach(id=>{ const el=document.getElementById(id); if(el && el.isConnected && getComputedStyle(el).display!=="none") candidatas.push(el); });
   let mejor=null, zMejor=-Infinity;
   candidatas.forEach(el=>{ const z=parseInt(getComputedStyle(el).zIndex,10)||0; if(z>=zMejor){ mejor=el; zMejor=z; } });
   return (mejor && mejor.id!=="lock-screen" && mejor.id!=="onboarding-screen") ? mejor : null;
@@ -429,6 +429,7 @@ function _sincronizarCapas(){
   const menuAbierto=!!document.querySelector("#side-menu.open");
   document.querySelectorAll('[onclick*="toggleSideMenu"]').forEach(b=>b.setAttribute("aria-expanded", String(menuAbierto)));
 }
+let _observarCapa=()=>{};   // registra una capa creada después del arranque (las del HTML se registran solas)
 (function(){
   if(typeof MutationObserver==="undefined") return;
   const menu=document.getElementById("side-menu");
@@ -437,7 +438,8 @@ function _sincronizarCapas(){
   }
   document.querySelectorAll('[onclick*="toggleSideMenu"]').forEach(b=>{ b.setAttribute("aria-haspopup","dialog"); b.setAttribute("aria-controls","side-menu"); b.setAttribute("aria-expanded","false"); });
   const mo=new MutationObserver(_sincronizarCapas);
-  document.querySelectorAll(".modal-overlay, #side-menu").forEach(c=>mo.observe(c,{attributes:true,attributeFilter:["class"]}));
+  _observarCapa=c=>mo.observe(c,{attributes:true,attributeFilter:["class"]});
+  document.querySelectorAll(".modal-overlay, #side-menu").forEach(_observarCapa);
   document.addEventListener("focusin", e=>{ _historialFoco.push(e.target); if(_historialFoco.length>8) _historialFoco.shift(); }, true);
   document.addEventListener("focusout", e=>{ if(!e.relatedTarget){ _historialFoco.push(null); if(_historialFoco.length>8) _historialFoco.shift(); } }, true);
   document.addEventListener("keydown", e=>{ _modoTeclado=true; }, true);
