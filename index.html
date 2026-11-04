@@ -193,7 +193,7 @@
     </div>
     <div class="form-group"><label class="form-label" for="new-cat-name">Nombre</label><input type="text" id="new-cat-name" class="form-input" placeholder="Ej: Mascotas"></div>
     <div class="form-group"><label class="form-label" for="new-cat-subs">Subcategorías (separadas por coma)</label><input type="text" id="new-cat-subs" class="form-input" placeholder="Ej: Veterinario, Alimento, Otros"></div>
-    <button class="btn-primary" style="background:var(--accent);color:#fff" onclick="guardarNuevaCat()">Agregar</button>
+    <button class="btn-primary" style="background:var(--accent);color:var(--on-solid)" onclick="guardarNuevaCat()">Agregar</button>
   </div>
 </div>
 
@@ -222,7 +222,7 @@
     </div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn-sm u-flex1" onclick="closePresupModal()">Cancelar</button>
-      <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:11px" onclick="guardarPresup()">Guardar</button>
+      <button class="btn-primary" style="flex:2;background:var(--accent);color:var(--on-solid)" onclick="guardarPresup()">Guardar</button>
     </div>
   </div>
 </div>
@@ -242,7 +242,7 @@
     </div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn-sm u-flex1" onclick="closeRenameModal()">Cancelar</button>
-      <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:11px" onclick="aplicarRename()">Renombrar</button>
+      <button class="btn-primary" style="flex:2;background:var(--accent);color:var(--on-solid)" onclick="aplicarRename()">Renombrar</button>
     </div>
   </div>
 </div>
@@ -1412,11 +1412,11 @@
     <button class="btn-sm" style="width:100%;margin:10px 0" id="btn-inflacion-bajar" onclick="actualizarInflacionDesdeInternet()">🌐 Actualizar desde internet</button>
     <details>
       <summary class="txt-sm txt-muted" style="cursor:pointer;padding:4px 0">o pegala a mano</summary>
-      <p class="txt-xs txt-muted" style="margin:8px 0">Sirve el JSON tal cual sale de la API, o una línea por mes: <code>2026-07, 2,11</code></p>
+      <p class="txt-xs txt-muted" style="margin:8px 0">Sirve el JSON tal cual sale de la API, o una línea por mes: <code class="u-nowrap">2026-07, 2,11</code></p>
       <textarea id="inflacion-pegar" class="form-textarea" rows="4" aria-label="Serie de inflación para pegar" placeholder='[{"fecha":"2026-07-31","valor":2.11}, ...]'></textarea>
       <div class="u-row" style="margin-top:8px">
         <button class="btn-sm u-flex1" onclick="guardarInflacionPegada()">Guardar</button>
-        <button class="btn-sm" style="color:var(--danger)" onclick="borrarInflacion()">Borrar la serie</button>
+        <button class="btn-sm cfg-btn-x" onclick="borrarInflacion()">Borrar la serie</button>
       </div>
     </details>
   </div>
@@ -1431,7 +1431,7 @@
     <button type="button" class="btn-sm" onclick="abrirPapelera()">Ver papelera</button>
   </div>
   <div class="card">
-    <div class="card-title">Exportar a Excel</div>
+    <div class="card-title">📗 Exportar a Excel</div>
     <div class="two-col">
       <div class="form-group"><label class="form-label" for="exp-desde">Desde</label><input type="month" id="exp-desde" class="form-input"></div>
       <div class="form-group"><label class="form-label" for="exp-hasta">Hasta</label><input type="month" id="exp-hasta" class="form-input"></div>
@@ -1447,7 +1447,7 @@
     <p class="txt-sm txt-muted mb-10">CSV desnormalizado con todo tu historial (una fila por movimiento y por cada cuota/mes de gasto frecuente), listo para abrir en Power BI, Looker Studio o pandas/Python.</p>
     <button class="btn-sm" style="width:100%" onclick="exportarDatosBI()">⬇ Exportar CSV para BI</button>
   </div>
-  <div class="card"><div class="card-title">Tus datos</div><div id="export-stats"></div></div>
+  <div class="card"><div class="card-title">🗂 Tus datos</div><div id="export-stats"></div></div>
     </div>
   </details>
   <details class="cfg-seccion" id="cfg-sec-peligro">
@@ -1457,7 +1457,7 @@
     <div class="card-title" style="color:var(--danger)">⚠ Zona de peligro</div>
     <div class="form-group">
       <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Si importaste el mismo archivo varias veces o querés empezar de cero, podés borrar todos los movimientos.</p>
-      <button class="btn-primary" style="background:var(--surface);color:var(--danger);border:1px solid var(--danger)" onclick="confirmarBorrarTodo()">🗑 Borrar todos los movimientos</button>
+      <button class="btn-primary btn-peligro" onclick="confirmarBorrarTodo()">🗑 Borrar todos los movimientos</button>
     </div>
   </div>
     </div>

@@ -1238,15 +1238,7 @@ label:has(>input[type="checkbox"]:not(.chk-custom)){min-height:var(--tap);displa
 /* Botones de solo símbolo (×, ✎) escritos con style="background:none…" en listas: conservan su tamaño, ganan halo de 44. */
 button[style*="background:none"]:not([style*="position"]){position:relative}
 button[style*="background:none"]::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
-/* Configuración, administrador de categorías (js/cuentas-tarjetas-categorias.js: estilos en línea, el markup no se toca desde acá).
-   Reglas de contexto, sin cambiar el alto de las filas: el ícono gana un halo de 44; el par ▲/▼ vuelve a su alto compacto (el
-   .btn-sm de 36 lo hacía crecer 42 px por fila) y cada uno toma un halo de 44 de ancho × 29 de alto hacia afuera de la pila
-   (dos botones apilados no pueden tener 44 cada uno: queda documentado en GUIA.md). "+ Sub" y × de categoría usan el halo de .btn-sm. */
-#page-config .cat-row button[title="Cambiar ícono"]{position:relative}
-#page-config .cat-row button[title="Cambiar ícono"]::after{content:"";position:absolute;left:50%;top:50%;width:var(--tap);height:var(--tap);transform:translate(-50%,-50%)}
-#page-config .cat-row button[title="Subir"],#page-config .cat-row button[title="Bajar"]{min-height:0}
-#page-config .cat-row button[title="Subir"]::after{top:auto;bottom:0;height:29px;transform:translateX(-50%)}
-#page-config .cat-row button[title="Bajar"]::after{top:0;height:29px;transform:translateX(-50%)}
+/* [AAA config] Las reglas de contexto del administrador de categorías (halos de ícono y ▲/▼ apilados) se retiraron: ahora el markup usa clases .cfg-* de 44×44 reales (bloque [AAA config] más abajo). */
 /* Interruptor un poco más grande (46×28): se ve y se toca mejor. */
 .chk-custom{width:46px;height:28px}
 .chk-custom::after{top:3px;left:3px;width:22px;height:22px}
@@ -1568,6 +1560,70 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .cfg-cuerpo .card{margin-left:0;margin-right:0}
 #cfg-sec-peligro>summary{border-color:var(--danger-light)}
 #cfg-sec-peligro .cfg-sec-titulo{color:var(--danger)}
+
+/* ═══════════════════════════════════════════════════════════
+   [AAA config] CONFIGURACIÓN (#page-config) — ronda 1
+   · Todo lo que se toca mide 44×44 reales (antes: botones de 36 con halo, ▲/▼ de 24×14, ícono de 30, × de 8×13).
+   · Administrador de cuentas / tarjetas / categorías con clases .cfg-* (antes: estilos en línea con medidas sueltas).
+   · Desplegables internos (<details> sin .cfg-seccion) con encabezado de 44 y flecha propia.
+   · Botón "Borrar todos los movimientos": su estado de confirmación es una clase (en oscuro volvía a blanco).
+   ═══════════════════════════════════════════════════════════ */
+#page-config .btn-sm{min-height:var(--tap)}
+#page-config .btn-primary{text-wrap:balance}
+#page-config .cfg-btn-x{color:var(--danger);min-width:var(--tap);padding-inline:0}
+.u-nowrap{white-space:nowrap}
+/* Títulos de tarjeta con botones al lado: si no entran (360 px) los botones bajan a su renglón, alineados a la derecha. */
+#page-config .card-title[style*="justify-content:space-between"]{flex-wrap:wrap;gap:var(--sp-2)}
+#page-config .card-title[style*="justify-content:space-between"]>.u-row-6{margin-left:auto}
+/* Hojas de Configuración (presupuesto, renombrar, nueva categoría, detalle de categoría): botones secundarios de 44 reales. */
+#modal-presup .btn-sm,#modal-rename .btn-sm,#modal-cat .btn-sm,#modal-cat-detail .btn-sm{min-height:var(--tap)}
+.btn-primary.btn-peligro{background:var(--surface);color:var(--danger);border:1px solid var(--danger)}
+.btn-primary.btn-peligro.is-confirmando{background:var(--danger);color:var(--on-solid)}
+/* Desplegables internos: encabezado de 44, flecha como la de las secciones. */
+#page-config details:not(.cfg-seccion)>summary{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--tap);cursor:pointer;list-style:none;padding-block:0!important}
+#page-config details:not(.cfg-seccion)>summary::-webkit-details-marker{display:none}
+#page-config details:not(.cfg-seccion)>summary::before{content:"▸";flex-shrink:0;width:12px;color:var(--muted);font-size:var(--fs-md);transition:transform var(--dur-2) var(--ease)}
+#page-config details[open]:not(.cfg-seccion)>summary::before{transform:rotate(90deg)}
+/* Filas de la lista de copias del celular: la × de 44. */
+#page-config .copia-borrar{min-width:var(--tap);min-height:var(--tap);padding:0 0 .38em}
+/* Etiquetas (cuentas, subcategorías): píldora de 28 con la × de 44 que sobresale del alto visible (margen negativo: el ritmo no cambia). */
+.cfg-chips{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-3) 6px}
+.cfg-chips-sub{margin-top:var(--sp-3)}
+.cfg-chip{display:inline-flex;align-items:center;max-width:100%;min-height:28px;padding:0 10px;border-radius:14px;background:var(--bg);color:var(--muted-on-tint);font-size:var(--fs-sm);line-height:1.2}
+.cfg-chip-sub{font-size:var(--fs-xs)}
+/* La píldora en sí no recibe toques: los botones (cuya caja de 44 sobresale 8 px) mandan. */
+.cfg-chip{pointer-events:none}
+.cfg-chip-x,.cfg-chip-btn{pointer-events:auto}
+.cfg-chip-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cfg-chip-propio{background:var(--accent-light);color:var(--accent)}
+.cfg-chip-x{flex-shrink:0;appearance:none;-webkit-appearance:none;border:0;background:none;color:inherit;font:inherit;font-size:var(--fs-lg);line-height:1;cursor:pointer;
+  width:var(--tap);height:var(--tap);margin:-8px -12px -8px -6px;padding:0 0 .38em;display:inline-flex;align-items:center;justify-content:center}
+.cfg-chip-x:active{opacity:.55}
+.cfg-sin-sub{align-self:center}
+/* Etiqueta-botón ("+ Sub", "Eliminar categoría"): caja real de 44 con borde transparente arriba y abajo; el aro (28) se dibuja con box-shadow inset. */
+.cfg-chip-btn{appearance:none;-webkit-appearance:none;font-family:inherit;font-weight:600;cursor:pointer;color:var(--accent);background:var(--surface);border:solid transparent;border-width:8px 0;background-clip:padding-box;
+  box-shadow:inset 0 0 0 1px var(--border-strong);min-height:var(--tap);margin-block:-8px;padding:0 14px;border-radius:14px/22px;white-space:nowrap;transition:transform var(--dur-1) var(--ease)}
+.cfg-chip-btn:active{transform:scale(.96)}
+.cfg-chip-peligro{color:var(--danger)}
+.cfg-acciones{margin-top:var(--sp-3)}
+/* Botón-ícono de 44×44 (▲ ▼ ✎ ×). */
+.cfg-ico-btn{flex-shrink:0;width:var(--tap);height:var(--tap);padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-mid);border-radius:var(--radius-md);background:var(--surface);color:var(--text);font:inherit;font-size:var(--fs-lg);line-height:1;cursor:pointer;transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.cfg-ico-btn:active{transform:scale(.94);background:var(--border)}
+.cfg-ico-plano{border-color:transparent;background:none;color:var(--muted)}
+.cfg-ico-peligro{color:var(--danger);padding-bottom:.38em}
+/* Fila de categoría: [ícono 44] nombre [▲][▼] y debajo las subcategorías + "+ Sub". */
+.cfg-cat{flex-direction:column;align-items:stretch;padding:var(--sp-3) 0}
+.cfg-cat-head{display:flex;align-items:center;gap:var(--sp-2)}
+.cfg-cat-ico{flex-shrink:0;width:var(--tap);height:var(--tap);padding:0;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-mid);border-radius:var(--radius-md);background:var(--bg);font-size:20px;line-height:1;cursor:pointer;transition:transform var(--dur-1) var(--ease)}
+.cfg-cat-ico:active{transform:scale(.94)}
+.cfg-cat-nombre{flex:1;min-width:0;font-size:var(--fs-md);font-weight:600;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.cfg-cat-orden{display:flex;gap:var(--sp-1);flex-shrink:0}
+/* Fila de tarjeta: nombre (con "propia") + ✎/× de 44, y el banco debajo. */
+.cfg-tc-fila{padding:var(--sp-1) 0 var(--sp-2);border-bottom:1px solid var(--border)}
+.cfg-tc-top{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2)}
+.cfg-tc-nombre{flex:1;min-width:0;font-size:var(--fs-md);overflow-wrap:anywhere}
+.cfg-tc-acc{display:flex;flex-shrink:0;margin-right:-12px}   /* el símbolo de la caja de 44 cae sobre el borde derecho de la tarjeta */
+.cfg-tc-fila .tc-banco-fila{margin-top:0}
 
 /* Conciliar con el broker (prueba) */
 .concil-aviso{background:var(--warning-light);color:var(--text);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;line-height:1.4}
