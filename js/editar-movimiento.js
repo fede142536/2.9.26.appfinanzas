@@ -198,7 +198,7 @@ function renderEditForm(m){
           <div style="font-size:18px;font-weight:600;color:${esIngFrec?"var(--success)":"var(--danger)"}">${fmtMoneda(montoVigente, m.moneda)}</div>
         </div>
       `:""}
-      <div class="form-group"><label class="form-label" id="edit-importe-label">${esFrec?"Monto base":(m.moneda==="USD"?"Importe (USD)":"Importe (ARS)")}</label>
+      <div class="form-group"><label class="form-label" id="edit-importe-label" for="edit-importe">${esFrec?"Monto base":(m.moneda==="USD"?"Importe (USD)":"Importe (ARS)")}</label>
         <div class="amount-wrap"><span class="amount-prefix edit-prefix-frec" id="edit-importe-prefix">${m.moneda==="USD"?"USD":"$"}</span>
           <input type="number" id="edit-importe" class="form-input amount-input" value="${m.moneda==="USD"?(m.importeOrig||0):(m.importe||0)}" inputmode="decimal" step="any">
         </div>
@@ -210,30 +210,30 @@ function renderEditForm(m){
            corrompía el registro. Un select por rama porque cada una dispara algo distinto al
            cambiar — la frecuente además actualiza el prefijo de "Registrar aumento". -->
       ${esFrec?`
-        <div class="form-group"><label class="form-label">Moneda</label>
+        <div class="form-group"><label class="form-label" for="edit-moneda-frec">Moneda</label>
           <select id="edit-moneda-frec" class="form-select" onchange="onEditMonedaChange()">
             <option value="ARS" ${(m.moneda||'ARS')==='ARS'?'selected':''}>🇦🇷 Pesos (ARS)</option>
             <option value="USD" ${m.moneda==='USD'?'selected':''}>🇺🇸 Dólares (USD)</option>
           </select>
         </div>
       `:`
-        <div class="form-group"><label class="form-label">Moneda</label>
+        <div class="form-group"><label class="form-label" for="edit-moneda">Moneda</label>
           <select id="edit-moneda" class="form-select" onchange="onEditMonedaChange()">
             <option value="ARS" ${(m.moneda||'ARS')==='ARS'?'selected':''}>🇦🇷 Pesos (ARS)</option>
             <option value="USD" ${m.moneda==='USD'?'selected':''}>🇺🇸 Dólares (USD)</option>
           </select>
         </div>
       `}
-      <div class="form-group"><label class="form-label">Categoría</label>
+      <div class="form-group"><label class="form-label" for="edit-cat">Categoría</label>
         <div class="u-row">
           <select id="edit-cat" class="form-select u-flex1" onchange="updateEditSubcats()"></select>
           <button type="button" class="btn-sm" onclick="openCatModalEdit()">+ Cat.</button>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Subcategoría</label>
+      <div class="form-group"><label class="form-label" for="edit-subcat">Subcategoría</label>
         <select id="edit-subcat" class="form-select"></select>
       </div>
-      <div class="form-group"><label class="form-label">Cuenta</label>
+      <div class="form-group"><label class="form-label" for="edit-cuenta">Cuenta</label>
         <div class="u-row">
           <select id="edit-cuenta" class="form-select u-flex1">
             ${getCuentas().map(c=>`<option ${m.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
@@ -286,7 +286,7 @@ function renderEditForm(m){
           <button type="button" class="btn-sm" style="color:var(--danger);width:100%" onclick="darDeBajaFrecGasto(${m.id})">Dar de baja desde ${mesLbl(mesActual)}</button>
         </div>
       `:`
-      <div class="form-group"><label class="form-label">Fecha</label>
+      <div class="form-group"><label class="form-label" for="edit-fecha">Fecha</label>
         <input type="date" id="edit-fecha" class="form-input" value="${(m.fecha||'').slice(0,10)}">
         <div style="display:flex;gap:6px;margin-top:8px">
           <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('edit-fecha',0)">Hoy</button>
@@ -295,26 +295,26 @@ function renderEditForm(m){
           <button type="button" class="btn-sm date-quick-chip" style="flex:1;font-size:11px" onclick="setFechaQuick('edit-fecha',-7)">-7d</button>
         </div>
       </div>`}
-      <div class="form-group"><label class="form-label">Nota</label>
+      <div class="form-group"><label class="form-label" for="edit-nota">Nota</label>
         <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
       ${m.tipo==="Gasto" && !esFrec?`
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm);margin-bottom:6px">
-          <input type="checkbox" id="edit-ahorro" ${m.esAhorro?"checked":""} style="width:18px;height:18px;cursor:pointer;accent-color:var(--save)" onchange="onEditAhorroToggle()">
+          <input type="checkbox" id="edit-ahorro" class="chk-custom" style="--chk:var(--save)" ${m.esAhorro?"checked":""} onchange="onEditAhorroToggle()">
           <span style="color:var(--save);font-weight:500">🏦 Es un ahorro (suma al fondo)</span>
         </label>
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
-          <input type="checkbox" id="edit-usa-ahorro" ${m.usaAhorro?"checked":""} style="width:18px;height:18px;cursor:pointer;accent-color:var(--save)" onchange="onEditUsaAhorroToggle()">
+          <input type="checkbox" id="edit-usa-ahorro" class="chk-custom" style="--chk:var(--save)" ${m.usaAhorro?"checked":""} onchange="onEditUsaAhorroToggle()">
           <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (resta del fondo)</span>
         </label>
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm);margin-top:6px">
-          <input type="checkbox" id="edit-traspaso" ${m.traspaso?"checked":""} style="width:18px;height:18px;cursor:pointer;accent-color:var(--accent)">
+          <input type="checkbox" id="edit-traspaso" class="chk-custom" style="--chk:var(--accent)" ${m.traspaso?"checked":""}>
           <span style="color:var(--accent);font-weight:500">↔️ Es un traspaso (cambia de bolsillo, no lo gastaste)</span>
         </label>
       </div>
       <div class="form-group">
-        <label class="form-label">Monto recuperable (opcional)</label>
+        <label class="form-label" for="edit-recup">Monto recuperable (opcional)</label>
         <div class="amount-wrap"><span class="amount-prefix">$</span>
           <input type="number" id="edit-recup" class="form-input amount-input" value="${m.recuperable||0}" inputmode="decimal" step="any">
         </div>
@@ -327,7 +327,7 @@ function renderEditForm(m){
     const mep=esCompraMepEditable(m);
     return `
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--invest-light);color:var(--invest);margin-bottom:10px">INVERSIÓN · ${escapeHtml(m.subcat)}</div>
-      <div class="form-group"><label class="form-label">Ticker / Fondo</label>
+      <div class="form-group"><label class="form-label" for="edit-ticker">Ticker / Fondo</label>
         <input type="text" id="edit-ticker" class="form-input" value="${escapeHtml(m.ticker)}">
       </div>
       <div class="form-group">
@@ -355,21 +355,21 @@ function renderEditForm(m){
         </label>
       </div>`:`
       <div class="two-col">
-        <div class="form-group"><label class="form-label">Importe ARS</label>
+        <div class="form-group"><label class="form-label" for="edit-ars">Importe ARS</label>
           <div class="amount-wrap"><span class="amount-prefix">$</span>
             <input type="number" id="edit-ars" class="form-input" style="padding-left:26px" value="${m.importe||0}" inputmode="decimal" step="any">
           </div>
         </div>
-        <div class="form-group"><label class="form-label">Importe USD</label>
+        <div class="form-group"><label class="form-label" for="edit-usd">Importe USD</label>
           <div class="amount-wrap"><span class="amount-prefix" style="font-size:11px;left:8px">USD</span>
             <input type="number" id="edit-usd" class="form-input" style="padding-left:40px" value="${m.importeUSD||0}" inputmode="decimal" step="any">
           </div>
         </div>
       </div>`}
-      <div class="form-group"><label class="form-label">Fecha</label>
+      <div class="form-group"><label class="form-label" for="edit-fecha">Fecha</label>
         <input type="date" id="edit-fecha" class="form-input" value="${(m.fecha||'').slice(0,10)}">
       </div>
-      <div class="form-group"><label class="form-label">Cuenta</label>
+      <div class="form-group"><label class="form-label" for="edit-cuenta">Cuenta</label>
         <div class="u-row">
           <select id="edit-cuenta" class="form-select u-flex1">
             ${getCuentas().map(c=>`<option ${m.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
@@ -379,7 +379,7 @@ function renderEditForm(m){
         </div>
       </div>
       ${bloqueSaleDeAhorroEditor(m)}
-      <div class="form-group"><label class="form-label">Nota</label>
+      <div class="form-group"><label class="form-label" for="edit-nota">Nota</label>
         <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
     `;
