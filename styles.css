@@ -547,7 +547,8 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .lock .lock-huella{margin-top:var(--sp-4);min-height:var(--tap);padding:0 var(--sp-4);font-size:var(--fs-md)}
 @media (max-height:700px){ .pin-key{height:56px} .lock-texto{margin-bottom:var(--sp-4)} .lock-huella{margin-top:var(--sp-3)} }
 @media (max-height:560px){ .lock-logo{display:none} .pin-key{height:48px} .pin-pad{gap:var(--sp-2)} .pin-error{min-height:21px;margin-bottom:var(--sp-2)} }
-@media (max-height:480px){ .lock{padding-top:calc(var(--sp-3) + var(--safe-t));padding-bottom:calc(var(--sp-3) + var(--safe-b))} .pin-key{height:var(--tap)} .lock-texto{margin-bottom:var(--sp-3)} }   /* apaisado: entran las 4 filas sin desplazar */
+@media (max-height:480px){ .lock{padding-top:calc(var(--sp-3) + var(--safe-t));padding-bottom:calc(var(--sp-3) + var(--safe-b))} .pin-key{height:var(--tap)} .lock-texto{margin-bottom:var(--sp-3)} .pin-error{min-height:21px;margin-bottom:var(--sp-2)} .lock-huella{margin-top:var(--sp-2)} }   /* apaisado: entran las 4 filas sin desplazar */
+@media (max-height:420px){ .lock{padding-top:calc(var(--sp-2) + var(--safe-t));padding-bottom:calc(var(--sp-2) + var(--safe-b))} .lock-texto{display:none} .lock-titulo{margin-bottom:var(--sp-3)} }
 @media (prefers-reduced-motion:reduce){ .pin-display.sacudon,.pin-texto-wrap.sacudon,.pin-dot.filled{animation:none} }
 /* [AAA bloqueo] Bienvenida. Las tres láminas comparten el mismo lugar (grilla apilada): el ícono no salta entre pasos. Puntos ≥3:1 (--border-strong). */
 .onb{position:fixed;inset:0;z-index:9998;background:var(--bg);flex-direction:column;overflow-y:auto;overscroll-behavior:contain}

@@ -310,7 +310,8 @@ function registrarFalloPin(ahora){
   return f;
 }
 function limpiarFallosPin(){ try{ localStorage.removeItem(PIN_FALLOS_KEY); }catch(e){ /* sin almacenamiento */ } }
-const textoEspera=seg=>seg>=60 ? `${Math.ceil(seg/60)} min` : `${seg} s`;
+// [AAA bloqueo] Con espacio duro (\u00a0) entre la cifra y la unidad: "30 s" no se parte en dos renglones.
+const textoEspera=seg=>seg>=60 ? `${Math.ceil(seg/60)}\u00a0min` : `${seg}\u00a0s`;
 
 // Comprueba un PIN contra el sobre: devuelve {clave, cache} si abre, o null si el PIN no es. No toca el estado de la app.
 async function verificarPin(pin){
@@ -410,6 +411,31 @@ function pinBackspace(){
     quitarErrorPin();
   }
 }
+
+// [AAA bloqueo] Teclado físico y foco de la pantalla de bloqueo (y de la bienvenida): con el PIN numérico los dígitos y Retroceso del teclado
+// funcionan como las teclas de pantalla; Tab no se escapa a la app que está detrás (todavía sin datos): da la vuelta por los controles visibles.
+function pantallaTapa(id){ const e=document.getElementById(id); return !!e && e.style.display!=="none" && getComputedStyle(e).display!=="none"; }
+document.addEventListener("keydown", e=>{
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  const dialogo=document.getElementById("modal-dialogo");
+  if(dialogo && dialogo.classList.contains("open")) return;
+  const id=pantallaTapa("lock-screen") ? "lock-screen" : (pantallaTapa("onboarding-screen") ? "onboarding-screen" : "");
+  if(!id) return;
+  if(e.key==="Tab"){
+    const raiz=document.getElementById(id);
+    const f=[...raiz.querySelectorAll("button,input,select,a[href]")].filter(x=>!x.disabled && x.offsetParent!==null && getComputedStyle(x).visibility!=="hidden");
+    if(!f.length) return;
+    const primero=f[0], ultimo=f[f.length-1];
+    if(!raiz.contains(document.activeElement)){ e.preventDefault(); (e.shiftKey?ultimo:primero).focus(); }
+    else if(e.shiftKey && document.activeElement===primero){ e.preventDefault(); ultimo.focus(); }
+    else if(!e.shiftKey && document.activeElement===ultimo){ e.preventDefault(); primero.focus(); }
+    return;
+  }
+  if(id==="lock-screen" && pinModo()==="n" && e.target && e.target.tagName!=="INPUT"){
+    if(/^[0-9]$/.test(e.key)){ e.preventDefault(); pinPress(e.key); }
+    else if(e.key==="Backspace"){ e.preventDefault(); pinBackspace(); }
+  }
+});
 
 // [AAA bloqueo] El error se dice de tres formas, para que no dependa del movimiento ni del color: el texto (con role="alert"), el sacudón de la
 // pantalla y los puntitos/el campo en rojo, que quedan hasta el próximo intento. Con prefers-reduced-motion el sacudón no se mueve (lo apaga el CSS)

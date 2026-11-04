@@ -10654,7 +10654,7 @@ test("desbloquear: PIN malo cuenta, a los 5 errores hay que esperar, y el bueno 
   await teclear("111111"); cierto(err.textContent==="PIN incorrecto", err.textContent); igual(leerFallosPin().n, 1); igual(encKey, null); igual(lock.style.display, "flex");
   for(let i=0;i<3;i++) await teclear("222222");
   igual(leerFallosPin().n, 4); cierto(err.textContent==="PIN incorrecto", "hasta el 4º error no espera");
-  await teclear("333333"); cierto(/Esperá 30 s/.test(err.textContent), err.textContent); cierto(segundosDeEsperaPin()>0 && segundosDeEsperaPin()<=30);
+  await teclear("333333"); cierto(/Esperá 30[\s\u00a0]s/.test(err.textContent), err.textContent); cierto(segundosDeEsperaPin()>0 && segundosDeEsperaPin()<=30);   // [AAA bloqueo] la cifra y la unidad van unidas por un espacio duro (\u00a0)
   await teclear("482916"); cierto(/Demasiados intentos/.test(err.textContent), "con la espera puesta ni siquiera prueba el PIN bueno: "+err.textContent); igual(encKey, null); igual(resolvio.length, 0);
   localStorage.setItem(PIN_FALLOS_KEY, JSON.stringify({n:5, hasta:Date.now()-1}));   // ya pasó la espera
   await teclear("482916");
