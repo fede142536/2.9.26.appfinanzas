@@ -347,6 +347,7 @@ function crPonerMonto(id, valor, formatear){
   if(!el) return;
   el.value=Number.isInteger(valor) ? String(valor) : String(valor).replace(".",",");
   if(typeof aplicarMascaraMiles==="function" && formatear) aplicarMascaraMiles(el, formatear);
+  if(typeof ajustarTamanoMonto==="function") ajustarTamanoMonto(el);   // [AAA cargar] que el monto entre entero en la tarjeta
 }
 function crPonerFecha(id, iso){
   const el=document.getElementById(id);
@@ -516,7 +517,7 @@ function vozMensaje(texto, esError){
   const res=document.getElementById("carga-rapida-res");
   if(!res) return;
   res.style.display=texto ? "block" : "none";
-  res.style.color=esError ? "var(--danger)" : "var(--text-muted)";
+  res.style.color=esError ? "var(--danger)" : "var(--muted)";   // [AAA cargar] --text-muted no existe: el aviso heredaba un color cualquiera
   res.textContent=texto||"";
 }
 

@@ -177,15 +177,15 @@
 
 <!-- MODAL NUEVA CATEGORÍA -->
 <div class="modal-overlay" id="modal-cat" onclick="if(event.target===this)closeCatModal()">
-  <div class="modal" role="dialog" aria-modal="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cat-titulo">
     <div class="modal-handle"></div>
-    <div class="modal-title">Nueva categoría</div>
+    <div class="modal-title" id="cat-titulo">Nueva categoría</div>
     <div class="form-group"><label class="form-label" for="new-cat-tipo">Tipo</label>
       <select id="new-cat-tipo" class="form-select"><option value="Gasto">Gasto</option><option value="Ingreso">Ingreso</option><option value="Inversion">Inversión</option><option value="Tarjeta">Tarjeta</option></select>
     </div>
     <div class="form-group"><label class="form-label">Ícono</label>
-      <button type="button" class="btn-sm" style="font-size:20px;padding:9px 16px;display:flex;align-items:center;gap:8px" onclick="openIconPicker({mode:'new'})">
-        <span id="new-cat-icon-preview">📦</span> <span style="font-size:13px">Elegir ícono</span>
+      <button type="button" class="btn-sm cat-icon-btn" onclick="openIconPicker({mode:'new'})">
+        <span id="new-cat-icon-preview" aria-hidden="true">📦</span> <span>Elegir ícono</span>
       </button>
     </div>
     <div class="form-group"><label class="form-label" for="new-cat-name">Nombre</label><input type="text" id="new-cat-name" class="form-input" placeholder="Ej: Mascotas"></div>
@@ -196,11 +196,11 @@
 
 <!-- MODAL SELECTOR DE ÍCONO (reutilizado para crear categoría y para editar el ícono de una existente) -->
 <div class="modal-overlay" id="modal-icon-picker" onclick="if(event.target===this)closeIconPicker()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:80vh">
+  <div class="modal icon-picker" role="dialog" aria-modal="true" aria-labelledby="icon-titulo">
     <div class="modal-handle"></div>
-    <div class="modal-title">Elegí un ícono</div>
-    <div id="icon-picker-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;overflow-y:auto;max-height:55vh"></div>
-    <button class="btn-sm" style="width:100%;margin-top:14px" onclick="closeIconPicker()">Cancelar</button>
+    <div class="modal-title" id="icon-titulo">Elegí un ícono</div>
+    <div id="icon-picker-grid" class="icon-picker-grid"></div>
+    <button type="button" class="btn-sm icon-picker-cancelar" onclick="closeIconPicker()">Cancelar</button>
   </div>
 </div>
 
@@ -518,7 +518,10 @@
 <!-- PAGE: CARGAR -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-cargar" class="page theme-gasto">
-  <div class="header"><h1>Nuevo movimiento</h1><p id="fecha-hoy"></p></div>
+  <div class="header"><h1>Nuevo movimiento</h1><p id="fecha-hoy"></p>
+    <!-- [AAA cargar] La calculadora vive en el encabezado fijo (antes era un botón flotante que tapaba el 📅, un interruptor o el botón Guardar). -->
+    <button type="button" id="fab-calculadora" onclick="abrirCalculadora()" aria-label="Abrir calculadora" title="Calculadora"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4.5" y="2.5" width="15" height="19" rx="3"/><rect x="7.5" y="5.5" width="9" height="4" rx="1"/><path d="M8 13.5h.01M12 13.5h.01M16 13.5h.01M8 17.5h.01M12 17.5h.01M16 17.5h.01"/></svg></button>
+  </div>
   <div id="alertas-frecuentes" style="padding:0 16px"></div>
   <!-- Carga rápida: una frase y la app rellena el formulario de abajo (no guarda nada) -->
   <div class="card carga-rapida">
@@ -528,22 +531,22 @@
       <button type="button" id="carga-rapida-voz" class="btn-sm btn-voz" style="display:none" aria-label="Dictar por voz" aria-pressed="false" onclick="dictarCargaRapida()">🎤</button>
       <button type="button" class="btn-sm" onclick="cargaRapida()">Cargar</button>
     </div>
-    <p id="carga-rapida-res" class="txt-xs" style="display:none;margin:8px 0 0;line-height:1.4"></p>
+    <p id="carga-rapida-res" class="txt-xs" role="status" aria-live="polite" style="display:none;margin:8px 0 0;line-height:1.4"></p>
   </div>
   <div class="type-toggle">
     <button class="type-btn active-gasto" id="btn-gasto" onclick="setTipo('Gasto')">↑ Gasto</button>
     <button class="type-btn" id="btn-ingreso" onclick="setTipo('Ingreso')">↓ Ingreso</button>
     <button class="type-btn" id="btn-inversion" onclick="setTipo('Inversion')">◈ Inv.</button>
     <button class="type-btn" id="btn-tarjeta" onclick="setTipo('Tarjeta')">▣ Tarj.</button>
-    <button class="type-btn" id="btn-cambio" onclick="setTipo('Cambio')">💱 Cambio</button>
+    <button class="type-btn" id="btn-cambio" onclick="setTipo('Cambio')">⇄ Cambio</button>
   </div>
   <!-- GASTO/INGRESO -->
   <div id="campos-gi">
     <div class="amount-card">
       <div class="amount-hero-label" id="inp-importe-label">Importe (ARS)</div>
-      <div class="amount-wrap amount-hero"><span class="amount-prefix" id="inp-importe-prefix">$</span>
+      <label class="amount-wrap amount-hero"><span class="amount-prefix" id="inp-importe-prefix">$</span>
         <input type="text" id="inp-importe" class="form-input amount-input" aria-label="Importe" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearConMiles);updateImporteCalc()">
-      </div>
+      </label>
       <div id="importe-calc-preview" style="font-size:11px;color:var(--accent);margin-top:-6px;display:none;text-align:center"></div>
       <div class="currency-pills">
         <button type="button" class="currency-pill active" data-for="inp-moneda" data-val="ARS" onclick="pillMoneda('inp-moneda','ARS')">🇦🇷 ARS</button>
@@ -558,7 +561,6 @@
       <div class="two-col">
         <div class="form-group">
           <div class="field-head"><label class="form-label" for="inp-cat">Categoría</label><button type="button" class="field-link" onclick="openCatModal()">+ Nueva</button></div>
-          <div id="sugerencia-cat" role="button" tabindex="0" style="display:none;font-size:12px;background:var(--accent-light);color:var(--accent);padding:7px 10px;border-radius:8px;margin-bottom:2px;cursor:pointer" onclick="aplicarSugerenciaCat()"></div>
           <select id="inp-cat" class="form-select" onchange="updateSubcats()"></select>
         </div>
         <div class="form-group"><label class="form-label" for="inp-subcat">Subcategoría</label><select id="inp-subcat" class="form-select" onchange="autoSeleccionarCuenta();sugerirAhorroDeMeta()"></select></div>
@@ -576,9 +578,11 @@
           <button type="button" class="date-chip" data-for="inp-fecha" data-delta="-7" onclick="setFechaQuick('inp-fecha',-7)">-7d</button>
           <button type="button" class="date-cal-btn" onclick="abrirCalendario('inp-fecha')" aria-label="Elegir otra fecha">📅</button>
         </div>
-        <input type="date" id="inp-fecha" class="field-hidden-native" onchange="refrescarFechaUI('inp-fecha')">
+        <input type="date" id="inp-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('inp-fecha')">
       </div>
-      <div class="form-group"><label class="form-label" for="inp-nota">Nota (opcional)</label><input type="text" id="inp-nota" class="form-input" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()"></div>
+      <div class="form-group"><label class="form-label" for="inp-nota">Nota (opcional)</label><input type="text" id="inp-nota" class="form-input" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()">
+        <!-- [AAA cargar] Sugerencia debajo de la nota (la que la dispara) y a todo el ancho: antes empujaba solo la columna de Categoría. -->
+        <div id="sugerencia-cat" class="sugerencia-cat" role="button" tabindex="0" style="display:none" onclick="aplicarSugerenciaCat()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();aplicarSugerenciaCat();}"></div></div>
     </div>
     <div class="card options-card" id="opciones-ingreso" style="display:none">
       <label class="opt-row" style="--chk:var(--save)">
@@ -633,9 +637,9 @@
     <div id="campos-inv" style="display:none">
       <div class="amount-card">
         <div class="amount-hero-label" id="inv-importe-label">Importe (ARS)</div>
-        <div class="amount-wrap amount-hero"><span class="amount-prefix" id="inv-importe-prefix">$</span>
+        <label class="amount-wrap amount-hero"><span class="amount-prefix" id="inv-importe-prefix">$</span>
           <input type="text" id="inv-importe" class="form-input amount-input" aria-label="Importe" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
-        </div>
+        </label>
         <div class="currency-pills">
           <button type="button" class="currency-pill active" data-for="inv-moneda" data-val="ARS" onclick="pillMoneda('inv-moneda','ARS')">🇦🇷 ARS</button>
           <button type="button" class="currency-pill" data-for="inv-moneda" data-val="USD" onclick="pillMoneda('inv-moneda','USD')">🇺🇸 USD</button>
@@ -672,7 +676,8 @@
           </label>
           <div class="form-group" id="inv-fondo-group" style="display:none">
             <label class="form-label" for="inv-fondo">¿De qué fondo?</label>
-            <select id="inv-fondo" class="form-select"></select>
+            <select id="inv-fondo" class="form-select" onchange="mostrarSaldoFondo()" aria-describedby="inv-fondo-saldo"></select>
+            <p id="inv-fondo-saldo" class="txt-xs txt-muted" style="margin:0"></p>
           </div>
         </div>
         <div class="form-group">
@@ -688,7 +693,7 @@
             <button type="button" class="date-chip" data-for="inv-fecha" data-delta="-7" onclick="setFechaQuick('inv-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('inv-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="inv-fecha" class="field-hidden-native" onchange="refrescarFechaUI('inv-fecha')">
+          <input type="date" id="inv-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('inv-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="inv-nota">Nota (opcional)</label><input type="text" id="inv-nota" class="form-input" placeholder="Descripción…"></div>
       </div>
@@ -697,9 +702,9 @@
     <div id="campos-tc" style="display:none">
       <div class="amount-card">
         <div class="amount-hero-label" id="tc-total-label">Monto total</div>
-        <div class="amount-wrap amount-hero"><span class="amount-prefix" id="tc-amount-prefix">$</span>
+        <label class="amount-wrap amount-hero"><span class="amount-prefix" id="tc-amount-prefix">$</span>
           <input type="text" id="tc-total" class="form-input amount-input" aria-label="Monto total" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcCuota()">
-        </div>
+        </label>
         <div class="currency-pills">
           <button type="button" class="currency-pill active" data-for="tc-moneda" data-val="ARS" onclick="pillMoneda('tc-moneda','ARS')">🇦🇷 ARS</button>
           <button type="button" class="currency-pill" data-for="tc-moneda" data-val="USD" onclick="pillMoneda('tc-moneda','USD')">🇺🇸 USD</button>
@@ -739,7 +744,7 @@
           <div class="form-group">
             <label class="form-label" for="tc-cuotas">Cuotas totales</label>
             <div class="date-row" id="tc-cuotas-chips"></div>
-            <input type="number" id="tc-cuotas" class="field-hidden-native" min="1" inputmode="numeric">
+            <input type="number" id="tc-cuotas" class="field-hidden-native" tabindex="-1" min="1" inputmode="numeric">
           </div>
           <div class="form-group"><label class="form-label" for="tc-mes-inicio">1ª cuota en</label><input type="month" id="tc-mes-inicio" class="form-input" onchange="refreshSimIfOpen()"></div>
           <div class="sim-box">
@@ -750,7 +755,7 @@
             </button>
             <div id="tc-sim-body" class="sim-body" style="display:none">
               <div style="display:flex;gap:14px;font-size:11px;color:var(--muted)">
-                <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--border);display:inline-block"></span>Ya tenés</span>
+                <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--border-strong);display:inline-block"></span>Ya tenés</span>
                 <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--warning);display:inline-block"></span>Esta compra</span>
               </div>
               <div id="tc-sim-rows"></div>
@@ -773,7 +778,7 @@
             <button type="button" class="date-chip" data-for="tc-fecha" data-delta="-7" onclick="setFechaQuick('tc-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('tc-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="tc-fecha" class="field-hidden-native" onchange="refrescarFechaUI('tc-fecha')">
+          <input type="date" id="tc-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('tc-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="tc-nota">Nota (opcional)</label><input type="text" id="tc-nota" class="form-input" placeholder="Descripción adicional..."></div>
       </div>
@@ -787,14 +792,14 @@
           <button type="button" class="sentido-btn" id="btn-cambio-venta" onclick="setSentidoCambio('venta')">Vendo dólares</button>
         </div>
         <div class="amount-hero-label" id="cambio-ars-label">Pesos que pagué</div>
-        <div class="amount-wrap amount-hero"><span class="amount-prefix">$</span>
+        <label class="amount-wrap amount-hero"><span class="amount-prefix">$</span>
           <input type="text" id="cambio-ars" class="form-input amount-input" aria-label="Monto en pesos" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcTipoCambio()">
-        </div>
+        </label>
         <div class="cambio-divider"><span class="cambio-divider-line"></span><span class="cambio-divider-dot">⇅</span><span class="cambio-divider-line"></span></div>
         <label class="amount-hero-label" for="cambio-usd" id="cambio-usd-label">Dólares que recibí</label>
-        <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">USD</span>
+        <label class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">USD</span>
           <input type="number" id="cambio-usd" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any" oninput="calcTipoCambio()">
-        </div>
+        </label>
         <div id="cambio-tc" class="rate-box">
           <span class="rate-box-label">Tipo de cambio</span>
           <span class="rate-box-val muted" id="cambio-tc-val">Poné los dos montos</span>
@@ -823,21 +828,19 @@
             <button type="button" class="date-chip" data-for="cambio-fecha" data-delta="-7" onclick="setFechaQuick('cambio-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('cambio-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="cambio-fecha" class="field-hidden-native" onchange="refrescarFechaUI('cambio-fecha')">
+          <input type="date" id="cambio-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('cambio-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="cambio-nota">Nota (opcional)</label><input type="text" id="cambio-nota" class="form-input" placeholder="Ej: MEP con AL30"></div>
       </div>
       <p class="txt-xs txt-muted" style="text-align:center;padding:0 20px">Comprar o vender dólares no es un gasto: es plata que cambia de bolsillo. Se guardan las dos patas.</p>
     </div>
-  <!-- Calculadora flotante: vive DENTRO de #page-cargar a propósito (ver handoff) — así hereda
-       --tema-color/--tema-light del tipo activo y queda oculta sola cuando no estás en Cargar,
-       sin tener que coordinarla a mano con showPage() como al FAB de siempre. -->
-  <button type="button" id="fab-calculadora" onclick="abrirCalculadora()" aria-label="Abrir calculadora">=</button>
+  <!-- Calculadora: el modal vive DENTRO de #page-cargar a propósito (ver handoff) — así hereda
+       --tema-color/--tema-light del tipo activo y queda oculta sola cuando no estás en Cargar. Su botón está en el encabezado. -->
   <div class="modal-overlay" id="modal-calculadora" onclick="if(event.target===this)cerrarCalculadora()">
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calc-titulo">
       <div class="modal-handle"></div>
-      <div class="modal-title">Calculadora</div>
-      <div class="calc-display" id="calc-display">0</div>
+      <div class="modal-title" id="calc-titulo">Calculadora</div>
+      <div class="calc-display" id="calc-display" role="status" aria-live="polite">0</div>
       <!-- Mismo orden que la calculadora del teléfono: C ⌫ ÷ × / 7 8 9 − / 4 5 6 + / 1 2 3 = /
            0 , — sin celdas que ocupen más de una fila o columna (eso corría "=" y "0" de lugar:
            el navegador ubica primero los botones con una posición fija y recién después los que
@@ -862,8 +865,8 @@
         <button type="button" class="calc-btn" onclick="calcInput('0')">0</button>
         <button type="button" class="calc-btn" onclick="calcInput(',')" aria-label="Coma decimal">,</button>
       </div>
-      <button type="button" class="btn-primary" onclick="usarResultadoCalculadora()">Usar este resultado</button>
-      <button type="button" class="btn-sm" style="margin-top:8px" onclick="cerrarCalculadora()">Cerrar</button>
+      <button type="button" class="btn-primary calc-usar" onclick="usarResultadoCalculadora()">Usar este resultado</button>
+      <button type="button" class="btn-sm calc-cerrar" onclick="cerrarCalculadora()">Cerrar</button>
     </div>
   </div>
   <div class="save-bar">

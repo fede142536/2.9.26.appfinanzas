@@ -77,10 +77,20 @@ function actualizarSaleDeAhorro(){
   if(fg) fg.style.display=chk && chk.checked ? "" : "none";
   if(!sel) return;
   const previo=sel.value;
-  sel.innerHTML=fondos.map(f=>`<option value="${escapeHtml(fondoKey(f))}">${escapeHtml(f.cat+(f.sub?" › "+f.sub:""))} · saldo ${moneda==="USD"?fmtMoneda(f.saldo,"USD"):fmtS(f.saldo)}</option>`).join("");
+  // [AAA cargar] La opción lleva solo el nombre corto ("Retiro › Cedears"): con el saldo adentro el select lo cortaba justo en el importe
+  // ("saldo $65…"). El saldo va en una línea de ayuda debajo (mostrarSaldoFondo), que se actualiza al cambiar de fondo.
+  sel.innerHTML=fondos.map(f=>`<option value="${escapeHtml(fondoKey(f))}">${escapeHtml(f.cat.replace(/^Fondo de /i,"")+(f.sub?" › "+f.sub:""))}</option>`).join("");
   const ticker=(document.getElementById("inv-ticker")||{}).value||"";
   const elegido=fondos.find(f=>fondoKey(f)===previo) || fondoSugerido(movs, fondos, ticker);
   if(elegido) sel.value=fondoKey(elegido);
+  mostrarSaldoFondo(fondos, moneda);
+}
+function mostrarSaldoFondo(fondos, moneda){
+  const el=document.getElementById("inv-fondo-saldo"), sel=document.getElementById("inv-fondo");
+  if(!el || !sel) return;
+  if(!fondos){ fondos=fondosConSaldo(movs, (document.getElementById("inv-moneda")||{}).value==="USD" ? "USD" : "ARS"); moneda=(document.getElementById("inv-moneda")||{}).value==="USD" ? "USD" : "ARS"; }
+  const f=fondos.find(x=>fondoKey(x)===sel.value);
+  el.textContent=f ? "Saldo del fondo: "+(moneda==="USD" ? fmtMoneda(f.saldo,"USD") : fmtS(f.saldo)) : "";
 }
 // El fondo elegido en el formulario, o null si la casilla no está tildada.
 function fondoElegidoEnFormulario(){

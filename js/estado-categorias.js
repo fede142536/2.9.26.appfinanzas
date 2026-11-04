@@ -160,12 +160,12 @@ function getIcon(cat, fallback){
 }
 
 // Set curado de emojis para elegir, agrupados por tema (se muestran todos juntos en una grilla)
-const ICON_CHOICES=["🏠","🏢","🛒","💳","🚗","🍽️","🍔","🍕","☕","🍺","👤","🤝","❤️","🏥","💊","🛵","🐾","🐕","🐱","📈","📉","📊","🏦","✈️","🧳","🎁","🚌","🚕","⛽","📦","💼","🏢","💰","✨","🔒","🎓","📚","🎮","📱","💻","👗","👟","💡","⚽","🎬","🎵","🎫","🧴","✂️","🔧","🌳","🍿","🍷","🎂","👶","🐣","🏋️","🚴","🏖️","🧾","🔥","💧","📶","🐷","💵","🪙","🏷️","🎯","📌","⭐"];
+const ICON_CHOICES=["🏠","🏢","🛒","💳","🚗","🍽️","🍔","🍕","☕","🍺","👤","🤝","❤️","🏥","💊","🛵","🐾","🐕","🐱","📈","📉","📊","🏦","✈️","🧳","🎁","🚌","🚕","⛽","📦","💼","🏭","💰","✨","🔒","🎓","📚","🎮","📱","💻","👗","👟","💡","⚽","🎬","🎵","🎫","🧴","✂️","🔧","🌳","🍿","🍷","🎂","👶","🐣","🏋️","🚴","🏖️","🧾","🔥","💧","📶","🐷","💵","🪙","🏷️","🎯","📌","⭐"];
 let iconPickerTarget=null; // null | {mode:'new'} | {mode:'edit', cat}
 function openIconPicker(target){
   iconPickerTarget=target;
   document.getElementById("icon-picker-grid").innerHTML=ICON_CHOICES.map(ic=>
-    `<button type="button" onclick="elegirIcono('${ic}')" style="font-size:22px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer">${ic}</button>`
+    `<button type="button" class="icon-opt" onclick="elegirIcono('${ic}')">${ic}</button>`
   ).join("");
   document.getElementById("modal-icon-picker").classList.add("open");
 }
