@@ -1101,8 +1101,8 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .mov-summary-num{container-type:inline-size;width:100%}
 .mov-summary-val{font-size:clamp(22px,calc(100cqw / (var(--n,8) * .66)),34px);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mov-mosaic-grid{container-type:inline-size}
-.mov-mosaic-val{font-size:clamp(12px,calc(((100cqw - var(--sp-2)) / 2 - 28px) / (var(--n,8) * .62)),var(--fs-lg))}
-.mov-mosaic-wide .mov-mosaic-val{font-size:clamp(12px,calc((100cqw - 28px) / (var(--n,8) * .62)),var(--fs-lg))}
+.mov-mosaic-val{font-size:clamp(12px,calc(((100cqw - var(--sp-2)) / 2 - 28px) / (var(--n,8) * .62)),19px)}
+.mov-mosaic-wide .mov-mosaic-val{font-size:clamp(12px,calc((100cqw - 28px) / (var(--n,8) * .62)),19px)}
 /* El nombre del mosaico baja a una segunda línea en vez de cortarse ("Frecuentes por p…"); con subgrid las filas de una misma fila
    de mosaicos quedan alineadas entre sí (título, cifra y subtítulo), aunque uno de los títulos ocupe dos líneas. */
 .mov-mosaic-name{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;line-height:1.25}
@@ -1125,6 +1125,7 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 #mes-label:has(.mes-label-x){display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1);max-width:100%;font-size:var(--fs-base)}
 #mes-label[role="button"]{cursor:pointer}
 .cierre-aviso>span{text-wrap:pretty}
+.mov-icon-svg-sm{width:16px;height:16px;flex-shrink:0;stroke-width:2.2}
 .mes-label-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mes-label-x{flex-shrink:0;margin-left:0}
 /* Íconos de la barra (buscar, fecha): trazo de 2 px en el color del texto, mismo peso que el ☰ (antes eran emoji a color, y el calendario siempre decía "July 17"). */
@@ -1172,11 +1173,19 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .tx-sub .tx-cuenta{flex:0 0 auto;min-width:0;max-width:65%;overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-xs)}
 .js-toggle-pago,.js-toggle-recup{font-size:var(--fs-xs)}
 #tx-list .tx-icon{font-size:var(--fs-base)}
-/* Entrada de las filas: 300 ms con la curva del sistema (eran 400 con "ease" y se repetían en cada toque de un filtro). */
-tx-item{animation-duration:var(--dur-3);animation-timing-function:var(--ease)}
+/* Entrada de las filas: 300 ms con la curva del sistema y SOLO en la primera carga o al cambiar de mes/período (.anima, ver renderMovs). */
+#tx-list tx-item{animation:none}
+#tx-list.anima tx-item{animation:slideUpFade var(--dur-3) var(--ease) forwards}
 .tx-cat{display:flex;align-items:center;gap:6px}
-.tx-cat-txt{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.tx-cat .badge{flex-shrink:0}
+/* Si título + badge no entran en una línea, el badge baja a una segunda (el título nunca queda en 0 px ni el badge en "D…"). */
+.tx-cat{flex-wrap:wrap;row-gap:2px}
+.tx-cat-txt{min-width:4.5ch;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.tx-cat .badge{flex:0 1 auto;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+
+/* Deslizar a la derecha: Editar y Repetir lado a lado, 66×60 cada uno (REVEAL_L = 132 en movimientos.js). */
+.tx-swipe-bg-left{width:132px;flex-direction:row}
+.tx-swipe-bg-left .tx-swipe-act{flex:1;width:auto;height:100%;min-width:var(--tap)}
 
 /* Estado vacío con guía y llamado a la acción. */
 .empty-titulo{font-size:var(--fs-base);font-weight:600;color:var(--text)}
@@ -1185,14 +1194,18 @@ tx-item{animation-duration:var(--dur-3);animation-timing-function:var(--ease)}
 
 /* Modal "Buscar por fecha": el mismo segmentado que la pantalla (antes: botones .type-btn de 31 px con estilos en línea). */
 .seg-filter-modal{margin:0 0 var(--sp-3)}
+#modal-filtro-fecha .two-col{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#modal-filtro-fecha input[type="date"].form-input,#modal-filtro-fecha input[type="month"].form-input{min-width:0;width:100%}
 
 /* Editor: Cancelar / Guardar quedan a la vista al pie de la hoja mientras se desplaza (los formularios de gasto frecuente miden más de
    dos pantallas: antes había que bajar hasta el final para guardar). La barra tapa el relleno inferior de la hoja (bottom negativo). */
-#modal-edit .edit-acciones{display:flex;gap:var(--sp-2);margin-top:var(--sp-3);padding:var(--sp-2) 0;position:sticky;bottom:calc(-1 * (var(--sp-6) + var(--safe-b)));padding-bottom:calc(var(--sp-2) + var(--safe-b));background:var(--surface);z-index:2}
+#modal-edit .modal{padding-bottom:0}
+#modal-edit .edit-acciones{display:flex;gap:var(--sp-2);margin-top:var(--sp-3);padding:var(--sp-2) 0 calc(var(--sp-3) + var(--safe-b));position:sticky;bottom:0;background:var(--surface);z-index:2}
 #modal-edit .edit-acciones::before{content:"";position:absolute;left:0;right:0;top:calc(-1 * var(--sp-3));height:var(--sp-3);background:linear-gradient(transparent,var(--surface));pointer-events:none}
 
 /* Editor: Tarjeta + "+" + Categoría — la tarjeta lleva el nombre largo ("Mercado Pa…"), se le da más ancho. */
 #modal-edit .two-col:has(#edit-tc-tarj){grid-template-columns:1.5fr 1fr}
+#modal-edit .u-row-6>.btn-sm{min-width:var(--tap)}
 
 
 .informe-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}

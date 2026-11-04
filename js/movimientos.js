@@ -155,6 +155,18 @@ function setFiltroFechaTab(tab){
     btn.setAttribute("aria-selected", t===tab ? "true" : "false");
   });
 }
+// Flechas izquierda/derecha entre las pestañas de la hoja "Buscar por fecha" (patrón de tablist).
+document.addEventListener("keydown", e=>{
+  if(e.key!=="ArrowLeft" && e.key!=="ArrowRight") return;
+  const t=e.target && e.target.closest && e.target.closest('#modal-filtro-fecha [role="tab"]');
+  if(!t) return;
+  const orden=["dia","rango","mes","anio"];
+  const i=orden.indexOf(t.id.replace("ff-tab-",""));
+  const nuevo=orden[(i+(e.key==="ArrowRight"?1:orden.length-1))%orden.length];
+  e.preventDefault();
+  setFiltroFechaTab(nuevo);
+  document.getElementById("ff-tab-"+nuevo).focus();
+});
 function aplicarFiltroFecha(){
   let desde, hasta, label;
   if(filtroFechaTab==="dia"){
@@ -168,7 +180,9 @@ function aplicarFiltroFecha(){
     if(!d||!h){showToast("Completá ambas fechas");return;}
     if(d>h){showToast("La fecha 'desde' no puede ser posterior a 'hasta'");return;}
     desde=d; hasta=h;
-    label=`${d.split("-").reverse().join("/")} — ${h.split("-").reverse().join("/")}`;
+    // formato corto (dd/mm/aa): un año completo entra en una línea a 360 px
+    const corto=f=>{ const p=f.split("-"); return `${p[2]}/${p[1]}/${p[0].slice(2)}`; };
+    label=`${corto(d)} — ${corto(h)}`;
   } else if(filtroFechaTab==="mes"){
     const v=document.getElementById("ff-mes").value;
     if(!v){showToast("Elegí un mes");return;}
@@ -185,7 +199,7 @@ function aplicarFiltroFecha(){
   // se puede tocar para volver al mes actual — antes esto ya funcionaba con un tap (el
   // onclick de #mes-label en index.html), pero sin ningún indicio visual el usuario no lo
   // descubría solo y volvía a abrir el modal para reconfigurar el mes manualmente.
-  document.getElementById("mes-label").innerHTML=`<span class="mes-label-txt">📅 ${label}</span> <span class="mes-label-x">✕</span>`;
+  document.getElementById("mes-label").innerHTML=`<svg class="mov-icon-svg mov-icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span class="mes-label-txt">${label}</span> <span class="mes-label-x">✕</span>`;
   document.getElementById("btn-mes-prev").style.visibility="hidden";
   document.getElementById("btn-mes-next").style.visibility="hidden";
   etiquetaMesAccesible();
@@ -258,6 +272,12 @@ function setFiltroCuenta(c){
 function setFiltroCategoria(c){
   filtroCategoria=c;
   renderMovs();
+}
+// Vacía el campo y la búsqueda (botón del estado "sin resultados").
+function limpiarBusquedaMovs(){
+  const i=document.getElementById("mov-search");
+  if(i){ i.value=""; i.focus(); }
+  onSearchMovs();
 }
 function onSearchMovs(){
   searchQuery=(document.getElementById("mov-search").value||"").trim().toLowerCase();
@@ -720,7 +740,10 @@ class TxItem extends HTMLElement{
   }
   _attachSwipe(){
     const content=this.querySelector(".tx-item-content");
-    const REVEAL=78;
+    // [AAA movimientos] Izquierda de la fila (se desliza a la derecha): Editar y Repetir LADO A LADO, 66×60 cada uno (132 px);
+    // derecha: Eliminar (78 px). Antes iban apilados y medían 78×30.
+    const REVEAL_L=132, REVEAL_R=78;
+    const posDe=est=>est>0 ? REVEAL_L : est<0 ? -REVEAL_R : 0;
     const SLOP=12; // píxeles mínimos antes de decidir si es swipe horizontal o solo scroll
     let startX=0, startY=0, dx=0, dragging=false, locked=null; // locked: null=sin decidir, "h"=horizontal, "v"=vertical (ignorar)
     const mover=x=>{ content.style.transform=`translateX(${x}px)`; };
@@ -744,8 +767,8 @@ class TxItem extends HTMLElement{
         locked = Math.abs(rawDx)>Math.abs(rawDy) ? "h" : "v";
       }
       if(locked==="v") return; // dejamos que el navegador scrollee normal
-      dx=rawDx+(this._openState*REVEAL);
-      dx=Math.max(-REVEAL, Math.min(REVEAL, dx));
+      dx=rawDx+posDe(this._openState);
+      dx=Math.max(-REVEAL_R, Math.min(REVEAL_L, dx));
       mover(dx);
     };
     const onEnd=()=>{
@@ -754,9 +777,9 @@ class TxItem extends HTMLElement{
       content.style.transition="transform .18s ease";
       if(locked==="h"){
         // Umbral más exigente (75% del recorrido) para que haga falta un gesto deliberado
-        if(dx<=-REVEAL*0.75){ mover(-REVEAL); this._openState=-1; }
-        else if(dx>=REVEAL*0.75){ mover(REVEAL); this._openState=1; }
-        else { mover(this._openState*REVEAL); } // vuelve a como estaba (abierto o cerrado)
+        if(dx<=-REVEAL_R*0.75){ mover(-REVEAL_R); this._openState=-1; }
+        else if(dx>=REVEAL_L*0.75){ mover(REVEAL_L); this._openState=1; }
+        else { mover(posDe(this._openState)); } // vuelve a como estaba (abierto o cerrado)
       }
       dx=0; locked=null;
     };
@@ -1001,7 +1024,8 @@ function mosaicosGridHTML(mosaicos){
   return `<div class="mov-mosaic-grid">${items.join("")}</div>`;
 }
 
-let ultimoBalanceAnimado=null;   // "período|cifra" del último balance animado (ver más abajo)
+let ultimoBalanceAnimado=null;
+let ultimaClaveLista=null;   // período de la última lista pintada: las filas se animan solo cuando cambia (no en cada filtro)   // "período|cifra" del último balance animado (ver más abajo)
 function renderMovs(){
   const mesMovs = filtroFecha ? getMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getMesMov(mesActual);
   const mesTcs = filtroFecha ? getTcMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getTcMovsEnMes(mesActual);
@@ -1495,12 +1519,18 @@ function renderMovs(){
     // usuario (búsqueda, rango) pasa por escapeHtml; la etiqueta del rango sale de aplicarFiltroFecha() y ya es fecha o mes.
     const vacio=(icono, titulo, guia, boton)=>`<div class="empty"><div class="empty-icon">${icono}</div><div class="empty-titulo">${titulo}</div>${guia?`<div class="empty-guia">${guia}</div>`:""}${boton||""}</div>`;
     const botonCargar=`<button type="button" class="btn-primary empty-cta" onclick="abrirCarga()">Cargar un movimiento</button>`;
-    if(searchQuery) list.innerHTML=vacio("🔍", `Sin resultados para "${escapeHtml(searchQuery)}"`, "Probá con otra palabra: la búsqueda mira nota, categoría, subcategoría y ticker.", "");
-    else if(filtroFecha) list.innerHTML=vacio("📅", `Sin movimientos en ${escapeHtml(filtroFecha.label)}`, "No hay nada cargado en esas fechas. Tocá la fecha de arriba para volver al mes.", "");
+    const boton=(txt,fn)=>`<button type="button" class="btn-primary empty-cta" onclick="${fn}">${txt}</button>`;
+    if(searchQuery) list.innerHTML=vacio("🔍", `Sin resultados para "${escapeHtml(searchQuery)}"`, "Probá con otra palabra: la búsqueda mira nota, categoría, subcategoría y ticker.", boton("Borrar búsqueda","limpiarBusquedaMovs()"));
+    else if(filtroFecha) list.innerHTML=vacio(`<svg class="mov-icon-svg" style="width:44px;height:44px;margin:0 auto" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`, `Sin movimientos en ${escapeHtml(filtroFecha.label)}`, "No hay nada cargado en esas fechas.", boton("Volver al mes","limpiarFiltroFecha()"));
     else if(!movs.length && !tcs.length) list.innerHTML=vacio("📭", "Todavía no cargaste nada", "Cuando cargues tu primer gasto o ingreso, lo vas a ver acá, ordenado por día.", botonCargar);
-    else list.innerHTML=vacio("📭", "Sin movimientos este mes", filtro==="Todos" ? "Nada cargado en este período. Podés cargar uno ahora o mirar otro mes." : "No hay movimientos de este tipo en este mes. Probá con \"Todos\" u otro mes.", filtro==="Todos" ? botonCargar : "");
+    else list.innerHTML=vacio("📭", "Sin movimientos este mes", filtro==="Todos" ? "Nada cargado en este período. Podés cargar uno ahora o mirar otro mes." : "No hay movimientos de este tipo en este mes.", filtro==="Todos" ? botonCargar : boton("Ver todos","setFiltro('Todos')"));
     return;
   }
+  // [AAA movimientos] Las filas entran con animación solo en la primera carga y al cambiar de mes o de período; filtrar o tocar un chip
+  // las repinta sin moverlas.
+  const claveLista=filtroFecha ? filtroFecha.desde+"|"+filtroFecha.hasta : mesActual;
+  list.classList.toggle("anima", claveLista!==ultimaClaveLista);
+  ultimaClaveLista=claveLista;
   renderTxListaLazy(show);
 }
 async function borrarMov(id, btn){
