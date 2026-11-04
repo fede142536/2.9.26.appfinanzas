@@ -794,6 +794,65 @@ canvas{width:100%!important;max-width:100%}
 .sc-det{font-size:12px;color:var(--muted);margin:2px 0 6px;line-height:1.35}
 .sc-acc{display:flex;gap:8px;align-items:center}
 .sc-acc .form-select{flex:1;height:36px;padding:0 10px;font-size:13px}
+/* [AAA importar] Pantalla Importar, vista previa, historial, aviso de arrastre, papelera y hojas de sin cuenta / ventas de fondo.
+   Selectores con id (o dos clases) a propósito: pisan reglas de componentes base y de [AAA sistema] solo dentro de este elemento. */
+.imp-intro{margin-bottom:var(--sp-3)}
+.imp-zona{display:block;position:relative;border:2px dashed var(--border-strong);border-radius:var(--radius-md);padding:var(--sp-5) var(--sp-4);text-align:center;cursor:pointer;transition:background var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease)}
+.imp-zona:active{background:var(--accent-light);border-color:var(--accent)}
+@media (hover:hover){.imp-zona:hover{background:var(--surface-2);border-color:var(--accent)}}
+.imp-zona:has(.imp-file:focus-visible){outline:2px solid var(--focus);outline-offset:2px;border-color:var(--accent)}
+.imp-file{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);opacity:0;pointer-events:none}   /* oculto a la vista pero con foco de teclado (antes display:none: no se llegaba con Tab) */
+.imp-zona-ico{font-size:28px;line-height:1.2;margin-bottom:var(--sp-1)}
+.imp-zona-tit{font-size:var(--fs-base);font-weight:600}
+.imp-zona-sub{font-size:var(--fs-sm);color:var(--muted);margin-top:var(--sp-1)}
+.imp-zona-chica{padding:var(--sp-4)}
+.imp-zona-chica .imp-zona-ico{font-size:22px;margin-bottom:0}
+.imp-zona-chica .imp-zona-tit{font-size:var(--fs-md);margin-top:var(--sp-1)}
+#xlsx-status{margin-top:var(--sp-3);font-size:var(--fs-md);line-height:1.4;text-align:center;color:var(--muted);text-wrap:balance}
+#xlsx-status:empty{display:none}   /* sin mensaje no deja un hueco bajo la zona de carga */
+/* historial */
+.imp-hist-fila{display:flex;align-items:center;gap:var(--sp-2);min-height:56px;padding:var(--sp-1) 0;border-bottom:1px solid var(--border)}
+.imp-hist-fila:last-child{border-bottom:0}
+.imp-hist-info{flex:1;min-width:0}
+.imp-hist-nombre{font-size:var(--fs-md);font-weight:600;line-height:1.3;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.imp-hist-ok{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;border-radius:var(--radius-pill);background:var(--success-light);color:var(--success);font-size:var(--fs-sm)}
+.tx-del.imp-hist-del{flex:none;color:var(--danger);font-size:20px}
+/* vista previa */
+#modal-import .modal{display:flex;flex-direction:column;overflow:hidden;padding-bottom:calc(var(--sp-4) + var(--safe-b))}
+#modal-import .modal>*{flex-shrink:0}
+.imp-cab{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-bottom:var(--sp-1)}
+#modal-import .modal-title{flex:1;min-width:0;margin:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#import-count-badge{flex:none;white-space:nowrap;font-size:var(--fs-sm);font-weight:600;background:var(--accent-light);color:var(--accent);padding:var(--sp-1) var(--sp-3);border-radius:var(--radius-pill)}
+.imp-guia{font-size:var(--fs-sm);color:var(--muted);margin:0 0 var(--sp-2)}
+#modal-import #import-preview-list{flex:1 1 auto;flex-shrink:1;min-height:96px;overflow-y:auto;overscroll-behavior:contain;margin-bottom:var(--sp-3);border-top:1px solid var(--border)}
+.imp-fila{display:grid;grid-template-columns:minmax(0,1fr) auto var(--tap);align-items:center;min-height:56px;padding:var(--sp-1) 0;border-bottom:1px solid var(--border)}
+.imp-fila-info{min-width:0;padding:var(--sp-1) var(--sp-2) var(--sp-1) 0}
+.imp-fila-top{display:flex;gap:var(--sp-2);align-items:baseline}
+.imp-fila-tipo{font-size:var(--fs-sm);font-weight:600}
+.imp-fila-cat{font-size:var(--fs-md);font-weight:600;margin-top:2px;line-height:1.3;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.imp-fila-nota{font-size:var(--fs-sm);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp-fila-monto{font-size:var(--fs-md);font-weight:600;white-space:nowrap;text-align:right}
+.imp-fila-x{width:var(--tap);height:var(--tap);display:inline-flex;align-items:center;justify-content:center;padding:0 0 .38em;background:none;border:0;border-radius:var(--radius-md);color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
+.imp-fila-x:active{background:var(--surface-2)}
+.imp-acciones{flex:none}
+#btn-confirmar-import{flex:2;background:var(--accent);color:var(--on-solid);padding:12px}
+/* aviso de arrastre */
+#drop-overlay{position:fixed;inset:0;background:var(--accent);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:calc(var(--sp-4) + var(--safe-t)) calc(var(--sp-4) + var(--safe-r)) calc(var(--sp-4) + var(--safe-b)) calc(var(--sp-4) + var(--safe-l));pointer-events:none;animation:imp-drop-in var(--dur-2) var(--ease)}
+@keyframes imp-drop-in{from{opacity:0}to{opacity:1}}
+.drop-caja{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-2);border:2px dashed var(--on-solid);border-radius:var(--radius-lg);padding:var(--sp-5);color:var(--on-solid)}
+.drop-ico{font-size:56px;line-height:1.1;color:var(--on-solid)}
+.drop-titulo{font-size:var(--fs-xl);font-weight:700}
+.drop-sub{font-size:var(--fs-md)}
+/* hojas de papelera, sin cuenta y ventas de fondo: "Cerrar" siempre a mano (lista larga), filas con tope de líneas */
+#modal-papelera .modal,#modal-sin-cuenta .modal,#modal-ventas-fondo .modal{padding-bottom:0}
+.modal .sheet-cerrar{position:sticky;bottom:calc(var(--sp-3) + var(--safe-b));z-index:2;display:block;width:100%;margin:var(--sp-3) 0 calc(var(--sp-3) + var(--safe-b));min-height:var(--tap);box-shadow:0 calc(var(--sp-3) + var(--safe-b)) 0 0 var(--surface),0 -8px 12px var(--surface)}
+.pap-fila .btn-sm{flex:none;min-height:var(--tap)}
+#modal-papelera .pap-tit{font-size:var(--fs-base);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#modal-papelera .pap-det{overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.sc-acc{flex-wrap:wrap}
+.sc-acc .form-select{height:var(--tap)}
+.sc-acc .btn-sm{min-height:var(--tap)}
+.sc-top>span:first-child{min-width:0;overflow-wrap:anywhere}
 /* Hoja "Pagar resumen": una fila con interruptor y una línea que resume fecha, cuenta y origen de la plata. */
 .pago-tc-fila{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px;padding:12px 2px;cursor:pointer}
 .pago-tc-ahorro{background:var(--save-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--save);font-weight:500}

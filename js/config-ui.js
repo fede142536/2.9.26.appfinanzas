@@ -468,50 +468,64 @@ function exportarPDF(){
   const totalCat=catSorted.reduce((s,[,v])=>s+v,0);
 
   const titulo=desde===hasta?mesLbl(desde):`${mesLbl(desde)} – ${mesLbl(hasta)}`;
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reporte ${escapeHtml(titulo)}</title>
+  // [AAA importar] Pieza gráfica: legible en el celular (viewport + KPIs 2×2), en A4 (márgenes de @page, filas que no se parten,
+  // encabezado de tabla repetido) y sin el texto de ayuda dentro del PDF. Mismos números que antes; solo cambia cómo se ven.
+  const pct=v=>{ const p=totalCat>0 ? v/totalCat*100 : 0; return v>0 && Math.round(p)===0 ? "&lt;1%" : Math.round(p)+"%"; };
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reporte ${escapeHtml(titulo)}</title>
   <style>
-    body{font-family:-apple-system,Helvetica,sans-serif;padding:30px;max-width:800px;margin:auto;color:#222}
-    h1{margin:0 0 4px;font-size:24px}.sub{color:#666;font-size:14px;margin-bottom:24px}
-    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
-    .kpi{padding:12px;border:1px solid #ddd;border-radius:8px}
-    .kpi-label{font-size:11px;color:#666;text-transform:uppercase}
-    .kpi-val{font-size:18px;font-weight:600;margin-top:4px}
-    .pos{color:#2d7a3a}.neg{color:#a32d2d}.inv{color:#534ab7}.save{color:#1a6b6b}
-    h2{font-size:16px;margin:24px 0 10px;border-bottom:1px solid #ddd;padding-bottom:6px}
+    @page{size:A4;margin:14mm 12mm}
+    *{box-sizing:border-box}
+    body{font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;padding:24px 20px;max-width:800px;margin:auto;color:#1c1c1a;font-variant-numeric:tabular-nums;-webkit-print-color-adjust:exact;print-color-adjust:exact;overflow-wrap:anywhere}
+    .marca{display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:3px solid #145283;padding-bottom:10px;margin-bottom:18px}
+    h1{margin:0;font-size:26px;letter-spacing:-.01em;color:#145283}
+    .sub{color:#555;font-size:14px;text-align:right}
+    .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px}
+    .kpi{padding:12px;border:1px solid #cfcfc9;border-radius:8px;background:#fafaf7;break-inside:avoid}
+    .kpi-label{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.04em}
+    .kpi-val{font-size:18px;font-weight:700;margin-top:4px}
+    .pos{color:#1e5c2c}.neg{color:#942727}.inv{color:#4841a5}.save{color:#165959}
+    .inv-linea{font-size:13px;color:#4841a5;margin:0 0 20px}
+    h2{font-size:16px;margin:24px 0 10px;border-bottom:1px solid #cfcfc9;padding-bottom:6px;break-after:avoid}
     table{width:100%;border-collapse:collapse;font-size:12px}
-    th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #eee}
-    th{font-size:10px;text-transform:uppercase;color:#666;background:#fafafa}
-    .right{text-align:right}
-    @media print{body{padding:15mm}}
+    thead{display:table-header-group}
+    tr{break-inside:avoid}
+    th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #e4e4de;vertical-align:top}
+    th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#444;background:#f0f0ea}
+    .right{text-align:right;white-space:nowrap}.nw{white-space:nowrap}
+    .nota{font-size:11px;color:#555}
+    .barra{height:4px;border-radius:2px;background:#e4e4de;margin-top:4px}.barra i{display:block;height:100%;border-radius:2px;background:#942727}
+    .pie{margin-top:28px;font-size:12px;color:#555;text-align:center}
+    .pie button{font:inherit;font-weight:600;color:#fff;background:#145283;border:0;border-radius:10px;padding:12px 22px;min-height:44px;cursor:pointer;margin-bottom:10px}
+    @media (max-width:560px){body{padding:16px 16px}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.marca{flex-direction:column;align-items:flex-start;gap:4px}.sub{text-align:left}.nota-col{display:none}}
+    @media print{body{padding:0}.pie{display:none}}
   </style></head><body>
-  <h1>Reporte de Enola</h1>
-  <div class="sub">${escapeHtml(titulo)} · Generado el ${new Date().toLocaleDateString("es-AR")}</div>
+  <div class="marca"><h1>Reporte de Enola</h1><div class="sub">${escapeHtml(titulo)} · Generado el ${new Date().toLocaleDateString("es-AR")}</div></div>
   <div class="kpis">
     <div class="kpi"><div class="kpi-label">Ingresos</div><div class="kpi-val pos">${fmtS(ing)}</div></div>
     <div class="kpi"><div class="kpi-label">Gastos</div><div class="kpi-val neg">${fmtS(gas)}</div></div>
     <div class="kpi"><div class="kpi-label">Ahorrado</div><div class="kpi-val save">${fmtS(aho)}</div></div>
     <div class="kpi"><div class="kpi-label">Balance</div><div class="kpi-val ${balance>=0?"pos":"neg"}">${fmtS(balance)}</div></div>
   </div>
-  ${inv>0?`<p style="font-size:12px;color:#534ab7;margin-bottom:20px">◈ Inversiones del período: ${fmtS(inv)}</p>`:""}
+  ${inv>0?`<p class="inv-linea">◈ Inversiones del período: ${fmtS(inv)}</p>`:""}
   ${catSorted.length?`<h2>Gastos por categoría</h2>
   <table><thead><tr><th>Categoría</th><th class="right">Total</th><th class="right">% del total</th></tr></thead><tbody>
-    ${catSorted.map(([c,v])=>`<tr><td>${escapeHtml(c)}</td><td class="right neg">${fmtS(v)}</td><td class="right">${totalCat>0?Math.round(v/totalCat*100):0}%</td></tr>`).join("")}
+    ${catSorted.map(([c,v])=>`<tr><td>${escapeHtml(c)}<div class="barra"><i style="width:${totalCat>0?Math.max(2,Math.round(v/totalCat*100)):0}%"></i></div></td><td class="right neg">${fmtS(v)}</td><td class="right">${pct(v)}</td></tr>`).join("")}
   </tbody></table>`:""}
   <h2>Detalle de movimientos (${inRange.length})</h2>
-  <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Nota</th><th class="right">Importe</th></tr></thead><tbody>
+  <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th class="nota-col">Nota</th><th class="right">Importe</th></tr></thead><tbody>
     ${inRange.map(m=>{
       const cls=m.tipo==="Ingreso"?"pos":m.tipo==="Inversion"?"inv":m.esAhorro?"save":"neg";
       const sign=m.tipo==="Ingreso"?"+":"-";
       return `<tr>
-        <td>${(m.fecha||"").split("-").reverse().slice(0,3).join("/")}</td>
-        <td>${escapeHtml(m.tipo)}${m.esAhorro?" 🏦":""}</td>
+        <td class="nw">${(m.fecha||"").split("-").reverse().slice(0,3).join("/")}</td>
+        <td>${escapeHtml(m.tipo==="Inversion"?"Inversión":m.tipo)}${m.esAhorro?" 🏦":""}</td>
         <td>${escapeHtml(m.cat||"")}</td>
-        <td style="font-size:11px;color:#666">${escapeHtml((m.nota||"").slice(0,40))}</td>
+        <td class="nota nota-col">${escapeHtml((m.nota||"").slice(0,40))}</td>
         <td class="right ${cls}">${sign}${fmtS(m.importe)}</td>
       </tr>`;
     }).join("")}
   </tbody></table>
-  <p style="margin-top:30px;font-size:11px;color:#999;text-align:center">Para guardar como PDF: Menú del navegador → Imprimir → Guardar como PDF</p>
+  <div class="pie"><button type="button" onclick="window.print()">Guardar como PDF o imprimir</button><div>En el cuadro de impresión elegí "Guardar como PDF".</div></div>
   </body></html>`;
   // Abrimos en una ventana nueva e imprimimos
   const win=window.open("","_blank");

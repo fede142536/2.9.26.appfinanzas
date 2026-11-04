@@ -140,11 +140,11 @@
 </div>
 
 <!-- DRAG & DROP GLOBAL: overlay que aparece al arrastrar un archivo sobre la app (Excel/CSV/JSON) -->
-<div id="drop-overlay" aria-hidden="true" style="display:none;position:fixed;inset:0;background:var(--accent,#145283);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:24px;pointer-events:none">
-  <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--on-solid,#fff);border-radius:20px;padding:24px">
-    <div style="font-size:56px;margin-bottom:14px">📂</div>
-    <div style="font-size:20px;font-weight:700;color:var(--on-solid,#fff)">Soltá el archivo acá</div>
-    <div style="font-size:13px;color:var(--on-solid,#fff);margin-top:6px">Excel (.xlsx/.xls/.csv) o backup (.json)</div>
+<div id="drop-overlay" aria-hidden="true" style="display:none">
+  <div class="drop-caja">
+    <div class="drop-ico">📂</div>
+    <div class="drop-titulo">Soltá el archivo acá</div>
+    <div class="drop-sub">Excel (.xlsx/.xls/.csv) o backup (.json)</div>
   </div>
 </div>
 
@@ -476,7 +476,7 @@
     <div class="modal-handle"></div>
     <div class="modal-title">🗑 Papelera</div>
     <div id="papelera-detalle"></div>
-    <button class="btn-sm" style="width:100%;margin-top:12px" onclick="cerrarPapelera()">Cerrar</button>
+    <button class="btn-sm sheet-cerrar" onclick="cerrarPapelera()">Cerrar</button>
   </div>
 </div>
 
@@ -486,7 +486,7 @@
     <div class="modal-handle"></div>
     <div class="modal-title">🏦 Movimientos sin cuenta</div>
     <div id="sin-cuenta-detalle"></div>
-    <button class="btn-sm" style="width:100%;margin-top:12px" onclick="cerrarSinCuenta()">Cerrar</button>
+    <button class="btn-sm sheet-cerrar" onclick="cerrarSinCuenta()">Cerrar</button>
   </div>
 </div>
 
@@ -496,23 +496,23 @@
     <div class="modal-handle"></div>
     <div class="modal-title">💸 Ventas que salieron de ahorros</div>
     <div id="ventas-fondo-detalle"></div>
-    <button class="btn-sm" style="width:100%;margin-top:12px" onclick="cerrarVentasFondo()">Cerrar</button>
+    <button class="btn-sm sheet-cerrar" onclick="cerrarVentasFondo()">Cerrar</button>
   </div>
 </div>
 
 <!-- MODAL IMPORT PREVIEW -->
 <div class="modal-overlay" id="modal-import" onclick="if(event.target===this)closeImportModal()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:92vh">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <div class="modal-title" style="margin:0" id="import-modal-title">Vista previa</div>
-      <span id="import-count-badge" style="font-size:11px;background:var(--accent-light);color:var(--accent);padding:3px 10px;border-radius:12px;font-weight:500"></span>
+    <div class="imp-cab">
+      <div class="modal-title" id="import-modal-title">Vista previa</div>
+      <span id="import-count-badge"></span>
     </div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Revisá y eliminá lo que no corresponda antes de importar.</p>
-    <div id="import-preview-list" style="max-height:52vh;overflow-y:auto;margin-bottom:14px"></div>
-    <div class="u-row">
+    <p class="imp-guia">Revisá y eliminá lo que no corresponda antes de importar.</p>
+    <div id="import-preview-list"></div>
+    <div class="u-row imp-acciones">
       <button class="btn-sm u-flex1" onclick="closeImportModal()">Cancelar</button>
-      <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:12px" onclick="confirmarImport()">Importar</button>
+      <button class="btn-primary" id="btn-confirmar-import" onclick="confirmarImport()">Importar</button>
     </div>
   </div>
 </div>
@@ -1212,25 +1212,25 @@
 <!-- PAGE: IMPORTAR -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-import" class="page">
-  <div class="header"><h1>Importar</h1><p>Excel o PDF del banco</p></div>
+  <div class="header"><h1>Importar</h1><p>Excel, CSV o copia de seguridad</p></div>
   <div class="card">
     <div class="card-title">📊 Importar desde Excel</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Detecta automáticamente las columnas: Fecha, Ingreso/Gasto, Categoría, Subcategorías, Importe, Cuenta, Moneda.</p>
-    <label style="display:block;border:2px dashed var(--border);border-radius:var(--radius-sm);padding:20px;text-align:center;cursor:pointer" id="xlsx-zone">
-      <input type="file" id="xlsx-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleXlsx(this)">
-      <div style="font-size:26px;margin-bottom:6px">📂</div>
-      <div style="font-size:14px;font-weight:500">Seleccionar archivo</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:3px">.xlsx · .xls · .csv</div>
+    <p class="txt-md txt-muted imp-intro">Detecta automáticamente las columnas: Fecha, Ingreso/Gasto, Categoría, Subcategorías, Importe, Cuenta, Moneda.</p>
+    <label class="imp-zona" id="xlsx-zone">
+      <input type="file" id="xlsx-file" class="imp-file" accept=".xlsx,.xls,.csv" onchange="handleXlsx(this)">
+      <div class="imp-zona-ico">📂</div>
+      <div class="imp-zona-tit">Seleccionar archivo</div>
+      <div class="imp-zona-sub">.xlsx · .xls · .csv</div>
     </label>
-    <div id="xlsx-status" style="margin-top:10px;font-size:13px;color:var(--muted);text-align:center;min-height:18px"></div>
+    <div id="xlsx-status" role="status" aria-live="polite"></div>
   </div>
   <div class="card">
     <div class="card-title">📥 Restaurar backup JSON</div>
     <p class="txt-sm txt-muted mb-10">Cargá un backup descargado desde Config. Reemplaza TODOS los datos actuales por los del backup.</p>
-    <label style="display:block;border:2px dashed var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;cursor:pointer">
-      <input type="file" id="json-restore-file" accept=".json" style="display:none" onchange="restaurarBackup(this)">
-      <div style="font-size:22px">📄</div>
-      <div style="font-size:13px;font-weight:500;margin-top:4px">Seleccionar backup .json</div>
+    <label class="imp-zona imp-zona-chica">
+      <input type="file" id="json-restore-file" class="imp-file" accept=".json" onchange="restaurarBackup(this)">
+      <div class="imp-zona-ico">📄</div>
+      <div class="imp-zona-tit">Seleccionar backup .json</div>
     </label>
   </div>
   <div class="card"><div class="card-title">Historial</div><div id="import-history"></div></div>
