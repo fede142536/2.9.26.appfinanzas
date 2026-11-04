@@ -77,15 +77,15 @@ function renderPresupManager(){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div class="txt-md txt-strong">${getIcon(cat)} ${escapeHtml(cat)}</div>
         <div class="u-row-6">
-          <button class="btn-sm" onclick="openPresupModal(${attrJS(cat)})">Editar</button>
-          <button class="btn-sm" style="color:var(--danger)" onclick="borrarPresup(${attrJS(cat)})">×</button>
+          <button class="btn-sm" aria-label="Editar el presupuesto de ${escapeHtml(cat)}" onclick="openPresupModal(${attrJS(cat)})">Editar</button>
+          <button class="btn-sm cfg-btn-x" aria-label="Quitar el presupuesto de ${escapeHtml(cat)}" onclick="borrarPresup(${attrJS(cat)})">×</button>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
         <span style="color:var(--muted)">${fmtS(gastado)} / ${fmtS(tope)}</span>
         <span style="color:${color};font-weight:600">${pct}%</span>
       </div>
-      <div style="background:var(--bg);height:8px;border-radius:4px;overflow:hidden">
+      <div role="progressbar" aria-label="Gastado de ${escapeHtml(cat)} este mes" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" style="background:var(--bg);height:8px;border-radius:4px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${color};transition:width .3s"></div>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px">${pct>=100?`⚠ Excedido por ${fmtS(gastado-tope)}`:`Restante este mes: ${fmtS(restante)}`}</div>
@@ -143,13 +143,12 @@ function confirmarBorrarTodo(){
   const el = document.querySelector('[onclick="confirmarBorrarTodo()"]');
   if(el.dataset.confirm !== "1"){
     el.textContent = "⚠ Tocá de nuevo para confirmar";
-    el.style.background = "var(--danger)";
-    el.style.color = "#fff";
+    // [AAA config] El estado "confirmar" es una clase (relleno --danger + --on-solid): en oscuro ya no vuelve a blanco al reponerse.
+    el.classList.add("is-confirmando");
     el.dataset.confirm = "1";
     setTimeout(()=>{
       el.textContent = "🗑 Borrar todos los movimientos";
-      el.style.background = "#fff";
-      el.style.color = "var(--danger)";
+      el.classList.remove("is-confirmando");
       el.dataset.confirm = "0";
     }, 3000);
     return;

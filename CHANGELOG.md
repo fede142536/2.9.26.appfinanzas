@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v228**
+**Versión actual: v229**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 4 de noviembre de 2026
 
+- AAA config: objetivos táctiles de 44 reales, administrador de categorías rehecho con clases, botón de borrar sin blanco en oscuro
+- **v229** · AAA tarjetas (A pagar, línea de tiempo, compras, resúmenes y hojas de pago y fechas)
 - **v228** · AAA inversiones (estados vacíos, cartera, detalle, conciliación, gráfico, flecha de mes)
 - AAA tarjetas: cifra que se ajusta, línea de tiempo con aro, filas sin cortes, resúmenes y hojas con 44 px, vacío con salida
 - **v227** · AAA ahorros (gráfico, metas, hoja Depositar, selector de emoji, estados vacíos)

@@ -57,9 +57,9 @@ function renderCuentasManager(){
   if(!el) return;
   const html=getCuentas().map(c=>{
     const esCustom=cuentasCustom.includes(c);
-    return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:${esCustom?'var(--accent-light)':'var(--bg)'};color:${esCustom?'var(--accent)':'var(--muted)'};padding:4px 10px;border-radius:12px;margin:3px">💳 ${escapeHtml(c)}${esCustom?`<button onclick="borrarCuentaCustom(${attrJS(c)})" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0;line-height:1">×</button>`:''}</span>`;
+    return `<span class="cfg-chip${esCustom?' cfg-chip-propio':''}"><span class="cfg-chip-txt">💳 ${escapeHtml(c)}</span>${esCustom?`<button type="button" class="cfg-chip-x" aria-label="Quitar la cuenta ${escapeHtml(c)}" onclick="borrarCuentaCustom(${attrJS(c)})">×</button>`:''}</span>`;
   }).join("");
-  el.innerHTML=html+`<div style="margin-top:10px"><button class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')">+ Agregar cuenta</button></div>`;
+  el.innerHTML=`<div class="cfg-chips">${html}</div><div class="cfg-acciones"><button class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')">+ Agregar cuenta</button></div>`;
 }
 
 // ═══════════════════════════════════════════
@@ -197,18 +197,18 @@ function renderTarjetasManager(){
     const tEsc=attrJS(t);
     const actual=bancos[t]||"";
     const opciones=[`<option value="">Sin banco</option>`, ...(actual && !cuentas.includes(actual)?[actual]:[]).concat(cuentas).map(c=>`<option value="${escapeHtml(c)}"${c===actual?" selected":""}>${escapeHtml(c)}</option>`)].join("");
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:13px">💳 ${escapeHtml(t)}${esDefault?"":' <span class="badge badge-accent">custom</span>'}</span>
-        <div style="display:flex;gap:10px">
-          <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0" onclick="renombrarTarjeta(${tEsc})" title="Renombrar">✎</button>
-          ${esCustom?`<button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:0" onclick="borrarTarjetaCustom(${tEsc})" title="Eliminar">×</button>`:""}
+    return `<div class="cfg-tc-fila">
+      <div class="cfg-tc-top">
+        <span class="cfg-tc-nombre">💳 ${escapeHtml(t)}${esDefault?"":' <span class="badge badge-accent">propia</span>'}</span>
+        <div class="cfg-tc-acc">
+          <button type="button" class="cfg-ico-btn cfg-ico-plano" aria-label="Renombrar la tarjeta ${escapeHtml(t)}" title="Renombrar" onclick="renombrarTarjeta(${tEsc})">✎</button>
+          ${esCustom?`<button type="button" class="cfg-ico-btn cfg-ico-plano cfg-ico-peligro" aria-label="Eliminar la tarjeta ${escapeHtml(t)}" title="Eliminar" onclick="borrarTarjetaCustom(${tEsc})">×</button>`:""}
         </div>
       </div>
       <label class="tc-banco-fila"><span>Banco</span><select class="form-select" aria-label="Banco de ${escapeHtml(t)}" onchange="setBancoTarjeta(${tEsc}, this.value)">${opciones}</select></label>
     </div>`;
   }).join("");
-  el.innerHTML=html+`<div style="margin-top:10px"><button class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')">+ Agregar tarjeta</button></div>`;
+  el.innerHTML=html+`<div class="cfg-acciones"><button class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')">+ Agregar tarjeta</button></div>`;
 }
 
 // ═══════════════════════════════════════════
@@ -271,27 +271,22 @@ function renderCatManager(){
       const subsHtml=subs.map(s=>{
         const esSubCustom=subsCustom.includes(s)&&!subsDefault.includes(s);
         if(esSubCustom){
-          return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:10px;margin:2px">${escapeHtml(s)}<button onclick="borrarSubcat('${t}',${catEsc},${attrJS(s)})" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0;line-height:1">×</button></span>`;
+          return `<span class="cfg-chip cfg-chip-sub cfg-chip-propio"><span class="cfg-chip-txt">${escapeHtml(s)}</span><button type="button" class="cfg-chip-x" aria-label="Quitar la subcategoría ${escapeHtml(s)} de ${escapeHtml(cat)}" onclick="borrarSubcat('${t}',${catEsc},${attrJS(s)})">×</button></span>`;
         }
-        return `<span style="display:inline-block;font-size:11px;background:var(--bg);color:var(--muted);padding:2px 8px;border-radius:10px;margin:2px">${escapeHtml(s)}</span>`;
+        return `<span class="cfg-chip cfg-chip-sub"><span class="cfg-chip-txt">${escapeHtml(s)}</span></span>`;
       }).join("");
       const esPrimera=idx===0, esUltima=idx===nombresOrdenados.length-1;
-      html+=`<div class="cat-row" style="flex-direction:column;align-items:stretch">
-        <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
-          <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:0">
-            <div style="display:flex;flex-direction:column">
-              <button class="btn-sm" style="padding:1px 6px;font-size:10px;line-height:1;${esPrimera?'opacity:.3;pointer-events:none':''}" onclick="moverCategoriaOrden('${t}',${catEsc},-1)" title="Subir">▲</button>
-              <button class="btn-sm" style="padding:1px 6px;font-size:10px;line-height:1;${esUltima?'opacity:.3;pointer-events:none':''}" onclick="moverCategoriaOrden('${t}',${catEsc},1)" title="Bajar">▼</button>
-            </div>
-            <button type="button" onclick="openIconPicker({mode:'edit',cat:${catEsc}})" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;font-size:15px;cursor:pointer;flex-shrink:0" title="Cambiar ícono">${getIcon(cat)}</button>
-            <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(cat)}${esDefault?'':' <span class="badge badge-accent">custom</span>'}</div>
-          </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn-sm" onclick="agregarSubcat('${t}',${catEsc})">+ Sub</button>
-            ${esDefault?'':`<button class="btn-sm" style="color:var(--danger)" onclick="borrarCat('${t}',${catEsc})">×</button>`}
+      const flecha=(dir)=>`<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false"><path d="${dir<0?'M2 8l4-4 4 4':'M2 4l4 4 4-4'}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      html+=`<div class="cat-row cfg-cat">
+        <div class="cfg-cat-head">
+          <button type="button" class="cfg-cat-ico" onclick="openIconPicker({mode:'edit',cat:${catEsc}})" title="Cambiar ícono" aria-label="Cambiar el ícono de ${escapeHtml(cat)}">${getIcon(cat)}</button>
+          <div class="cfg-cat-nombre">${escapeHtml(cat)}${esDefault?'':' <span class="badge badge-accent">propia</span>'}</div>
+          <div class="cfg-cat-orden">
+            <button type="button" class="cfg-ico-btn"${esPrimera?' disabled':''} onclick="moverCategoriaOrden('${t}',${catEsc},-1)" title="Subir" aria-label="Subir ${escapeHtml(cat)}">${flecha(-1)}</button>
+            <button type="button" class="cfg-ico-btn"${esUltima?' disabled':''} onclick="moverCategoriaOrden('${t}',${catEsc},1)" title="Bajar" aria-label="Bajar ${escapeHtml(cat)}">${flecha(1)}</button>
           </div>
         </div>
-        <div style="margin-top:6px">${subsHtml||'<span class="txt-xs txt-muted">Sin subcategorías</span>'}</div>
+        <div class="cfg-chips cfg-chips-sub">${subsHtml||'<span class="txt-xs txt-muted cfg-sin-sub">Sin subcategorías</span>'}<button type="button" class="cfg-chip cfg-chip-btn" onclick="agregarSubcat('${t}',${catEsc})" aria-label="Agregar una subcategoría a ${escapeHtml(cat)}">+ Sub</button>${esDefault?'':`<button type="button" class="cfg-chip cfg-chip-btn cfg-chip-peligro" onclick="borrarCat('${t}',${catEsc})" aria-label="Eliminar la categoría ${escapeHtml(cat)}">Eliminar categoría</button>`}</div>
       </div>`;
     });
   });
