@@ -140,13 +140,13 @@ async function renderHuellaStatus(){
   if(!el) return;
   if(!pinConfigurado()){ el.innerHTML=""; return; }
   if(huellaActiva()){
-    el.innerHTML=`<p class="txt-xs" style="color:var(--success);margin:10px 0 6px">👆 Huella o rostro activados: se usan en vez de teclear el PIN.</p>
-      <button class="btn-sm" style="width:100%;color:var(--danger)" onclick="desactivarHuella()">Desactivar huella</button>`;
+    el.innerHTML=`<p class="pin-estado pin-estado-huella">👆 Huella o rostro activados: se usan en vez de teclear el PIN.</p>
+      <button class="btn-sm pin-btn-ancho pin-btn-peligro" onclick="desactivarHuella()">Desactivar huella</button>`;
     return;
   }
   const ok=await huellaDisponible();
   el.innerHTML=ok
-    ? `<p class="txt-xs txt-muted" style="margin:10px 0 6px">Podés abrir la app con tu huella o rostro, sin teclear el PIN. El PIN sigue protegiendo tus datos.</p>
-       <button class="btn-sm" style="width:100%" onclick="activarHuella().then(renderHuellaStatus)">👆 Activar huella o rostro</button>`
-    : `<p class="txt-xs txt-muted" style="margin:10px 0 0">Este celular no ofrece huella o rostro para desbloquear apps web.</p>`;
+    ? `<p class="pin-ayuda">Podés abrir la app con tu huella o rostro, sin teclear el PIN. El PIN sigue protegiendo tus datos.</p>
+       <button class="btn-sm pin-btn-ancho" onclick="activarHuella().then(renderHuellaStatus)">👆 Activar huella o rostro</button>`
+    : `<p class="pin-ayuda">Este celular no ofrece huella o rostro para desbloquear apps web.</p>`;
 }

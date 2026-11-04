@@ -14,7 +14,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v223">
+<meta name="enola-version" content="enola-v224">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <!-- Color de la barra del sistema = color de fondo de la app (claro #f7f6f2 / oscuro #000). Los dos primeros siguen al sistema; applyTheme() (config-ui.js)
@@ -39,41 +39,50 @@
 <!-- Chart.js y SheetJS viven en js/vendor (versiones fijas, ver js/vendor/LEEME.md): la app no baja código de ningún CDN.
      defer es IMPORTANTE, no cosmético: el HTML se parsea sin esperar estos archivos, así la pantalla nunca queda en blanco por una carga lenta
      (los gráficos y el Excel se protegen solos si todavía no están; ver renderChartMensualBI y handleXlsx). -->
-<script defer src="js/vendor/xlsx.full.min.js?v=223"></script>
-<script defer src="js/vendor/chart.umd.js?v=223"></script>
-<link rel="stylesheet" href="styles.css?v=223">
+<script defer src="js/vendor/xlsx.full.min.js?v=224"></script>
+<script defer src="js/vendor/chart.umd.js?v=224"></script>
+<link rel="stylesheet" href="styles.css?v=224">
 </head>
 <body>
+<!-- Pantalla de arranque [AAA navegacion]: hasta que el script de la app dibuja Movimientos (main.js la retira), la
+     pantalla muestra el ícono de Enola sobre el fondo del tema en vez de quedar en blanco. Va por debajo de la pantalla de
+     bloqueo (9999). Sus estilos van en línea (se ve igual aunque el CSS cacheado sea viejo) y se retira sola a los 8 s por si
+     el arranque falla: el aviso de error de más abajo tiene que poder verse. -->
+<div id="splash" aria-hidden="true" style="position:fixed;inset:0;z-index:9990;display:flex;align-items:center;justify-content:center;background:var(--bg,#f7f6f2)">
+  <img src="icon-192.png" alt="" width="88" height="88" style="border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.12)">
+</div>
+<script>setTimeout(function(){ var s=document.getElementById("splash"); if(s) s.remove(); }, 8000);</script>
 <!-- Aviso de versión desactualizada. Los estilos van inline a propósito: styles.css también
      se sirve desde caché, y este cartel tiene que verse bien justamente cuando lo cacheado
      quedó viejo. -->
-<div id="version-vieja" role="alert" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:var(--banner-bg,#924f00);color:var(--banner-fg,#fff);padding:10px 14px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:var(--shadow-pop,0 2px 10px rgba(0,0,0,.25))">
+<div id="version-vieja" role="status" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:var(--banner-bg,#924f00);color:var(--banner-fg,#fff);padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px 16px;font:500 13px/1.4 system-ui,-apple-system,sans-serif;box-shadow:var(--shadow-pop,0 2px 10px rgba(0,0,0,.25))">
   <div style="max-width:560px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between">
-    <span id="version-vieja-msg" style="flex:1;min-width:0"></span>
-    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:var(--banner-fg,#fff);color:var(--banner-bg,#924f00);border:none;border-radius:8px;padding:12px 16px;min-height:44px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:700;font-size:14px">Hay una versión nueva de Enola</div>
+      <div id="version-vieja-msg" style="margin-top:2px"></div>
+    </div>
+    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:var(--banner-fg,#fff);color:var(--banner-bg,#924f00);border:none;border-radius:12px;padding:0 16px;min-height:44px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
   </div>
 </div>
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- AVISO DE ERROR NO ATRAPADO.
      En una PWA en el celular no hay consola: hasta ahora, si algo fallaba, la app
      simplemente no hacía nada y no había forma de saber por qué (nos costó varias rondas
      a ciegas diagnosticar el bug del PIN). Esto hace que cualquier falla futura sea
      legible y copiable desde el propio teléfono. -->
-<div id="error-banner" role="alert" aria-live="assertive" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:10003;background:var(--danger-light);border-top:2px solid var(--danger);padding:12px 14px;max-height:55vh;overflow-y:auto">
-  <div style="display:flex;align-items:flex-start;gap:10px">
-    <span style="font-size:16px;line-height:1.3">⚠️</span>
-    <div class="u-flex1 u-min0">
-      <div style="font-size:12px;font-weight:600;color:var(--danger)">Ocurrió un error</div>
-      <div id="error-banner-msg" style="font-size:12px;color:var(--text);word-break:break-word;margin-top:2px"></div>
-      <pre id="error-banner-detalle" style="display:none;font-size:10px;color:var(--muted);white-space:pre-wrap;word-break:break-word;margin-top:8px"></pre>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button class="btn-sm" style="font-size:11px;padding:5px 10px" onclick="toggleErrorDetalle()" id="error-banner-toggle">Ver detalle</button>
-        <button class="btn-sm" style="font-size:11px;padding:5px 10px" onclick="copiarError()">Copiar</button>
-      </div>
+<div id="error-banner" class="error-banner" role="alert" aria-live="assertive" style="display:none">
+  <span class="error-banner-ico" aria-hidden="true">⚠️</span>
+  <div class="error-banner-cuerpo">
+    <div class="error-banner-titulo">Ocurrió un error</div>
+    <div id="error-banner-msg" class="error-banner-msg"></div>
+    <pre id="error-banner-detalle" class="error-banner-detalle" style="display:none"></pre>
+    <div class="error-banner-acciones">
+      <button class="btn-sm" onclick="toggleErrorDetalle()" id="error-banner-toggle">Ver detalle</button>
+      <button class="btn-sm" onclick="copiarError()">Copiar</button>
     </div>
-    <button style="background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1;padding:0 4px" onclick="cerrarErrorBanner()" aria-label="Cerrar aviso de error">×</button>
   </div>
+  <button class="error-banner-cerrar" onclick="cerrarErrorBanner()" aria-label="Cerrar aviso de error">×</button>
 </div>
 
 <!-- DIÁLOGO GENÉRICO (reemplaza alert/confirm/prompt nativos del navegador).
@@ -86,7 +95,7 @@
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title" id="dialogo-titulo"></div>
-    <p id="dialogo-mensaje" style="font-size:14px;color:var(--text);line-height:1.5;margin-bottom:14px;white-space:pre-line"></p>
+    <p id="dialogo-mensaje" class="dialogo-mensaje"></p>
     <div class="form-group" id="dialogo-input-group" style="display:none">
       <div style="position:relative">
         <input type="text" id="dialogo-input" class="form-input" autocomplete="off" aria-labelledby="dialogo-mensaje" style="padding-right:84px">
@@ -100,20 +109,20 @@
   </div>
 </div>
 
-<!-- PANTALLA DE BLOQUEO -->
-<div id="lock-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:30px">
-  <div style="font-size:48px;margin-bottom:8px">🔒</div>
-  <h2 style="margin:0 0 4px;font-size:22px;color:var(--text)">Enola</h2>
-  <p id="lock-texto" style="font-size:14px;color:var(--muted);margin:0 0 24px">Ingresá tu PIN para continuar</p>
-  <div id="pin-display" style="display:flex;gap:10px;margin-bottom:8px">
+<!-- PANTALLA DE BLOQUEO. [AAA bloqueo] Los estilos viven en styles.css (bloque "[AAA bloqueo]"): ya no hay medidas ni colores en línea. -->
+<div id="lock-screen" class="lock" style="display:none" role="dialog" aria-modal="true" aria-labelledby="lock-titulo">
+  <div class="lock-logo" aria-hidden="true">🔒</div>
+  <h2 class="lock-titulo" id="lock-titulo">Enola</h2>
+  <p id="lock-texto" class="lock-texto">Ingresá tu PIN para continuar</p>
+  <div id="pin-display" class="pin-display" role="img" aria-label="PIN: 0 de 4 dígitos">
     <span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span>
   </div>
-  <div id="pin-texto-wrap" style="display:none;flex-direction:column;align-items:stretch;gap:8px;width:100%;max-width:280px;margin-bottom:6px">
-    <input type="password" id="pin-texto" class="form-input" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Código" placeholder="Tu código" style="text-align:center;font-size:20px;letter-spacing:2px" onkeydown="if(event.key==='Enter'){ event.preventDefault(); pinTextoEnviar(); }">
-    <div style="display:flex;gap:8px"><button type="button" class="btn-sm u-flex1" id="pin-texto-ver" onclick="pinTextoMostrar()">Mostrar</button><button type="button" class="btn-primary" style="flex:2;padding:10px" onclick="pinTextoEnviar()">Entrar</button></div>
+  <div id="pin-texto-wrap" class="pin-texto-wrap" style="display:none">
+    <input type="password" id="pin-texto" class="form-input pin-texto" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="Código" placeholder="Tu código" aria-describedby="pin-error" onkeydown="if(event.key==='Enter'){ event.preventDefault(); pinTextoEnviar(); }">
+    <div class="pin-texto-acciones"><button type="button" class="btn-sm lock-btn-sec" id="pin-texto-ver" aria-pressed="false" onclick="pinTextoMostrar()">Mostrar</button><button type="button" class="btn-primary lock-btn-pri" onclick="pinTextoEnviar()">Entrar</button></div>
   </div>
-  <p id="pin-error" style="font-size:13px;color:var(--danger);margin:0 0 16px;min-height:18px"></p>
-  <div id="pin-pad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:260px">
+  <p id="pin-error" class="pin-error" role="alert"></p>
+  <div id="pin-pad" class="pin-pad">
     <button class="pin-key" onclick="pinPress('1')">1</button>
     <button class="pin-key" onclick="pinPress('2')">2</button>
     <button class="pin-key" onclick="pinPress('3')">3</button>
@@ -123,69 +132,63 @@
     <button class="pin-key" onclick="pinPress('7')">7</button>
     <button class="pin-key" onclick="pinPress('8')">8</button>
     <button class="pin-key" onclick="pinPress('9')">9</button>
-    <button class="pin-key" style="visibility:hidden"></button>
+    <span class="pin-key pin-key-vacio" aria-hidden="true"></span>
     <button class="pin-key" onclick="pinPress('0')">0</button>
-    <button class="pin-key" onclick="pinBackspace()" style="font-size:18px" aria-label="Borrar último dígito">⌫</button>
+    <button class="pin-key" onclick="pinBackspace()" aria-label="Borrar último dígito">⌫</button>
   </div>
-  <button type="button" id="btn-huella" class="btn-sm" style="display:none;margin-top:18px" onclick="desbloquearConHuella()">👆 Usar huella o rostro</button>
+  <button type="button" id="btn-huella" class="btn-sm lock-huella" style="display:none" onclick="desbloquearConHuella()">👆 Usar huella o rostro</button>
 </div>
 
 <!-- DRAG & DROP GLOBAL: overlay que aparece al arrastrar un archivo sobre la app (Excel/CSV/JSON) -->
-<div id="drop-overlay" style="display:none;position:fixed;inset:0;background:var(--accent,#145283);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:32px;pointer-events:none">
-  <div>
+<div id="drop-overlay" aria-hidden="true" style="display:none;position:fixed;inset:0;background:var(--accent,#145283);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:24px;pointer-events:none">
+  <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--on-solid,#fff);border-radius:20px;padding:24px">
     <div style="font-size:56px;margin-bottom:14px">📂</div>
     <div style="font-size:20px;font-weight:700;color:var(--on-solid,#fff)">Soltá el archivo acá</div>
     <div style="font-size:13px;color:var(--on-solid,#fff);margin-top:6px">Excel (.xlsx/.xls/.csv) o backup (.json)</div>
   </div>
 </div>
 
-<!-- ONBOARDING: pantalla de bienvenida para usuarios nuevos (solo se ve una vez, sin datos cargados) -->
-<div id="onboarding-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9998;flex-direction:column;padding:0">
-
-
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
-    <div id="ob-slide-0">
-      <div style="font-size:64px;margin-bottom:18px">🐷</div>
-      <h2 style="margin:0 0 10px;font-size:24px">Bienvenido a Enola</h2>
-      <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
-        Controlá tus gastos, ingresos, tarjetas, ahorros e inversiones desde un solo lugar. Simple, rápido y pensado para el día a día.
-      </p>
-    </div>
-    <div id="ob-slide-1" style="display:none">
-      <div style="font-size:64px;margin-bottom:18px">🔒</div>
-      <h2 style="margin:0 0 10px;font-size:24px">Tus datos son privados</h2>
-      <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
-        Todo lo que cargues queda guardado únicamente en tu celular. No hay servidores ni cuentas: nadie más puede ver tu información financiera.
-      </p>
-    </div>
-    <div id="ob-slide-2" style="display:none">
-      <div style="font-size:64px;margin-bottom:18px">💾</div>
-      <h2 style="margin:0 0 10px;font-size:24px">Hacé backup seguido</h2>
-      <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
-        Como los datos no salen del dispositivo, si lo perdés o lo formateás sin backup, se pierden. Desde Config vas a poder descargar una copia de seguridad cuando quieras.
-      </p>
+<!-- ONBOARDING: pantalla de bienvenida para usuarios nuevos (solo se ve una vez, sin datos cargados). [AAA bloqueo] Estilos en styles.css. -->
+<div id="onboarding-screen" class="onb" style="display:none" role="dialog" aria-modal="true" aria-label="Bienvenida a Enola">
+  <div class="onb-cuerpo">
+    <div class="onb-slides" aria-live="polite">
+      <div class="onb-slide activa" id="ob-slide-0">
+        <div class="onb-emoji" aria-hidden="true">🐷</div>
+        <h2 class="onb-titulo">Bienvenido a Enola</h2>
+        <p class="onb-texto">Controlá tus gastos, ingresos, tarjetas, ahorros e inversiones desde un solo lugar. Simple, rápido y pensado para el día a día.</p>
+      </div>
+      <div class="onb-slide" id="ob-slide-1">
+        <div class="onb-emoji" aria-hidden="true">🔒</div>
+        <h2 class="onb-titulo">Tus datos son privados</h2>
+        <p class="onb-texto">Todo lo que cargues queda guardado únicamente en tu celular. No hay servidores ni cuentas: nadie más puede ver tu información financiera.</p>
+      </div>
+      <div class="onb-slide" id="ob-slide-2">
+        <div class="onb-emoji" aria-hidden="true">💾</div>
+        <h2 class="onb-titulo">Hacé backup seguido</h2>
+        <p class="onb-texto">Como los datos no salen del dispositivo, si lo perdés o lo formateás sin backup, se pierden. Desde Config vas a poder descargar una copia de seguridad cuando quieras.</p>
+      </div>
     </div>
   </div>
-  <div style="padding:24px 32px 36px">
-    <div style="display:flex;justify-content:center;gap:6px;margin-bottom:20px">
+  <div class="onb-pie">
+    <div class="onb-puntos" id="ob-puntos" role="img" aria-label="Paso 1 de 3">
       <span class="ob-dot" id="ob-dot-0"></span><span class="ob-dot" id="ob-dot-1"></span><span class="ob-dot" id="ob-dot-2"></span>
     </div>
-    <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%" onclick="onboardingSiguiente()" id="ob-btn-siguiente">Siguiente</button>
-    <button class="btn-sm" style="width:100%;margin-top:10px;border:none;background:none" onclick="cerrarOnboarding()" id="ob-btn-saltar">Saltar</button>
+    <button class="btn-primary onb-siguiente" onclick="onboardingSiguiente()" id="ob-btn-siguiente">Siguiente</button>
+    <button class="btn-sm onb-saltar" onclick="cerrarOnboarding()" id="ob-btn-saltar">Saltar</button>
   </div>
 </div>
 
 <!-- MODAL NUEVA CATEGORÍA -->
 <div class="modal-overlay" id="modal-cat" onclick="if(event.target===this)closeCatModal()">
-  <div class="modal" role="dialog" aria-modal="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cat-titulo">
     <div class="modal-handle"></div>
-    <div class="modal-title">Nueva categoría</div>
+    <div class="modal-title" id="cat-titulo">Nueva categoría</div>
     <div class="form-group"><label class="form-label" for="new-cat-tipo">Tipo</label>
       <select id="new-cat-tipo" class="form-select"><option value="Gasto">Gasto</option><option value="Ingreso">Ingreso</option><option value="Inversion">Inversión</option><option value="Tarjeta">Tarjeta</option></select>
     </div>
     <div class="form-group"><label class="form-label">Ícono</label>
-      <button type="button" class="btn-sm" style="font-size:20px;padding:9px 16px;display:flex;align-items:center;gap:8px" onclick="openIconPicker({mode:'new'})">
-        <span id="new-cat-icon-preview">📦</span> <span style="font-size:13px">Elegir ícono</span>
+      <button type="button" class="btn-sm cat-icon-btn" onclick="openIconPicker({mode:'new'})">
+        <span id="new-cat-icon-preview" aria-hidden="true">📦</span> <span>Elegir ícono</span>
       </button>
     </div>
     <div class="form-group"><label class="form-label" for="new-cat-name">Nombre</label><input type="text" id="new-cat-name" class="form-input" placeholder="Ej: Mascotas"></div>
@@ -196,11 +199,11 @@
 
 <!-- MODAL SELECTOR DE ÍCONO (reutilizado para crear categoría y para editar el ícono de una existente) -->
 <div class="modal-overlay" id="modal-icon-picker" onclick="if(event.target===this)closeIconPicker()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:80vh">
+  <div class="modal icon-picker" role="dialog" aria-modal="true" aria-labelledby="icon-titulo">
     <div class="modal-handle"></div>
-    <div class="modal-title">Elegí un ícono</div>
-    <div id="icon-picker-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;overflow-y:auto;max-height:55vh"></div>
-    <button class="btn-sm" style="width:100%;margin-top:14px" onclick="closeIconPicker()">Cancelar</button>
+    <div class="modal-title" id="icon-titulo">Elegí un ícono</div>
+    <div id="icon-picker-grid" class="icon-picker-grid"></div>
+    <button type="button" class="btn-sm icon-picker-cancelar" onclick="closeIconPicker()">Cancelar</button>
   </div>
 </div>
 
@@ -266,19 +269,19 @@
 <div class="modal-overlay" id="modal-filtro-fecha" onclick="if(event.target===this)closeFiltroFechaModal()">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
-    <div class="modal-title">📅 Buscar por fecha</div>
-    <div class="type-toggle" style="margin-bottom:14px">
-      <button type="button" class="type-btn" id="ff-tab-dia" onclick="setFiltroFechaTab('dia')">Día</button>
-      <button type="button" class="type-btn" id="ff-tab-rango" onclick="setFiltroFechaTab('rango')">Rango</button>
-      <button type="button" class="type-btn" id="ff-tab-mes" onclick="setFiltroFechaTab('mes')">Mes</button>
-      <button type="button" class="type-btn" id="ff-tab-anio" onclick="setFiltroFechaTab('anio')">Año</button>
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px"><svg class="mov-icon-svg" style="width:22px;height:22px" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Buscar por fecha</div>
+    <div class="seg-filter seg-filter-modal" role="tablist" aria-label="Qué querés buscar">
+      <button type="button" class="seg-btn" role="tab" aria-selected="true" id="ff-tab-dia" aria-controls="ff-panel-dia" onclick="setFiltroFechaTab('dia')">Día</button>
+      <button type="button" class="seg-btn" role="tab" aria-selected="false" id="ff-tab-rango" aria-controls="ff-panel-rango" onclick="setFiltroFechaTab('rango')">Rango</button>
+      <button type="button" class="seg-btn" role="tab" aria-selected="false" id="ff-tab-mes" aria-controls="ff-panel-mes" onclick="setFiltroFechaTab('mes')">Mes</button>
+      <button type="button" class="seg-btn" role="tab" aria-selected="false" id="ff-tab-anio" aria-controls="ff-panel-anio" onclick="setFiltroFechaTab('anio')">Año</button>
     </div>
-    <div id="ff-panel-dia">
+    <div id="ff-panel-dia" role="tabpanel" aria-labelledby="ff-tab-dia">
       <div class="form-group"><label class="form-label" for="ff-dia">Fecha exacta</label>
         <input type="date" id="ff-dia" class="form-input">
       </div>
     </div>
-    <div id="ff-panel-rango" style="display:none">
+    <div id="ff-panel-rango" role="tabpanel" aria-labelledby="ff-tab-rango" style="display:none">
       <div class="two-col">
         <div class="form-group"><label class="form-label" for="ff-rango-desde">Desde</label>
           <input type="date" id="ff-rango-desde" class="form-input">
@@ -288,12 +291,12 @@
         </div>
       </div>
     </div>
-    <div id="ff-panel-mes" style="display:none">
+    <div id="ff-panel-mes" role="tabpanel" aria-labelledby="ff-tab-mes" style="display:none">
       <div class="form-group"><label class="form-label" for="ff-mes">Mes</label>
         <input type="month" id="ff-mes" class="form-input">
       </div>
     </div>
-    <div id="ff-panel-anio" style="display:none">
+    <div id="ff-panel-anio" role="tabpanel" aria-labelledby="ff-tab-anio" style="display:none">
       <div class="form-group"><label class="form-label" for="ff-anio">Año</label>
         <select id="ff-anio" class="form-select"></select>
       </div>
@@ -329,11 +332,11 @@
     <div class="modal-handle"></div>
     <div class="modal-title">Editar movimiento</div>
     <div id="edit-form-content"></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
+    <button type="button" class="btn-sm" id="edit-repetir" style="width:100%;margin-top:8px" onclick="repetirDesdeEditor()">🔁 Repetir este movimiento (con la fecha de hoy)</button>
+    <div class="edit-acciones">
       <button class="btn-sm u-flex1" onclick="closeEditModal()">Cancelar</button>
       <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:11px" onclick="guardarEdit()">Guardar cambios</button>
     </div>
-    <button type="button" class="btn-sm" id="edit-repetir" style="width:100%;margin-top:8px" onclick="repetirDesdeEditor()">🔁 Repetir este movimiento (con la fecha de hoy)</button>
   </div>
 </div>
 
@@ -518,7 +521,10 @@
 <!-- PAGE: CARGAR -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div id="page-cargar" class="page theme-gasto">
-  <div class="header"><h1>Nuevo movimiento</h1><p id="fecha-hoy"></p></div>
+  <div class="header"><h1>Nuevo movimiento</h1><p id="fecha-hoy"></p>
+    <!-- [AAA cargar] La calculadora vive en el encabezado fijo (antes era un botón flotante que tapaba el 📅, un interruptor o el botón Guardar). -->
+    <button type="button" id="fab-calculadora" onclick="abrirCalculadora()" aria-label="Abrir calculadora" title="Calculadora"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4.5" y="2.5" width="15" height="19" rx="3"/><rect x="7.5" y="5.5" width="9" height="4" rx="1"/><path d="M8 13.5h.01M12 13.5h.01M16 13.5h.01M8 17.5h.01M12 17.5h.01M16 17.5h.01"/></svg></button>
+  </div>
   <div id="alertas-frecuentes" style="padding:0 16px"></div>
   <!-- Carga rápida: una frase y la app rellena el formulario de abajo (no guarda nada) -->
   <div class="card carga-rapida">
@@ -528,22 +534,22 @@
       <button type="button" id="carga-rapida-voz" class="btn-sm btn-voz" style="display:none" aria-label="Dictar por voz" aria-pressed="false" onclick="dictarCargaRapida()">🎤</button>
       <button type="button" class="btn-sm" onclick="cargaRapida()">Cargar</button>
     </div>
-    <p id="carga-rapida-res" class="txt-xs" style="display:none;margin:8px 0 0;line-height:1.4"></p>
+    <p id="carga-rapida-res" class="txt-xs" role="status" aria-live="polite" style="display:none;margin:8px 0 0;line-height:1.4"></p>
   </div>
   <div class="type-toggle">
     <button class="type-btn active-gasto" id="btn-gasto" onclick="setTipo('Gasto')">↑ Gasto</button>
     <button class="type-btn" id="btn-ingreso" onclick="setTipo('Ingreso')">↓ Ingreso</button>
     <button class="type-btn" id="btn-inversion" onclick="setTipo('Inversion')">◈ Inv.</button>
     <button class="type-btn" id="btn-tarjeta" onclick="setTipo('Tarjeta')">▣ Tarj.</button>
-    <button class="type-btn" id="btn-cambio" onclick="setTipo('Cambio')">💱 Cambio</button>
+    <button class="type-btn" id="btn-cambio" onclick="setTipo('Cambio')">⇄ Cambio</button>
   </div>
   <!-- GASTO/INGRESO -->
   <div id="campos-gi">
     <div class="amount-card">
       <div class="amount-hero-label" id="inp-importe-label">Importe (ARS)</div>
-      <div class="amount-wrap amount-hero"><span class="amount-prefix" id="inp-importe-prefix">$</span>
+      <label class="amount-wrap amount-hero"><span class="amount-prefix" id="inp-importe-prefix">$</span>
         <input type="text" id="inp-importe" class="form-input amount-input" aria-label="Importe" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearConMiles);updateImporteCalc()">
-      </div>
+      </label>
       <div id="importe-calc-preview" style="font-size:11px;color:var(--accent);margin-top:-6px;display:none;text-align:center"></div>
       <div class="currency-pills">
         <button type="button" class="currency-pill active" data-for="inp-moneda" data-val="ARS" onclick="pillMoneda('inp-moneda','ARS')">🇦🇷 ARS</button>
@@ -558,7 +564,6 @@
       <div class="two-col">
         <div class="form-group">
           <div class="field-head"><label class="form-label" for="inp-cat">Categoría</label><button type="button" class="field-link" onclick="openCatModal()">+ Nueva</button></div>
-          <div id="sugerencia-cat" role="button" tabindex="0" style="display:none;font-size:12px;background:var(--accent-light);color:var(--accent);padding:7px 10px;border-radius:8px;margin-bottom:2px;cursor:pointer" onclick="aplicarSugerenciaCat()"></div>
           <select id="inp-cat" class="form-select" onchange="updateSubcats()"></select>
         </div>
         <div class="form-group"><label class="form-label" for="inp-subcat">Subcategoría</label><select id="inp-subcat" class="form-select" onchange="autoSeleccionarCuenta();sugerirAhorroDeMeta()"></select></div>
@@ -576,9 +581,11 @@
           <button type="button" class="date-chip" data-for="inp-fecha" data-delta="-7" onclick="setFechaQuick('inp-fecha',-7)">-7d</button>
           <button type="button" class="date-cal-btn" onclick="abrirCalendario('inp-fecha')" aria-label="Elegir otra fecha">📅</button>
         </div>
-        <input type="date" id="inp-fecha" class="field-hidden-native" onchange="refrescarFechaUI('inp-fecha')">
+        <input type="date" id="inp-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('inp-fecha')">
       </div>
-      <div class="form-group"><label class="form-label" for="inp-nota">Nota (opcional)</label><input type="text" id="inp-nota" class="form-input" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()"></div>
+      <div class="form-group"><label class="form-label" for="inp-nota">Nota (opcional)</label><input type="text" id="inp-nota" class="form-input" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()">
+        <!-- [AAA cargar] Sugerencia debajo de la nota (la que la dispara) y a todo el ancho: antes empujaba solo la columna de Categoría. -->
+        <div id="sugerencia-cat" class="sugerencia-cat" role="button" tabindex="0" style="display:none" onclick="aplicarSugerenciaCat()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();aplicarSugerenciaCat();}"></div></div>
     </div>
     <div class="card options-card" id="opciones-ingreso" style="display:none">
       <label class="opt-row" style="--chk:var(--save)">
@@ -633,9 +640,9 @@
     <div id="campos-inv" style="display:none">
       <div class="amount-card">
         <div class="amount-hero-label" id="inv-importe-label">Importe (ARS)</div>
-        <div class="amount-wrap amount-hero"><span class="amount-prefix" id="inv-importe-prefix">$</span>
+        <label class="amount-wrap amount-hero"><span class="amount-prefix" id="inv-importe-prefix">$</span>
           <input type="text" id="inv-importe" class="form-input amount-input" aria-label="Importe" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles)">
-        </div>
+        </label>
         <div class="currency-pills">
           <button type="button" class="currency-pill active" data-for="inv-moneda" data-val="ARS" onclick="pillMoneda('inv-moneda','ARS')">🇦🇷 ARS</button>
           <button type="button" class="currency-pill" data-for="inv-moneda" data-val="USD" onclick="pillMoneda('inv-moneda','USD')">🇺🇸 USD</button>
@@ -672,7 +679,8 @@
           </label>
           <div class="form-group" id="inv-fondo-group" style="display:none">
             <label class="form-label" for="inv-fondo">¿De qué fondo?</label>
-            <select id="inv-fondo" class="form-select"></select>
+            <select id="inv-fondo" class="form-select" onchange="mostrarSaldoFondo()" aria-describedby="inv-fondo-saldo"></select>
+            <p id="inv-fondo-saldo" class="txt-xs txt-muted" style="margin:0"></p>
           </div>
         </div>
         <div class="form-group">
@@ -688,7 +696,7 @@
             <button type="button" class="date-chip" data-for="inv-fecha" data-delta="-7" onclick="setFechaQuick('inv-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('inv-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="inv-fecha" class="field-hidden-native" onchange="refrescarFechaUI('inv-fecha')">
+          <input type="date" id="inv-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('inv-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="inv-nota">Nota (opcional)</label><input type="text" id="inv-nota" class="form-input" placeholder="Descripción…"></div>
       </div>
@@ -697,9 +705,9 @@
     <div id="campos-tc" style="display:none">
       <div class="amount-card">
         <div class="amount-hero-label" id="tc-total-label">Monto total</div>
-        <div class="amount-wrap amount-hero"><span class="amount-prefix" id="tc-amount-prefix">$</span>
+        <label class="amount-wrap amount-hero"><span class="amount-prefix" id="tc-amount-prefix">$</span>
           <input type="text" id="tc-total" class="form-input amount-input" aria-label="Monto total" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcCuota()">
-        </div>
+        </label>
         <div class="currency-pills">
           <button type="button" class="currency-pill active" data-for="tc-moneda" data-val="ARS" onclick="pillMoneda('tc-moneda','ARS')">🇦🇷 ARS</button>
           <button type="button" class="currency-pill" data-for="tc-moneda" data-val="USD" onclick="pillMoneda('tc-moneda','USD')">🇺🇸 USD</button>
@@ -739,7 +747,7 @@
           <div class="form-group">
             <label class="form-label" for="tc-cuotas">Cuotas totales</label>
             <div class="date-row" id="tc-cuotas-chips"></div>
-            <input type="number" id="tc-cuotas" class="field-hidden-native" min="1" inputmode="numeric">
+            <input type="number" id="tc-cuotas" class="field-hidden-native" tabindex="-1" min="1" inputmode="numeric">
           </div>
           <div class="form-group"><label class="form-label" for="tc-mes-inicio">1ª cuota en</label><input type="month" id="tc-mes-inicio" class="form-input" onchange="refreshSimIfOpen()"></div>
           <div class="sim-box">
@@ -750,7 +758,7 @@
             </button>
             <div id="tc-sim-body" class="sim-body" style="display:none">
               <div style="display:flex;gap:14px;font-size:11px;color:var(--muted)">
-                <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--border);display:inline-block"></span>Ya tenés</span>
+                <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--border-strong);display:inline-block"></span>Ya tenés</span>
                 <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:var(--warning);display:inline-block"></span>Esta compra</span>
               </div>
               <div id="tc-sim-rows"></div>
@@ -773,7 +781,7 @@
             <button type="button" class="date-chip" data-for="tc-fecha" data-delta="-7" onclick="setFechaQuick('tc-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('tc-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="tc-fecha" class="field-hidden-native" onchange="refrescarFechaUI('tc-fecha')">
+          <input type="date" id="tc-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('tc-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="tc-nota">Nota (opcional)</label><input type="text" id="tc-nota" class="form-input" placeholder="Descripción adicional..."></div>
       </div>
@@ -787,14 +795,14 @@
           <button type="button" class="sentido-btn" id="btn-cambio-venta" onclick="setSentidoCambio('venta')">Vendo dólares</button>
         </div>
         <div class="amount-hero-label" id="cambio-ars-label">Pesos que pagué</div>
-        <div class="amount-wrap amount-hero"><span class="amount-prefix">$</span>
+        <label class="amount-wrap amount-hero"><span class="amount-prefix">$</span>
           <input type="text" id="cambio-ars" class="form-input amount-input" aria-label="Monto en pesos" placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);calcTipoCambio()">
-        </div>
+        </label>
         <div class="cambio-divider"><span class="cambio-divider-line"></span><span class="cambio-divider-dot">⇅</span><span class="cambio-divider-line"></span></div>
         <label class="amount-hero-label" for="cambio-usd" id="cambio-usd-label">Dólares que recibí</label>
-        <div class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">USD</span>
+        <label class="amount-wrap amount-hero amount-hero-sm"><span class="amount-prefix">USD</span>
           <input type="number" id="cambio-usd" class="form-input amount-input" placeholder="0" inputmode="decimal" step="any" oninput="calcTipoCambio()">
-        </div>
+        </label>
         <div id="cambio-tc" class="rate-box">
           <span class="rate-box-label">Tipo de cambio</span>
           <span class="rate-box-val muted" id="cambio-tc-val">Poné los dos montos</span>
@@ -823,21 +831,19 @@
             <button type="button" class="date-chip" data-for="cambio-fecha" data-delta="-7" onclick="setFechaQuick('cambio-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('cambio-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="cambio-fecha" class="field-hidden-native" onchange="refrescarFechaUI('cambio-fecha')">
+          <input type="date" id="cambio-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('cambio-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="cambio-nota">Nota (opcional)</label><input type="text" id="cambio-nota" class="form-input" placeholder="Ej: MEP con AL30"></div>
       </div>
       <p class="txt-xs txt-muted" style="text-align:center;padding:0 20px">Comprar o vender dólares no es un gasto: es plata que cambia de bolsillo. Se guardan las dos patas.</p>
     </div>
-  <!-- Calculadora flotante: vive DENTRO de #page-cargar a propósito (ver handoff) — así hereda
-       --tema-color/--tema-light del tipo activo y queda oculta sola cuando no estás en Cargar,
-       sin tener que coordinarla a mano con showPage() como al FAB de siempre. -->
-  <button type="button" id="fab-calculadora" onclick="abrirCalculadora()" aria-label="Abrir calculadora">=</button>
+  <!-- Calculadora: el modal vive DENTRO de #page-cargar a propósito (ver handoff) — así hereda
+       --tema-color/--tema-light del tipo activo y queda oculta sola cuando no estás en Cargar. Su botón está en el encabezado. -->
   <div class="modal-overlay" id="modal-calculadora" onclick="if(event.target===this)cerrarCalculadora()">
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calc-titulo">
       <div class="modal-handle"></div>
-      <div class="modal-title">Calculadora</div>
-      <div class="calc-display" id="calc-display">0</div>
+      <div class="modal-title" id="calc-titulo">Calculadora</div>
+      <div class="calc-display" id="calc-display" role="status" aria-live="polite">0</div>
       <!-- Mismo orden que la calculadora del teléfono: C ⌫ ÷ × / 7 8 9 − / 4 5 6 + / 1 2 3 = /
            0 , — sin celdas que ocupen más de una fila o columna (eso corría "=" y "0" de lugar:
            el navegador ubica primero los botones con una posición fija y recién después los que
@@ -862,8 +868,8 @@
         <button type="button" class="calc-btn" onclick="calcInput('0')">0</button>
         <button type="button" class="calc-btn" onclick="calcInput(',')" aria-label="Coma decimal">,</button>
       </div>
-      <button type="button" class="btn-primary" onclick="usarResultadoCalculadora()">Usar este resultado</button>
-      <button type="button" class="btn-sm" style="margin-top:8px" onclick="cerrarCalculadora()">Cerrar</button>
+      <button type="button" class="btn-primary calc-usar" onclick="usarResultadoCalculadora()">Usar este resultado</button>
+      <button type="button" class="btn-sm calc-cerrar" onclick="cerrarCalculadora()">Cerrar</button>
     </div>
   </div>
   <div class="save-bar">
@@ -881,26 +887,27 @@
       <button class="mov-topbar-arrow" onclick="cambiarMes(-1)" id="btn-mes-prev" aria-label="Mes anterior">‹</button>
       <div class="mov-topbar-month">
         <span class="mov-topbar-eyebrow">Movimientos</span>
-        <span id="mes-label" class="mov-topbar-label" role="button" tabindex="0" aria-label="Mes mostrado. Tocá para limpiar el filtro de fecha" onclick="if(filtroFecha)limpiarFiltroFecha()" style="cursor:pointer"></span>
+        <span id="mes-label" class="mov-topbar-label" onclick="if(filtroFecha)limpiarFiltroFecha()"></span>
       </div>
       <button class="mov-topbar-arrow" onclick="cambiarMes(1)" id="btn-mes-next" aria-label="Mes siguiente">›</button>
     </div>
-    <button class="mov-icon-btn" id="btn-mov-search" onclick="toggleMovSearch()" aria-label="Buscar movimientos">🔍</button>
-    <button class="mov-icon-btn" onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha">📅</button>
+    <button class="mov-icon-btn" id="btn-mov-search" onclick="toggleMovSearch()" aria-label="Buscar movimientos"><svg class="mov-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20.5 20.5"/></svg></button>
+    <button class="mov-icon-btn" onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha"><svg class="mov-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
   </div>
   <div id="mov-search-row" class="mov-search-row" style="display:none;padding:10px 16px 0">
     <input type="search" id="mov-search" aria-label="Buscar movimientos" placeholder="Buscar por nota, categoría, ticker…" oninput="onSearchMovs()">
+    <div id="mov-search-count" class="mov-search-count" role="status"></div>
   </div>
-  <div id="mov-cierre-aviso" style="display:none"></div>
-  <div id="mov-anual-aviso" style="display:none"></div>
-  <div class="mov-summary" id="mov-summary"></div>
+  <div id="mov-cierre-aviso" role="status" style="display:none"></div>
+  <div id="mov-anual-aviso" role="status" style="display:none"></div>
   <div class="seg-filter" id="mov-filtros"></div>
-  <div id="mov-tarjeta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
-  <div id="mov-cat-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
-  <div id="mov-cuenta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;align-items:center;gap:6px"></div>
+  <div class="mov-summary" id="mov-summary"></div>
+  <div id="mov-tarjeta-filtro" class="mov-chips" style="display:none"></div>
+  <div id="mov-cat-filtro" class="mov-chips" style="display:none"></div>
+  <div id="mov-cuenta-filtro" class="mov-chips" style="display:none"></div>
   <div id="mov-cuenta-resumen" class="cuenta-resumen" style="display:none"></div>
   <div id="mov-arrastre" class="info-line" style="display:none"></div>
-  <div id="gcal-aviso" class="venc-wrap" style="display:none"></div>
+  <div id="gcal-aviso" class="venc-wrap" role="status" style="display:none"></div>
   <div id="mov-presup-resumen" style="padding:0 16px 8px;display:none"></div>
   <div class="tx-list" id="tx-list"></div>
 </div>
@@ -1477,7 +1484,7 @@
   <button class="nav-btn" onclick="showPage('dash',this);closeSideMenu()"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span></button>
   <button class="nav-btn" onclick="showPage('ahorro',this);closeSideMenu()"><span class="nav-icon">🏦</span><span class="nav-label">Ahorros</span></button>
   <button class="nav-btn" onclick="showPage('import',this);closeSideMenu()"><span class="nav-icon">📥</span><span class="nav-label">Importar</span></button>
-  <button class="nav-btn" onclick="closeSideMenu();abrirCierreMes()"><span class="nav-icon">🗓</span><span class="nav-label">Cerrar el mes</span></button>
+  <button class="nav-btn" onclick="closeSideMenu();abrirCierreMes()"><span class="nav-icon">🗓️</span><span class="nav-label">Cerrar el mes</span></button>
   <button class="nav-btn" onclick="showPage('config',this);closeSideMenu()"><span class="nav-icon">⚙️</span><span class="nav-label">Configuración</span></button>
 </div>
 
@@ -1486,43 +1493,43 @@
      existiría y showPage() se cortaría con un TypeError dejando la pantalla a medio pintar. -->
 <button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento"></button>
 
-<script src="js/estado-categorias.js?v=223"></script>
-<script src="js/resultado-inversiones.js?v=223"></script>
-<script src="js/render-comun.js?v=223"></script>
-<script src="js/form-cargar.js?v=223"></script>
-<script src="js/movimientos.js?v=223"></script>
-<script src="js/editar-movimiento.js?v=223"></script>
-<script src="js/tarjetas-inversiones.js?v=223"></script>
-<script src="js/analisis.js?v=223"></script>
-<script src="js/cambio-moneda.js?v=223"></script>
-<script src="js/traspasos.js?v=223"></script>
-<script src="js/dashboard.js?v=223"></script>
-<script src="js/inflacion.js?v=223"></script>
-<script src="js/ahorros.js?v=223"></script>
-<script src="js/conciliacion.js?v=223"></script>
-<script src="js/papelera.js?v=223"></script>
-<script src="js/carga-rapida.js?v=223"></script>
-<script src="js/atajos.js?v=223"></script>
-<script src="js/aumentos.js?v=223"></script>
-<script src="js/retiro-por-venta.js?v=223"></script>
-<script src="js/selector-mes.js?v=223"></script>
-<script src="js/decimales.js?v=223"></script>
-<script src="js/recuperable.js?v=223"></script>
-<script src="js/resumen-anual.js?v=223"></script>
-<script src="js/repetir.js?v=223"></script>
-<script src="js/informe-periodo.js?v=223"></script>
-<script src="js/cierre-mes.js?v=223"></script>
-<script src="js/huella.js?v=223"></script>
-<script src="js/cuentas-sugeridas.js?v=223"></script>
-<script src="js/graficos-interactivos.js?v=223"></script>
-<script src="js/importar-exportar.js?v=223"></script>
-<script src="js/cuentas-tarjetas-categorias.js?v=223"></script>
-<script src="js/config-ui.js?v=223"></script>
-<script src="js/calendario-google.js?v=223"></script>
-<script src="js/backup-drive.js?v=223"></script>
-<script src="js/presupuestos.js?v=223"></script>
-<script src="js/seguridad-pin.js?v=223"></script>
-<script src="js/main.js?v=223"></script>
+<script src="js/estado-categorias.js?v=224"></script>
+<script src="js/resultado-inversiones.js?v=224"></script>
+<script src="js/render-comun.js?v=224"></script>
+<script src="js/form-cargar.js?v=224"></script>
+<script src="js/movimientos.js?v=224"></script>
+<script src="js/editar-movimiento.js?v=224"></script>
+<script src="js/tarjetas-inversiones.js?v=224"></script>
+<script src="js/analisis.js?v=224"></script>
+<script src="js/cambio-moneda.js?v=224"></script>
+<script src="js/traspasos.js?v=224"></script>
+<script src="js/dashboard.js?v=224"></script>
+<script src="js/inflacion.js?v=224"></script>
+<script src="js/ahorros.js?v=224"></script>
+<script src="js/conciliacion.js?v=224"></script>
+<script src="js/papelera.js?v=224"></script>
+<script src="js/carga-rapida.js?v=224"></script>
+<script src="js/atajos.js?v=224"></script>
+<script src="js/aumentos.js?v=224"></script>
+<script src="js/retiro-por-venta.js?v=224"></script>
+<script src="js/selector-mes.js?v=224"></script>
+<script src="js/decimales.js?v=224"></script>
+<script src="js/recuperable.js?v=224"></script>
+<script src="js/resumen-anual.js?v=224"></script>
+<script src="js/repetir.js?v=224"></script>
+<script src="js/informe-periodo.js?v=224"></script>
+<script src="js/cierre-mes.js?v=224"></script>
+<script src="js/huella.js?v=224"></script>
+<script src="js/cuentas-sugeridas.js?v=224"></script>
+<script src="js/graficos-interactivos.js?v=224"></script>
+<script src="js/importar-exportar.js?v=224"></script>
+<script src="js/cuentas-tarjetas-categorias.js?v=224"></script>
+<script src="js/config-ui.js?v=224"></script>
+<script src="js/calendario-google.js?v=224"></script>
+<script src="js/backup-drive.js?v=224"></script>
+<script src="js/presupuestos.js?v=224"></script>
+<script src="js/seguridad-pin.js?v=224"></script>
+<script src="js/main.js?v=224"></script>
 
 <script>
 // ═══════════════════════════════════════════
@@ -1565,15 +1572,18 @@
       canal.port1.onmessage=function(ev){
         var instalada=(ev.data && ev.data.version) || "";
         if(!instalada || instalada===esperada) return;
-        msg.textContent="Tenés guardada una versión vieja ("+instalada+"). Algunas cosas pueden no andar bien hasta que actualices.";
+        msg.textContent="Actualizá para que todo ande bien: algunas pantallas pueden fallar con la versión que tenés guardada.";
+        cartel.title="Versión guardada: "+instalada+" · versión nueva: "+esperada;
         cartel.style.display="block";
         // El cartel es fixed: sin esto tapa el header de la app, y como el header es sticky
         // con top:0, al scrollear se le volvería a meter abajo igual. Se corre todo lo demás
-        // hacia abajo la altura del cartel.
+        // hacia abajo la altura del cartel. --cartel-h lo usan las barras de arriba y los botones fijos
+        // (styles.css); la regla de abajo cubre el caso de un CSS cacheado viejo que todavía no la conoce.
         var alto=cartel.offsetHeight;
         document.body.style.paddingTop=alto+"px";
+        document.documentElement.style.setProperty("--cartel-h", alto+"px");
         var est=document.createElement("style");
-        est.textContent=".header{top:"+alto+"px}";
+        est.textContent=".header,.mov-topbar{top:"+alto+"px}";
         document.head.appendChild(est);
       };
       sw.postMessage({tipo:"GET_VERSION"}, [canal.port2]);

@@ -51,6 +51,7 @@
   --invest:#4841a5;--invest-light:#eeedfe;--save:#165959;--save-light:#e0f5f5;
   --warning-fill:#b87410;--warning-solid:#e0a030;--on-warning-solid:#2a1800;
   --on-solid:#fff;--focus:var(--accent);--grad-fin:black;--banner-bg:#924f00;--banner-fg:#fff;
+  --toast-bg:#1f1f22;--toast-fg:#fff;--toast-accion:#8fe0d4;
   --radius:14px;--radius-sm:8px;--radius-md:12px;--radius-lg:20px;--radius-pill:999px;
   --shadow:0 8px 24px rgba(0,0,0,.05);--shadow-sm:0 1px 3px rgba(0,0,0,.12);--shadow-pop:0 10px 30px rgba(0,0,0,.18);
   --surface-glass:rgba(255,255,255,.82);
@@ -69,6 +70,7 @@
   --invest:#b3abeb;--invest-light:#26223a;--save:#7dcfcf;--save-light:#1a3535;
   --warning-fill:#e5a652;--warning-solid:#e5a652;--on-warning-solid:#0b0b0c;
   --on-solid:#0b0b0c;--grad-fin:white;--banner-bg:#e5a652;--banner-fg:#0b0b0c;
+  --toast-bg:#ececf0;--toast-fg:#141416;--toast-accion:#095049;
   --shadow:0 8px 24px rgba(0,0,0,.6);--shadow-sm:0 1px 3px rgba(0,0,0,.5);--shadow-pop:0 10px 30px rgba(0,0,0,.7);
   --surface-glass:rgba(28,28,30,.78);
   color-scheme:dark;
@@ -83,12 +85,13 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    una imagen de contenido, y aria-label ya lo describe para quien usa lector de pantalla. */
 #fab-cargar{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom, 0px));right:24px;width:56px;height:56px;border-radius:50%;background:var(--surface) url('fab-perro.jpg') center/cover;border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.2s}
 #fab-cargar:active{transform:scale(.92)}
-/* Calculadora flotante de Cargar: flota por encima de la .save-bar (que es sticky, no fixed,
-   y ocupa todo el ancho con el botón Guardar) para no taparlo. El ícono es el signo "=" como
-   texto plano (no un emoji): el de calculadora de bolsillo no lo dibujan todas las fuentes de
-   emoji de Android y se veía como un cuadrito roto. */
-#fab-calculadora{position:fixed;bottom:calc(92px + env(safe-area-inset-bottom, 0px));right:16px;width:48px;height:48px;border-radius:50%;background:var(--tema-color,var(--accent));color:var(--on-solid);border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;cursor:pointer;transition:transform .2s}
-#fab-calculadora:active{transform:scale(.92)}
+/* [AAA cargar] Botón de la calculadora: vive en el encabezado fijo de Cargar (antes era un botón flotante de 48 px que tapaba el 📅,
+   un interruptor o el botón Guardar según el scroll). Círculo de 44 con ícono SVG (el emoji de calculadora no lo dibujan todas las
+   fuentes de Android; un SVG sí), tintado con el color del tipo activo. */
+#page-cargar #fab-calculadora{position:absolute;top:50%;right:calc(var(--sp-2) + var(--safe-r));bottom:auto;transform:translateY(-50%);width:var(--tap);height:var(--tap);border-radius:50%;
+  background:var(--tema-light,var(--accent-light));color:var(--tema-color,var(--accent));border:1px solid color-mix(in srgb,var(--tema-color,var(--accent)) 40%,transparent);box-shadow:none;z-index:1;
+  display:flex;align-items:center;justify-content:center;padding:0;font-size:0;cursor:pointer;transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+#page-cargar #fab-calculadora:active{transform:translateY(-50%) scale(.94)}
 .calc-display{background:var(--bg);border-radius:12px;padding:16px 14px;margin:4px 0 14px;text-align:right;
   font-size:30px;font-weight:700;letter-spacing:-.5px;color:var(--text);overflow-x:auto;white-space:nowrap}
 .calc-grid{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:56px;gap:8px;margin-bottom:14px}
@@ -509,12 +512,75 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .filter-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface);font-size:12px;cursor:pointer;white-space:nowrap;color:var(--muted);scroll-snap-align:start}
 .filter-chip.active{background:var(--accent);border-color:var(--accent);color:var(--on-solid)}
 .ahorro-view-btn.active{background:var(--save);color:var(--on-solid);border-color:var(--save)}
-.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);background:transparent;transition:all .15s}
-.ob-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .2s}
-.ob-dot.active{background:var(--accent);width:22px;border-radius:4px}
-.pin-dot.filled{background:var(--accent);border-color:var(--accent)}
-.pin-key{font-size:22px;padding:18px 0;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;cursor:pointer;font-weight:500;position:relative;overflow:hidden}
-.pin-key:active{background:var(--accent);color:var(--on-solid);transform:scale(.96)}
+/* [AAA bloqueo] PANTALLA DE BLOQUEO, BIENVENIDA y botón Mostrar de los diálogos de clave.
+   · Todo sale de tokens (var(--…)); ya no hay medidas ni colores en línea en index.html.
+   · .lock se acomoda al área visible: --vv-top/--vv-bottom los pone ajustarBloqueoAlTeclado() (js/seguridad-pin.js) cuando el teclado del celular tapa
+     parte de la pantalla; los dos espaciadores ::before/::after centran el contenido y, si no entra (poco alto, apaisado), se achican a 0 y la pantalla
+     se desplaza en vez de cortar lo de arriba. Safe areas (muesca y barra de gestos) sumadas al margen.
+   · Teclas de 64×88 px (56 y 48 en pantallas bajas): objetivo táctil muy por encima de los 44. Borde --border-mid (el --border es solo divisor).
+   · Error: texto (role="alert") + sacudón + puntitos/campo en rojo que quedan hasta el próximo intento (el primer dígito o Retroceso los quita; el aviso de la espera sigue contando); con prefers-reduced-motion no hay movimiento. */
+.lock{position:fixed;inset:var(--vv-top,0px) 0 var(--vv-bottom,0px) 0;z-index:9999;background:var(--bg);flex-direction:column;align-items:center;overflow-y:auto;overscroll-behavior:contain;
+  padding:calc(var(--sp-5) + var(--safe-t)) calc(var(--sp-5) + var(--safe-r)) calc(var(--sp-5) + var(--safe-b)) calc(var(--sp-5) + var(--safe-l))}
+.lock::before,.lock::after{content:"";flex:1 0 0}
+.lock>*{flex:none}
+.lock-logo{font-size:48px;line-height:1;margin-bottom:var(--sp-2)}
+.lock-titulo{margin:0 0 var(--sp-1);font-size:var(--fs-xl);font-weight:700;line-height:1.2;color:var(--text)}
+.lock-texto{margin:0 0 var(--sp-5);font-size:var(--fs-base);line-height:1.4;color:var(--muted);text-align:center}
+.pin-display{display:flex;gap:var(--sp-3);margin-bottom:var(--sp-1)}
+.pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);background:transparent;transition:background-color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease)}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent);animation:pinPop var(--dur-2) var(--ease)}
+@keyframes pinPop{0%{transform:scale(.6)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
+.pin-display.con-error .pin-dot,.pin-display.con-error .pin-dot.filled{border-color:var(--danger)}
+.pin-display.con-error .pin-dot.filled{background:var(--danger)}
+@keyframes pinSacudon{0%,100%{transform:none}15%{transform:translateX(-10px)}30%{transform:translateX(9px)}45%{transform:translateX(-7px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}90%{transform:translateX(1px)}}
+.pin-display.sacudon,.pin-texto-wrap.sacudon{animation:pinSacudon 380ms cubic-bezier(.36,.07,.19,.97) both}
+.pin-texto-wrap{display:flex;flex-direction:column;align-items:stretch;gap:var(--sp-2);width:100%;max-width:288px;margin-bottom:var(--sp-2)}
+.pin-texto{text-align:center;font-size:var(--fs-xl);letter-spacing:.12em}
+.pin-texto:placeholder-shown{letter-spacing:0;font-size:var(--fs-lg)}
+.pin-texto-wrap.con-error .pin-texto,.pin-texto-wrap.con-error .pin-texto:focus-visible{border-color:var(--danger)}
+.pin-texto-wrap.con-error .pin-texto:focus-visible{outline-color:var(--danger)}   /* con foco y error: un solo aro, en rojo */
+.pin-texto-acciones{display:flex;gap:var(--sp-2)}
+.lock .lock-btn-sec{flex:1;min-height:var(--tap);font-size:var(--fs-md)}
+.lock .lock-btn-pri{flex:2;padding:var(--sp-2);background:var(--accent);color:var(--on-solid)}
+/* Un solo renglón reservado (los avisos son cortos: "PIN incorrecto. Esperá 30 s."): el teclado no se mueve cuando aparece y entre puntos y teclas quedan ~33 px. */
+.pin-error{margin:0 0 var(--sp-2);min-height:1.4em;max-width:100%;font-size:var(--fs-base);font-weight:500;line-height:1.4;color:var(--danger);text-align:center;text-wrap:balance}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);width:100%;max-width:288px}
+.pin-key{height:64px;padding:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);font-weight:500;border:1px solid var(--border-mid);background:var(--surface);color:var(--text);border-radius:var(--radius-md);cursor:pointer;position:relative;overflow:hidden;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:background-color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease),color var(--dur-1) var(--ease),transform var(--dur-1) var(--ease)}
+.pin-key:active{background:var(--accent);border-color:var(--accent);color:var(--on-solid);transform:scale(.96)}
+.pin-key-vacio{visibility:hidden;pointer-events:none}
+.lock .lock-huella{margin-top:var(--sp-4);min-height:var(--tap);padding:0 var(--sp-4);font-size:var(--fs-md)}
+@media (max-height:700px){ .pin-key{height:56px} .lock-texto{margin-bottom:var(--sp-4)} .lock-huella{margin-top:var(--sp-3)} }
+@media (max-height:560px){ .lock-logo{display:none} .pin-key{height:48px} .pin-pad{gap:var(--sp-2)} }
+@media (max-height:480px){ .lock{padding-top:calc(var(--sp-3) + var(--safe-t));padding-bottom:calc(var(--sp-3) + var(--safe-b))} .pin-key{height:var(--tap)} .lock-texto{margin-bottom:var(--sp-3)} .lock-huella{margin-top:var(--sp-2)} }   /* apaisado: entran las 4 filas sin desplazar */
+@media (max-height:420px){ .lock{padding-top:calc(var(--sp-3) + var(--safe-t));padding-bottom:calc(var(--sp-3) + var(--safe-b))} .lock-texto{display:none} .lock-titulo{margin-bottom:var(--sp-2)} .pin-key{height:40px} .pin-pad{gap:6px} .lock-huella{margin-top:var(--sp-2)} }   /* teclas de 40: con la huella visible entra todo en 360 de alto */
+@media (prefers-reduced-motion:reduce){ .pin-display.sacudon,.pin-texto-wrap.sacudon,.pin-dot.filled{animation:none} }
+/* [AAA bloqueo] Bienvenida. Las tres láminas comparten el mismo lugar (grilla apilada): el ícono no salta entre pasos. Puntos ≥3:1 (--border-strong). */
+.onb{position:fixed;inset:0;z-index:9998;background:var(--bg);flex-direction:column;overflow-y:auto;overscroll-behavior:contain}
+.onb-cuerpo{flex:1 0 auto;display:flex;align-items:center;justify-content:center;text-align:center;
+  padding:calc(var(--sp-6) + var(--safe-t)) calc(var(--sp-6) + var(--safe-r)) var(--sp-5) calc(var(--sp-6) + var(--safe-l))}
+.onb-slides{display:grid;width:100%;max-width:320px}
+.onb-slide{grid-area:1/1;align-self:start;visibility:hidden;opacity:0;transition:opacity var(--dur-2) var(--ease),visibility 0s linear var(--dur-2)}
+.onb-slide.activa{visibility:visible;opacity:1;transition:opacity var(--dur-2) var(--ease),visibility 0s}
+.onb-emoji{font-size:64px;line-height:1;margin-bottom:var(--sp-4)}
+.onb-titulo{margin:0 0 var(--sp-3);font-size:var(--fs-xl);font-weight:700;line-height:1.2;color:var(--text);text-wrap:balance}
+.onb-texto{margin:0;font-size:var(--fs-base);line-height:1.5;color:var(--muted);text-wrap:pretty}
+.onb-pie{flex:none;padding:var(--sp-5) calc(var(--sp-6) + var(--safe-r)) calc(var(--sp-5) + var(--safe-b)) calc(var(--sp-6) + var(--safe-l))}
+.onb-puntos{display:flex;justify-content:center;gap:var(--sp-2);margin-bottom:var(--sp-5)}
+.ob-dot{width:8px;height:8px;border-radius:4px;background:var(--border-strong);transition:width var(--dur-2) var(--ease),background-color var(--dur-2) var(--ease)}
+.ob-dot.active{background:var(--accent);width:24px}
+.onb .onb-siguiente{width:100%;background:var(--accent);color:var(--on-solid)}
+.onb .onb-saltar{width:100%;margin-top:var(--sp-2);border:none;background:none;min-height:var(--tap);font-size:var(--fs-base);font-weight:500;color:var(--muted)}
+@media (max-height:480px){   /* apaisado: ícono más chico, márgenes reducidos, y puntos + botones en una fila */
+  .onb-cuerpo{padding:calc(var(--sp-3) + var(--safe-t)) calc(var(--sp-6) + var(--safe-r)) var(--sp-2) calc(var(--sp-6) + var(--safe-l))}
+  .onb-slides{max-width:480px}
+  .onb-emoji{font-size:40px;margin-bottom:var(--sp-2)}
+  .onb-titulo{margin-bottom:var(--sp-2)}
+  .onb-pie{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-2) calc(var(--sp-6) + var(--safe-r)) calc(var(--sp-3) + var(--safe-b)) calc(var(--sp-6) + var(--safe-l))}
+  .onb-puntos{margin-bottom:0}
+  .onb .onb-siguiente{flex:1;width:auto}
+  .onb .onb-saltar{width:auto;margin-top:0;padding:0 var(--sp-3)}
+}
 /* MODAL */
 /* display:flex siempre (no "none"), oculto vía opacity+visibility para poder animar la transición.
    pointer-events:none cuando está cerrado evita que capture toques mientras es invisible. */
@@ -1028,6 +1094,228 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .nav-btn:active,.pin-key:active{transition-duration:var(--dur-1)}
 
 /* ═══════════════════════════════════════════
+   [AAA cargar] PANTALLA CARGAR
+   ═══════════════════════════════════════════
+   Ronda 1. Va antes de "MOVIMIENTO REDUCIDO" para pisar a los componentes de Cargar sin tocar sus reglas. Tokens del sistema (GUIA.md).
+   !important solo donde hay que ganarle a otro !important de este mismo archivo (el tamaño de .amount-input). */
+
+/* Encabezado: deja lugar al botón de la calculadora (44 + margen) para que el título no pase por debajo. */
+#page-cargar>.header{padding-right:calc(var(--tap) + var(--sp-4) + var(--safe-r))}
+#fab-calculadora:focus-visible{outline:2px solid var(--tema-color,var(--accent));outline-offset:2px}
+
+/* Aviso de gastos frecuentes: una línea con el total; el detalle se despliega. Separado del encabezado (antes quedaba pegado). */
+#alertas-frecuentes:not(:empty){padding-top:var(--sp-3)}
+.aviso-frec{background:var(--warning-light);color:var(--warning);border-radius:var(--radius-sm);padding:0 var(--sp-3);margin-bottom:var(--sp-1);font-size:var(--fs-sm)}
+.aviso-frec>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);min-height:var(--tap);cursor:pointer;list-style:none;line-height:1.35}
+.aviso-frec>summary::-webkit-details-marker{display:none}
+.aviso-frec>summary::after{content:"▾";flex-shrink:0;font-size:var(--fs-md);transition:transform var(--dur-2) var(--ease)}
+.aviso-frec[open]>summary::after{transform:rotate(180deg)}
+.aviso-frec-lista{font-size:var(--fs-xs);color:var(--muted);line-height:1.45;padding-bottom:var(--sp-3)}
+
+/* Carga rápida: el micrófono y "Cargar" miden 44 reales; el aviso de resultado respira. */
+#page-cargar .carga-rapida .u-row .btn-sm{min-height:var(--tap)}
+.btn-voz{min-width:var(--tap)}
+
+/* Selector de tipo: Cambio ahora es un glifo (⇄) como los otros cuatro: mismo peso visual, sin emoji de color. */
+#page-cargar>.type-toggle .type-btn{font-size:var(--fs-sm)}
+
+/* MONTO PROTAGONISTA. Toda la zona (el "$", el aire, la cifra) es un <label>: tocar cualquier parte enfoca el campo. El campo nunca baja
+   de 44 de ancho (vacío medía 35×69). La cifra ENTERA entra: la fuente baja con --monto-fs (ajustarTamanoMonto, js/config-ui.js) y el
+   texto no se corta con "…" (el reset global de input,select ponía text-overflow:ellipsis y se perdía el último dígito de 12 cifras). */
+#page-cargar .amount-hero{cursor:text;max-width:100%}
+#page-cargar .amount-card .amount-hero .amount-input{font-size:var(--monto-fs,38px)!important;min-width:var(--tap);max-width:100%;text-overflow:clip;text-align:center;
+  box-sizing:border-box;height:69px;line-height:1;padding-block:0}
+/* Altura fija (69): al bajar la fuente por la cifra larga la tarjeta no cambia de alto y el formulario de abajo no se mueve. Sin transición de font-size:
+   ajustarTamanoMonto mide el campo real y necesita el tamaño final al instante. */
+#page-cargar .amount-card .amount-hero{height:69px}
+#page-cargar .amount-hero .amount-input::placeholder{color:var(--border-strong);opacity:1}
+/* El prefijo ($ / USD) acompaña a la cifra: misma línea base y peso, no se achica con ella. */
+#page-cargar .amount-card .amount-hero{align-items:baseline}
+/* El prefijo heredaba transform:translateY(-50%) de la regla absoluta original y quedaba ~10 px por encima de la línea base de la cifra. */
+#page-cargar .amount-hero .amount-prefix{transform:none;line-height:1}
+#page-cargar .amount-card .amount-hero-sm{gap:var(--sp-2)}
+
+/* Moneda ARS/USD y sentido Compro/Vendo: botones de 44 reales dentro de la píldora. */
+#page-cargar .currency-pill{height:32px}
+#page-cargar .sentido-btn{height:var(--tap);padding-inline:var(--sp-4)}
+
+/* Etiquetas de campo con enlace ("+ Nueva"): la fila mide 28 con la etiqueta y el enlace pegados al campo (proximidad) y el enlace suma un halo de 44 de
+   alto (la caja mide 28; el halo cubre 8 px por arriba y 8 por abajo, así toca bien sin robarle el toque al selector). */
+#page-cargar .field-head,#page-cargar .two-col>.form-group>.form-label,#page-cargar .field-head>.form-label{min-height:28px}
+#page-cargar .field-head{align-items:flex-end}
+#page-cargar .two-col>.form-group>.form-label,#page-cargar .field-head>.form-label{display:flex;align-items:flex-end}
+#page-cargar .field-link{align-self:stretch;display:inline-flex;align-items:flex-end;padding-left:var(--sp-3);font-size:var(--fs-sm)}
+
+/* Categoría y Subcategoría en una sola columna en pantallas de celular: medido con las 120 subcategorías reales, a 390 px la columna de
+   Subcategoría (93 px útiles) cortaba 12 nombres ("Electrodomésticos", "Renovación Alquiler"…), a 360 px 15; apiladas no se corta ninguna. */
+@media (max-width:480px){
+  #page-cargar .two-col:has(#inp-cat),#page-cargar .two-col:has(#tc-cat){grid-template-columns:1fr}
+  #page-cargar .two-col:has(#inp-cat) .form-select,#page-cargar .two-col:has(#tc-cat) .form-select{padding-left:var(--sp-3);padding-right:24px;background-position:right 8px center}
+}
+
+/* Sugerencia de categoría (debajo de la nota): botón de ancho completo, 44 de alto, legible (el "tocá para aplicar" ya no se apaga con opacity). */
+.sugerencia-cat{display:block;margin-top:var(--sp-2);padding:14px var(--sp-3);border-radius:var(--radius-sm);background:var(--accent-light);color:var(--accent);font-size:var(--fs-sm);line-height:1.35;cursor:pointer;transition:transform var(--dur-1) var(--ease)}
+.sugerencia-cat:active{transform:scale(.99)}
+.sugerencia-cat:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sugerencia-cat-fuente{color:var(--muted-on-tint);font-size:var(--fs-xs)}
+
+/* Campos de importe secundarios de las opciones (día de vencimiento, monto recuperable): tamaño de campo normal, no de monto protagonista. */
+.opt-amount-wrap .amount-input{font-size:var(--fs-base)!important}
+#inv-fondo-group{margin-top:var(--sp-2)}
+.carga-rapida-guardar{min-height:var(--tap)}
+
+/* Chips de Cargar: mismo alto (44) que Hoy/Ayer/-2d/-7d. */
+.cuota-chip,.inv-cat-chip{min-height:var(--tap)}
+.inv-cat-chip{padding-inline:var(--sp-3)}
+.ticker-row{gap:var(--sp-2)}
+.ticker-chip{height:40px;padding:0 var(--sp-3);font-size:var(--fs-sm)}
+
+/* Simulador "¿Me lo banco?": el importe no se parte (antes "$1.822.575,8" / "0"), la barra cede el ancho. Lo ya comprometido es gris medio (≥3:1). */
+.sim-row{display:flex;align-items:center;gap:var(--sp-2)}
+.sim-mes{width:30px;flex-shrink:0;font-size:var(--fs-xs);font-weight:600;color:var(--muted);text-transform:uppercase}
+.sim-bar{flex:1;min-width:32px;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;display:flex}
+.sim-bar>span{height:100%}
+.sim-bar-ya{background:var(--border-strong)}
+.sim-bar-nueva{background:var(--warning)}
+.sim-val{min-width:84px;flex-shrink:0;text-align:right;white-space:nowrap;font-size:var(--fs-sm);font-weight:600}
+
+/* Franjas de valor (cuota / tipo de cambio): una línea, la fuente la baja ajustarLineaResumen (--resumen-fs). */
+.rate-strip{min-height:40px;box-sizing:border-box}
+.rate-strip-label{white-space:nowrap;flex-shrink:0}
+.rate-strip-val{white-space:nowrap;font-size:var(--resumen-fs,17px)}
+.rate-box-label{white-space:nowrap;flex-shrink:0}
+.rate-box-val:not(.muted){white-space:nowrap;font-size:var(--resumen-fs,16px)}
+/* Tarjeta apila igual (Tarjeta / Categoría): a 360 px #tc-cat cortaba 3 opciones y "+ Nueva" quedaba a 11 px de la etiqueta vecina. */
+/* Primera fila de opciones: sin divisoria (la tarjeta ya tiene borde; quedaba una doble línea a 4 px). El primer hijo puede ser un <p> oculto, por eso :first-of-type. */
+.options-card>.opt-row:first-of-type{border-top:none}
+/* Barra Guardar opaca: con el fondo translúcido asomaba el texto de las opciones por el borde. */
+#page-cargar .save-bar{background:var(--bg)}
+
+/* Barra Guardar: el .page deja 96 px abajo (era para una barra inferior que ya no existe) y la barra quedaba flotando con un hueco debajo.
+   En Cargar va pegada al borde de abajo, y el scroll por foco deja libre su alto para que el teclado no esconda el campo tras ella. */
+#page-cargar{padding-bottom:0}
+#page-cargar .save-bar{margin-top:var(--sp-3)}
+html:has(#page-cargar.active){scroll-padding-bottom:calc(88px + var(--safe-b))}
+
+/* Calculadora: visor que no corta la cuenta, "Usar este resultado" con el color del tipo, "Cerrar" a todo el ancho. */
+#modal-calculadora .calc-usar{background:var(--tema-color,var(--accent));color:var(--on-solid)}
+#modal-calculadora .calc-cerrar{width:100%;margin-top:var(--sp-2);min-height:var(--tap)}
+.calc-display{font-size:var(--calc-fs,30px);transition:font-size var(--dur-1) var(--ease)}
+.calc-btn{min-height:var(--tap)}
+
+/* Nueva categoría y selector de ícono. */
+.cat-icon-btn{font-size:var(--fs-xl);gap:var(--sp-2);justify-content:flex-start;padding:var(--sp-2) var(--sp-4);min-height:var(--tap)}
+.cat-icon-btn span+span{font-size:var(--fs-md)}
+.icon-picker{max-height:80vh}
+.icon-picker-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--sp-2);overflow-y:auto;max-height:55vh}
+.icon-opt{min-height:var(--tap);font-size:var(--fs-xl);padding:var(--sp-2);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer;transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.icon-opt:active{transform:scale(.94);background:var(--bg)}
+.icon-picker-cancelar{width:100%;margin-top:var(--sp-3);min-height:var(--tap)}
+   [AAA navegacion] NAVEGACIÓN, MENÚ, AVISOS Y HOJAS
+   ═══════════════════════════════════════════
+   Va después de las reglas de cada componente y antes de "movimiento reducido": pisa lo anterior sin reordenarlo.
+   --cartel-h: alto del cartel de "versión vieja" (lo fija el script de index.html); las barras de arriba y los botones
+   fijos de arriba se corren esa altura para que el cartel no los tape. */
+.header,.mov-topbar{top:var(--cartel-h,0px)}
+/* Alto mínimo igual al de la barra de Movimientos (56 + 1 de borde): el ☰ de 44 px (a 6 px del borde) cabe entero y queda centrado también en el encabezado de una sola línea (Configuración). */
+.header{min-height:calc(57px + var(--safe-t));padding-top:calc(9px + var(--safe-t));padding-bottom:9px;display:flex;flex-direction:column;justify-content:center}
+.header p{margin-top:0}
+.mov-topbar{padding-top:calc(6px + var(--safe-t))}
+#hamburger-btn{top:calc(var(--cartel-h,0px) + var(--safe-t) + 6px);background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none;transition:transform var(--dur-1) var(--ease),background-color var(--dur-1) var(--ease)}
+#hamburger-btn:active{transform:scale(.94);background:var(--border)}
+/* Íconos de trazo (2 px, redondeados) en lugar de glifos de texto: el ☰ de todas las barras y la calculadora de Cargar. Van como máscara de
+   la propia caja (color = el del texto, cambia con el tema) y solo si el botón no trae ya un <svg> propio. El nombre accesible es el aria-label. */
+button[onclick*="toggleSideMenu"]:not(:has(svg)),#hamburger-btn:not(:has(svg)),#fab-calculadora:not(:has(svg)){font-size:0}
+button[onclick*="toggleSideMenu"]:not(:has(svg))::before,#fab-calculadora:not(:has(svg))::before{content:"";display:block;width:22px;height:22px;background:currentColor;
+  -webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+button[onclick*="toggleSideMenu"]:not(:has(svg)){--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 7h16M4 12h16M4 17h16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")}
+#fab-calculadora:not(:has(svg)){--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='5' y='3' width='14' height='18' rx='2.5' fill='none' stroke='%23000' stroke-width='2'/%3E%3Cpath d='M8.5 7.5h7M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E")}
+
+/* Pantalla de arranque (index.html #splash): el ícono sobre el fondo del tema hasta que se dibuja Movimientos. */
+#splash{transition:opacity var(--dur-2) var(--ease)}
+#splash.listo{opacity:0;pointer-events:none}
+#splash img{animation:splashLate 1.4s ease-in-out infinite alternate}
+@keyframes splashLate{from{opacity:.8;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+
+/* Cambio de pestaña: solo un fundido. Antes era un scale(.98) sobre la pantalla entera, que además le cambiaba el "bloque
+   contenedor" a los botones fijos de adentro (la calculadora saltaba mientras duraba la animación). */
+@keyframes pageEnter{from{opacity:0}to{opacity:1}}
+.page.active{animation:pageEnter var(--dur-2) var(--ease)}
+
+/* MENÚ LATERAL. Cerrado es visibility:hidden (con retraso para no cortar la animación de salida): sus 8 botones ya no
+   entran en el orden del Tab ni los lee un lector de pantalla desde atrás de la pantalla. */
+#side-menu{visibility:hidden;transition:transform var(--dur-3) var(--ease),visibility 0s linear var(--dur-3);overscroll-behavior:contain;padding:calc(var(--safe-t) + var(--cartel-h,0px)) 0 var(--safe-b)}
+#side-menu.open{visibility:visible;transition:transform var(--dur-3) var(--ease),visibility 0s}
+#side-menu-overlay{transition:opacity var(--dur-3) var(--ease)}
+#side-menu:focus,.modal:focus{outline:none}
+.side-menu-header{padding:var(--sp-2) var(--sp-2) var(--sp-2) 20px;min-height:64px;margin-bottom:var(--sp-2)}
+.side-menu-close{margin:0}
+.nav-btn{padding:12px 20px;min-height:48px;gap:var(--sp-3)}
+.nav-icon{font-size:20px;width:28px}
+.nav-btn.active{box-shadow:inset 3px 0 0 var(--accent)}
+.nav-btn:focus-visible{outline-offset:-3px}
+
+/* HOJAS MODALES. Se cierran con la misma animación con la que se abren: antes el visibility pasaba a hidden de golpe y la
+   hoja desaparecía sin salir. overscroll-behavior: el scroll de una hoja no arrastra la pantalla de atrás, y mientras
+   hay una hoja (o el menú) abierta la pantalla no se mueve. El alto usa dvh: con la barra del navegador a medio
+   esconder, 90vh se pasaba de la pantalla visible. */
+.modal-overlay{padding-top:var(--cartel-h,0px);transition:opacity var(--dur-2) var(--ease),visibility 0s linear var(--dur-2);overscroll-behavior:contain}
+.modal-overlay.open{transition:opacity var(--dur-2) var(--ease),visibility 0s}
+.modal{max-height:calc(90vh - var(--cartel-h,0px)) !important;max-height:calc(90dvh - var(--cartel-h,0px)) !important;overscroll-behavior:contain;transform:translateY(24px);transition:transform var(--dur-3) var(--ease)}
+.modal-handle{touch-action:none}
+body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
+
+/* AVISO (toast): abajo, centrado, por encima del botón del perro (56 px + 24) y de la barra de Guardar; con el teclado
+   en pantalla se apoya sobre el teclado (--kb) y con un aviso de error abajo, sobre ese aviso (--toast-extra). Superficie
+   inversa (oscura en claro, clara en oscuro): se distingue del fondo en los dos temas. Vacío o escondido no recibe toques. */
+.toast{top:auto;bottom:calc(96px + var(--safe-b) + var(--kb,0px) + var(--toast-extra,0px));background:var(--toast-bg);color:var(--toast-fg);
+  -webkit-backdrop-filter:none;backdrop-filter:none;border-radius:var(--radius-lg);font-size:var(--fs-md);z-index:10004;
+  box-shadow:var(--shadow-pop);transform:translate(-50%,16px);opacity:0;pointer-events:none;
+  transition:transform var(--dur-2) var(--ease),opacity var(--dur-2) var(--ease)}
+.toast.show{transform:translate(-50%,0);opacity:1;transition:transform var(--dur-3) var(--ease),opacity var(--dur-2) var(--ease)}
+.toast.sobre-error{bottom:calc(var(--toast-extra,0px) + var(--sp-3) + var(--kb,0px))}   /* apoyado sobre el aviso de error, sin los 96 px que libran al perro (ese aviso ya lo tapa) */
+.toast.show.con-accion{pointer-events:auto}   /* un aviso común deja pasar el toque a lo que tapa; el que trae botón lo recibe */
+.toast.con-accion{gap:var(--sp-1);padding:var(--sp-1) var(--sp-2) var(--sp-1) 20px}
+.toast-accion{color:var(--toast-accion);min-height:var(--tap);padding:0 var(--sp-3);border-radius:var(--radius-md);font-size:var(--fs-md);
+  transition:background-color var(--dur-1) var(--ease)}
+.toast-accion:active{background:rgba(127,127,127,.22)}
+.toast-accion:focus-visible{outline:2px solid currentColor;outline-offset:-2px}
+
+/* BOTÓN DEL PERRO: se esconde mientras bajás por una lista (js/render-comun.js) y vuelve al subir. Enfocado con el
+   teclado siempre se ve. El anillo claro lo separa de lo que pasa por debajo. */
+#fab-cargar{border:2px solid var(--surface);box-shadow:var(--shadow-pop);transition:transform var(--dur-2) var(--ease),opacity var(--dur-2) var(--ease)}
+#fab-cargar.fab-oculto:not(:focus-visible){transform:translateY(calc(100% + var(--sp-5) + var(--safe-b)));opacity:0;pointer-events:none}
+/* En reposo (2,5 s sin tocar el scroll) se repliega contra el borde derecho y deja asomar solo los 31 px del margen de página: las cifras y los
+   botones de la columna derecha (que terminan 32 px antes del borde) quedan libres. Un halo de 44 px mantiene el toque; al subir, al enfocarlo
+   o al cambiar de pantalla vuelve completo. */
+#fab-cargar.fab-replegado:not(:focus-visible){transform:translateX(calc(100% + var(--sp-5) + var(--safe-r) - 31px))}
+#fab-cargar.fab-replegado::after{content:"";position:absolute;top:0;bottom:0;left:-14px;right:0}
+/* CALCULADORA de Cargar: sube a la barra de arriba (a la derecha, simétrica al ☰) en vez de flotar sobre el formulario, donde tapaba
+   el 📅 de la fecha. Es solo su posición: el botón y lo que abre son los de siempre. */
+#fab-calculadora{top:calc(var(--cartel-h,0px) + var(--safe-t) + 6px);bottom:auto;right:calc(var(--sp-2) + var(--safe-r));width:var(--tap);height:var(--tap);background:transparent;color:var(--text);
+  border:1.5px solid var(--border-mid);box-shadow:none;transition:transform var(--dur-1) var(--ease),background-color var(--dur-1) var(--ease)}
+#fab-calculadora:active{background:var(--border)}
+
+/* AVISO DE ERROR (index.html #error-banner): abajo, sube desde el borde, respeta la barra de gestos y su ✕ mide 44. */
+.error-banner{position:fixed;left:0;right:0;bottom:0;z-index:10003;align-items:flex-start;gap:var(--sp-2);background:var(--danger-light);
+  border-top:2px solid var(--danger);padding:var(--sp-3) var(--sp-1) calc(var(--sp-3) + var(--safe-b)) var(--sp-4);max-height:55vh;max-height:55dvh;
+  overflow-y:auto;overscroll-behavior:contain;box-shadow:0 -8px 24px rgba(0,0,0,.18);animation:errorSube var(--dur-3) var(--ease)}
+@keyframes errorSube{from{transform:translateY(100%)}to{transform:none}}
+.error-banner-ico{font-size:var(--fs-lg);line-height:1.3;padding-top:var(--sp-1)}
+.error-banner-cuerpo{flex:1;min-width:0;padding-top:var(--sp-1)}
+.error-banner-titulo{font-size:var(--fs-md);font-weight:600;color:var(--danger)}
+.error-banner-msg{font-size:var(--fs-sm);color:var(--text);word-break:break-word;margin-top:2px}
+.error-banner-detalle{font-size:var(--fs-xs);color:var(--muted);white-space:pre-wrap;word-break:break-word;margin-top:var(--sp-2)}
+.error-banner-acciones{display:flex;gap:var(--sp-2);margin-top:var(--sp-2);flex-wrap:wrap}
+.error-banner-acciones .btn-sm{min-height:var(--tap)}
+.error-banner-cerrar{flex-shrink:0;width:var(--tap);height:var(--tap);border:none;border-radius:50%;background:none;color:var(--muted);font-size:22px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;padding-bottom:.31em;cursor:pointer;transition:background-color var(--dur-1) var(--ease)}
+.error-banner-cerrar:active{background:var(--border)}
+
+/* DIÁLOGO (alerta / confirmación / prompt): el mensaje en el cuerpo de 15 px de la app. */
+.dialogo-mensaje{font-size:var(--fs-base);color:var(--text);line-height:1.5;margin-bottom:var(--sp-4);white-space:pre-line}
+
+/* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO
    ═══════════════════════════════════════════
    Quien activó "reducir movimiento" en su teléfono lo hizo por algo — mareo, vértigo, o
@@ -1090,6 +1378,123 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .mes-corto .form-select{padding-left:12px;padding-right:8px}
 .aum-edit-monto .amount-input{font-size:22px;font-weight:700}
 
+/* ═══════════════════════════════════════════
+   [AAA movimientos] Movimientos (#page-mov) y su editor (#modal-edit) — ronda 1
+   ═══════════════════════════════════════════
+   Va después del bloque [AAA sistema] a propósito: pisa reglas suyas (chips de 44, .venc-ok, .btn-sm) solo dentro de Movimientos. */
+
+/* Cifras de 12 dígitos: entran ENTERAS. El JS pone en --n el largo del texto y la cifra se achica según el ancho de su contenedor
+   (cqw) hasta un piso; recién ahí corta con "…". Antes el importe de un mosaico terminaba en "$1.111.111.1…" (perdías el orden de magnitud).
+   Tope = el tamaño de siempre. Sin soporte de cqw (muy viejo) queda el tamaño fijo con "…", como antes. */
+.mov-summary-num{container-type:inline-size;width:100%}
+.mov-summary-val{font-size:clamp(22px,calc(100cqw / (var(--n,8) * .66)),34px);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mov-mosaic-grid{container-type:inline-size}
+.mov-mosaic-val{font-size:clamp(12px,calc(((100cqw - var(--sp-2)) / 2 - 28px) / (var(--n,8) * .62)),19px)}
+.mov-mosaic-wide .mov-mosaic-val{font-size:clamp(12px,calc((100cqw - 28px) / (var(--n,8) * .62)),19px)}
+/* El nombre del mosaico baja a una segunda línea en vez de cortarse ("Frecuentes por p…"); con subgrid las filas de una misma fila
+   de mosaicos quedan alineadas entre sí (título, cifra y subtítulo), aunque uno de los títulos ocupe dos líneas. */
+.mov-mosaic-name{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;line-height:1.25}
+@supports (grid-template-rows:subgrid){
+  .mov-mosaic-grid{row-gap:0}
+  .mov-mosaic{display:grid;grid-row:span 3;grid-template-rows:subgrid;row-gap:0;margin-bottom:var(--sp-2);align-content:start}
+  .mov-mosaic-val,.mov-mosaic-sub{margin-top:6px}
+  .mov-mosaic-grid{margin-bottom:calc(-1 * var(--sp-2))}
+}
+/* Mosaicos neutros (Cantidad, Gastos USD): superficie y aro propios; antes tenían el fondo de la página y parecían texto suelto. */
+.mov-mosaic[data-tono="neutro"]{background:var(--surface);box-shadow:inset 0 0 0 1px var(--border)}
+.mov-mosaic[data-tono="neutro"] .mov-mosaic-glyph{background:var(--bg)}
+.mov-topbar-eyebrow{font-size:var(--fs-xs)}
+/* 16 px (no --fs-lg 17): a 360 px de ancho "Noviembre 2026" tiene que entrar entre las dos flechas de 44 sin partirse. */
+.mov-topbar-label{white-space:nowrap}
+.mov-topbar-month{min-width:128px;max-width:100%}
+/* Con un filtro de fechas activo, las flechas ‹ › se van (no se pueden usar) y el rótulo "📅 fecha ✕" ocupa su lugar sin partirse en dos
+   líneas; si es muy largo, el texto termina en "…" y la ✕ queda siempre a la vista. */
+.mov-topbar-center:has(.mes-label-x) .mov-topbar-arrow{display:none}
+#mes-label:has(.mes-label-x){display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1);max-width:100%;font-size:var(--fs-base)}
+#mes-label[role="button"]{cursor:pointer}
+.cierre-aviso>span{text-wrap:pretty}
+.mov-icon-svg-sm{width:16px;height:16px;flex-shrink:0;stroke-width:2.2}
+.mes-label-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mes-label-x{flex-shrink:0;margin-left:0}
+/* Íconos de la barra (buscar, fecha): trazo de 2 px en el color del texto, mismo peso que el ☰ (antes eran emoji a color, y el calendario siempre decía "July 17"). */
+.mov-icon-svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
+.mov-search-count{min-height:20px;padding:var(--sp-1) 2px 0;font-size:var(--fs-sm);color:var(--muted)}
+.mov-search-row input{height:var(--tap);padding:0 var(--sp-3);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);font-size:var(--fs-base)}
+
+/* Aviso de cierre de mes / de año: "Ver" es una acción de texto, no un botón con borde que pese más que el aviso. */
+.cierre-aviso{gap:var(--sp-2)}
+.cierre-aviso .btn-sm{min-height:32px;padding:0 var(--sp-3);border:0;border-radius:var(--radius-pill);background:transparent;color:var(--accent);font-size:var(--fs-md);font-weight:700}
+.cierre-aviso .btn-sm:active{background:var(--surface)}
+
+/* Chips de cuenta, categoría y tarjeta. Caja REAL de 44 px (32 de dibujo, la misma altura que el segmentado, + 6 de borde transparente
+   arriba y abajo) con las filas pegadas y sin margen negativo: las cajas de dos filas ya NO se pisan (antes 11 px: el toque en el
+   borde de abajo de un chip activaba el de la fila siguiente y, a 2-10 px bajo el segmentado, el chip "Sin cuenta"). El hueco visible
+   entre filas es de 12 px. 6 px de padding arriba: el halo de 44 del segmentado llega 3 px por debajo de su caja y la distancia
+   visible hasta la primera fila queda en 12 px, igual que entre filas. */
+.mov-chips{flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:0;padding:6px 16px 0}
+.mov-chips .filter-chip.filter-chip{border-block-width:6px;margin-block:0;line-height:32px;padding-inline:12px;min-height:var(--tap);max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* El nombre largo de una cuenta termina en "…" y la cantidad queda siempre visible (antes el chip se salía de la pantalla). */
+.mov-chips .filter-chip.filter-chip:has(.filter-chip-txt){display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1)}
+.filter-chip-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filter-chip .txt-muted{color:inherit}
+.mov-chips .filter-chip-label{align-self:center;min-height:var(--tap);display:inline-flex;align-items:center}
+.cuenta-resumen{margin-top:var(--sp-1)}
+#mov-presup-resumen{margin-top:var(--sp-1)}
+
+/* Franja de vencimientos: nombre y detalle en dos líneas a la izquierda, acción a la derecha (antes el detalle quedaba
+   alineado a la derecha y partido en dos líneas desparejas). Los botones son tonales: seis "✓ Pagado" rellenos competían con el título. */
+.venc-fila{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nom ok" "txt ok";column-gap:var(--sp-3);row-gap:1px;align-items:center;padding:6px 0}
+.venc-fila+.venc-fila{border-top:1px solid var(--border)}
+.venc-fila>.venc-nombre{grid-area:nom}
+.venc-fila>.venc-txt{grid-area:txt;flex:none;text-align:left;font-size:var(--fs-sm);line-height:1.35}
+.venc-fila>.venc-ok{grid-area:ok}
+.venc-franja+.venc-franja{margin-top:var(--sp-2)}
+.venc-franja .venc-ok.venc-ok{background-color:var(--surface);color:var(--warning);box-shadow:inset 0 0 0 1.5px var(--warning)}
+.venc-franja .venc-vencida .venc-ok.venc-ok{background-color:var(--surface);color:var(--danger);box-shadow:inset 0 0 0 1.5px var(--danger)}
+.venc-franja .venc-ok.venc-cobrado{background-color:var(--surface);color:var(--success);box-shadow:inset 0 0 0 1.5px var(--success)}
+.venc-franja .venc-ok.venc-ok:active{background-color:transparent}
+.venc-mas{min-height:var(--tap);display:flex;align-items:center;padding:0;margin-block:-6px -8px}
+
+/* Filas: la etiqueta de cuenta se acorta con "…" (antes, un nombre largo tapaba todo el subtítulo y se cortaba sin puntos). */
+#tx-list .tx-sub{display:flex;align-items:center;gap:5px}
+#tx-list .tx-sub-txt{flex:0 1 auto}
+.tx-sub .tx-cuenta{flex:0 0 auto;min-width:0;max-width:65%;overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-xs)}
+.js-toggle-pago,.js-toggle-recup{font-size:var(--fs-xs)}
+#tx-list .tx-icon{font-size:var(--fs-base)}
+/* Entrada de las filas: 300 ms con la curva del sistema y SOLO en la primera carga o al cambiar de mes/período (.anima, ver renderMovs). */
+#tx-list tx-item{animation:none}
+#tx-list.anima tx-item{animation:slideUpFade var(--dur-3) var(--ease) forwards}
+.tx-cat{display:flex;align-items:center;gap:6px}
+/* Si título + badge no entran en una línea, el badge baja a una segunda (el título nunca queda en 0 px ni el badge en "D…"). */
+.tx-cat{flex-wrap:wrap;row-gap:2px}
+.tx-cat-txt{min-width:4.5ch;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.tx-cat .badge{flex:0 1 auto;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+
+/* Deslizar a la derecha: Editar y Repetir lado a lado, 66×60 cada uno (REVEAL_L = 132 en movimientos.js). */
+.tx-swipe-bg-left{width:132px;flex-direction:row}
+.tx-swipe-bg-left .tx-swipe-act{flex:1;width:auto;height:100%;min-width:var(--tap)}
+
+/* Estado vacío con guía y llamado a la acción. */
+.empty-titulo{font-size:var(--fs-base);font-weight:600;color:var(--text)}
+.empty-guia{font-size:var(--fs-md);line-height:1.45;margin:var(--sp-2) auto 0;max-width:30em}
+.empty-cta{width:auto;margin-top:var(--sp-4);padding:0 var(--sp-5);background:var(--accent);color:var(--on-solid)}
+
+/* Modal "Buscar por fecha": el mismo segmentado que la pantalla (antes: botones .type-btn de 31 px con estilos en línea). */
+.seg-filter-modal{margin:0 0 var(--sp-3)}
+#modal-filtro-fecha .two-col{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#modal-filtro-fecha input[type="date"].form-input,#modal-filtro-fecha input[type="month"].form-input{min-width:0;width:100%}
+
+/* Editor: Cancelar / Guardar quedan a la vista al pie de la hoja mientras se desplaza (los formularios de gasto frecuente miden más de
+   dos pantallas: antes había que bajar hasta el final para guardar). La barra tapa el relleno inferior de la hoja (bottom negativo). */
+#modal-edit .modal{padding-bottom:0}
+#modal-edit .edit-acciones{display:flex;gap:var(--sp-2);margin-top:var(--sp-3);padding:var(--sp-2) 0 calc(var(--sp-3) + var(--safe-b));position:sticky;bottom:0;background:var(--surface);z-index:2}
+#modal-edit .edit-acciones::before{content:"";position:absolute;left:0;right:0;top:calc(-1 * var(--sp-3));height:var(--sp-3);background:linear-gradient(transparent,var(--surface));pointer-events:none}
+
+/* Editor: Tarjeta + "+" + Categoría — la tarjeta lleva el nombre largo ("Mercado Pa…"), se le da más ancho. */
+#modal-edit .two-col:has(#edit-tc-tarj){grid-template-columns:1.5fr 1fr}
+#modal-edit .u-row-6>.btn-sm{min-width:var(--tap)}
+
 
 .informe-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .informe-tabla{width:100%;border-collapse:collapse;font-size:12px}
@@ -1105,4 +1510,22 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .informe-fila>span{min-width:0}
 
 /* Botón "Mostrar/Ocultar" dentro del campo de clave de los diálogos. */
-.dialogo-ver{position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:6px 10px;border:0;border-radius:var(--radius-sm);background:var(--bg);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer}
+/* [AAA bloqueo] Botón Mostrar/Ocultar: 36 px de alto dentro del campo de 44 y halo de 44 (el área clicable llena el campo; no se pisa con lo escrito: el campo reserva 84 px a la derecha). */
+.dialogo-ver{position:absolute;right:var(--sp-2);top:50%;transform:translateY(-50%);height:36px;padding:0 var(--sp-3);border:0;border-radius:var(--radius-sm);background:var(--bg);color:var(--muted);font-size:var(--fs-sm);font-weight:600;cursor:pointer;transition:background-color var(--dur-1) var(--ease)}
+.dialogo-ver::after{content:"";position:absolute;inset:-4px -8px}
+.dialogo-ver:active{background:var(--border)}
+/* [AAA bloqueo] Tarjeta Seguridad de Configuración (solo lo visual del PIN): el estado en 13 px con peso 500 (antes 12 px suelto) y ritmo de 4 px. */
+.pin-estado{margin:0 0 var(--sp-3);font-size:var(--fs-md);font-weight:500;line-height:1.4;color:var(--success)}
+.pin-estado-huella{margin:var(--sp-3) 0 var(--sp-2)}
+.pin-nota{margin:calc(-1*var(--sp-1)) 0 var(--sp-3)}
+/* Ayuda de la huella (inactiva o no disponible): mismo cuerpo de 13 px que el estado "activada", en gris. Aviso de PIN débil: borde ámbar a la izquierda y radio solo a la derecha (el borde recto no se curva). */
+.pin-ayuda{margin:var(--sp-3) 0 var(--sp-2);font-size:var(--fs-md);line-height:1.4;color:var(--muted)}
+.pin-ayuda-baja{margin-top:var(--sp-1)}
+.pin-aviso{background:var(--bg);border-left:3px solid var(--warning);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:var(--sp-3);margin-bottom:var(--sp-3)}
+.pin-aviso p{margin:0 0 var(--sp-2);font-size:var(--fs-md);line-height:1.4;color:var(--text)}
+.pin-btn-ancho{width:100%}
+.pin-btn-peligro{color:var(--danger)}
+.pin-cifrar{--chk:var(--save);margin-top:var(--sp-3)}
+.pin-autolock{margin-top:var(--sp-3)}
+.pin-activar{width:100%;background:var(--accent);color:var(--on-solid)}
+#pin-status .btn-sm,#huella-status .btn-sm{min-height:var(--tap)}   /* 44 reales aquí; el resto de Config sigue en 36 + halo: lo unificará config */

@@ -191,8 +191,12 @@ function animarNumero(elemento, valorFinal, duracion, formatoFn){
 // ═══════════════════════════════════════════
 // SWIPE-TO-DISMISS en modales (arrastrar hacia abajo desde el handle para cerrar)
 // ═══════════════════════════════════════════
-// Delegado en document (hay 12 modales distintos, todos con la misma estructura
+// Delegado en document (hay más de 25 modales distintos, todos con la misma estructura
 // .modal-overlay > .modal > .modal-handle) — así no hace falta cablear cada uno a mano.
+// [AAA navegacion] Al pasar el umbral NO se saca la clase "open" a mano: se hace click sobre el
+// propio overlay, igual que Escape, así corre el cierre real de cada hoja (con su limpieza) y, en
+// el diálogo genérico, se resuelve su promesa (antes quedaba colgada con el listener de teclado
+// puesto). Y el gesto solo arranca si la hoja no está scrolleada: si no, pelea con el scroll.
 (function(){
   const UMBRAL=100;
   let startY=0, currentY=0, dragging=false, activeModal=null;
@@ -205,7 +209,8 @@ function animarNumero(elemento, valorFinal, duracion, formatoFn){
     // (~60px) del modal — así no interfiere con el scroll normal de su contenido
     const rect=modal.getBoundingClientRect();
     const y=e.touches[0].clientY;
-    const enZonaArrastre = e.target.closest(".modal-handle") || (y-rect.top)<60;
+    const enHandle=!!e.target.closest(".modal-handle");
+    const enZonaArrastre = enHandle || ((y-rect.top)<60 && modal.scrollTop<=0);
     if(!enZonaArrastre) return;
     activeModal=modal;
     startY=y;
@@ -223,21 +228,23 @@ function animarNumero(elemento, valorFinal, duracion, formatoFn){
     if(!dragging || !activeModal) return;
     dragging=false;
     const modal=activeModal;
-    modal.style.transition="transform .24s cubic-bezier(.22,.9,.35,1)";
+    modal.style.transition="transform var(--dur-2) var(--ease)";
+    const limpiar=()=>{ modal.style.transition=""; modal.style.transform=""; };
     if(currentY>UMBRAL){
       // Pasó el umbral: termina de salir de pantalla y recién ahí se cierra de verdad
       const overlay=modal.closest(".modal-overlay");
       const altura=modal.getBoundingClientRect().height;
       modal.style.transform=`translateY(${altura+40}px)`;
       setTimeout(()=>{
-        if(overlay) overlay.classList.remove("open");
-        modal.style.transition="";
-        modal.style.transform="";
-      }, 240);
+        if(overlay) overlay.click();   // el cierre propio de la hoja (ver arriba)
+        // Si la hoja no se cerró (no tiene cierre por toque afuera), vuelve a su lugar
+        if(overlay && overlay.classList.contains("open")) modal.style.transform="translateY(0)";
+        setTimeout(limpiar, 240);
+      }, 200);
     } else {
       // No llegó al umbral: rebota a su posición original
       modal.style.transform="translateY(0)";
-      setTimeout(()=>{ modal.style.transition=""; modal.style.transform=""; }, 240);
+      setTimeout(limpiar, 240);
     }
     currentY=0;
     activeModal=null;
@@ -247,22 +254,69 @@ function animarNumero(elemento, valorFinal, duracion, formatoFn){
 })();
 
 function vibrar(ms){ if(navigator.vibrate) navigator.vibrate(ms); }
-let toastTimer=null;
+// ═══════════════════════════════════════════
+// AVISOS (toast)
+// ═══════════════════════════════════════════
+// [AAA navegacion] El aviso vive ABAJO, por encima del botón del perro y de la barra de Guardar (antes tapaba la
+// barra superior), es una región "status" (aria-live=polite: el lector de pantalla lo lee solo) y, al irse, se
+// vacía: no queda ni texto viejo ni un botón "Deshacer" invisible que el Tab pueda alcanzar. Un aviso con botón
+// no se va mientras el foco o el mouse están encima (WCAG 2.2.1), y Esc lo descarta.
+let toastTimer=null, toastLimpiar=null, toastPausado=false, toastRestante=0, toastFin=0;
 // Cuánto se queda un aviso en pantalla: 2,2 s y, si el texto es largo (se lee en varias líneas), un poco más por cada letra de más.
 function duracionToast(msg){ return Math.min(2200+Math.max(String(msg||"").length-40,0)*45, 7000); }
-function showToast(msg){const t=document.getElementById("toast");clearTimeout(toastTimer);t.classList.remove("con-accion");t.textContent=msg;t.classList.add("show");toastTimer=setTimeout(()=>t.classList.remove("show"),duracionToast(msg));}
+function _toastProgramar(ms){
+  clearTimeout(toastTimer);
+  toastRestante=ms; toastFin=Date.now()+ms;
+  if(!toastPausado) toastTimer=setTimeout(ocultarToast, ms);
+}
+// Si hay un aviso de error abajo, el aviso se apoya encima de él en vez de pisarlo.
+function _toastUbicar(t){
+  const eb=document.getElementById("error-banner");
+  const h=(eb && eb.style && eb.style.display && eb.style.display!=="none") ? (eb.offsetHeight||0) : 0;
+  if(t.style && t.style.setProperty) t.style.setProperty("--toast-extra", h+"px");
+  if(t.classList) t.classList.toggle("sobre-error", h>0);
+}
+function ocultarToast(){
+  const t=document.getElementById("toast");
+  if(!t) return;
+  clearTimeout(toastTimer); toastPausado=false;
+  t.classList.remove("show");
+  // Recién cuando terminó de irse se vacía (si en el medio llegó otro aviso, no se toca).
+  clearTimeout(toastLimpiar);
+  toastLimpiar=setTimeout(()=>{ if(!t.classList.contains("show")){ t.classList.remove("con-accion"); t.textContent=""; } }, 320);
+}
+function showToast(msg){
+  const t=document.getElementById("toast");
+  clearTimeout(toastLimpiar); toastPausado=false;
+  t.classList.remove("con-accion");
+  t.textContent=msg;
+  _toastUbicar(t);
+  t.classList.add("show");
+  _toastProgramar(duracionToast(msg));
+}
 // Un aviso con un botón (p. ej. "Deshacer"): dura más, para dar tiempo a tocarlo. Un aviso nuevo lo reemplaza.
 function showToastAccion(msg, textoAccion, fn, ms){
   const t=document.getElementById("toast");
-  clearTimeout(toastTimer);
+  clearTimeout(toastLimpiar); toastPausado=false;
   t.textContent="";
   const span=document.createElement("span"); span.textContent=msg;
   const b=document.createElement("button"); b.type="button"; b.className="toast-accion"; b.textContent=textoAccion;
-  b.onclick=()=>{ clearTimeout(toastTimer); t.classList.remove("show","con-accion"); fn(); };
+  b.onclick=()=>{ ocultarToast(); fn(); };
   t.append(span,b);
+  _toastUbicar(t);
   t.classList.add("show","con-accion");
-  toastTimer=setTimeout(()=>t.classList.remove("show","con-accion"), ms||7000);
+  _toastProgramar(ms||7000);
 }
+(function(){
+  const t=document.getElementById("toast");
+  if(!t || !t.addEventListener) return;
+  const pausar=()=>{ if(toastPausado || !t.classList.contains("show")) return; toastPausado=true; clearTimeout(toastTimer); toastRestante=Math.max(toastFin-Date.now(),0); };
+  const reanudar=()=>{ if(!toastPausado) return; toastPausado=false; if(t.classList.contains("show")){ toastFin=Date.now()+Math.max(toastRestante,2000); toastTimer=setTimeout(ocultarToast, Math.max(toastRestante,2000)); } };
+  t.addEventListener("focusin", pausar);
+  t.addEventListener("focusout", e=>{ if(!e.relatedTarget || !t.contains(e.relatedTarget)) reanudar(); });
+  t.addEventListener("pointerenter", e=>{ if(e.pointerType==="mouse") pausar(); });
+  t.addEventListener("pointerleave", e=>{ if(e.pointerType==="mouse") reanudar(); });
+})();
 
 // ═══════════════════════════════════════════
 // ACCESIBILIDAD: TECLADO
@@ -280,17 +334,196 @@ document.addEventListener("keydown", (e)=>{
   el.click();
 });
 
-// Escape cierra el modal abierto más reciente. Se dispara un click sobre el propio overlay
-// en vez de sacarle la clase a mano: así corre el onclick que ya tiene cada modal (que
-// llama a SU función de cierre real, con la limpieza que corresponda).
+// Escape cierra lo de más arriba: el aviso con foco, la hoja abierta más reciente o el menú lateral. Se dispara un
+// click sobre el propio overlay en vez de sacarle la clase a mano: así corre el onclick que ya tiene cada modal
+// (que llama a SU función de cierre real, con la limpieza que corresponda).
 document.addEventListener("keydown", (e)=>{
   if(e.key!=="Escape") return;
+  const aviso=document.getElementById("toast");
+  if(aviso && aviso.classList && aviso.classList.contains("show") && aviso.contains && aviso.contains(document.activeElement)){ ocultarToast(); return; }
   const generico=document.getElementById("modal-dialogo");
   if(generico && generico.classList.contains("open")) return; // tiene su propio manejo
   const abiertos=document.querySelectorAll(".modal-overlay.open");
-  if(!abiertos.length) return;
-  abiertos[abiertos.length-1].click();
+  if(abiertos.length){ abiertos[abiertos.length-1].click(); return; }
+  const menu=document.getElementById("side-menu");
+  if(menu && menu.classList.contains("open") && typeof closeSideMenu==="function") closeSideMenu();
 });
+
+// ═══════════════════════════════════════════
+// FOCO EN HOJAS, DIÁLOGOS Y MENÚ  [AAA navegacion]
+// ═══════════════════════════════════════════
+// Con el teclado (o un lector de pantalla), el Tab recorría 30 controles de la pantalla de atrás antes de llegar al
+// primer campo de la hoja. Ahora, mientras hay una capa abierta (hoja .modal-overlay.open o el menú lateral):
+//   · el foco entra a la capa (a la propia hoja, no a un campo: en el celular un campo levantaría el teclado);
+//   · Tab y Shift+Tab dan la vuelta DENTRO de la capa de más arriba;
+//   · al cerrarse, el foco vuelve al botón que la abrió (si sigue ahí y a nadie le importa a dónde fue el foco).
+// No se mete con la pantalla de bloqueo ni con la bienvenida (si una de ellas es lo más alto, no atrapa nada), y no
+// toca el cierre ni el contenido de ningún modal: observa la clase "open" de cada capa, así no hay que cablear cada uno.
+const _CAPAS=".modal-overlay.open, #side-menu.open";
+const _FOCUSABLES='a[href],button,input,select,textarea,summary,[tabindex],[contenteditable="true"]';
+const _capasAbiertas=new Map();   // capa → botón que la abrió
+const _historialFoco=[];          // últimos controles enfocados (null = el foco se perdió); de ahí sale "quién abrió la capa"
+let _modoTeclado=false;           // la última interacción fue con teclado (si no, no se devuelve el foco a un campo de texto)
+
+function _visible(el){ return !!el && el.isConnected && getComputedStyle(el).visibility!=="hidden" && (el.offsetWidth>0 || el.offsetHeight>0 || el.getClientRects().length>0); }
+function _focusables(caja){
+  return Array.from(caja.querySelectorAll(_FOCUSABLES)).filter(el=>{
+    if(el.disabled || el.getAttribute("tabindex")==="-1" || el.closest("[inert],[hidden]")) return false;
+    if(el.tagName==="INPUT" && el.type==="hidden") return false;
+    return _visible(el);
+  });
+}
+function _cajaDeCapa(capa){ return capa.id==="side-menu" ? capa : (capa.querySelector(".modal") || capa); }
+// La capa que de verdad está arriba (por z-index, y a igual z-index la última del documento). null si no hay o si
+// arriba hay una pantalla propia (bloqueo / bienvenida), que maneja su foco sola.
+function _capaSuperior(){
+  const candidatas=Array.from(document.querySelectorAll(_CAPAS));
+  ["lock-screen","onboarding-screen"].forEach(id=>{ const el=document.getElementById(id); if(el && el.isConnected && getComputedStyle(el).display!=="none") candidatas.push(el); });
+  let mejor=null, zMejor=-Infinity;
+  candidatas.forEach(el=>{ const z=parseInt(getComputedStyle(el).zIndex,10)||0; if(z>=zMejor){ mejor=el; zMejor=z; } });
+  return (mejor && mejor.id!=="lock-screen" && mejor.id!=="onboarding-screen") ? mejor : null;
+}
+function _esCampoDeTexto(el){ return !!el && (el.tagName==="TEXTAREA" || el.tagName==="SELECT" || (el.tagName==="INPUT" && !/^(button|checkbox|radio|submit|reset|range|color|file)$/.test(el.type))); }
+
+// Toda hoja tiene nombre accesible: se apunta (aria-labelledby) al título de la hoja, creándole un id si falta; sin título, un aria-label genérico.
+function _nombrarCapa(capa){
+  const caja=_cajaDeCapa(capa);
+  if(!caja || !caja.hasAttribute) return;
+  if(caja.dataset && caja.dataset.nombreAuto){ caja.removeAttribute("aria-label"); caja.removeAttribute("aria-labelledby"); }   // lo puso esta función: se recalcula (el título se llena al abrir)
+  else if(caja.hasAttribute("aria-label") || caja.hasAttribute("aria-labelledby")) return;
+  const tit=caja.querySelector(".modal-title, h1, h2, h3");
+  if(tit && tit.textContent.trim()){ if(!tit.id) tit.id=(capa.id||"capa")+"-titulo"; caja.setAttribute("aria-labelledby", tit.id); }
+  else caja.setAttribute("aria-label", "Ventana");
+  if(caja.dataset) caja.dataset.nombreAuto="1";
+}
+function _entrarEnCapa(capa){
+  const caja=_cajaDeCapa(capa);
+  if(caja.contains(document.activeElement)) return;     // ya hay foco adentro (p. ej. el diálogo lo pone solo)
+  if(!caja.hasAttribute("tabindex")) caja.setAttribute("tabindex","-1");
+  caja.focus({preventScroll:true});
+}
+function _devolverFoco(capa, abridor){
+  const a=document.activeElement;
+  // Si el foco ya se fue a otro lado (la persona tocó otra cosa, o hay otra capa), no se lo roba.
+  if(a && a!==document.body && !capa.contains(a)) return;
+  if(abridor && _visible(abridor) && !abridor.disabled && (_modoTeclado || !_esCampoDeTexto(abridor))){
+    abridor.focus({preventScroll:true});
+  } else if(_modoTeclado && (!a || a===document.body || capa.contains(a))){
+    // El botón que abrió la capa ya no está (p. ej. el menú cambió de pantalla): el foco pasa a la pantalla activa.
+    const pag=document.querySelector(".page.active");
+    if(pag){ if(!pag.hasAttribute("tabindex")) pag.setAttribute("tabindex","-1"); pag.focus({preventScroll:true}); }
+  }
+}
+// El último control enfocado ANTES de que se abriera la capa c (los que están dentro de c no cuentan). Si en el medio
+// el foco se perdió (tocar algo no enfocable), no hay a quién devolverlo.
+function _abridorDe(c){
+  for(let i=_historialFoco.length-1;i>=0;i--){
+    const x=_historialFoco[i];
+    if(x===null) return null;
+    if(x.isConnected && !c.contains(x)) return x;
+  }
+  return null;
+}
+function _sincronizarCapas(){
+  const abiertas=new Set(document.querySelectorAll(_CAPAS));
+  abiertas.forEach(c=>{
+    if(_capasAbiertas.has(c)) return;
+    _capasAbiertas.set(c, _abridorDe(c));
+    _nombrarCapa(c);
+    if(_capaSuperior()===c) _entrarEnCapa(c);
+  });
+  Array.from(_capasAbiertas.keys()).forEach(c=>{
+    if(abiertas.has(c)) return;
+    const abridor=_capasAbiertas.get(c);
+    _capasAbiertas.delete(c);
+    _devolverFoco(c, abridor);
+  });
+  // El botón ☰ anuncia si el menú está abierto.
+  const menuAbierto=!!document.querySelector("#side-menu.open");
+  document.querySelectorAll('[onclick*="toggleSideMenu"]').forEach(b=>b.setAttribute("aria-expanded", String(menuAbierto)));
+}
+let _observarCapa=()=>{};   // registra una capa creada después del arranque (las del HTML se registran solas)
+(function(){
+  if(typeof MutationObserver==="undefined") return;
+  const menu=document.getElementById("side-menu");
+  if(menu){   // el menú es un diálogo modal con nombre (el HTML solo trae el <div>)
+    menu.setAttribute("role","dialog"); menu.setAttribute("aria-modal","true"); menu.setAttribute("aria-label","Menú principal");
+  }
+  document.querySelectorAll('[onclick*="toggleSideMenu"]').forEach(b=>{ b.setAttribute("aria-haspopup","dialog"); b.setAttribute("aria-controls","side-menu"); b.setAttribute("aria-expanded","false"); });
+  document.querySelectorAll(".modal-overlay:not(#modal-dialogo)").forEach(_nombrarCapa);   // (el diálogo genérico se nombra solo al abrirse)
+  const mo=new MutationObserver(_sincronizarCapas);
+  _observarCapa=c=>mo.observe(c,{attributes:true,attributeFilter:["class"]});
+  document.querySelectorAll(".modal-overlay, #side-menu").forEach(_observarCapa);
+  document.addEventListener("focusin", e=>{ _historialFoco.push(e.target); if(_historialFoco.length>8) _historialFoco.shift(); }, true);
+  document.addEventListener("focusout", e=>{ if(!e.relatedTarget){ _historialFoco.push(null); if(_historialFoco.length>8) _historialFoco.shift(); } }, true);
+  document.addEventListener("keydown", e=>{ _modoTeclado=true; }, true);
+  document.addEventListener("pointerdown", ()=>{ _modoTeclado=false; }, true);
+  document.addEventListener("keydown", e=>{
+    if(e.key!=="Tab" || e.defaultPrevented || e.ctrlKey || e.altKey || e.metaKey) return;
+    // Un aviso con botón ("Deshacer") queda al final del documento: con el foco perdido, el primer Tab va directo a él.
+    const aviso=document.getElementById("toast");
+    const boton=aviso && aviso.classList && aviso.classList.contains("show") && aviso.querySelector ? aviso.querySelector(".toast-accion") : null;
+    const sup=_capaSuperior();
+    if(boton && !e.shiftKey && !sup && (!document.activeElement || document.activeElement===document.body)){ e.preventDefault(); boton.focus(); return; }
+    if(!sup) return;
+    const caja=_cajaDeCapa(sup), f=_focusables(caja), a=document.activeElement;
+    if(!f.length){ e.preventDefault(); _entrarEnCapa(sup); return; }
+    if(!caja.contains(a) || a===caja){ e.preventDefault(); (e.shiftKey ? f[f.length-1] : f[0]).focus(); return; }
+    if(!e.shiftKey && a===f[f.length-1]){ e.preventDefault(); f[0].focus(); }
+    else if(e.shiftKey && a===f[0]){ e.preventDefault(); f[f.length-1].focus(); }
+  }, true);
+})();
+
+// ═══════════════════════════════════════════
+// BOTÓN DEL PERRO (#fab-cargar) Y TECLADO EN PANTALLA  [AAA navegacion]
+// ═══════════════════════════════════════════
+// El botón flotante tapaba el importe de la última fila visible y el botón "Pagar" de Tarjetas. Ahora, mientras
+// bajás por una lista, se esconde (se desliza hacia abajo) y vuelve apenas subís un poco, en el borde de arriba o de
+// abajo de la página, o si lo enfocás con el teclado. Es lo que hacen los botones flotantes de las apps nativas.
+function fabCargarMostrar(){
+  const fab=document.getElementById("fab-cargar");
+  if(fab && fab.classList) fab.classList.remove("fab-oculto","fab-replegado");
+  _fabUltimoY=window.scrollY;
+  _fabProgramarRepliegue();
+}
+let _fabUltimoY=0, _fabIdle=null;
+// Tras 2,5 s sin movimiento el botón se repliega contra el borde (ver styles.css); se programa de nuevo con cada scroll.
+function _fabProgramarRepliegue(){
+  clearTimeout(_fabIdle);
+  _fabIdle=setTimeout(()=>{
+    const fab=document.getElementById("fab-cargar");
+    if(fab && fab.classList && !fab.classList.contains("fab-oculto") && document.activeElement!==fab) fab.classList.add("fab-replegado");
+  }, 2500);
+}
+(function(){
+  const fab=document.getElementById("fab-cargar");
+  if(!fab || !fab.classList) return;
+  let pendiente=false;
+  const evaluar=()=>{
+    pendiente=false;
+    const y=window.scrollY, dy=y-_fabUltimoY;
+    const maximo=document.documentElement.scrollHeight-window.innerHeight;
+    if(y<=24 || y>=maximo-8) { fab.classList.remove("fab-oculto","fab-replegado"); _fabUltimoY=y; _fabProgramarRepliegue(); return; }
+    if(dy>=8){ fab.classList.add("fab-oculto"); fab.classList.remove("fab-replegado"); _fabUltimoY=y; }
+    else if(dy<=-8){ fab.classList.remove("fab-oculto","fab-replegado"); _fabUltimoY=y; _fabProgramarRepliegue(); }
+    else _fabProgramarRepliegue();
+  };
+  window.addEventListener("scroll", ()=>{ if(!pendiente){ pendiente=true; requestAnimationFrame(evaluar); } }, {passive:true});
+  fab.addEventListener("focusin", ()=>{ clearTimeout(_fabIdle); fab.classList.remove("fab-replegado"); });
+  fab.addEventListener("focusout", _fabProgramarRepliegue);
+  _fabProgramarRepliegue();
+})();
+// Teclado en pantalla: en Chrome del celular el teclado tapa lo que está fijo abajo (el aviso). --kb es lo que
+// mide el teclado; el aviso se apoya encima de él. Con el zoom del pellizco no se calcula.
+(function(){
+  const vv=window.visualViewport;
+  if(!vv) return;
+  const medir=()=>{
+    const kb=(vv.scale>1.01) ? 0 : Math.max(0, Math.round(window.innerHeight-vv.height-vv.offsetTop));
+    document.documentElement.style.setProperty("--kb", kb+"px");
+  };
+  vv.addEventListener("resize", medir); vv.addEventListener("scroll", medir);
+})();
 
 // ═══════════════════════════════════════════
 // ERRORES VISIBLES
@@ -309,7 +542,7 @@ function mostrarErrorGlobal(titulo, detalle){
   pre.textContent=detalle||"(sin detalle)";
   pre.style.display="none";
   document.getElementById("error-banner-toggle").textContent="Ver detalle";
-  el.style.display="block";
+  el.style.display="flex";
 }
 function toggleErrorDetalle(){
   const pre=document.getElementById("error-banner-detalle");
@@ -410,7 +643,12 @@ function _dialogoAceptar(){
 
 function _dialogoTecla(e){
   if(e.key==="Escape"){ e.preventDefault(); _dialogoCancelar(); }
-  else if(e.key==="Enter"){ e.preventDefault(); _dialogoAceptar(); }
+  else if(e.key==="Enter"){
+    // [AAA navegacion] Con el foco en un botón (Cancelar, Mostrar…) Enter lo activa a él: antes aceptaba el diálogo
+    // igual, o sea que Enter sobre "Cancelar" confirmaba un borrado.
+    if(e.target && e.target.closest && e.target.closest("button,a[href]")) return;
+    e.preventDefault(); _dialogoAceptar();
+  }
 }
 
 function _dialogoAbrir(opts){
@@ -441,6 +679,10 @@ function _dialogoAbrir(opts){
     const ver=document.getElementById("dialogo-ver");
     if(ver){ ver.style.display=opts.tipoInput==="password" ? "" : "none"; ver.textContent="Mostrar"; ver.setAttribute("aria-pressed","false"); }
     input.inputMode=opts.inputMode||"text";
+    // [AAA bloqueo] Una clave no se corrige ni se pone en mayúscula sola, ni el teclado la aprende al pasar a "Mostrar".
+    const esClave=opts.tipoInput==="password";
+    if(esClave){ input.setAttribute("autocapitalize","off"); input.setAttribute("autocorrect","off"); input.spellcheck=false; }
+    else { input.removeAttribute("autocapitalize"); input.removeAttribute("autocorrect"); input.removeAttribute("spellcheck"); }
     input.placeholder=opts.placeholder||"";
     input.value=opts.valorInicial!==undefined&&opts.valorInicial!==null?String(opts.valorInicial):"";
   } else {
@@ -455,12 +697,21 @@ function _dialogoAbrir(opts){
   btnCancel.textContent=opts.textoCancelar||"Cancelar";
   btnCancel.style.display=(opts.tipo==="alert")?"none":"block";
 
+  // [AAA navegacion] Un lector de pantalla lo lee como diálogo de alerta (o como diálogo común si pide un texto), con su título y mensaje.
+  const caja=ov.querySelector ? ov.querySelector(".modal") : null;
+  if(caja){
+    caja.setAttribute("role", opts.tipo==="prompt" ? "dialog" : "alertdialog");
+    caja.setAttribute("aria-labelledby", opts.titulo ? "dialogo-titulo" : "dialogo-mensaje");
+    caja.setAttribute("aria-describedby", "dialogo-mensaje");
+  }
   ov.classList.add("open");
   document.addEventListener("keydown", _dialogoTecla);
   // El foco va después de la animación de entrada del modal (250ms): en el celular es lo
   // que levanta el teclado sin que el modal "salte" mientras se está moviendo.
   if(_dialogoFocusTimer) clearTimeout(_dialogoFocusTimer);
   if(opts.tipo==="prompt") _dialogoFocusTimer=setTimeout(()=>{ input.focus(); input.select(); }, 250);
+  // Alerta y confirmación: el foco entra al diálogo ya, en el botón que corresponde (en un borrado, el seguro: Cancelar).
+  else (opts.peligroso && opts.tipo==="confirm" ? btnCancel : btnOk).focus({preventScroll:true});
 
   return new Promise(resolve=>{ _dialogo.resolver=resolve; });
 }

@@ -19,10 +19,14 @@ function checkOnboarding(){
   document.getElementById("onboarding-screen").style.display="flex";
 }
 function actualizarOnboardingUI(){
+  // [AAA bloqueo] Las tres láminas comparten el mismo lugar (grilla apilada) y cambian por clase: el ícono no salta de altura entre pasos.
   for(let i=0;i<3;i++){
-    document.getElementById("ob-slide-"+i).style.display = i===obStep ? "block" : "none";
+    const lam=document.getElementById("ob-slide-"+i);
+    lam.classList.toggle("activa", i===obStep);
+    lam.setAttribute("aria-hidden", String(i!==obStep));
     document.getElementById("ob-dot-"+i).classList.toggle("active", i===obStep);
   }
+  const puntos=document.getElementById("ob-puntos"); if(puntos) puntos.setAttribute("aria-label", `Paso ${obStep+1} de 3`);
   document.getElementById("ob-btn-siguiente").textContent = obStep===2 ? "Empezar" : "Siguiente";
   document.getElementById("ob-btn-saltar").style.visibility = obStep===2 ? "hidden" : "visible";
 }
@@ -89,6 +93,15 @@ function procesarArchivoSoltado(file){
   }
 }
 
+// Retira la pantalla de arranque de index.html (el ícono sobre el fondo) con un fundido corto. Es idempotente: si
+// ya se fue (o no existe, como en tests.html), no hace nada.
+function quitarSplash(){
+  const el=document.getElementById("splash");
+  if(!el || !el.classList) return;
+  el.classList.add("listo");
+  setTimeout(()=>{ if(el.parentNode) el.remove(); }, 260);
+}
+
 // Arranque de la app. checkLock() muestra (si corresponde) la pantalla de PIN y devuelve
 // una Promise que recién se resuelve cuando no hace falta PIN o cuando el correcto ya fue
 // ingresado (y, si el cifrado está activo, los datos ya quedaron descifrados en memoria).
@@ -110,6 +123,7 @@ async function bootApp(){
   // depender de ese caché.
   showPage('mov', document.querySelector('.nav-btn[onclick*="\'mov\'"]'));
   renderMovs();
+  quitarSplash();
   checkOnboarding();
   atajoAlArrancar();   // si abriste la app desde un atajo del ícono (Cargar gasto, Cerrar el mes…), te lleva ahí
   // Con delay: que el usuario vea primero sus datos, no un diálogo tapando la pantalla

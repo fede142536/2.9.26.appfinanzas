@@ -25,6 +25,57 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 4 de noviembre de 2026
 
+- Tests: el aviso del bloqueo con un solo botón cicla el foco (ajuste tras integrar navegación y bloqueo)
+- Bloqueo (AAA r2): aviso de espera que persiste, teclado sin saltos, detalles apaisado y foco con error
+- Navegación (AAA r2): cartel que no tapa menú ni hojas, perro que se repliega, hojas con nombre, íconos de trazo
+- Cargar (AAA r2): ajuste de estilos pendiente
+- Cargar (AAA ronda 2): decimales sin cortar, monto centrado y sin saltos, Tarjeta apilada, saldo del fondo, aria-pressed
+  - ajustarTamanoMonto verifica contra el campo real (scrollWidth) y baja de a 1 px: 0 cortes en 1.008 casos (4 campos, 3 anchos, 2 temas, 1-14 dígitos, con y sin decimales).
+  - Monto: min-width 44 centrado, altura fija 69 y sin transición (sin salto de layout), prefijo en la línea base, 'USD' a 8 px.
+  - Franjas de cuota / tipo de cambio en una línea con fuente que se ajusta (con 12 dígitos partían la línea y movían el formulario).
+  - Tarjeta/Categoría apiladas en celular; Fondo con nombre corto y el saldo en una línea de ayuda.
+  - aria-pressed en tipo, moneda, fecha, sentido, cuotas y categorías de inversión; campos de fecha ocultos fuera del Tab. …
+- Movimientos (AAA r2): hoja de fecha sin desborde, segmentado que no salta, vacíos con salida, swipe lado a lado y detalles
+  - Hoja Buscar por fecha: columnas minmax(0,1fr) e inputs width:100% (Hasta desbordaba 14 px a 360); tabpanel/aria-controls/flechas; rango corto y SVG en vez de emoji.
+  - Segmentado Todos/Gastos/Ingresos/Tarjetas arriba del resumen: ya no salta 252 px al tocar un filtro.
+  - Fila: el badge baja de línea si no entra (el título dejaba de verse a 360 con 12 dígitos).
+  - Vacíos: botón en las 5 variantes. Swipe: Editar/Repetir 66x60 lado a lado.
+  - Editor: + de 44 px, Repetir sobre la barra, barra pegada al borde. Filas animan solo al cargar o cambiar de mes. Cifra de mosaico vuelve a 19 px.
+- Bloqueo AAA: teclado físico, trampa de foco, espacio duro en la espera y apaisado
+- Movimientos (AAA r1): entrada de filas en 300 ms con la curva del sistema
+- Navegación: botones del aviso de error de 44 px
+- Navegación: encabezado de una línea a 57 px (el ☰ de 44 cabe), aviso común no intercepta toques
+- Movimientos (AAA r1): badges de fila siempre visibles, íconos de barra en trazo, aria de filtros y del rótulo del mes
+  - El título de la fila se acorta con '…' pero DE AHORROS / TRASPASO / USD no se esconden.
+  - Buscar y fecha: íconos SVG de trazo en vez de emoji a color (el calendario siempre decía 'July 17').
+  - aria-pressed en el segmentado y los chips; el rótulo del mes es botón solo con filtro de fechas activo.
+- Movimientos (AAA r1): cifras de 12 dígitos enteras, chips sin solape, franja de vencimientos, avisos, vacío con guía y hoja de fecha
+  - Mosaicos y balance achican la cifra (cqw) en vez de cortarla con '…'; el título del mosaico baja a 2 líneas y las filas se alinean (subgrid).
+  - Mosaicos neutros con superficie propia; chips de cuenta/categoría/tarjeta con caja real de 44 sin pisarse, nombre largo con '…' y cantidad legible en el chip activo.
+  - Franja de vencimientos en dos líneas, botones tonales (el 'Cobrado' tenía texto marrón sobre verde, 1,9:1).
+  - 'Ver' del aviso de cierre pasa a acción de texto; rótulo del filtro de fechas sin partirse; vacíos con guía y botón; búsqueda con contador.
+  - Editor: barra Cancelar/Guardar fija al pie; hoja 'Buscar por fecha' con el segmentado de la pantalla. …
+- Movimientos (AAA r1): editor con etiquetas ligadas a sus campos e interruptores en vez de casillas nativas
+  Cada <label> del editor (movimiento y compra con tarjeta) lleva for=; el textarea de Nota
+  ya tiene nombre accesible. Las casillas de ahorro, saldo de ahorros, traspaso y 'solo ese mes'
+  usan .chk-custom como el resto de la app.
+- Navegación: tests del foco en hojas, avisos y diálogos; registro de capas creadas después del arranque
+- Bloqueo AAA: pantalla de PIN, bienvenida y clave de diálogos
+  Teclas de 64x88 con borde visible, Entrar con relleno, error con role=alert + sacudón sin movimiento
+  en prefers-reduced-motion + puntos rojos, cuenta atrás de la espera, safe areas, teclado virtual y
+  pantallas bajas/apaisadas sin cortes, bienvenida sin saltos entre pasos, Mostrar con halo de 44.
+- Navegación AAA: aviso abajo y legible en oscuro, perro que se esconde al bajar, foco atrapado en hojas/menú, diálogos y cartel rediseñados
+  - Toast: abajo (no tapa la barra superior), superficie inversa legible en claro y oscuro, región status aria-live atómica, se vacía al irse, Deshacer de 44 px, pausa con foco/mouse, Esc.
+  - FAB del perro: se esconde al bajar y vuelve al subir (no tapa importes ni Pagar); calculadora de Cargar sube a la barra de arriba.
+  - Hojas: se cierran animadas, overscroll contenido, pantalla bloqueada detrás, 90dvh, swipe cierra por el cierre real de cada hoja.
+  - Foco: trap robusto con Tab/Shift+Tab, foco entra y vuelve al botón que abrió, Esc; menú lateral con role/aria y oculto al Tab cuando está cerrado. …
+- Cargar (AAA ronda 1): monto que entra entero, calculadora en el encabezado, categorías apiladas y chips de 44
+  - Monto protagonista: label táctil, fuente que baja para que entren 12 dígitos sin '…' (ajustarTamanoMonto), placeholder visible.
+  - Calculadora: botón de 44 en el encabezado fijo (ya no tapa el 📅/Guardar), visor que no corta la cuenta, 'Usar este resultado' con el color del tipo.
+  - Categoría y Subcategoría en una columna en celular (con 2 columnas se cortaban 12 de 120 subcategorías a 390 px).
+  - Simulador de cuotas sin importes partidos; chips de cuotas/categorías/tickers/sentido con alto táctil.
+  - Barra Guardar pegada al borde, aviso de frecuentes plegable, sugerencia de categoría bajo la nota.
+  - Diálogos con nombre accesible; selector de ícono sin estilos en línea ni ícono repetido.
 - Sistema (ronda 3, cierre): texto oscuro en botones ámbar y reparto 1,5/1 de Categoría y Subcategoría
 - Sistema (ronda 3): sin texto cortado en Cargar, ritmo de chips, foco del importe, selects, alineación y contraste
   - Selector de tipo de Cargar: se quita el word-spacing global (cortaba "Cambio" a 360 px); solo "↑ Gasto/↓ Ingreso/◈ Inv./▣ Tarj." llevan .2em.

@@ -9878,6 +9878,115 @@ test("avisos: un mensaje largo se ve entero (varias líneas, dentro de la pantal
   igual(duracionToast("x".repeat(2000)), 7000, "con un tope");
 });
 
+// ═══════════════════════════════════════════
+// NAVEGACIÓN: avisos, foco en hojas y diálogos
+// ═══════════════════════════════════════════
+grupo("Navegación: avisos, foco en hojas y diálogos");
+
+// Una hoja de mentira (overlay > .modal con tres botones) más un botón "de la pantalla" que la abre.
+function conHojaDePrueba(fn){
+  const afuera=document.createElement("button"); afuera.textContent="abre"; document.body.appendChild(afuera);
+  const ov=document.createElement("div"); ov.className="modal-overlay"; ov.id="hoja-prueba";
+  ov.innerHTML='<div class="modal"><button id="hp-a">a</button><input id="hp-b"><button id="hp-c">c</button></div>';
+  document.body.appendChild(ov); _observarCapa(ov);
+  const tab=(shift)=>{ const e=new KeyboardEvent("keydown",{key:"Tab",shiftKey:!!shift,bubbles:true,cancelable:true}); (document.activeElement||document.body).dispatchEvent(e); return e; };
+  const pausa=()=>new Promise(r=>setTimeout(r,20));
+  return Promise.resolve(fn({afuera, ov, tab, pausa})).finally(()=>{ ov.remove(); afuera.remove(); });
+}
+
+test("foco: al abrirse una hoja el foco entra a ella, y Tab / Shift+Tab dan la vuelta adentro", ()=>conHojaDePrueba(async ({afuera, ov, tab, pausa})=>{
+  afuera.focus(); ov.classList.add("open"); await pausa();
+  const caja=ov.querySelector(".modal");
+  cierto(document.activeElement===caja, "el foco tiene que entrar a la hoja (a la propia hoja: un campo levantaría el teclado)");
+  const a=document.getElementById("hp-a"), c=document.getElementById("hp-c");
+  // (un Tab simulado no mueve el foco solo: se cubren los bordes, que es donde el trap actúa; el medio lo hace el navegador)
+  let e=tab(); igual(document.activeElement.id, "hp-a", "Tab desde la hoja va al primer control"); cierto(e.defaultPrevented);
+  c.focus(); e=tab(); igual(document.activeElement.id, "hp-a", "del último vuelve al primero, no sale a la pantalla"); cierto(e.defaultPrevented);
+  e=tab(true); igual(document.activeElement.id, "hp-c", "Shift+Tab desde el primero va al último"); cierto(e.defaultPrevented);
+  a.focus(); e=tab(); cierto(!e.defaultPrevented, "en el medio de la hoja el Tab es del navegador");
+  afuera.focus(); e=tab(); igual(document.activeElement.id, "hp-a", "si el foco quedó afuera, el Tab lo trae de vuelta"); cierto(e.defaultPrevented);
+}));
+
+test("foco: al cerrarse la hoja el foco vuelve al botón que la abrió y el Tab deja de estar atrapado", ()=>conHojaDePrueba(async ({afuera, ov, tab, pausa})=>{
+  afuera.focus(); ov.classList.add("open"); await pausa();
+  document.getElementById("hp-c").focus();
+  ov.classList.remove("open"); await pausa();
+  cierto(document.activeElement===afuera, "tiene que volver al botón que abrió la hoja");
+  const e=tab(); cierto(!e.defaultPrevented, "sin hoja abierta el Tab es del navegador: no se toca");
+}));
+
+test("foco: si la persona ya movió el foco a otro lado, cerrar la hoja no se lo roba", ()=>conHojaDePrueba(async ({afuera, ov, pausa})=>{
+  const otro=document.createElement("button"); document.body.appendChild(otro);
+  afuera.focus(); ov.classList.add("open"); await pausa();
+  otro.focus(); ov.classList.remove("open"); await pausa();
+  cierto(document.activeElement===otro, "el foco se queda donde la persona lo puso"); otro.remove();
+}));
+
+test("foco: con una pantalla de bloqueo encima, la hoja no atrapa el foco", ()=>conHojaDePrueba(async ({afuera, ov, tab, pausa})=>{
+  const lock=document.createElement("div"); lock.id="lock-screen"; lock.style.cssText="position:fixed;inset:0;z-index:9999"; lock.innerHTML="<button id='pin-1'>1</button><button id='pin-2'>2</button>"; document.body.appendChild(lock);
+  // (en esta página getElementById devuelve un div suelto si no existe: se usa el real; dos botones porque con uno solo el Tab del propio bloqueo da la vuelta y sí lo frena)
+  const real=document.querySelector("#lock-screen");
+  try{
+    afuera.focus(); ov.classList.add("open"); await pausa();
+    document.getElementById("pin-1").focus();
+    const e=tab(); cierto(!e.defaultPrevented, "con el bloqueo arriba el foco es del bloqueo");
+  } finally { real.remove(); }
+}));
+
+test("avisos: al irse el aviso queda vacío (sin texto viejo ni un botón Deshacer invisible)", async ()=>{
+  let t=document.querySelector("#toast"), creado=false;
+  if(!t){ t=document.createElement("div"); t.id="toast"; document.body.appendChild(t); creado=true; }
+  try{
+    showToastAccion("Eliminado","Deshacer",()=>{},60000);
+    cierto(t.querySelector("button.toast-accion") && t.classList.contains("show"));
+    ocultarToast(); cierto(!t.classList.contains("show"));
+    await new Promise(r=>setTimeout(r,450));
+    igual(t.textContent, ""); igual(t.querySelectorAll("button").length, 0); cierto(!t.classList.contains("con-accion"));
+  } finally { t.classList.remove("show","con-accion"); t.textContent=""; if(creado) t.remove(); }
+});
+
+test("diálogo: Enter sobre un botón activa ese botón (Cancelar no confirma); con el foco perdido Enter acepta", async ()=>{
+  const antes=window._dialogoAceptar; let aceptado=0; window._dialogoAceptar=()=>{ aceptado++; };
+  const btn=document.createElement("button"); document.body.appendChild(btn);
+  try{
+    _dialogoTecla({key:"Enter", target:btn, preventDefault(){}}); igual(aceptado, 0, "Enter con el foco en un botón no acepta el diálogo: lo activa el propio botón");
+    _dialogoTecla({key:"Enter", target:document.body, preventDefault(){}}); igual(aceptado, 1, "sin foco en un botón, Enter acepta como siempre");
+  } finally { window._dialogoAceptar=antes; btn.remove(); }
+});
+
+test("avisos y hojas: el CSS los ubica sin tapar la barra de arriba y cierran animados", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const iAAA=css.indexOf("[AAA navegacion] NAVEGACIÓN"); cierto(iAAA>0, "falta el bloque de navegación");
+  const bloque=css.slice(iAAA);
+  const toast=bloque.slice(bloque.indexOf(".toast{"), bloque.indexOf("}", bloque.indexOf(".toast{"))+1);
+  cierto(/bottom:\s*calc\(96px/.test(toast) && /top:\s*auto/.test(toast), "el aviso va abajo, por encima del botón del perro: "+toast);
+  cierto(/var\(--toast-bg\)/.test(toast), "el color del aviso sale de tokens que cambian con el tema");
+  cierto(/\.modal-overlay\{[^}]*visibility 0s linear var\(--dur-2\)/.test(bloque), "al cerrar, la hoja tiene que esperar la animación antes de ocultarse (visibility con retraso)");
+  cierto(/\.modal\{[^}]*overscroll-behavior:contain/.test(bloque), "el scroll de la hoja no tiene que arrastrar la pantalla de atrás");
+  cierto(/#fab-cargar\.fab-oculto/.test(bloque) && /#fab-calculadora\{[^}]*top:/.test(bloque), "el perro se esconde al bajar y la calculadora sube a la barra de arriba");
+});
+
+test("hojas: toda hoja abierta tiene nombre accesible (su título, o 'Ventana' si no hay)", ()=>conHojaDePrueba(async ({ov, pausa})=>{
+  ov.querySelector(".modal").insertAdjacentHTML("afterbegin",'<div class="modal-title">Editar movimiento</div>');
+  ov.classList.add("open"); await pausa();
+  const caja=ov.querySelector(".modal"), id=caja.getAttribute("aria-labelledby");
+  cierto(id && document.querySelector("#"+id).textContent==="Editar movimiento", "aria-labelledby tiene que apuntar al título: "+id);
+  ov.classList.remove("open"); await pausa();
+  ov.querySelector(".modal-title").remove(); caja.removeAttribute("aria-labelledby"); delete caja.dataset.nombreAuto;
+  ov.classList.add("open"); await pausa();
+  igual(caja.getAttribute("aria-label"), "Ventana", "sin título, un nombre genérico");
+}));
+
+test("navegación: el cartel de versión no tapa el menú ni las hojas, y el perro se repliega en reposo (CSS)", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const bloque=css.slice(css.indexOf("[AAA navegacion] NAVEGACIÓN"));
+  cierto(/#side-menu\{[^}]*padding:calc\(var\(--safe-t\) \+ var\(--cartel-h/.test(bloque), "el menú reserva el alto del cartel");
+  cierto(/\.modal-overlay\{padding-top:var\(--cartel-h/.test(bloque), "las hojas reservan el alto del cartel");
+  cierto(/\.modal\{max-height:calc\(90vh - var\(--cartel-h/.test(bloque), "la hoja se achica lo que ocupa el cartel");
+  cierto(/#fab-cargar\.fab-replegado[^{]*\{transform:translateX\(calc\(100% \+ var\(--sp-5\) \+ var\(--safe-r\) - 31px\)\)/.test(bloque), "el perro se repliega dejando asomar 31 px");
+  cierto(/#fab-cargar\.fab-replegado::after\{[^}]*left:-14px/.test(bloque), "con un halo que completa los 44 px de toque");
+});
+
 grupo("Monto recuperable: cobrar");
 
 const GASTO_REC=(extra)=>({id:500, tipo:"Gasto", cat:"Regalos", subcat:"Familia", importe:50000, moneda:"ARS", cuenta:"Mercado Libre", fecha:"2026-10-26", nota:"", recuperable:25000, ...(extra||{})});
@@ -10654,8 +10763,11 @@ test("desbloquear: PIN malo cuenta, a los 5 errores hay que esperar, y el bueno 
   await teclear("111111"); cierto(err.textContent==="PIN incorrecto", err.textContent); igual(leerFallosPin().n, 1); igual(encKey, null); igual(lock.style.display, "flex");
   for(let i=0;i<3;i++) await teclear("222222");
   igual(leerFallosPin().n, 4); cierto(err.textContent==="PIN incorrecto", "hasta el 4º error no espera");
-  await teclear("333333"); cierto(/Esperá 30 s/.test(err.textContent), err.textContent); cierto(segundosDeEsperaPin()>0 && segundosDeEsperaPin()<=30);
+  await teclear("333333"); cierto(/Esperá 30[\s\u00a0]s/.test(err.textContent), err.textContent); cierto(segundosDeEsperaPin()>0 && segundosDeEsperaPin()<=30);   // [AAA bloqueo] la cifra y la unidad van unidas por un espacio duro (\u00a0)
   await teclear("482916"); cierto(/Demasiados intentos/.test(err.textContent), "con la espera puesta ni siquiera prueba el PIN bueno: "+err.textContent); igual(encKey, null); igual(resolvio.length, 0);
+  // [AAA bloqueo] tocar una tecla (o Retroceso) en plena espera NO borra el aviso que cuenta los segundos
+  pinPress("1"); cierto(/Demasiados intentos/.test(err.textContent), "el aviso de la espera se borró con la primera tecla: "+err.textContent);
+  pinBackspace(); cierto(/Demasiados intentos/.test(err.textContent), "el aviso de la espera se borró con Retroceso: "+err.textContent); igual(pinBuffer, "");
   localStorage.setItem(PIN_FALLOS_KEY, JSON.stringify({n:5, hasta:Date.now()-1}));   // ya pasó la espera
   await teclear("482916");
   cierto(!!encKey && encCache && encCache.fmovs3.includes('"id":7'), "no desbloqueó con el PIN bueno"); igual(lock.style.display, "none"); igual(resolvio.length, 1, "se resolvió checkLock");
