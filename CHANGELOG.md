@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v227**
+**Versión actual: v228**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 4 de noviembre de 2026
 
+- **v228** · AAA inversiones (estados vacíos, cartera, detalle, conciliación, gráfico, flecha de mes)
+- AAA tarjetas: cifra que se ajusta, línea de tiempo con aro, filas sin cortes, resúmenes y hojas con 44 px, vacío con salida
 - **v227** · AAA ahorros (gráfico, metas, hoja Depositar, selector de emoji, estados vacíos)
 - **v226** · AAA importar (reporte para imprimir, vista previa, zonas de carga, hojas)
 - AAA inversiones: resumen que escala, filas sin cortes, vacíos con guía, hoja de detalle y conciliación con acciones fijas, flecha del mes deshabilitada, gráfico legible
