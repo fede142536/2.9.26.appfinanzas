@@ -509,12 +509,62 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .filter-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface);font-size:12px;cursor:pointer;white-space:nowrap;color:var(--muted);scroll-snap-align:start}
 .filter-chip.active{background:var(--accent);border-color:var(--accent);color:var(--on-solid)}
 .ahorro-view-btn.active{background:var(--save);color:var(--on-solid);border-color:var(--save)}
-.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);background:transparent;transition:all .15s}
-.ob-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .2s}
-.ob-dot.active{background:var(--accent);width:22px;border-radius:4px}
-.pin-dot.filled{background:var(--accent);border-color:var(--accent)}
-.pin-key{font-size:22px;padding:18px 0;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;cursor:pointer;font-weight:500;position:relative;overflow:hidden}
-.pin-key:active{background:var(--accent);color:var(--on-solid);transform:scale(.96)}
+/* [AAA bloqueo] PANTALLA DE BLOQUEO, BIENVENIDA y botón Mostrar de los diálogos de clave.
+   · Todo sale de tokens (var(--…)); ya no hay medidas ni colores en línea en index.html.
+   · .lock se acomoda al área visible: --vv-top/--vv-bottom los pone ajustarBloqueoAlTeclado() (js/seguridad-pin.js) cuando el teclado del celular tapa
+     parte de la pantalla; los dos espaciadores ::before/::after centran el contenido y, si no entra (poco alto, apaisado), se achican a 0 y la pantalla
+     se desplaza en vez de cortar lo de arriba. Safe areas (muesca y barra de gestos) sumadas al margen.
+   · Teclas de 64×88 px (56 y 48 en pantallas bajas): objetivo táctil muy por encima de los 44. Borde --border-mid (el --border es solo divisor).
+   · Error: texto (role="alert") + sacudón + puntitos/campo en rojo que quedan hasta el próximo intento; con prefers-reduced-motion no hay movimiento. */
+.lock{position:fixed;inset:var(--vv-top,0px) 0 var(--vv-bottom,0px) 0;z-index:9999;background:var(--bg);flex-direction:column;align-items:center;overflow-y:auto;overscroll-behavior:contain;
+  padding:calc(var(--sp-5) + var(--safe-t)) calc(var(--sp-5) + var(--safe-r)) calc(var(--sp-5) + var(--safe-b)) calc(var(--sp-5) + var(--safe-l))}
+.lock::before,.lock::after{content:"";flex:1 0 0}
+.lock>*{flex:none}
+.lock-logo{font-size:48px;line-height:1;margin-bottom:var(--sp-2)}
+.lock-titulo{margin:0 0 var(--sp-1);font-size:var(--fs-xl);font-weight:700;line-height:1.2;color:var(--text)}
+.lock-texto{margin:0 0 var(--sp-5);font-size:var(--fs-base);line-height:1.4;color:var(--muted);text-align:center}
+.pin-display{display:flex;gap:var(--sp-3);margin-bottom:var(--sp-2)}
+.pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);background:transparent;transition:background-color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease)}
+.pin-dot.filled{background:var(--accent);border-color:var(--accent);animation:pinPop var(--dur-2) var(--ease)}
+@keyframes pinPop{0%{transform:scale(.6)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
+.pin-display.con-error .pin-dot,.pin-display.con-error .pin-dot.filled{border-color:var(--danger)}
+.pin-display.con-error .pin-dot.filled{background:var(--danger)}
+@keyframes pinSacudon{0%,100%{transform:none}15%{transform:translateX(-10px)}30%{transform:translateX(9px)}45%{transform:translateX(-7px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}90%{transform:translateX(1px)}}
+.pin-display.sacudon,.pin-texto-wrap.sacudon{animation:pinSacudon 380ms cubic-bezier(.36,.07,.19,.97) both}
+.pin-texto-wrap{display:flex;flex-direction:column;align-items:stretch;gap:var(--sp-2);width:100%;max-width:288px;margin-bottom:var(--sp-2)}
+.pin-texto{text-align:center;font-size:var(--fs-xl);letter-spacing:.12em}
+.pin-texto:placeholder-shown{letter-spacing:0;font-size:var(--fs-lg)}
+.pin-texto-wrap.con-error .pin-texto{border-color:var(--danger)}
+.pin-texto-acciones{display:flex;gap:var(--sp-2)}
+.lock .lock-btn-sec{flex:1;min-height:var(--tap);font-size:var(--fs-md)}
+.lock .lock-btn-pri{flex:2;padding:var(--sp-2);background:var(--accent);color:var(--on-solid)}
+.pin-error{margin:0 0 var(--sp-4);min-height:42px;max-width:300px;font-size:var(--fs-base);font-weight:500;line-height:1.4;color:var(--danger);text-align:center;text-wrap:balance}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);width:100%;max-width:288px}
+.pin-key{height:64px;padding:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);font-weight:500;border:1px solid var(--border-mid);background:var(--surface);color:var(--text);border-radius:var(--radius-md);cursor:pointer;position:relative;overflow:hidden;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:background-color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease),color var(--dur-1) var(--ease),transform var(--dur-1) var(--ease)}
+.pin-key:active{background:var(--accent);border-color:var(--accent);color:var(--on-solid);transform:scale(.96)}
+.pin-key-vacio{visibility:hidden;pointer-events:none}
+.lock .lock-huella{margin-top:var(--sp-4);min-height:var(--tap);padding:0 var(--sp-4);font-size:var(--fs-md)}
+@media (max-height:700px){ .pin-key{height:56px} .lock-texto{margin-bottom:var(--sp-4)} .lock-huella{margin-top:var(--sp-3)} }
+@media (max-height:560px){ .lock-logo{display:none} .pin-key{height:48px} .pin-pad{gap:var(--sp-2)} .pin-error{min-height:21px;margin-bottom:var(--sp-2)} }
+@media (max-height:480px){ .lock{padding-top:calc(var(--sp-3) + var(--safe-t));padding-bottom:calc(var(--sp-3) + var(--safe-b))} .pin-key{height:var(--tap)} .lock-texto{margin-bottom:var(--sp-3)} }   /* apaisado: entran las 4 filas sin desplazar */
+@media (prefers-reduced-motion:reduce){ .pin-display.sacudon,.pin-texto-wrap.sacudon,.pin-dot.filled{animation:none} }
+/* [AAA bloqueo] Bienvenida. Las tres láminas comparten el mismo lugar (grilla apilada): el ícono no salta entre pasos. Puntos ≥3:1 (--border-strong). */
+.onb{position:fixed;inset:0;z-index:9998;background:var(--bg);flex-direction:column;overflow-y:auto;overscroll-behavior:contain}
+.onb-cuerpo{flex:1 0 auto;display:flex;align-items:center;justify-content:center;text-align:center;
+  padding:calc(var(--sp-6) + var(--safe-t)) calc(var(--sp-6) + var(--safe-r)) var(--sp-5) calc(var(--sp-6) + var(--safe-l))}
+.onb-slides{display:grid;width:100%;max-width:320px}
+.onb-slide{grid-area:1/1;align-self:start;visibility:hidden;opacity:0;transition:opacity var(--dur-2) var(--ease),visibility 0s linear var(--dur-2)}
+.onb-slide.activa{visibility:visible;opacity:1;transition:opacity var(--dur-2) var(--ease),visibility 0s}
+.onb-emoji{font-size:64px;line-height:1;margin-bottom:var(--sp-4)}
+.onb-titulo{margin:0 0 var(--sp-3);font-size:var(--fs-xl);font-weight:700;line-height:1.2;color:var(--text);text-wrap:balance}
+.onb-texto{margin:0;font-size:var(--fs-base);line-height:1.5;color:var(--muted);text-wrap:pretty}
+.onb-pie{flex:none;padding:var(--sp-5) calc(var(--sp-6) + var(--safe-r)) calc(var(--sp-5) + var(--safe-b)) calc(var(--sp-6) + var(--safe-l))}
+.onb-puntos{display:flex;justify-content:center;gap:var(--sp-2);margin-bottom:var(--sp-5)}
+.ob-dot{width:8px;height:8px;border-radius:4px;background:var(--border-strong);transition:width var(--dur-2) var(--ease),background-color var(--dur-2) var(--ease)}
+.ob-dot.active{background:var(--accent);width:24px}
+.onb .onb-siguiente{width:100%;background:var(--accent);color:var(--on-solid)}
+.onb .onb-saltar{width:100%;margin-top:var(--sp-2);border:none;background:none;min-height:var(--tap);font-size:var(--fs-base);font-weight:500;color:var(--muted)}
 /* MODAL */
 /* display:flex siempre (no "none"), oculto vía opacity+visibility para poder animar la transición.
    pointer-events:none cuando está cerrado evita que capture toques mientras es invisible. */
@@ -1105,4 +1155,12 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .informe-fila>span{min-width:0}
 
 /* Botón "Mostrar/Ocultar" dentro del campo de clave de los diálogos. */
-.dialogo-ver{position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:6px 10px;border:0;border-radius:var(--radius-sm);background:var(--bg);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer}
+/* [AAA bloqueo] Botón Mostrar/Ocultar: 36 px de alto dentro del campo de 44 y halo de 44 (el área clicable llena el campo; no se pisa con lo escrito: el campo reserva 84 px a la derecha). */
+.dialogo-ver{position:absolute;right:var(--sp-2);top:50%;transform:translateY(-50%);height:36px;padding:0 var(--sp-3);border:0;border-radius:var(--radius-sm);background:var(--bg);color:var(--muted);font-size:var(--fs-sm);font-weight:600;cursor:pointer;transition:background-color var(--dur-1) var(--ease)}
+.dialogo-ver::after{content:"";position:absolute;inset:-4px -8px}
+.dialogo-ver:active{background:var(--border)}
+/* [AAA bloqueo] Tarjeta Seguridad de Configuración (solo lo visual del PIN): el estado en 13 px con peso 500 (antes 12 px suelto) y ritmo de 4 px. */
+.pin-estado{margin:0 0 var(--sp-3);font-size:var(--fs-md);font-weight:500;line-height:1.4;color:var(--success)}
+.pin-estado-huella{margin:var(--sp-3) 0 var(--sp-2)}
+.pin-nota{margin:calc(-1*var(--sp-1)) 0 var(--sp-3)}
+#pin-status .btn-sm,#huella-status .btn-sm{min-height:var(--tap)}

@@ -441,6 +441,10 @@ function _dialogoAbrir(opts){
     const ver=document.getElementById("dialogo-ver");
     if(ver){ ver.style.display=opts.tipoInput==="password" ? "" : "none"; ver.textContent="Mostrar"; ver.setAttribute("aria-pressed","false"); }
     input.inputMode=opts.inputMode||"text";
+    // [AAA bloqueo] Una clave no se corrige ni se pone en mayúscula sola, ni el teclado la aprende al pasar a "Mostrar".
+    const esClave=opts.tipoInput==="password";
+    if(esClave){ input.setAttribute("autocapitalize","off"); input.setAttribute("autocorrect","off"); input.spellcheck=false; }
+    else { input.removeAttribute("autocapitalize"); input.removeAttribute("autocorrect"); input.removeAttribute("spellcheck"); }
     input.placeholder=opts.placeholder||"";
     input.value=opts.valorInicial!==undefined&&opts.valorInicial!==null?String(opts.valorInicial):"";
   } else {

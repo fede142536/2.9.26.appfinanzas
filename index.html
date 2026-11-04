@@ -100,20 +100,20 @@
   </div>
 </div>
 
-<!-- PANTALLA DE BLOQUEO -->
-<div id="lock-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:30px">
-  <div style="font-size:48px;margin-bottom:8px">🔒</div>
-  <h2 style="margin:0 0 4px;font-size:22px;color:var(--text)">Enola</h2>
-  <p id="lock-texto" style="font-size:14px;color:var(--muted);margin:0 0 24px">Ingresá tu PIN para continuar</p>
-  <div id="pin-display" style="display:flex;gap:10px;margin-bottom:8px">
+<!-- PANTALLA DE BLOQUEO. [AAA bloqueo] Los estilos viven en styles.css (bloque "[AAA bloqueo]"): ya no hay medidas ni colores en línea. -->
+<div id="lock-screen" class="lock" style="display:none" role="dialog" aria-modal="true" aria-labelledby="lock-titulo">
+  <div class="lock-logo" aria-hidden="true">🔒</div>
+  <h2 class="lock-titulo" id="lock-titulo">Enola</h2>
+  <p id="lock-texto" class="lock-texto">Ingresá tu PIN para continuar</p>
+  <div id="pin-display" class="pin-display" role="img" aria-label="PIN: 0 de 4 dígitos">
     <span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span>
   </div>
-  <div id="pin-texto-wrap" style="display:none;flex-direction:column;align-items:stretch;gap:8px;width:100%;max-width:280px;margin-bottom:6px">
-    <input type="password" id="pin-texto" class="form-input" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Código" placeholder="Tu código" style="text-align:center;font-size:20px;letter-spacing:2px" onkeydown="if(event.key==='Enter'){ event.preventDefault(); pinTextoEnviar(); }">
-    <div style="display:flex;gap:8px"><button type="button" class="btn-sm u-flex1" id="pin-texto-ver" onclick="pinTextoMostrar()">Mostrar</button><button type="button" class="btn-primary" style="flex:2;padding:10px" onclick="pinTextoEnviar()">Entrar</button></div>
+  <div id="pin-texto-wrap" class="pin-texto-wrap" style="display:none">
+    <input type="password" id="pin-texto" class="form-input pin-texto" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="Código" placeholder="Tu código" aria-describedby="pin-error" onkeydown="if(event.key==='Enter'){ event.preventDefault(); pinTextoEnviar(); }">
+    <div class="pin-texto-acciones"><button type="button" class="btn-sm lock-btn-sec" id="pin-texto-ver" aria-pressed="false" onclick="pinTextoMostrar()">Mostrar</button><button type="button" class="btn-primary lock-btn-pri" onclick="pinTextoEnviar()">Entrar</button></div>
   </div>
-  <p id="pin-error" style="font-size:13px;color:var(--danger);margin:0 0 16px;min-height:18px"></p>
-  <div id="pin-pad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:260px">
+  <p id="pin-error" class="pin-error" role="alert"></p>
+  <div id="pin-pad" class="pin-pad">
     <button class="pin-key" onclick="pinPress('1')">1</button>
     <button class="pin-key" onclick="pinPress('2')">2</button>
     <button class="pin-key" onclick="pinPress('3')">3</button>
@@ -123,11 +123,11 @@
     <button class="pin-key" onclick="pinPress('7')">7</button>
     <button class="pin-key" onclick="pinPress('8')">8</button>
     <button class="pin-key" onclick="pinPress('9')">9</button>
-    <button class="pin-key" style="visibility:hidden"></button>
+    <span class="pin-key pin-key-vacio" aria-hidden="true"></span>
     <button class="pin-key" onclick="pinPress('0')">0</button>
-    <button class="pin-key" onclick="pinBackspace()" style="font-size:18px" aria-label="Borrar último dígito">⌫</button>
+    <button class="pin-key" onclick="pinBackspace()" aria-label="Borrar último dígito">⌫</button>
   </div>
-  <button type="button" id="btn-huella" class="btn-sm" style="display:none;margin-top:18px" onclick="desbloquearConHuella()">👆 Usar huella o rostro</button>
+  <button type="button" id="btn-huella" class="btn-sm lock-huella" style="display:none" onclick="desbloquearConHuella()">👆 Usar huella o rostro</button>
 </div>
 
 <!-- DRAG & DROP GLOBAL: overlay que aparece al arrastrar un archivo sobre la app (Excel/CSV/JSON) -->
@@ -139,39 +139,33 @@
   </div>
 </div>
 
-<!-- ONBOARDING: pantalla de bienvenida para usuarios nuevos (solo se ve una vez, sin datos cargados) -->
-<div id="onboarding-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9998;flex-direction:column;padding:0">
-
-
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
-    <div id="ob-slide-0">
-      <div style="font-size:64px;margin-bottom:18px">🐷</div>
-      <h2 style="margin:0 0 10px;font-size:24px">Bienvenido a Enola</h2>
-      <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
-        Controlá tus gastos, ingresos, tarjetas, ahorros e inversiones desde un solo lugar. Simple, rápido y pensado para el día a día.
-      </p>
-    </div>
-    <div id="ob-slide-1" style="display:none">
-      <div style="font-size:64px;margin-bottom:18px">🔒</div>
-      <h2 style="margin:0 0 10px;font-size:24px">Tus datos son privados</h2>
-      <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
-        Todo lo que cargues queda guardado únicamente en tu celular. No hay servidores ni cuentas: nadie más puede ver tu información financiera.
-      </p>
-    </div>
-    <div id="ob-slide-2" style="display:none">
-      <div style="font-size:64px;margin-bottom:18px">💾</div>
-      <h2 style="margin:0 0 10px;font-size:24px">Hacé backup seguido</h2>
-      <p style="font-size:15px;color:var(--muted);line-height:1.5;max-width:320px">
-        Como los datos no salen del dispositivo, si lo perdés o lo formateás sin backup, se pierden. Desde Config vas a poder descargar una copia de seguridad cuando quieras.
-      </p>
+<!-- ONBOARDING: pantalla de bienvenida para usuarios nuevos (solo se ve una vez, sin datos cargados). [AAA bloqueo] Estilos en styles.css. -->
+<div id="onboarding-screen" class="onb" style="display:none" role="dialog" aria-modal="true" aria-label="Bienvenida a Enola">
+  <div class="onb-cuerpo">
+    <div class="onb-slides" aria-live="polite">
+      <div class="onb-slide activa" id="ob-slide-0">
+        <div class="onb-emoji" aria-hidden="true">🐷</div>
+        <h2 class="onb-titulo">Bienvenido a Enola</h2>
+        <p class="onb-texto">Controlá tus gastos, ingresos, tarjetas, ahorros e inversiones desde un solo lugar. Simple, rápido y pensado para el día a día.</p>
+      </div>
+      <div class="onb-slide" id="ob-slide-1">
+        <div class="onb-emoji" aria-hidden="true">🔒</div>
+        <h2 class="onb-titulo">Tus datos son privados</h2>
+        <p class="onb-texto">Todo lo que cargues queda guardado únicamente en tu celular. No hay servidores ni cuentas: nadie más puede ver tu información financiera.</p>
+      </div>
+      <div class="onb-slide" id="ob-slide-2">
+        <div class="onb-emoji" aria-hidden="true">💾</div>
+        <h2 class="onb-titulo">Hacé backup seguido</h2>
+        <p class="onb-texto">Como los datos no salen del dispositivo, si lo perdés o lo formateás sin backup, se pierden. Desde Config vas a poder descargar una copia de seguridad cuando quieras.</p>
+      </div>
     </div>
   </div>
-  <div style="padding:24px 32px 36px">
-    <div style="display:flex;justify-content:center;gap:6px;margin-bottom:20px">
+  <div class="onb-pie">
+    <div class="onb-puntos" id="ob-puntos" role="img" aria-label="Paso 1 de 3">
       <span class="ob-dot" id="ob-dot-0"></span><span class="ob-dot" id="ob-dot-1"></span><span class="ob-dot" id="ob-dot-2"></span>
     </div>
-    <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%" onclick="onboardingSiguiente()" id="ob-btn-siguiente">Siguiente</button>
-    <button class="btn-sm" style="width:100%;margin-top:10px;border:none;background:none" onclick="cerrarOnboarding()" id="ob-btn-saltar">Saltar</button>
+    <button class="btn-primary onb-siguiente" onclick="onboardingSiguiente()" id="ob-btn-siguiente">Siguiente</button>
+    <button class="btn-sm onb-saltar" onclick="cerrarOnboarding()" id="ob-btn-saltar">Saltar</button>
   </div>
 </div>
 

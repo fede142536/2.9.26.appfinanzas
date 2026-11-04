@@ -140,7 +140,7 @@ async function renderHuellaStatus(){
   if(!el) return;
   if(!pinConfigurado()){ el.innerHTML=""; return; }
   if(huellaActiva()){
-    el.innerHTML=`<p class="txt-xs" style="color:var(--success);margin:10px 0 6px">👆 Huella o rostro activados: se usan en vez de teclear el PIN.</p>
+    el.innerHTML=`<p class="pin-estado pin-estado-huella">👆 Huella o rostro activados: se usan en vez de teclear el PIN.</p>
       <button class="btn-sm" style="width:100%;color:var(--danger)" onclick="desactivarHuella()">Desactivar huella</button>`;
     return;
   }
