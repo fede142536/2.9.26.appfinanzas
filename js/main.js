@@ -19,10 +19,14 @@ function checkOnboarding(){
   document.getElementById("onboarding-screen").style.display="flex";
 }
 function actualizarOnboardingUI(){
+  // [AAA bloqueo] Las tres láminas comparten el mismo lugar (grilla apilada) y cambian por clase: el ícono no salta de altura entre pasos.
   for(let i=0;i<3;i++){
-    document.getElementById("ob-slide-"+i).style.display = i===obStep ? "block" : "none";
+    const lam=document.getElementById("ob-slide-"+i);
+    lam.classList.toggle("activa", i===obStep);
+    lam.setAttribute("aria-hidden", String(i!==obStep));
     document.getElementById("ob-dot-"+i).classList.toggle("active", i===obStep);
   }
+  const puntos=document.getElementById("ob-puntos"); if(puntos) puntos.setAttribute("aria-label", `Paso ${obStep+1} de 3`);
   document.getElementById("ob-btn-siguiente").textContent = obStep===2 ? "Empezar" : "Siguiente";
   document.getElementById("ob-btn-saltar").style.visibility = obStep===2 ? "hidden" : "visible";
 }

@@ -310,7 +310,8 @@ function registrarFalloPin(ahora){
   return f;
 }
 function limpiarFallosPin(){ try{ localStorage.removeItem(PIN_FALLOS_KEY); }catch(e){ /* sin almacenamiento */ } }
-const textoEspera=seg=>seg>=60 ? `${Math.ceil(seg/60)} min` : `${seg} s`;
+// [AAA bloqueo] Con espacio duro (\u00a0) entre la cifra y la unidad: "30 s" no se parte en dos renglones.
+const textoEspera=seg=>seg>=60 ? `${Math.ceil(seg/60)}\u00a0min` : `${seg}\u00a0s`;
 
 // Comprueba un PIN contra el sobre: devuelve {clave, cache} si abre, o null si el PIN no es. No toca el estado de la app.
 async function verificarPin(pin){
@@ -360,6 +361,7 @@ function ajustarPantallaBloqueo(){
   const alfa=pinModo()==="a", ver=(id,d)=>{ const e=document.getElementById(id); if(e) e.style.display=d; };
   ver("pin-display", alfa?"none":"flex"); ver("pin-pad", alfa?"none":"grid"); ver("pin-texto-wrap", alfa?"flex":"none");
   const t=document.getElementById("lock-texto"); if(t) t.textContent=alfa ? "Ingresá tu código para continuar" : "Ingresá tu PIN para continuar";
+  ajustarBloqueoAlTeclado();
   if(alfa){ const i=document.getElementById("pin-texto"); if(i){ i.value=""; i.type="password"; setTimeout(()=>{ try{ i.focus(); }catch(e){} }, 400); } }
 }
 // El código alfanumérico se manda con el botón Entrar o con Enter (un PIN numérico se manda solo al completar los dígitos).
@@ -372,7 +374,8 @@ async function pinTextoEnviar(){
 function pinTextoMostrar(){
   const i=document.getElementById("pin-texto"); if(!i) return;
   i.type=i.type==="password" ? "text" : "password";
-  const b=document.getElementById("pin-texto-ver"); if(b) b.textContent=i.type==="password" ? "Mostrar" : "Ocultar";
+  const b=document.getElementById("pin-texto-ver"); if(b){ b.textContent=i.type==="password" ? "Mostrar" : "Ocultar"; b.setAttribute("aria-pressed", String(i.type!=="password")); }
+  try{ i.focus(); }catch(e){}   // [AAA bloqueo] el foco vuelve al campo: el teclado no se cierra al tocar Mostrar
 }
 // Los puntitos de la pantalla de bloqueo: tantos como dígitos tiene el PIN (4 los de antes, 6 los nuevos).
 function updatePinDisplay(){
@@ -385,12 +388,15 @@ function updatePinDisplay(){
   dots.forEach((d,i)=>{
     d.classList.toggle("filled", i<pinBuffer.length);
   });
+  // [AAA bloqueo] Los puntitos son un dibujo: el lector de pantalla lee cuántos dígitos van (sin decir cuáles).
+  if(cont) cont.setAttribute("aria-label", `PIN: ${Math.min(pinBuffer.length,n)} de ${n} dígitos`);
 }
 
 function pinPress(d){
   const largo=pinLen();
   if(pinBuffer.length>=largo) return;
   vibrar(15);
+  if(pinBuffer.length===0) quitarErrorPin(true);   // empieza un intento nuevo: se va el rojo y el aviso del anterior (salvo el de la espera, que sigue contando)
   pinBuffer+=d;
   updatePinDisplay();
   if(pinBuffer.length===largo){
@@ -401,17 +407,87 @@ function pinBackspace(){
   if(pinBuffer.length>0){
     pinBuffer=pinBuffer.slice(0,-1);
     updatePinDisplay();
-    document.getElementById("pin-error").textContent="";
+    quitarErrorPin(true);
   }
 }
 
+// [AAA bloqueo] Teclado físico y foco de la pantalla de bloqueo (y de la bienvenida): con el PIN numérico los dígitos y Retroceso del teclado
+// funcionan como las teclas de pantalla; Tab no se escapa a la app que está detrás (todavía sin datos): da la vuelta por los controles visibles.
+function pantallaTapa(id){ const e=document.getElementById(id); return !!e && e.style.display!=="none" && getComputedStyle(e).display!=="none"; }
+document.addEventListener("keydown", e=>{
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  const dialogo=document.getElementById("modal-dialogo");
+  if(dialogo && dialogo.classList.contains("open")) return;
+  const id=pantallaTapa("lock-screen") ? "lock-screen" : (pantallaTapa("onboarding-screen") ? "onboarding-screen" : "");
+  if(!id) return;
+  if(e.key==="Tab"){
+    const raiz=document.getElementById(id);
+    const f=[...raiz.querySelectorAll("button,input,select,a[href]")].filter(x=>!x.disabled && x.offsetParent!==null && getComputedStyle(x).visibility!=="hidden");
+    if(!f.length) return;
+    const primero=f[0], ultimo=f[f.length-1];
+    if(!raiz.contains(document.activeElement)){ e.preventDefault(); (e.shiftKey?ultimo:primero).focus(); }
+    else if(e.shiftKey && document.activeElement===primero){ e.preventDefault(); ultimo.focus(); }
+    else if(!e.shiftKey && document.activeElement===ultimo){ e.preventDefault(); primero.focus(); }
+    return;
+  }
+  if(id==="lock-screen" && pinModo()==="n" && e.target && e.target.tagName!=="INPUT"){
+    if(/^[0-9]$/.test(e.key)){ e.preventDefault(); pinPress(e.key); }
+    else if(e.key==="Backspace"){ e.preventDefault(); pinBackspace(); }
+  }
+});
+
+// [AAA bloqueo] El error se dice de tres formas, para que no dependa del movimiento ni del color: el texto (con role="alert"), el sacudón de la
+// pantalla y los puntitos/el campo en rojo, que quedan hasta el próximo intento (el primer dígito, Retroceso o escribir en el campo los quitan).
+// El aviso de la espera por intentos NO se borra al tocar una tecla: sigue contando hasta que termina la espera. Con prefers-reduced-motion el sacudón no se mueve (lo apaga el CSS)
+// pero el rojo sí se ve. La animación es una clase (.sacudon): se reinicia sacándola y poniéndola de nuevo.
 function sacudirPin(){
-  const display=document.getElementById("pin-display");
-  if(!display) return;
-  display.style.transform="translateX(-8px)";
-  setTimeout(()=>{display.style.transform="translateX(8px)";},80);
-  setTimeout(()=>{display.style.transform="";},160);
+  ["pin-display","pin-texto-wrap"].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.classList.remove("sacudon"); void el.offsetWidth;
+    el.classList.add("sacudon", "con-error");
+    el.addEventListener("animationend", ()=>el.classList.remove("sacudon"), {once:true});
+  });
 }
+function quitarErrorPin(tambienTexto){
+  ["pin-display","pin-texto-wrap"].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove("con-error","sacudon"); });
+  if(tambienTexto){
+    const e=document.getElementById("pin-error");
+    if(e && !(segundosDeEsperaPin()>0 && AVISO_ESPERA.test(e.textContent))) e.textContent="";   // en plena espera el aviso se queda (solo comportamiento visual: no toca los intentos)
+  }
+}
+// [AAA bloqueo] La espera por intentos cuenta hacia atrás en pantalla (antes el "28 s" se quedaba quieto y nunca se despejaba). Solo repinta el
+// texto del aviso y no toca ningún contador de seguridad: los segundos salen de segundosDeEsperaPin(). El lector de pantalla oye el aviso una
+// vez (role="alert"); mientras cuenta, el aviso se marca aria-live="off" para que no lo repita cada segundo.
+let pinCuentaAtras=null;
+const AVISO_ESPERA=/^(Demasiados intentos|PIN incorrecto\. Esperá)/;
+function iniciarCuentaAtrasPin(){
+  clearInterval(pinCuentaAtras); pinCuentaAtras=null;
+  const err=document.getElementById("pin-error");
+  if(!err || segundosDeEsperaPin()<=0 || !AVISO_ESPERA.test(err.textContent)) return;
+  const demasiados=err.textContent.startsWith("Demasiados");
+  const texto=seg=>demasiados ? `Demasiados intentos. Probá en ${textoEspera(seg)}.` : `PIN incorrecto. Esperá ${textoEspera(seg)}.`;
+  pinCuentaAtras=setInterval(()=>{
+    const e=document.getElementById("pin-error");
+    if(!e || !AVISO_ESPERA.test(e.textContent)){ clearInterval(pinCuentaAtras); pinCuentaAtras=null; return; }   // el aviso ya es otro (o se borró): no se pisa
+    const seg=segundosDeEsperaPin();
+    e.setAttribute("aria-live","off");
+    if(seg<=0){ clearInterval(pinCuentaAtras); pinCuentaAtras=null; e.removeAttribute("aria-live"); e.textContent="Ya podés volver a intentar."; return; }
+    e.textContent=texto(seg);
+  }, 1000);
+}
+
+// [AAA bloqueo] Con el teclado del celular abierto (código alfanumérico) la pantalla de bloqueo se acomoda al área que de verdad se ve: el
+// borde de arriba y de abajo del visualViewport pasan al CSS como --vv-top y --vv-bottom, y el contenido se vuelve a centrar ahí. Si el
+// navegador achica la página entera, los dos valores dan 0 y no cambia nada.
+function ajustarBloqueoAlTeclado(){
+  const lock=document.getElementById("lock-screen"), v=window.visualViewport;
+  if(!lock || !v) return;
+  const alto=document.documentElement.clientHeight;
+  lock.style.setProperty("--vv-top", Math.max(0, Math.round(v.offsetTop))+"px");
+  lock.style.setProperty("--vv-bottom", Math.max(0, Math.round(alto-v.offsetTop-v.height))+"px");
+}
+document.addEventListener("input", e=>{ if(e.target && e.target.id==="pin-texto") quitarErrorPin(true); });   // al volver a escribir, se va el rojo y el aviso
+if(window.visualViewport){ visualViewport.addEventListener("resize", ajustarBloqueoAlTeclado); visualViewport.addEventListener("scroll", ajustarBloqueoAlTeclado); }
 
 async function checkPin(){
   const pinIngresado=pinBuffer;
@@ -419,8 +495,8 @@ async function checkPin(){
   // Con intentos fallidos de más hay que esperar: ni se prueba el PIN.
   const espera=segundosDeEsperaPin();
   if(espera>0){
-    err.textContent=`Demasiados intentos. Probá de nuevo en ${textoEspera(espera)}.`;
-    pinBuffer=""; setTimeout(updatePinDisplay, 300); sacudirPin();
+    err.textContent=`Demasiados intentos. Probá en ${textoEspera(espera)}.`;
+    pinBuffer=""; setTimeout(updatePinDisplay, 300); sacudirPin(); iniciarCuentaAtrasPin();
     return;
   }
   let ok=false;
@@ -485,10 +561,11 @@ async function checkPin(){
   } else {
     const f=registrarFalloPin();
     const e=esperaTrasFallos(f.n);
-    err.textContent=e>0 ? `PIN incorrecto. Esperá ${textoEspera(e)} para volver a intentar.` : "PIN incorrecto";
+    err.textContent=e>0 ? `PIN incorrecto. Esperá ${textoEspera(e)}.` : "PIN incorrecto";
     pinBuffer="";
     setTimeout(updatePinDisplay, 300);
     sacudirPin();
+    iniciarCuentaAtrasPin();
   }
 }
 
@@ -767,25 +844,25 @@ function renderPinStatus(){
     const largo=pinLen(), alfa=pinModo()==="a";
     const opcion=autoLockOpcion();
     el.innerHTML=`
-      <p style="font-size:12px;color:var(--success);margin-bottom:10px">✓ ${alfa?"Código alfanumérico activo":`PIN activo (${largo} dígitos)`}. Se va a pedir cada vez que abras la app.</p>
-      ${!alfa && largo>=PIN_LEN_NUEVO?`<p class="txt-xs txt-muted" style="margin:-4px 0 10px">¿Querés más seguridad? Con “Cambiar PIN” podés usar un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p>`:""}
-      ${!alfa && largo<PIN_LEN_NUEVO?`<div class="inset mb-10" style="border-left:3px solid var(--warning)"><p class="txt-sm" style="margin:0 0 8px">Tu PIN tiene ${largo} dígitos y se puede adivinar en minutos. Pasá a ${PIN_LEN_NUEVO} dígitos o a un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p><button class="btn-sm" style="width:100%" onclick="changePin()">Reforzar mi PIN</button></div>`:""}
+      <p class="pin-estado">✓ ${alfa?"Código alfanumérico activo":`PIN activo (${largo} dígitos)`}. Se va a pedir cada vez que abras la app.</p>
+      ${!alfa && largo>=PIN_LEN_NUEVO?`<p class="txt-xs txt-muted pin-nota">¿Querés más seguridad? Con “Cambiar PIN” podés usar un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p>`:""}
+      ${!alfa && largo<PIN_LEN_NUEVO?`<div class="pin-aviso"><p>Tu PIN tiene ${largo} dígitos y se puede adivinar en minutos. Pasá a ${PIN_LEN_NUEVO} dígitos o a un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p><button class="btn-sm pin-btn-ancho" onclick="changePin()">Reforzar mi PIN</button></div>`:""}
       <div class="u-row">
         <button class="btn-sm u-flex1" onclick="changePin()">Cambiar PIN</button>
-        <button class="btn-sm" style="flex:1;color:var(--danger)" onclick="removePin()">Desactivar</button>
+        <button class="btn-sm u-flex1 pin-btn-peligro" onclick="removePin()">Desactivar</button>
       </div>
-      <label class="opt-row" style="--chk:var(--save);margin-top:12px">
+      <label class="opt-row pin-cifrar">
         <span class="opt-icon">🔒</span>
         <span class="opt-text"><span class="opt-title">Cifrar los backups</span><span class="opt-sub">El archivo, el menú de compartir y Drive. Se abren con tu PIN o código</span></span>
         <input type="checkbox" id="backup-cifrado-chk" class="chk-custom" ${localStorage.getItem(BACKUP_CIFRADO_KEY)==="0"?"":"checked"} onchange="onBackupCifradoToggle(this)">
       </label>
-      <div class="form-group" style="margin-top:12px"><label class="form-label" for="autolock-sel">Volver a pedir el PIN</label>
+      <div class="form-group pin-autolock"><label class="form-label" for="autolock-sel">Volver a pedir el PIN</label>
         <select id="autolock-sel" class="form-select" onchange="cambiarAutoLock(this.value)">${AUTOLOCK_OPCIONES.map(([v,t])=>`<option value="${v}"${v===opcion?" selected":""}>${v==="nunca"?"Nunca (la app queda abierta)":`Si salís o no la usás ${t.replace("a ","")}`}</option>`).join("")}</select>
-        <p class="txt-xs txt-muted" style="margin-top:4px">Si salís de la app o la dejás sin tocar ese tiempo, vuelve a pedir el PIN.</p></div>`;
+        <p class="txt-xs txt-muted pin-ayuda-baja">Si salís de la app o la dejás sin tocar ese tiempo, vuelve a pedir el PIN.</p></div>`;
   } else {
     el.innerHTML=`
       <p class="txt-sm txt-muted mb-10">El PIN te protege si alguien toma tu celular. Es opcional.</p>
-      <button class="btn-primary" style="background:var(--accent);color:#fff;width:100%" onclick="setupPin()">🔐 Activar PIN</button>`;
+      <button class="btn-primary pin-activar" onclick="setupPin()">🔐 Activar PIN</button>`;
   }
   if(typeof renderHuellaStatus==="function") renderHuellaStatus();
 }
