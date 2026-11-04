@@ -578,7 +578,7 @@
           <button type="button" class="date-chip" data-for="inp-fecha" data-delta="-7" onclick="setFechaQuick('inp-fecha',-7)">-7d</button>
           <button type="button" class="date-cal-btn" onclick="abrirCalendario('inp-fecha')" aria-label="Elegir otra fecha">📅</button>
         </div>
-        <input type="date" id="inp-fecha" class="field-hidden-native" onchange="refrescarFechaUI('inp-fecha')">
+        <input type="date" id="inp-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('inp-fecha')">
       </div>
       <div class="form-group"><label class="form-label" for="inp-nota">Nota (opcional)</label><input type="text" id="inp-nota" class="form-input" placeholder="Ej: Disco, YPF, Spotify..." oninput="sugerirCategoria()">
         <!-- [AAA cargar] Sugerencia debajo de la nota (la que la dispara) y a todo el ancho: antes empujaba solo la columna de Categoría. -->
@@ -676,7 +676,8 @@
           </label>
           <div class="form-group" id="inv-fondo-group" style="display:none">
             <label class="form-label" for="inv-fondo">¿De qué fondo?</label>
-            <select id="inv-fondo" class="form-select"></select>
+            <select id="inv-fondo" class="form-select" onchange="mostrarSaldoFondo()" aria-describedby="inv-fondo-saldo"></select>
+            <p id="inv-fondo-saldo" class="txt-xs txt-muted" style="margin:0"></p>
           </div>
         </div>
         <div class="form-group">
@@ -692,7 +693,7 @@
             <button type="button" class="date-chip" data-for="inv-fecha" data-delta="-7" onclick="setFechaQuick('inv-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('inv-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="inv-fecha" class="field-hidden-native" onchange="refrescarFechaUI('inv-fecha')">
+          <input type="date" id="inv-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('inv-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="inv-nota">Nota (opcional)</label><input type="text" id="inv-nota" class="form-input" placeholder="Descripción…"></div>
       </div>
@@ -743,7 +744,7 @@
           <div class="form-group">
             <label class="form-label" for="tc-cuotas">Cuotas totales</label>
             <div class="date-row" id="tc-cuotas-chips"></div>
-            <input type="number" id="tc-cuotas" class="field-hidden-native" min="1" inputmode="numeric">
+            <input type="number" id="tc-cuotas" class="field-hidden-native" tabindex="-1" min="1" inputmode="numeric">
           </div>
           <div class="form-group"><label class="form-label" for="tc-mes-inicio">1ª cuota en</label><input type="month" id="tc-mes-inicio" class="form-input" onchange="refreshSimIfOpen()"></div>
           <div class="sim-box">
@@ -777,7 +778,7 @@
             <button type="button" class="date-chip" data-for="tc-fecha" data-delta="-7" onclick="setFechaQuick('tc-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('tc-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="tc-fecha" class="field-hidden-native" onchange="refrescarFechaUI('tc-fecha')">
+          <input type="date" id="tc-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('tc-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="tc-nota">Nota (opcional)</label><input type="text" id="tc-nota" class="form-input" placeholder="Descripción adicional..."></div>
       </div>
@@ -827,7 +828,7 @@
             <button type="button" class="date-chip" data-for="cambio-fecha" data-delta="-7" onclick="setFechaQuick('cambio-fecha',-7)">-7d</button>
             <button type="button" class="date-cal-btn" onclick="abrirCalendario('cambio-fecha')" aria-label="Elegir otra fecha">📅</button>
           </div>
-          <input type="date" id="cambio-fecha" class="field-hidden-native" onchange="refrescarFechaUI('cambio-fecha')">
+          <input type="date" id="cambio-fecha" class="field-hidden-native" tabindex="-1" onchange="refrescarFechaUI('cambio-fecha')">
         </div>
         <div class="form-group"><label class="form-label" for="cambio-nota">Nota (opcional)</label><input type="text" id="cambio-nota" class="form-input" placeholder="Ej: MEP con AL30"></div>
       </div>
@@ -839,7 +840,7 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="calc-titulo">
       <div class="modal-handle"></div>
       <div class="modal-title" id="calc-titulo">Calculadora</div>
-      <div class="calc-display" id="calc-display" role="status" aria-live="polite" aria-label="Cuenta">0</div>
+      <div class="calc-display" id="calc-display" role="status" aria-live="polite">0</div>
       <!-- Mismo orden que la calculadora del teléfono: C ⌫ ÷ × / 7 8 9 − / 4 5 6 + / 1 2 3 = /
            0 , — sin celdas que ocupen más de una fila o columna (eso corría "=" y "0" de lugar:
            el navegador ubica primero los botones con una posición fija y recién después los que

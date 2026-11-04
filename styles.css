@@ -1058,10 +1058,17 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
    de 44 de ancho (vacío medía 35×69). La cifra ENTERA entra: la fuente baja con --monto-fs (ajustarTamanoMonto, js/config-ui.js) y el
    texto no se corta con "…" (el reset global de input,select ponía text-overflow:ellipsis y se perdía el último dígito de 12 cifras). */
 #page-cargar .amount-hero{cursor:text;max-width:100%}
-#page-cargar .amount-card .amount-hero .amount-input{font-size:var(--monto-fs,38px)!important;min-width:max(3ch,var(--tap));max-width:100%;text-overflow:clip;transition:font-size var(--dur-2) var(--ease)}
+#page-cargar .amount-card .amount-hero .amount-input{font-size:var(--monto-fs,38px)!important;min-width:var(--tap);max-width:100%;text-overflow:clip;text-align:center;
+  box-sizing:border-box;height:69px;line-height:1;padding-block:0}
+/* Altura fija (69): al bajar la fuente por la cifra larga la tarjeta no cambia de alto y el formulario de abajo no se mueve. Sin transición de font-size:
+   ajustarTamanoMonto mide el campo real y necesita el tamaño final al instante. */
+#page-cargar .amount-card .amount-hero{height:69px}
 #page-cargar .amount-hero .amount-input::placeholder{color:var(--border-strong);opacity:1}
 /* El prefijo ($ / USD) acompaña a la cifra: misma línea base y peso, no se achica con ella. */
 #page-cargar .amount-card .amount-hero{align-items:baseline}
+/* El prefijo heredaba transform:translateY(-50%) de la regla absoluta original y quedaba ~10 px por encima de la línea base de la cifra. */
+#page-cargar .amount-hero .amount-prefix{transform:none;line-height:1}
+#page-cargar .amount-card .amount-hero-sm{gap:var(--sp-2)}
 
 /* Moneda ARS/USD y sentido Compro/Vendo: botones de 44 reales dentro de la píldora. */
 #page-cargar .currency-pill{height:32px}
@@ -1077,8 +1084,8 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 /* Categoría y Subcategoría en una sola columna en pantallas de celular: medido con las 120 subcategorías reales, a 390 px la columna de
    Subcategoría (93 px útiles) cortaba 12 nombres ("Electrodomésticos", "Renovación Alquiler"…), a 360 px 15; apiladas no se corta ninguna. */
 @media (max-width:480px){
-  #page-cargar .two-col:has(#inp-cat){grid-template-columns:1fr}
-  #page-cargar .two-col:has(#inp-cat) .form-select{padding-left:var(--sp-3);padding-right:24px;background-position:right 8px center}
+  #page-cargar .two-col:has(#inp-cat),#page-cargar .two-col:has(#tc-cat){grid-template-columns:1fr}
+  #page-cargar .two-col:has(#inp-cat) .form-select,#page-cargar .two-col:has(#tc-cat) .form-select{padding-left:var(--sp-3);padding-right:24px;background-position:right 8px center}
 }
 
 /* Sugerencia de categoría (debajo de la nota): botón de ancho completo, 44 de alto, legible (el "tocá para aplicar" ya no se apaga con opacity). */
@@ -1106,6 +1113,17 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .sim-bar-ya{background:var(--border-strong)}
 .sim-bar-nueva{background:var(--warning)}
 .sim-val{min-width:84px;flex-shrink:0;text-align:right;white-space:nowrap;font-size:var(--fs-sm);font-weight:600}
+
+/* Franjas de valor (cuota / tipo de cambio): una línea, la fuente la baja ajustarLineaResumen (--resumen-fs). */
+.rate-strip-label{white-space:nowrap;flex-shrink:0}
+.rate-strip-val{white-space:nowrap;font-size:var(--resumen-fs,17px)}
+.rate-box-label{white-space:nowrap;flex-shrink:0}
+.rate-box-val:not(.muted){white-space:nowrap;font-size:var(--resumen-fs,16px)}
+/* Tarjeta apila igual (Tarjeta / Categoría): a 360 px #tc-cat cortaba 3 opciones y "+ Nueva" quedaba a 11 px de la etiqueta vecina. */
+/* Primera fila de opciones: sin divisoria (la tarjeta ya tiene borde; quedaba una doble línea a 4 px). El primer hijo puede ser un <p> oculto, por eso :first-of-type. */
+.options-card>.opt-row:first-of-type{border-top:none}
+/* Barra Guardar opaca: con el fondo translúcido asomaba el texto de las opciones por el borde. */
+#page-cargar .save-bar{background:var(--bg)}
 
 /* Barra Guardar: el .page deja 96 px abajo (era para una barra inferior que ya no existe) y la barra quedaba flotando con un hueco debajo.
    En Cargar va pegada al borde de abajo, y el scroll por foco deja libre su alto para que el teclado no esconda el campo tras ella. */

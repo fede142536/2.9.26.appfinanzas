@@ -116,13 +116,14 @@ function buildInvCatChips(){
   const actual=sel.value;
   cont.innerHTML=[...sel.options].map(o=>{
     const on=o.value===actual;
-    return `<button type="button" class="inv-cat-chip${on?" active":""}" data-cat="${escapeHtml(o.value)}" onclick="pickInvCat(this)">${getIcon(o.value,"📦")} ${escapeHtml(o.value)}</button>`;
+    return `<button type="button" class="inv-cat-chip${on?" active":""}" data-cat="${escapeHtml(o.value)}" aria-pressed="${on}" onclick="pickInvCat(this)">${getIcon(o.value,"📦")} ${escapeHtml(o.value)}</button>`;
   }).join("");
 }
 function pickInvCat(btn){
   const sel=document.getElementById("inv-cat");
   sel.value=btn.dataset.cat;
   document.querySelectorAll("#inv-cat-chips .inv-cat-chip").forEach(b=>b.classList.toggle("active", b===btn));
+  if(typeof sincronizarAriaPressed==="function") sincronizarAriaPressed();
   updateInvSubcats();
 }
 // "Recientes": últimos 5 tickers distintos usados en movimientos de Inversión, más nuevo primero
@@ -465,6 +466,7 @@ function setTipo(t){
   if(t==="Tarjeta"){ buildTcCats(); buildTarjetaSelect("tc-tarjeta"); buildCuotasChips(); }
   if(t==="Inversion"){ buildInvCats(); buildTickerRecientes(); }
   if(t==="Cambio"){ buildCuentaSelect("cambio-cuenta"); setSentidoCambio(sentidoCambio); }
+  if(typeof sincronizarAriaPressed==="function") sincronizarAriaPressed();
   if(typeof ajustarTodosLosMontos==="function") ajustarTodosLosMontos();   // [AAA cargar] los campos recién mostrados ya tienen ancho: se ajusta la fuente del monto
 }
 
@@ -495,6 +497,7 @@ function setSentidoCambio(s){
     usaAhorroGroup.style.display = compra ? "none" : "";
     if(compra){ const chk=document.getElementById("cambio-usaahorro"); if(chk) chk.checked=false; }
   }
+  if(typeof sincronizarAriaPressed==="function") sincronizarAriaPressed();
   calcTipoCambio();
 }
 
@@ -514,6 +517,7 @@ function calcTipoCambio(){
     val.textContent=fmtS(tc)+" por dólar";
     val.classList.remove("muted");
   }
+  if(typeof ajustarLineaResumen==="function") ajustarLineaResumen(val);
 }
 
 async function guardarCambio(){
@@ -589,6 +593,7 @@ function calcCuota(){
     if(lbl) lbl.textContent="Valor por cuota";
     document.getElementById("tc-cuota-val").textContent=(total>0&&c>0)?fmtCur(total/c):cero;
   }
+  if(typeof ajustarLineaResumen==="function") ajustarLineaResumen(document.getElementById("tc-cuota-val"));
   refreshSimIfOpen();
 }
 // Chips de cuotas totales (reemplazan el <input type="number"> de siempre, que sigue oculto
@@ -599,12 +604,13 @@ function buildCuotasChips(){
   if(!cont || !input) return;
   const actual=parseInt(input.value,10)||1;
   cont.innerHTML=[1,3,6,9,12,18].map(q=>
-    `<button type="button" class="cuota-chip${q===actual?" active":""}" data-q="${q}" onclick="pickCuotas(${q})">${q}</button>`
+    `<button type="button" class="cuota-chip${q===actual?" active":""}" data-q="${q}" aria-pressed="${q===actual}" onclick="pickCuotas(${q})">${q}</button>`
   ).join("");
 }
 function pickCuotas(q){
   document.getElementById("tc-cuotas").value=q;
   document.querySelectorAll("#tc-cuotas-chips .cuota-chip").forEach(b=>b.classList.toggle("active", Number(b.dataset.q)===q));
+  if(typeof sincronizarAriaPressed==="function") sincronizarAriaPressed();
   calcCuota();
 }
 // ── SIMULADOR INLINE ("¿Me lo banco?") ──

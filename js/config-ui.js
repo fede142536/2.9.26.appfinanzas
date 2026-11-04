@@ -52,7 +52,26 @@ function ajustarTamanoMonto(el){
   const pre=hero.querySelector(".amount-prefix");
   const libre=tarjeta.clientWidth-parseFloat(ct.paddingLeft)-parseFloat(ct.paddingRight)-parseFloat(ch.paddingLeft)-parseFloat(ch.paddingRight)
     -(pre?pre.offsetWidth:0)-(parseFloat(ch.columnGap)||0)-8;
-  if(ancho>libre) el.style.setProperty("--monto-fs", Math.max(18,Math.floor(base*libre/ancho))+"px");
+  let fs=ancho>libre ? Math.max(18,Math.floor(base*libre/ancho)) : base;
+  if(fs<base) el.style.setProperty("--monto-fs", fs+"px");
+  // La estimación puede quedarse corta unos px (decimales, separadores): se verifica contra el campo real y se baja de a 1 px hasta que entre.
+  for(let i=0; i<60 && fs>18 && el.scrollWidth>el.clientWidth; i++){ fs--; el.style.setProperty("--monto-fs", fs+"px"); }
+}
+// [AAA cargar] Los botones de una elección (tipo, moneda, fecha, sentido del cambio, cuotas, categoría de inversión) marcan la activa con color:
+// aria-pressed se lo cuenta también al lector de pantalla. Se deriva de la clase "active*" que ya manejan setTipo, syncCurrencyPill, etc.
+function sincronizarAriaPressed(){
+  document.querySelectorAll("#page-cargar .type-btn,#page-cargar .currency-pill,#page-cargar .date-chip,#page-cargar .sentido-btn,#page-cargar .cuota-chip,#page-cargar .inv-cat-chip").forEach(b=>{
+    b.setAttribute("aria-pressed", /(^|\s)active/.test(b.className) ? "true" : "false");
+  });
+}
+// [AAA cargar] Franja "Valor por cuota" / "Tipo de cambio": con un importe de 12 dígitos el valor se partía en dos líneas y la tarjeta crecía 8 px
+// (salto de layout). Una sola línea y la fuente baja de a 1 px (piso 11) hasta que entre en la franja.
+function ajustarLineaResumen(val){
+  const caja=val && val.parentElement;
+  if(!caja || !caja.clientWidth) return;
+  val.style.removeProperty("--resumen-fs");
+  let fs=parseFloat(getComputedStyle(val).fontSize);
+  for(let i=0; i<14 && fs>11 && caja.scrollWidth>caja.clientWidth; i++){ fs--; val.style.setProperty("--resumen-fs", fs+"px"); }
 }
 function ajustarTodosLosMontos(){
   document.querySelectorAll(".amount-hero .amount-input").forEach(ajustarTamanoMonto);
@@ -190,6 +209,7 @@ function refrescarFechaUI(inputId){
   document.querySelectorAll(`.date-chip[data-for="${inputId}"]`).forEach(chip=>{
     chip.classList.toggle("active", Number(chip.dataset.delta)===diff);
   });
+  sincronizarAriaPressed();
 }
 // Abre el selector nativo de fecha/mes sobre un input oculto detrás de chips o pills.
 function abrirCalendario(inputId){
@@ -217,6 +237,7 @@ function syncCurrencyPill(selectId){
   document.querySelectorAll(`.currency-pill[data-for="${selectId}"]`).forEach(b=>{
     b.classList.toggle("active", b.dataset.val===sel.value);
   });
+  sincronizarAriaPressed();
 }
 
 // ═══════════════════════════════════════════
