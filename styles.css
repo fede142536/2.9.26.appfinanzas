@@ -3,21 +3,75 @@
 @font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/plus-jakarta-sans-500.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:600;font-display:swap;src:url(fonts/plus-jakarta-sans-600.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:700;font-display:swap;src:url(fonts/plus-jakarta-sans-700.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+/* ═══════════════════════════════════════════════════════════════════════════
+   SISTEMA DE DISEÑO DE ENOLA (guía corta: aaa/sistema/GUIA.md)
+   Todo color, radio, sombra, tamaño y tiempo sale de los tokens de abajo. Si hace falta
+   uno nuevo, se define en :root Y en [data-theme="dark"].
+
+   COLOR · cada par tiene un tono de TEXTO (--accent, --danger…) y un fondo suave (-light).
+     --text     texto principal                         17:1 claro · 14:1 oscuro
+     --muted    texto atenuado (rótulos, notas)         7,6:1 sobre blanco · 7,1:1 sobre la tarjeta oscura
+     --accent   azul · acción, selección, enlaces       8,2:1 · 9,0:1
+     --danger   rojo · gasto, error, borrar             8,1:1 · 8,0:1
+     --success  verde · ingreso, ok                     8,0:1 · 9,5:1
+     --warning  ámbar · tarjeta, aviso                  6,3:1 · 9,0:1   (en claro es un ocre naranja: el ámbar vivo no llega a 4,5:1 como texto)
+     --invest   violeta · inversión                     8,2:1 · 8,1:1
+     --save     teal · ahorro                           8,1:1 · 9,5:1
+     (contraste sobre blanco en claro · sobre la tarjeta #1c1c1e en oscuro). Los 6 tonos cumplen AA (≥4,5:1) sobre --bg,
+     --surface y todos los -light en ambos temas. Sobre su propio fondo suave (-light) llegan a ≥7:1 (AAA) en los dos temas,
+     salvo el ámbar en claro (5,5:1): más oscuro dejaría de verse ámbar y pasaría a marrón.
+   --warning-fill     ámbar vivo para RELLENOS sin texto (barras) y texto GRANDE ≥24 px (la cifra de Tarjetas): 3,8:1 sobre blanco.
+   --warning-solid + --on-warning-solid   botón ámbar con texto oscuro (ámbar vivo #e0a030, 7,5:1): conserva la calidez.
+   --on-solid   texto SOBRE un relleno sólido semántico (botón, chip activo): blanco en claro, casi negro en oscuro (los tonos
+                del oscuro son claros). Nunca escribas un blanco fijo sobre un relleno semántico.
+   --muted-on-tint  texto chico atenuado SOBRE fondos tintados (track de segmentados, chips, mosaicos): ≥7:1 en ambos temas.
+   --border         divisor decorativo (líneas, fondo de segmentados). No lo uses como único borde de un control.
+   --border-mid     borde de botones con texto (el texto ya los identifica): .btn-sm.
+   --border-strong  borde de controles (inputs, interruptor apagado): ≥3:1 sobre la tarjeta (WCAG 1.4.11).
+   --surface-2      superficie elevada SOBRE un fondo --border (segmento activo, píldora activa): blanco / #3a3a3c.
+   --banner-bg/-fg  cartel de "versión vieja" (index.html, estilos en línea a propósito: tiene que verse aunque el CSS esté viejo).
+   --focus          anillo de foco del teclado.
+
+   FORMA · radios: --radius-sm 8 (botones chicos) · --radius-md 12 (inputs, botones) · --radius 14 (tarjetas)
+           --radius-lg 20 (hojas modales) · --radius-pill 999 (chips, píldoras).
+   SOMBRA · --shadow-sm (relieve mínimo) · --shadow (tarjetas) · --shadow-pop (toast, menús flotantes).
+   MOVIMIENTO · --dur-1 120ms (tocar) · --dur-2 200ms (cambios de estado) · --dur-3 300ms (entradas) · curva --ease.
+   ESPACIADO · grilla de 4 px: --sp-1 4 · --sp-2 8 · --sp-3 12 · --sp-4 16 (margen lateral de página) · --sp-5 24 · --sp-6 32.
+   TIPOGRAFÍA · Plus Jakarta Sans. Escala corta: --fs-micro 10 · --fs-xs 11 · --fs-sm 12 · --fs-md 13 ·
+           --fs-base 15 (cuerpo, inputs) · --fs-lg 17 (títulos de pantalla) · --fs-xl 22 · --fs-hero 44 (importe).
+           Cifras siempre tabulares (ya está en body). La escala es el OBJETIVO: quedan tamaños sueltos en reglas de cada pantalla
+           (aaa/sistema/TAMANOS_SUELTOS.md). Pesos: 400 cuerpo · 500 énfasis · 600 rótulos y botones · 700 cifras y títulos.
+   TÁCTIL · --tap 44px: todo lo que se toca mide (o tiene área clicable de) 44×44. Ver el bloque [AAA sistema] más abajo.
+   ═══════════════════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#f7f6f2;--surface:#fff;--border:#e8e5df;--text:#1a1a18;--muted:#6e6d65;
-  --accent:#1c6ca8;--accent-light:#e5f0fb;--danger:#a32d2d;--danger-light:#fcebeb;
-  --success:#2d7a3a;--success-light:#e8f5eb;--warning:#ba7517;--warning-light:#faeeda;
-  --invest:#534ab7;--invest-light:#eeedfe;--save:#1a6b6b;--save-light:#e0f5f5;
-  --radius:14px;--radius-sm:8px;--shadow:0 8px 24px rgba(0,0,0,.05);
+  --bg:#f7f6f2;--surface:#fff;--surface-2:#fff;--border:#e8e5df;--border-mid:#b8b5ab;--border-strong:#8a887f;
+  --text:#1a1a18;--muted:#55544d;--muted-on-tint:#4a493f;
+  --accent:#145283;--accent-light:#e5f0fb;--danger:#942727;--danger-light:#fcebeb;
+  --success:#1e5c2c;--success-light:#e8f5eb;--warning:#924f00;--warning-light:#faeeda;
+  --invest:#4841a5;--invest-light:#eeedfe;--save:#165959;--save-light:#e0f5f5;
+  --warning-fill:#b87410;--warning-solid:#e0a030;--on-warning-solid:#2a1800;
+  --on-solid:#fff;--focus:var(--accent);--grad-fin:black;--banner-bg:#924f00;--banner-fg:#fff;
+  --radius:14px;--radius-sm:8px;--radius-md:12px;--radius-lg:20px;--radius-pill:999px;
+  --shadow:0 8px 24px rgba(0,0,0,.05);--shadow-sm:0 1px 3px rgba(0,0,0,.12);--shadow-pop:0 10px 30px rgba(0,0,0,.18);
   --surface-glass:rgba(255,255,255,.82);
+  --ease:cubic-bezier(.22,.9,.35,1);--dur-1:.12s;--dur-2:.2s;--dur-3:.3s;
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;
+  --fs-micro:10px;--fs-xs:11px;--fs-sm:12px;--fs-md:13px;--fs-base:15px;--fs-lg:17px;--fs-xl:22px;--fs-hero:44px;
+  --tap:44px;
+  --safe-t:env(safe-area-inset-top,0px);--safe-r:env(safe-area-inset-right,0px);--safe-b:env(safe-area-inset-bottom,0px);--safe-l:env(safe-area-inset-left,0px);
+  color-scheme:light;
 }
 [data-theme="dark"]{
-  --bg:#000000;--surface:#1c1c1e;--border:rgba(255,255,255,.1);--text:#e8e6e0;--muted:#9a9890;
-  --accent:#4da3e8;--accent-light:#1d3045;--danger:#e57373;--danger-light:#3a2020;
-  --success:#7bbf85;--success-light:#1f3322;--warning:#e0a04a;--warning-light:#3a2c18;
-  --invest:#9489e0;--invest-light:#26223a;--save:#5cbfbf;--save-light:#1a3535;
-  --shadow:0 8px 24px rgba(0,0,0,.6);
+  --bg:#000000;--surface:#1c1c1e;--surface-2:#3a3a3c;--border:rgba(255,255,255,.1);--border-mid:rgba(255,255,255,.26);--border-strong:#727275;
+  --text:#e8e6e0;--muted:#aaa8a0;--muted-on-tint:#d2d0c8;
+  --accent:#88c3f3;--accent-light:#1d3045;--danger:#f19a9a;--danger-light:#3a2020;
+  --success:#96cf9f;--success-light:#1f3322;--warning:#e9b36c;--warning-light:#3a2c18;
+  --invest:#b3abeb;--invest-light:#26223a;--save:#7dcfcf;--save-light:#1a3535;
+  --warning-fill:#e5a652;--warning-solid:#e5a652;--on-warning-solid:#0b0b0c;
+  --on-solid:#0b0b0c;--grad-fin:white;--banner-bg:#e5a652;--banner-fg:#0b0b0c;
+  --shadow:0 8px 24px rgba(0,0,0,.6);--shadow-sm:0 1px 3px rgba(0,0,0,.5);--shadow-pop:0 10px 30px rgba(0,0,0,.7);
   --surface-glass:rgba(28,28,30,.78);
+  color-scheme:dark;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-variant-numeric:tabular-nums}
@@ -33,7 +87,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    y ocupa todo el ancho con el botón Guardar) para no taparlo. El ícono es el signo "=" como
    texto plano (no un emoji): el de calculadora de bolsillo no lo dibujan todas las fuentes de
    emoji de Android y se veía como un cuadrito roto. */
-#fab-calculadora{position:fixed;bottom:calc(92px + env(safe-area-inset-bottom, 0px));right:16px;width:48px;height:48px;border-radius:50%;background:var(--tema-color,var(--accent));color:#fff;border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;cursor:pointer;transition:transform .2s}
+#fab-calculadora{position:fixed;bottom:calc(92px + env(safe-area-inset-bottom, 0px));right:16px;width:48px;height:48px;border-radius:50%;background:var(--tema-color,var(--accent));color:var(--on-solid);border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;cursor:pointer;transition:transform .2s}
 #fab-calculadora:active{transform:scale(.92)}
 .calc-display{background:var(--bg);border-radius:12px;padding:16px 14px;margin:4px 0 14px;text-align:right;
   font-size:30px;font-weight:700;letter-spacing:-.5px;color:var(--text);overflow-x:auto;white-space:nowrap}
@@ -45,7 +99,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    solo el color del texto, no un fondo aparte — eso hacía que se viera recargada. */
 .calc-btn-op{color:var(--tema-color,var(--accent))}
 .calc-btn-clear{color:var(--danger)}
-.calc-btn-eq{background:var(--tema-color,var(--accent));color:#fff}
+.calc-btn-eq{background:var(--tema-color,var(--accent));color:var(--on-solid)}
 /* Fondo oscuro detrás del menú: invisible y sin capturar toques hasta que se abre */
 #side-menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199;opacity:0;pointer-events:none;transition:opacity .3s ease}
 #side-menu-overlay.open{opacity:1;pointer-events:auto}
@@ -56,7 +110,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .side-menu-title{font-size:16px;font-weight:700;letter-spacing:-.3px}
 .side-menu-close{background:none;border:none;font-size:22px;color:var(--muted);cursor:pointer;padding:4px 8px;line-height:1}
 /* Ítems del menú: lista vertical, ícono a la izquierda, texto grande — reemplaza el look de tab bar */
-.nav-btn{width:100%;text-align:left;padding:13px 18px;border:none;background:none;font-size:15px;font-weight:500;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:14px;transition:background-color .2s ease}
+.nav-btn{width:100%;text-align:left;padding:13px 18px;border:none;background:none;font-size:var(--fs-base);font-weight:500;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:14px;transition:background-color var(--dur-2) var(--ease)}
 .nav-btn:active{background:var(--bg)}
 .nav-btn.active{color:var(--accent);background:var(--accent-light);font-weight:600}
 .nav-icon{font-size:19px;line-height:1;width:26px;text-align:center;flex-shrink:0}
@@ -69,23 +123,23 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 @keyframes pageEnter{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
 .page.active{display:block;animation:pageEnter .25s ease}
 .header{background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:13px 16px 13px 58px;position:sticky;top:0;z-index:50}
-.header h1{font-size:17px;font-weight:600;letter-spacing:-.4px}
-.header p{font-size:12px;color:var(--muted);margin-top:2px}
+.header h1{font-size:var(--fs-lg);font-weight:600;letter-spacing:-.4px}
+.header p{font-size:var(--fs-sm);color:var(--muted);margin-top:2px}
 @keyframes slideUpFade{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
 /* Destello breve en el select de cuenta cuando se autocompleta por predicción */
 @keyframes cuentaSugeridaFlash{0%{box-shadow:0 0 0 3px var(--accent-light);border-color:var(--accent)}100%{box-shadow:none;border-color:var(--border)}}
 .cuenta-sugerida-flash{animation:cuentaSugeridaFlash .7s ease}
-.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:15px;margin:10px 16px;box-shadow:var(--shadow);animation:slideUpFade .4s ease forwards}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:var(--sp-4);margin:10px 16px;box-shadow:var(--shadow);animation:slideUpFade .4s ease forwards}
 /* Que el toque se sienta. En el celular no hay hover: sin esto, tocar una fila o un chip no
    devuelve ninguna señal hasta que la pantalla cambia, y se siente trabado. */
-.chip,.tx-item{transition:transform .12s ease}
+.chip,.tx-item{transition:transform var(--dur-1) var(--ease)}
 .chip:active{transform:scale(.97)}
 .tx-item:active{transform:scale(.99)}
-.card-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+.card-title{font-size:var(--fs-xs);font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
 /* FORM */
-.form-group{margin-bottom:18px}
-.form-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:7px;display:block}
-.form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;background:transparent;color:var(--text);appearance:none;-webkit-appearance:none;outline:none;transition:border-color .15s,box-shadow .15s}
+.form-group{margin-bottom:var(--sp-4)}
+.form-label{font-size:var(--fs-sm);font-weight:600;color:var(--muted);margin-bottom:7px;display:block}
+.form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:var(--radius-md);font-size:var(--fs-base);background:transparent;color:var(--text);appearance:none;-webkit-appearance:none;outline:none;transition:border-color var(--dur-2) var(--ease),box-shadow var(--dur-2) var(--ease)}
 .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);background:transparent;box-shadow:0 0 0 3px var(--accent-light)}
 .form-textarea{resize:none;height:64px}
 /* CHECKBOX CUSTOM → SWITCH
@@ -96,7 +150,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    variable --chk en el style="" de cada input, igual que --tema-color en la pantalla de Cargar.*/
 .chk-custom{appearance:none;-webkit-appearance:none;width:36px;height:22px;flex-shrink:0;
   border-radius:999px;background:var(--border);position:relative;cursor:pointer;
-  transition:background-color .15s ease,transform .12s ease}
+  transition:background-color var(--dur-2) var(--ease),transform var(--dur-1) var(--ease)}
 .chk-custom::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;
   border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s ease}
 .chk-custom:checked{background:var(--chk,var(--accent))}
@@ -113,19 +167,19 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 /* AMOUNT */
 
 /* BUTTONS */
-.btn-primary{width:100%;padding:13px;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease;position:relative;overflow:hidden}
+.btn-primary{width:100%;padding:13px;border:none;border-radius:var(--radius-md);font-size:var(--fs-base);font-weight:600;cursor:pointer;transition:transform var(--dur-1) var(--ease),box-shadow var(--dur-2) var(--ease);position:relative;overflow:hidden}
 /* Ripple effect: span absoluto inyectado por JS en el punto exacto del toque, que se expande
    y desvanece. rgba negro semitransparente funciona razonablemente bien tanto sobre los
    fondos de color de .btn-primary como sobre los claros de .pin-key/.type-btn. */
 @keyframes rippleAnim{0%{transform:scale(0);opacity:1}100%{transform:scale(1);opacity:0}}
 .ripple-effect{position:absolute;border-radius:50%;background:rgba(0,0,0,.15);animation:rippleAnim .5s ease-out;pointer-events:none}
-.btn-gasto{background:var(--danger);background:linear-gradient(135deg,var(--danger),color-mix(in srgb,var(--danger) 78%,black));color:#fff}
-.btn-ingreso{background:var(--success);background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 78%,black));color:#fff}
-.btn-inversion{background:var(--invest);background:linear-gradient(135deg,var(--invest),color-mix(in srgb,var(--invest) 78%,black));color:#fff}
-.btn-tarjeta{background:var(--warning);background:linear-gradient(135deg,var(--warning),color-mix(in srgb,var(--warning) 78%,black));color:#fff}
-.btn-cambio{background:var(--accent);background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 78%,black));color:#fff}
+.btn-gasto{background:var(--danger);background:linear-gradient(135deg,var(--danger),color-mix(in srgb,var(--danger) 78%,var(--grad-fin)));color:var(--on-solid)}
+.btn-ingreso{background:var(--success);background:linear-gradient(135deg,var(--success),color-mix(in srgb,var(--success) 78%,var(--grad-fin)));color:var(--on-solid)}
+.btn-inversion{background:var(--invest);background:linear-gradient(135deg,var(--invest),color-mix(in srgb,var(--invest) 78%,var(--grad-fin)));color:var(--on-solid)}
+.btn-tarjeta{background:var(--warning-solid);background:linear-gradient(135deg,var(--warning-solid),color-mix(in srgb,var(--warning-solid) 82%,var(--grad-fin)));color:var(--on-warning-solid)}
+.btn-cambio{background:var(--accent);background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 78%,var(--grad-fin)));color:var(--on-solid)}
 .btn-primary:active{transform:scale(.97)}
-.btn-sm{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap}
+.btn-sm{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:var(--fs-sm);background:var(--surface);color:var(--text);cursor:pointer;white-space:nowrap}
 .amount-wrap{position:relative}
 .amount-prefix{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--muted)}
 .amount-input{padding-left:28px!important;font-size:22px!important;font-weight:500}
@@ -185,7 +239,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 .sentido-pills{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:2px}
 .sentido-btn{height:30px;padding:0 14px;border:none;border-radius:999px;font-size:12px;font-weight:600;
   cursor:pointer;background:transparent;color:var(--muted);transition:background-color .15s,color .15s}
-.sentido-btn.active{background:var(--tema-color);color:#fff}
+.sentido-btn.active{background:var(--tema-color);color:var(--on-solid)}
 /* Divisor ⇅ entre los dos montos de Cambio */
 .cambio-divider{align-self:stretch;display:flex;align-items:center;gap:10px}
 .cambio-divider-line{flex:1;height:1px;background:var(--border)}
@@ -257,7 +311,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
   background:var(--surface-glass);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
   border-top:1px solid var(--border)}
 #page-cargar #btn-guardar{position:static;height:48px;border-radius:12px;font-size:15px;font-weight:600;
-  color:#fff;background:var(--tema-color);box-shadow:none;transition:background-color .25s ease}
+  color:var(--on-solid);background:var(--tema-color);box-shadow:none;transition:background-color .25s ease}
 /* Feedback de toque, igual que .chip, para todos los chips/pills nuevos de Cargar */
 .currency-pill:active,.sentido-btn:active,.date-chip:active,.date-cal-btn:active,.cuota-chip:active,
 .inv-cat-chip:active,.ticker-chip:active,.field-link:active{transform:scale(.97)}
@@ -273,7 +327,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    abajo; fondo hundido como .inset porque es información secundaria, no una acción. */
 .info-line{margin:10px 16px 0;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--muted);text-align:center;line-height:1.4}
 .chip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 7px;text-align:center}
-.chip-label{font-size:9.5px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.chip-label{font-size:var(--fs-micro);color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px}
 .chip-val{font-size:14px;font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.3px}
 .chip-val.positive{color:var(--success)}.chip-val.negative{color:var(--danger)}.chip-val.warn{color:var(--warning)}.chip-val.invest{color:var(--invest)}.chip-val.save{color:var(--save)}
 /* TX LIST */
@@ -299,8 +353,8 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
 #tx-list .tx-cat{font-size:14px}
 #tx-list .carga-rapida{margin:8px 16px 0;padding:12px 14px}
 .btn-voz{min-width:42px;font-size:16px}
-.carga-rapida-guardar{background:var(--save);border-color:var(--save);color:#fff;font-weight:700}
-.btn-voz.grabando{background:var(--danger);border-color:var(--danger);color:#fff;animation:vozLatido 1.1s ease-in-out infinite}
+.carga-rapida-guardar{background:var(--save);border-color:var(--save);color:var(--on-solid);font-weight:700}
+.btn-voz.grabando{background:var(--danger);border-color:var(--danger);color:var(--on-solid);animation:vozLatido 1.1s ease-in-out infinite}
 @keyframes vozLatido{0%,100%{box-shadow:0 0 0 0 rgba(200,60,60,.5)}50%{box-shadow:0 0 0 7px rgba(200,60,60,0)}}
 @media (prefers-reduced-motion:reduce){.btn-voz.grabando{animation:none}}
 .cierre-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
@@ -353,7 +407,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    dentro de #tx-list ya no necesita su propio margen ni radio (los pone .tx-day). */
 tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radius-sm);margin-bottom:4px;animation:slideUpFade .4s ease forwards}
 #tx-list tx-item{border-radius:0;margin-bottom:0}
-.tx-swipe-bg{position:absolute;top:0;bottom:0;width:78px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;text-align:center;padding:0 4px;cursor:pointer}
+.tx-swipe-bg{position:absolute;top:0;bottom:0;width:78px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--on-solid);text-align:center;padding:0 4px;cursor:pointer}
 .tx-swipe-bg-left{left:0;background:var(--accent);flex-direction:column;padding:0}
 .tx-swipe-act{flex:1;width:100%;display:flex;align-items:center;justify-content:center}
 .tx-swipe-repetir{background:rgba(0,0,0,.18)}
@@ -382,7 +436,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .month-nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0}
 .month-nav button{background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 13px;font-size:14px;cursor:pointer;color:var(--text)}
 .month-nav span{font-size:15px;font-weight:600}
-.mes-label-x{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:4px;border-radius:50%;background:var(--danger);color:#fff;font-size:11px;font-weight:700;vertical-align:middle}
+.mes-label-x{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:4px;border-radius:50%;background:var(--danger);color:var(--on-solid);font-size:11px;font-weight:700;vertical-align:middle}
 
 /* ═══════════════════════════════════════════
    MOVIMIENTOS: barra unificada + resumen número/barras + filtro segmentado
@@ -430,7 +484,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .seg-btn{flex:1;height:32px;border:none;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;
   background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:4px}
 .seg-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
-.seg-btn-count{font-size:10.5px;opacity:.6}
+.seg-btn-count{font-size:var(--fs-xs)}
 
 /* BARS */
 .bar-wrap{display:flex;flex-direction:column;gap:8px}
@@ -453,14 +507,14 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .filter-row{display:flex;gap:7px;padding:10px 16px 0;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x mandatory;scroll-padding-left:16px}
 .filter-row::-webkit-scrollbar{display:none}
 .filter-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface);font-size:12px;cursor:pointer;white-space:nowrap;color:var(--muted);scroll-snap-align:start}
-.filter-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.ahorro-view-btn.active{background:var(--save);color:#fff;border-color:var(--save)}
+.filter-chip.active{background:var(--accent);border-color:var(--accent);color:var(--on-solid)}
+.ahorro-view-btn.active{background:var(--save);color:var(--on-solid);border-color:var(--save)}
 .pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);background:transparent;transition:all .15s}
 .ob-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .2s}
 .ob-dot.active{background:var(--accent);width:22px;border-radius:4px}
 .pin-dot.filled{background:var(--accent);border-color:var(--accent)}
 .pin-key{font-size:22px;padding:18px 0;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;cursor:pointer;font-weight:500;position:relative;overflow:hidden}
-.pin-key:active{background:var(--accent);color:#fff;transform:scale(.96)}
+.pin-key:active{background:var(--accent);color:var(--on-solid);transform:scale(.96)}
 /* MODAL */
 /* display:flex siempre (no "none"), oculto vía opacity+visibility para poder animar la transición.
    pointer-events:none cuando está cerrado evita que capture toques mientras es invisible. */
@@ -471,7 +525,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
   transform:translateY(28px);transition:transform .24s cubic-bezier(.22,.9,.35,1)}
 .modal-overlay.open .modal{transform:translateY(0)}
 .modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 14px}
-.modal-title{font-size:16px;font-weight:600;margin-bottom:14px}
+.modal-title{font-size:var(--fs-lg);font-weight:600;margin-bottom:14px}
 /* TARJETA CARDS */
 /* MISC */
 
@@ -484,7 +538,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .inv-row-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .inv-row-top{display:flex;align-items:center;gap:6px}
 .inv-row-ticker{font-size:14px;font-weight:700;letter-spacing:.3px}
-.inv-row-badge{font-size:9.5px;font-weight:700;letter-spacing:.3px;padding:2px 6px;border-radius:6px}
+.inv-row-badge{font-size:var(--fs-micro);font-weight:700;letter-spacing:.3px;padding:2px 6px;border-radius:6px}
 .inv-row-badge.entra{background:var(--invest-light);color:var(--invest)}
 .inv-row-badge.sale{background:var(--success-light);color:var(--success)}
 .inv-row-sub{font-size:12px;color:var(--muted)}
@@ -537,13 +591,13 @@ canvas{width:100%!important;max-width:100%}
 /* Utilidad genérica para cualquier otro carrusel horizontal (ej: "Próximas cuotas" en Tarjetas) */
 .hscroll{scroll-snap-type:x mandatory}
 .hscroll-item{scroll-snap-align:start}
-.year-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.year-tab.active{background:var(--accent);border-color:var(--accent);color:var(--on-solid)}
 
 /* ── ACCESIBILIDAD ── */
 /* Foco visible solo para navegación por teclado: :focus-visible no se activa al tocar o
    hacer click, así que no cambia nada de la experiencia táctil habitual. Sin esto, quien
    navega con teclado no tiene forma de saber dónde está parado. */
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 /* Los elementos con role="button" son <div>/<span>: el cursor de texto confunde */
 [role="button"]{cursor:pointer}
 
@@ -558,7 +612,7 @@ canvas{width:100%!important;max-width:100%}
 /* Badge: la etiquetita al lado de un título (AHORRO, DE AHORROS, 🔁 FRECUENTE, USD, …).
    Estaba inline 21 veces con 9 ortografías: padding 1px 5px vs 1px 6px, radio 6px vs 8px,
    con y sin font-weight. Ahora hay una sola y todas se ven igual. */
-.badge{display:inline-block;font-size:9px;padding:1px 6px;border-radius:8px;font-weight:500;vertical-align:middle}
+.badge{display:inline-block;font-size:var(--fs-micro);padding:2px 7px;border-radius:8px;font-weight:500;vertical-align:middle}
 .badge-save{background:var(--save-light);color:var(--save)}
 .badge-danger{background:var(--danger-light);color:var(--danger)}
 .badge-success{background:var(--success-light);color:var(--success)}
@@ -577,10 +631,10 @@ canvas{width:100%!important;max-width:100%}
 
 /* Escala de texto. Los tamaños ya existían de hecho, repartidos en cientos de style=""; esto
    solo les pone nombre para que dejen de multiplicarse. */
-.txt-micro{font-size:10px}
-.txt-xs{font-size:11px}
-.txt-sm{font-size:12px}
-.txt-md{font-size:13px}
+.txt-micro{font-size:var(--fs-micro)}
+.txt-xs{font-size:var(--fs-xs)}
+.txt-sm{font-size:var(--fs-sm)}
+.txt-md{font-size:var(--fs-md)}
 .txt-muted{color:var(--muted)}
 .txt-strong{font-weight:600}
 .txt-medium{font-weight:500}
@@ -630,7 +684,7 @@ canvas{width:100%!important;max-width:100%}
 .tc-bar-row{display:flex;flex-direction:column;gap:6px}
 .tc-bar-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;font-weight:600}
 .tc-bar-track{height:6px;border-radius:3px;background:var(--border);overflow:hidden}
-.tc-bar-fill{height:100%;background:var(--warning);transition:width .25s ease}
+.tc-bar-fill{height:100%;background:var(--warning-fill);transition:width .25s ease}
 /* Lista "Compras de este mes" (#tc-pendientes): una fila por compra con su avance, tocarla
    abre openEditTcModal (antes esta pantalla no tenía forma de editar/borrar). */
 .tc-row{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 14px;cursor:pointer}
@@ -641,7 +695,7 @@ canvas{width:100%!important;max-width:100%}
 .tc-row-sub{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);min-width:0}
 .tc-row-sub span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tc-row-progreso{width:44px;height:4px;border-radius:2px;background:var(--border);flex-shrink:0;overflow:hidden}
-.tc-row-progreso-fill{height:100%;background:var(--warning)}
+.tc-row-progreso-fill{height:100%;background:var(--warning-fill)}
 .tc-row-right{text-align:right;flex-shrink:0}
 .tc-row-monto{font-size:14px;font-weight:600;color:var(--text)}
 .tc-row-fin{font-size:11px;color:var(--muted);margin-top:2px}
@@ -679,7 +733,7 @@ canvas{width:100%!important;max-width:100%}
 .pago-tc-ahorro{background:var(--save-light);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--save);font-weight:500}
 .pago-tc-det-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin-top:10px;padding:11px 12px;border:0;border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer;text-align:left}
 .pago-tc-det-ir{color:var(--muted);font-size:12px;white-space:nowrap}
-.tc-res-btn{padding:7px 14px;border:0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--warning);color:#fff;cursor:pointer}
+.tc-res-btn{padding:7px 14px;border:0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--warning-solid);color:var(--on-warning-solid);cursor:pointer}
 /* Franja de próximos vencimientos (Movimientos, arriba de la lista). */
 .venc-wrap{margin:10px 16px 0}
 .venc-franja{background:var(--warning-light);border-radius:var(--radius);padding:10px 14px}
@@ -687,11 +741,11 @@ canvas{width:100%!important;max-width:100%}
 .venc-fila{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;padding:4px 0}
 .venc-nombre{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .venc-txt{text-align:right;flex:1;min-width:0}
-.venc-ok{flex-shrink:0;border:0;border-radius:var(--radius-sm);background:var(--warning);color:#fff;font-size:11px;font-weight:600;padding:5px 9px;cursor:pointer}
+.venc-ok{flex-shrink:0;border:0;border-radius:var(--radius-sm);background:var(--warning-solid);color:var(--on-warning-solid);font-size:var(--fs-xs);font-weight:600;padding:5px 9px;cursor:pointer}
 .venc-franja.venc-con-vencidos{background:var(--danger-light,var(--warning-light));border:1px solid var(--danger)}
 .venc-con-vencidos .venc-titulo{color:var(--danger)}
 .venc-vencida .venc-nombre{color:var(--danger)}
-.venc-vencida .venc-ok{background:var(--danger)}
+.venc-vencida .venc-ok{background:var(--danger);color:var(--on-solid)}
 .venc-por-cobrar{background:var(--success-light);border:1px solid transparent}
 .venc-por-cobrar .venc-titulo{color:var(--success)}
 .venc-cobrado{background:var(--success)}
@@ -827,6 +881,151 @@ canvas{width:100%!important;max-width:100%}
 @keyframes mesDesdeIzquierda{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
 .mes-desde-der{animation:mesDesdeDerecha .26s cubic-bezier(.22,.9,.35,1)}
 .mes-desde-izq{animation:mesDesdeIzquierda .26s cubic-bezier(.22,.9,.35,1)}
+
+/* ═══════════════════════════════════════════
+   [AAA sistema] REGLAS GLOBALES
+   ═══════════════════════════════════════════
+   Reglas transversales (tacto, foco, selección, safe areas, estados). Van acá, antes del bloque de
+   movimiento reducido, para pisar a los componentes sin tocar sus reglas. Los tokens están al principio.
+   !important: solo donde hay que pisar un style="" escrito en línea (HTML o JS), que no se puede ganar de otra forma.
+   Cada uno lleva su motivo en el comentario de arriba. El resto se gana por especificidad. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation;scroll-padding-top:64px}
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-wrap:break-word}
+::selection{background:var(--accent-light);color:var(--text)}
+*{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+/* Controles nativos: heredan la tipografía de la app (sin esto el textarea sale en monoespaciada y el input en la fuente del sistema).
+   Plus Jakarta es más ancha que la del sistema: lo que no entra se corta con "…" en vez de quedar mocho. */
+button,input,select,textarea{font-family:inherit;letter-spacing:inherit;font-variant-numeric:inherit}
+input,select{text-overflow:ellipsis}
+/* Selector de tipo de Cargar: la etiqueta entera tiene que entrar en la píldora a 360 px (los botones tienen overflow:hidden, y el
+   texto es un solo nodo: no admite gap). Plus Jakarta tiene el espacio más angosto que la fuente del sistema: se le devuelve aire a
+   "↑ Gasto", "↓ Ingreso", "◈ Inv.", "▣ Tarj."; "💱 Cambio" ya lo trae del propio emoji y es el que más justo entra (60,4 de 63 a 360 px). */
+#page-cargar>.type-toggle .type-btn{padding-inline:0;min-height:var(--tap)}
+#page-cargar>.type-toggle .type-btn:not(#btn-cambio){word-spacing:.2em}
+/* Un control deshabilitado se ve apagado y no engaña al dedo (vale para disabled y para aria-disabled="true").
+   Los botones-ícono pierden también el fondo de :active. */
+button:disabled,.btn-primary:disabled,.btn-sm:disabled,input:disabled,select:disabled,[aria-disabled="true"]{opacity:.4;cursor:default}
+button:disabled:active,button[aria-disabled="true"]:active{transform:none;background-color:transparent}
+button:disabled,button[aria-disabled="true"]{-webkit-user-select:none;user-select:none}
+/* FOCO del teclado. Una sola regla para todo campo y botón: anillo de 2px (--focus) con separación.
+   Los campos de la app apagan el outline de :focus a propósito (usan borde + halo); acá se vuelve a dar una señal ≥3:1 con :focus-visible. */
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+/* !important: hay inputs con style="outline:none" en línea (monto de depósito). */
+input[style*="outline:none"]:focus-visible{outline:2px solid var(--focus)!important}
+.form-input:focus-visible,.form-select:focus-visible,.form-textarea:focus-visible{border-color:var(--focus)}
+#page-cargar .card .form-input:focus-visible,#page-cargar .card .form-select:focus-visible,#page-cargar .card .form-textarea:focus-visible{border-color:var(--tema-color,var(--accent));outline-color:var(--tema-color,var(--accent))}
+/* Monto de Cargar: el input es chico y sin borde; el anillo va alrededor de TODO el monto (prefijo + cifra), con el color del tipo. */
+#page-cargar .amount-hero{width:fit-content;margin-inline:auto;padding-inline:var(--sp-4);border-radius:var(--radius-md)}
+#page-cargar .amount-hero:has(.amount-input:focus-visible){outline:2px solid var(--tema-color,var(--accent));outline-offset:0}
+#page-cargar .amount-hero .amount-input:focus,#page-cargar .amount-hero .amount-input:focus-visible{outline:none;box-shadow:none}
+.mov-search-row input:focus-visible{border-color:var(--focus)}
+.btn-primary:focus-visible,.filter-chip.active:focus-visible,.year-tab.active:focus-visible{outline-color:var(--text)}
+/* Campos: borde ≥3:1 (WCAG 1.4.11), alto táctil, placeholder legible. */
+.form-input,.form-select,.form-textarea{border-color:var(--border-strong);min-height:var(--tap)}
+.form-textarea{min-height:64px}
+.form-input::placeholder,.form-textarea::placeholder{color:var(--muted);opacity:.85}
+#page-cargar .card .form-input,#page-cargar .card .form-select,#page-cargar .card .form-textarea{border-color:var(--border-strong)}
+/* Select: flecha propia (la nativa está apagada con appearance:none y no se veía que fuera desplegable), y el texto largo
+   termina en "…" sin pisar la flecha. El trazo de la flecha es --muted en cada tema. */
+.form-select,#page-cargar .card .form-select{padding-right:24px;text-overflow:ellipsis;white-space:nowrap;background-repeat:no-repeat;background-position:right 8px center;background-size:12px 8px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2355544d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+[data-theme="dark"] .form-select,[data-theme="dark"] #page-cargar .card .form-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aaa8a0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#page-cargar .card .form-select{background-color:var(--bg)}
+.mes-corto .form-select{padding-left:12px;padding-right:24px}
+/* Cargar: Categoría lleva el nombre más largo ("🛒 Supermercado ⭐" = 140 px) y es obligatoria; Subcategoría es opcional: se reparte el ancho
+   1,5 / 1 (y relleno lateral de 10/22) para que la categoría más común entre entera a 360 px (con 1/1 se leía "Supermer…"). */
+#page-cargar .two-col:has(#inp-cat){grid-template-columns:1.5fr 1fr}
+#page-cargar .two-col:has(#inp-cat) .form-select{padding-left:10px;padding-right:22px;background-position:right 7px center}
+.chk-custom{background:var(--border-strong)}
+.chk-custom:checked{background:var(--chk,var(--accent))}
+/* Base de componentes: botón = mismo radio que el input; el "Ver" de un aviso no debe pesar más que el aviso. */
+.btn-primary{min-height:var(--tap)}
+.btn-sm{border-radius:var(--radius-sm);min-height:36px;display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);
+  border-color:var(--border-mid);transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.modal{border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding-bottom:calc(var(--sp-6) + var(--safe-b))}
+.modal-handle{width:40px;height:5px;border-radius:var(--radius-pill);background:var(--border-strong);opacity:.55}
+.toast{top:calc(var(--sp-4) + var(--safe-t))}
+#fab-cargar{right:calc(var(--sp-5) + var(--safe-r))}
+#fab-calculadora{right:calc(var(--sp-4) + var(--safe-r))}
+/* Texto chico atenuado sobre fondos tintados: --muted-on-tint (≥7:1). */
+.seg-btn,.seg-btn-count,.tx-cuenta,.mov-mosaic-sub,.currency-pill,.date-chip,.type-btn,.cierre-x,.tc-col-lbl{color:var(--muted-on-tint)}
+.seg-btn.active,.currency-pill.active{color:var(--text);background:var(--surface-2)}
+.tx-del{color:var(--muted)}
+/* !important en las tres reglas siguientes: pisan colores escritos en línea por el JS/HTML (style="background:var(--warning)…",
+   style="color:#fff", la cifra de 34 px). Botón ámbar sólido = ámbar vivo con texto oscuro; en oscuro los rellenos son claros y el
+   blanco fijo no se lee, así que decide --on-solid; la cifra grande de Tarjetas usa el ámbar vivo (texto grande: alcanzan 3:1). */
+button[style*="color:#fff"],label.btn-primary[style*="color:#fff"],button[style*="color: rgb(255, 255, 255)"]{color:var(--on-solid)!important}
+button[style*="background:var(--warning)"]{background:var(--warning-solid)!important;color:var(--on-warning-solid)!important}
+div[style*="font-size:34px"][style*="color:var(--warning)"]{color:var(--warning-fill)!important}
+/* La barra del mes elegido en la línea de tiempo de Tarjetas lleva el ámbar vivo (relleno). !important: su fondo viene en línea desde el JS. */
+.tc-col[aria-pressed="true"] .tc-col-bar{background-color:var(--warning-fill)!important}
+
+/* OBJETIVOS TÁCTILES (≥44×44). Hay TRES herramientas, según dónde viva el control:
+   1) Botones-ícono: el elemento mide 44.
+   2) Chips y botones chicos DENTRO de un contenedor con scroll u overflow:hidden (.filter-row, .year-tabs, .tc-res): un halo ::after
+      se recorta ahí, así que la caja es REAL: 44 de alto con bordes transparentes de 8 px y margin-block:-8px (el layout sigue siendo
+      el de un chip de 28), y el dibujo se pinta solo en el área del padding (background-clip) con el aro como sombra interior.
+      Se ve y se espacia igual que antes y se toca en 44. Las cajas de dos filas vecinas se pisan 10 px: cada chip conserva ≥34 propios.
+   3) Controles sueltos (sin recorte): halo invisible ::after de 44, no cambia el layout. NO usarlo dentro de overflow ≠ visible. */
+#hamburger-btn{width:var(--tap);height:var(--tap);top:6px;left:8px}
+.side-menu-close{min-width:var(--tap);min-height:var(--tap);display:inline-flex;align-items:center;justify-content:center;padding:0;margin:-6px -8px -6px 0}
+.mov-icon-btn{width:var(--tap);height:var(--tap)}
+.mov-topbar-arrow{width:var(--tap);height:var(--tap)}
+.cierre-x{min-width:var(--tap);min-height:var(--tap);margin:-12px -10px -12px -6px;display:inline-flex;align-items:center;justify-content:center}
+.tx-del,.tx-edit{min-width:var(--tap);min-height:var(--tap);padding:0;display:inline-flex;align-items:center;justify-content:center}
+/* El glifo × queda ~0,19 em bajo el centro de su caja en Plus Jakarta (medido con canvas): se compensa para que quede en el centro exacto. */
+.tx-del,.side-menu-close,.cierre-x{padding-bottom:.38em}
+.copia-borrar{display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:0 8px .38em}
+.side-menu-close{padding-bottom:.31em}
+.date-chip{min-height:var(--tap)}
+.date-cal-btn{width:var(--tap);height:var(--tap)}
+.tc-col{flex-basis:var(--tap)}
+/* (2) caja real con borde transparente. La clase doble (.x.x) sube la especificidad para ganarle a .x.active y a los background:
+   en shorthand sin usar !important. Los chips/pestañas llevan 8,5 px arriba y abajo (27 de dibujo = el alto de siempre) con margen
+   negativo igual: el ritmo vertical visible es el de antes (paso de 33 px entre filas, 6 px de hueco). */
+.filter-chip.filter-chip,.year-tab.year-tab,.tc-res-btn.tc-res-btn,.venc-ok.venc-ok{box-sizing:border-box;min-height:var(--tap);padding-block:0;
+  border-width:8px 0;border-style:solid;border-block-color:transparent;background-clip:padding-box;margin-block:-8px}
+.tc-res-btn.tc-res-btn,.venc-ok.venc-ok{display:inline-flex;align-items:center;justify-content:center;border-radius:var(--radius-sm)/calc(var(--radius-sm) + 8px)}
+.filter-chip.filter-chip,.year-tab.year-tab{display:inline-block;line-height:27px;text-align:center;white-space:nowrap;border-radius:var(--radius-pill);box-shadow:inset 0 0 0 1px var(--border);border-block-width:8.5px;margin-block:-8.5px}
+.filter-chip.filter-chip{padding-inline:13px}
+.year-tab.year-tab{padding-inline:15px}
+.filter-chip.active.active,.year-tab.active.active{box-shadow:inset 0 0 0 1px var(--accent)}
+/* Los carruseles recortan en vertical: dejan 8 px arriba y abajo para la caja, y el de abajo se devuelve con margen negativo. */
+.filter-row,.year-tabs{padding-top:10px;padding-bottom:var(--sp-2);margin-bottom:calc(-1 * var(--sp-2))}
+/* !important: los presets del informe traen style="margin-bottom:8px" en línea; ese hueco ya lo cubre el padding de abajo. */
+.filter-row[style*="margin-bottom"]{margin-bottom:0!important}
+.tc-res-link{border-block:15px solid transparent;margin-block:-15px;position:relative}
+.dash-insight-action{display:flex;align-items:center;min-height:var(--tap)}
+.dash-year-link{display:flex;align-items:center;justify-content:center;min-height:var(--tap)}
+label:has(>input[type="checkbox"]:not(.chk-custom)){min-height:var(--tap);display:flex;align-items:center;gap:var(--sp-2)}
+/* (3) halo ::after, solo para controles SIN recorte */
+.seg-btn,.btn-sm,.currency-pill,.field-link,.copia-borrar,.meta-edit,#mes-label,.js-toggle-pago{position:relative}
+.meta-edit{position:absolute}
+.seg-btn::after,.btn-sm::after,.currency-pill::after,.field-link::after,.copia-borrar::after,.meta-edit::after,#mes-label::after,.js-toggle-pago::after,.chk-custom::before{
+  content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
+.chk-custom::before{height:var(--tap)}
+/* Botones de solo símbolo (×, ✎) escritos con style="background:none…" en listas: conservan su tamaño, ganan halo de 44. */
+button[style*="background:none"]:not([style*="position"]){position:relative}
+button[style*="background:none"]::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
+/* Configuración, administrador de categorías (js/cuentas-tarjetas-categorias.js: estilos en línea, el markup no se toca desde acá).
+   Reglas de contexto, sin cambiar el alto de las filas: el ícono gana un halo de 44; el par ▲/▼ vuelve a su alto compacto (el
+   .btn-sm de 36 lo hacía crecer 42 px por fila) y cada uno toma un halo de 44 de ancho × 29 de alto hacia afuera de la pila
+   (dos botones apilados no pueden tener 44 cada uno: queda documentado en GUIA.md). "+ Sub" y × de categoría usan el halo de .btn-sm. */
+#page-config .cat-row button[title="Cambiar ícono"]{position:relative}
+#page-config .cat-row button[title="Cambiar ícono"]::after{content:"";position:absolute;left:50%;top:50%;width:var(--tap);height:var(--tap);transform:translate(-50%,-50%)}
+#page-config .cat-row button[title="Subir"],#page-config .cat-row button[title="Bajar"]{min-height:0}
+#page-config .cat-row button[title="Subir"]::after{top:auto;bottom:0;height:29px;transform:translateX(-50%)}
+#page-config .cat-row button[title="Bajar"]::after{top:0;height:29px;transform:translateX(-50%)}
+/* Interruptor un poco más grande (46×28): se ve y se toca mejor. */
+.chk-custom{width:46px;height:28px}
+.chk-custom::after{top:3px;left:3px;width:22px;height:22px}
+.chk-custom:checked::after{left:21px}
+/* Estado :active parejo: todo lo que se toca devuelve señal al instante. */
+.filter-chip,.year-tab,.seg-btn,.btn-sm,.tc-res-btn,.venc-ok,.mov-icon-btn,.mov-topbar-arrow,.side-menu-close,.cierre-x,.tx-del,.tx-edit,.copia-borrar,.meta-edit{transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.filter-chip:active,.year-tab:active,.seg-btn:active,.btn-sm:active,.tc-res-btn:active,.venc-ok:active{transform:scale(.96)}
+.mov-icon-btn:active,.mov-topbar-arrow:active,.side-menu-close:active,.cierre-x:active,.tx-del:active,.tx-edit:active,.copia-borrar:active{background:var(--border)}
+.field-link:active{opacity:.6}
+.nav-btn:active,.pin-key:active{transition-duration:var(--dur-1)}
 
 /* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO
