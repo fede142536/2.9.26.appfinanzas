@@ -9923,8 +9923,8 @@ test("foco: si la persona ya movió el foco a otro lado, cerrar la hoja no se lo
 }));
 
 test("foco: con una pantalla de bloqueo encima, la hoja no atrapa el foco", ()=>conHojaDePrueba(async ({afuera, ov, tab, pausa})=>{
-  const lock=document.createElement("div"); lock.id="lock-screen"; lock.style.cssText="position:fixed;inset:0;z-index:9999"; lock.innerHTML="<button id='pin-1'>1</button>"; document.body.appendChild(lock);
-  // (en esta página getElementById devuelve un div suelto si no existe: se usa el real)
+  const lock=document.createElement("div"); lock.id="lock-screen"; lock.style.cssText="position:fixed;inset:0;z-index:9999"; lock.innerHTML="<button id='pin-1'>1</button><button id='pin-2'>2</button>"; document.body.appendChild(lock);
+  // (en esta página getElementById devuelve un div suelto si no existe: se usa el real; dos botones porque con uno solo el Tab del propio bloqueo da la vuelta y sí lo frena)
   const real=document.querySelector("#lock-screen");
   try{
     afuera.focus(); ov.classList.add("open"); await pausa();
