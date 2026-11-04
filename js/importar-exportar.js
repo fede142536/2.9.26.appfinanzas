@@ -4,17 +4,16 @@
 let importPreview=[];
 function renderImportHistory(){
   const el=document.getElementById("import-history");
-  if(!importHistory.length){el.innerHTML=`<p style="font-size:13px;color:var(--muted);padding:6px 0">Sin importaciones aún</p>`;return;}
+  if(!importHistory.length){el.innerHTML=`<p class="txt-md txt-muted" style="padding:6px 0">Sin importaciones aún. Cuando importes un archivo, queda anotado acá.</p>`;return;}
   el.innerHTML=importHistory.slice(0,12).map((h,idx)=>{
     // Contar cuántos movimientos de esta importación siguen existiendo (si tiene id)
     const vivos=h.id ? movs.filter(m=>m._importId===h.id).length : 0;
+    const nombre=escapeHtml(h.nombre);
     return `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div class="u-flex1 u-min0"><div class="txt-md txt-strong">${escapeHtml(h.nombre)}</div><div class="txt-xs txt-muted">${h.fecha} · ${h.registros} registros${h.id&&vivos>0?` · ${vivos} en la app`:""}</div></div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <span style="font-size:11px;background:var(--success-light);color:var(--success);padding:3px 9px;border-radius:12px">✓</span>
-        <button class="tx-del" style="color:var(--danger);font-size:18px" onclick="eliminarImport(${idx})" title="Eliminar esta importación">×</button>
-      </div>
+    <div class="imp-hist-fila">
+      <div class="imp-hist-info"><div class="imp-hist-nombre">${nombre}</div><div class="txt-xs txt-muted">${escapeHtml(h.fecha)} · ${Number(h.registros||0).toLocaleString("es-AR")} ${h.registros===1?"registro":"registros"}${h.id&&vivos>0?` · ${vivos.toLocaleString("es-AR")} en la app`:""}</div></div>
+      <span class="imp-hist-ok" role="img" aria-label="Importación correcta">✓</span>
+      <button type="button" class="tx-del imp-hist-del" onclick="eliminarImport(${idx})" title="Eliminar esta importación" aria-label="Eliminar la importación ${nombre}">×</button>
     </div>`;
   }).join("");
 }
@@ -325,26 +324,26 @@ function setXlsxStatus(msg,color){const el=document.getElementById("xlsx-status"
 function openImportPreview(items, title){
   importPreview = items;
   document.getElementById("import-modal-title").textContent = title;
-  document.getElementById("import-count-badge").textContent = `${items.length} registros`;
+  document.getElementById("import-count-badge").textContent = `${items.length} ${items.length===1?"registro":"registros"}`;
   renderImportPreviewList();
   document.getElementById("modal-import").classList.add("open");
 }
 function closeImportModal(){document.getElementById("modal-import").classList.remove("open");importPreview=[];}
-function removeImportItem(idx){importPreview.splice(idx,1);document.getElementById("import-count-badge").textContent=`${importPreview.length} registros`;if(!importPreview.length){closeImportModal();return;}renderImportPreviewList();}
+function removeImportItem(idx){importPreview.splice(idx,1);document.getElementById("import-count-badge").textContent=`${importPreview.length} ${importPreview.length===1?"registro":"registros"}`;if(!importPreview.length){closeImportModal();return;}renderImportPreviewList();}
 function renderImportPreviewList(){
   const el=document.getElementById("import-preview-list");
   const C={Gasto:"var(--danger)",Ingreso:"var(--success)",Inversion:"var(--invest)"};
+  const ROT={Gasto:"Gasto",Ingreso:"Ingreso",Inversion:"Inversión"};
+  const fechaCorta=f=>{ const m=String(f||"").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : escapeHtml(f||""); };
   el.innerHTML=importPreview.map((m,i)=>`
-    <div style="display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
-      <div class="u-flex1 u-min0">
-        <div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;font-weight:600;color:${C[m.tipo]||"var(--muted)"}">${m.tipo}</span><span class="txt-xs txt-muted">${m.fecha}</span></div>
-        <div style="font-size:13px;font-weight:600;margin-top:2px">${escapeHtml(m.cat)} · ${escapeHtml(m.subcat)}</div>
-        ${m.nota?`<div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.nota)}</div>`:""}
+    <div class="imp-fila">
+      <div class="imp-fila-info">
+        <div class="imp-fila-top"><span class="imp-fila-tipo" style="color:${C[m.tipo]||"var(--muted)"}">${escapeHtml(ROT[m.tipo]||m.tipo)}</span><span class="txt-xs txt-muted">${fechaCorta(m.fecha)}</span></div>
+        <div class="imp-fila-cat">${escapeHtml(m.cat)} · ${escapeHtml(m.subcat)}</div>
+        ${m.nota?`<div class="imp-fila-nota">${escapeHtml(m.nota)}</div>`:""}
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:13px;font-weight:600;color:${C[m.tipo]||"var(--text)"}">${fmt(m.importe)}</div>
-        <button onclick="removeImportItem(${i})" style="background:none;border:none;color:#ccc;font-size:15px;cursor:pointer">×</button>
-      </div>
+      <div class="imp-fila-monto" style="color:${C[m.tipo]||"var(--text)"}">${fmt(m.importe)}</div>
+      <button type="button" class="imp-fila-x" onclick="removeImportItem(${i})" aria-label="Quitar este registro de la importación" title="Quitar">×</button>
     </div>`).join("");
 }
 async function confirmarImport(){
@@ -400,9 +399,9 @@ function renderExportStats(){
   const fila=(k,v)=>`<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:var(--muted)">${k}</span><strong style="text-align:right">${v}</strong></div>`;
   el.innerHTML=`
     <div style="display:flex;flex-direction:column;gap:9px;font-size:14px">
-      ${fila("Movimientos", movs.length)}
-      ${fila("Registros de tarjeta", tcs.length)}
-      ${fila("Gastos frecuentes", frecuentes)}
+      ${fila("Movimientos", movs.length.toLocaleString("es-AR"))}
+      ${fila("Registros de tarjeta", tcs.length.toLocaleString("es-AR"))}
+      ${fila("Gastos frecuentes", frecuentes.toLocaleString("es-AR"))}
       ${fila("Período cargado", escapeHtml(periodo))}
     </div>
     <p class="txt-xs txt-muted" style="margin-top:10px">Para ver ingresos, gastos y balance usá el Dashboard o Movimientos: ahí se calculan siempre con la misma regla.</p>`;
