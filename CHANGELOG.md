@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v226**
+**Versión actual: v227**
 
 ## Lo más importante, por etapas
 
@@ -25,7 +25,15 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 4 de noviembre de 2026
 
+- **v227** · AAA ahorros (gráfico, metas, hoja Depositar, selector de emoji, estados vacíos)
 - **v226** · AAA importar (reporte para imprimir, vista previa, zonas de carga, hojas)
+- AAA inversiones: resumen que escala, filas sin cortes, vacíos con guía, hoja de detalle y conciliación con acciones fijas, flecha del mes deshabilitada, gráfico legible
+  - Resumen: cifra principal que se achica para entrar (12 dígitos), texto centrado, sin 'Pusiste —'.
+  - Filas de Este mes y Cartera: ticker/categoría con '…', etiqueta y monto nunca cortados, fecha siempre visible; tocar la fila edita; role/teclado/nombre accesible.
+  - Cartera: barras alineadas (texto de % de ancho fijo), cerradas con aria-expanded y 44 px.
+  - Evolución: eje Y compacto con margen adaptable y color --muted, role=img + aria-label, pills 44 reales, vacío con guía.
+  - Borrar con confirmación: ya no queda en '?' ni '×'.
+  - #inv-mes-next: disabled + aria-disabled y oculta en el mes actual. …
 - AAA ahorros: franja de saldo y gráficos con cifras largas, estado vacío, selector de emoji, hojas y áreas táctiles
 - AAA importar: zonas de carga, historial, vista previa, aviso de arrastre, hojas con Cerrar fijo y reporte imprimible responsive
 - **v225** · AAA tanda 2 parcial (dashboard y año completo, informe y cierre)
