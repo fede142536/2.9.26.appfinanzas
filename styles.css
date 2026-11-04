@@ -935,6 +935,38 @@ canvas{width:100%!important;max-width:100%}
 .dash-year-link{display:block;text-align:center;font-size:12px;font-weight:600;color:var(--accent);
   text-decoration:none;padding:8px 0;cursor:pointer}
 .dash-year-links{padding:0 0 20px}
+/* [AAA dashboard] Resumen narrativo (#dash-resumen). Va pegado a las reglas de arriba, con #dash-resumen para ganarle a las del bloque [AAA sistema]. */
+/* Simetría de la barra: el ☰ mide 44 a la izquierda; el espejo de la derecha también (antes 40: el mes quedaba 2 px corrido). */
+.dash-topbar-espejo{width:var(--tap);flex-shrink:0}
+/* Tope del selector: la flecha se esconde (el hueco queda, el mes no se mueve) y, como está disabled, ni se enfoca ni se toca. */
+#dash-resumen .mov-topbar-arrow:disabled{visibility:hidden}
+/* Titular: mismo margen lateral que las tarjetas (16; estaba en 20) y ritmo 24 arriba / 16 abajo. El renglón de detalle pasa de 12 a 13 px. */
+#dash-resumen .dash-headline{padding:var(--sp-5) var(--sp-4) var(--sp-3);gap:var(--sp-2)}
+#dash-resumen .dash-headline-sub{font-size:var(--fs-md);line-height:1.4}
+#dash-resumen .dash-insights{gap:var(--sp-3)}
+/* Tarjeta: radio y relleno del sistema. La separación cabecera/cuerpo ya no es un gap de la tarjeta (dejaba 12 px de más abajo con la tarjeta cerrada):
+   la pone el primer hijo del cuerpo, que se recorta junto con él. */
+#dash-resumen .dash-insight-card{border-radius:var(--radius);padding:var(--sp-4);gap:0;transition:transform var(--dur-1) var(--ease),padding var(--dur-2) var(--ease)}
+#dash-resumen .dash-insight-body>:first-child{margin-top:var(--sp-3)}
+/* Con acción, el botón (44 de alto) ya aporta el aire de abajo: el relleno de la tarjeta abierta se achica para que no quede doble. */
+#dash-resumen .dash-insight-card:has(.dash-insight-top[aria-expanded="true"]):has(.dash-insight-action){padding-bottom:var(--sp-1)}
+/* La cabecera (el role=button) mide 44: 4 px de relleno arriba y abajo, compensados con margen negativo para que el ritmo visible no cambie. */
+#dash-resumen .dash-insight-top{border-radius:var(--radius-sm);padding-block:var(--sp-1);margin-block:calc(-1 * var(--sp-1))}
+#dash-resumen .dash-insight-frase{font-size:var(--fs-base)}
+/* Chevrón: SVG de trazo 2 que gira (antes los glifos ▾/▴ intercambiados, de 12 px). */
+#dash-resumen .dash-insight-chev{width:20px;height:20px;margin-top:var(--sp-2);fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform var(--dur-2) var(--ease)}
+#dash-resumen .dash-insight-top[aria-expanded="true"] .dash-insight-chev{transform:rotate(180deg)}
+/* Cerrado, el cuerpo no se puede enfocar ni leer con lector de pantalla (quedaba recortado pero presente). Al abrir aparece de inmediato; al cerrar espera la animación. */
+#dash-resumen .dash-insight-body{visibility:hidden;transition:visibility 0s linear var(--dur-2)}
+#dash-resumen .dash-insight-card:has(.dash-insight-top[aria-expanded="true"]) .dash-insight-body{visibility:visible;transition-delay:0s}
+#dash-resumen .dash-insight-row-label,#dash-resumen .dash-insight-row-val,#dash-resumen .dash-insight-detalle{font-size:var(--fs-sm)}
+/* Acción del hallazgo: botón de texto del color de acento, sin caja del navegador, 44 de alto y pegado a la columna del texto. */
+#dash-resumen .dash-insight-action{background:none;border:0;padding:0;margin:calc(-1 * var(--sp-2)) 0 0;font:inherit;font-size:var(--fs-md);font-weight:600;color:var(--accent);text-align:left;align-self:flex-start;min-height:var(--tap);cursor:pointer}
+/* "Ver el año completo": 15 px y 700, con la misma jerarquía que el texto de las tarjetas (antes 12 px, el elemento más débil de la pantalla). */
+#dash-resumen .dash-year-link{font-size:var(--fs-base);font-weight:700}
+#dash-resumen .dash-year-links{padding:var(--sp-1) 0 var(--sp-5)}
+/* Mes sin movimientos: usa el patrón .empty de la app, con el margen de las tarjetas. */
+#dash-resumen .dash-vacio{padding:var(--sp-5) var(--sp-4)}
 
 /* ═══════════════════════════════════════════
    CAMBIO DE MES
