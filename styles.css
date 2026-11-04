@@ -903,6 +903,80 @@ canvas{width:100%!important;max-width:100%}
 .meta-menu-btn:active{background:var(--bg)}
 .meta-menu-btn.danger{color:var(--danger)}
 
+/* [AAA ahorros] Pantalla Ahorros y metas + sus hojas. Reglas de contexto y cifras largas (ver aaa/ahorros/GUIA_ELEMENTO.md). */
+.ahorro-header-title{font-size:var(--fs-lg)}
+.ahorro-header-spacer{width:var(--tap);height:var(--tap);flex-shrink:0}
+/* Franja de saldo: la cifra se achica según el largo del texto (--n lo pone renderAhorroSaldo) y, si Fondo USD no entra al lado, baja a su propia línea. */
+.ahorro-saldo{flex-wrap:wrap;gap:var(--sp-1) var(--sp-3);padding:var(--sp-4)}
+.ahorro-saldo-disp{flex:1 1 180px;container-type:inline-size}
+.ahorro-saldo-label{font-size:var(--fs-xs)}
+.ahorro-saldo-val{display:block;font-size:clamp(22px,calc(100cqw / (var(--n,9) * .66)),34px);line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ahorro-saldo-usd{flex:0 1 auto;margin-left:auto;min-width:0}
+.ahorro-saldo-usd-label{font-size:var(--fs-xs)}
+.ahorro-saldo-usd-val{font-size:var(--fs-base);white-space:nowrap}
+.ahorro-saldo-usd-val.neg{color:var(--danger)}
+.ahorro-fondo-msg{padding:var(--sp-3) var(--sp-4) 0;font-size:var(--fs-sm);text-wrap:pretty}
+/* Mis metas: el rótulo y el total arrancan sobre el mismo margen de 16 que las tarjetas */
+.metas-header{padding:var(--sp-4) var(--sp-4) var(--sp-2);gap:var(--sp-2)}
+.metas-header-sum{text-align:right;min-width:0}
+/* Nombre de la meta: el texto se acorta con "…" pero el 🔗 (atada a un ahorro) queda siempre a la vista */
+.meta-nombre{display:flex;align-items:baseline;justify-content:center;gap:var(--sp-1);min-width:0}
+.meta-nombre-t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta-nombre-link{flex-shrink:0}
+.meta-plan{font-size:var(--fs-xs)}
+.meta-plan-t{display:inline-block}
+.meta-falta{font-size:var(--fs-xs)}
+.meta-edit{color:var(--muted-on-tint)}
+.meta-edit .mov-icon-svg{width:16px;height:16px}
+.meta-card-nueva{border-color:var(--border-strong);font-family:inherit}
+.meta-nueva-mas{font-size:var(--fs-xl);line-height:1}
+.meta-nueva-txt{font-size:var(--fs-sm);font-weight:600}
+.meta-card-primera{grid-column:1/-1;min-height:132px;padding:var(--sp-4);width:100%}
+.meta-card-primera .meta-nueva-txt{color:var(--text)}
+.meta-nueva-guia{font-size:var(--fs-sm);max-width:24em}
+/* Card de historial */
+.ahorro-hist{margin:var(--sp-3) var(--sp-4) 0;padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3)}
+.ahorro-hist.sin-ahorros .ahorro-view-tabs{display:none}
+.ahorro-vacio{text-align:center;padding:var(--sp-2) var(--sp-2) var(--sp-1)}
+.ahorro-vacio[hidden]{display:none}
+.ahorro-vacio-icono{font-size:var(--fs-hero);line-height:1;margin-bottom:var(--sp-3)}
+.ahorro-vacio .ahorro-vacio-cta{background:var(--save);color:var(--on-solid)}
+#ahorro-tooltip{min-height:20px}
+.ahorro-tip-val{white-space:nowrap}
+.ahorro-rank-row{padding:var(--sp-3) 0;min-height:var(--tap);align-items:center}
+.ahorro-rank-cat{font-size:var(--fs-md)}
+.ahorro-rank-icono{flex-shrink:0}
+.ahorro-rank-nombre{min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.ahorro-rank-val{font-size:var(--fs-md);white-space:nowrap}
+.ahorro-rank-val small{font-size:var(--fs-xs)}
+.ahorro-rank-meta{font-size:var(--fs-xs);flex-wrap:wrap;gap:0 var(--sp-2)}
+.ahorro-rank-meta>span:last-child{white-space:nowrap;margin-left:auto}
+/* Línea de dólares: si las tres cifras no entran en una fila, bajan a una por fila (nunca se parte una cifra) */
+#usd-card{flex-wrap:wrap;gap:var(--sp-2) var(--sp-4)}
+.ahorro-usd-cell{flex:1 1 auto;min-width:0}
+.ahorro-usd-cell-label{font-size:var(--fs-xs)}
+.ahorro-usd-cell-val{font-size:var(--fs-md);white-space:nowrap}
+.ahorro-usd-cell-val.neg{color:var(--danger)}
+/* Botón de acción verde (Depositar, Crear meta): relleno --save con texto --on-solid, sin color en línea */
+.btn-primary.btn-save{background:var(--save);color:var(--on-solid)}
+/* Hoja Depositar */
+.deposito-titulos strong{font-size:var(--fs-lg);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.deposito-titulos span{font-size:var(--fs-sm)}
+.deposito-monto{margin:var(--sp-3) 0;gap:var(--sp-1);min-width:0}
+.deposito-moneda{font-size:var(--fs-xl);font-weight:600;color:var(--save)}
+#modal-depositar .amount-input{padding-left:0!important;font-size:34px!important;font-weight:700!important;letter-spacing:-1px;background:transparent;border:none;outline:none;box-shadow:none;field-sizing:content;min-width:var(--tap);max-width:calc(100% - 28px);color:var(--text);height:var(--tap);padding-block:0}
+#modal-depositar .deposito-monto:has(.amount-input:focus-visible){outline:2px solid var(--focus);outline-offset:0;border-radius:var(--radius-md)}
+.deposito-chips{gap:var(--sp-2)}
+.deposito-chip{height:var(--tap);font-size:var(--fs-sm);border:1.5px solid var(--border-mid);padding:0 var(--sp-1)}
+.deposito-preview{font-size:var(--fs-md);margin:var(--sp-3) 0}
+/* Hoja de la meta: selector de emoji con botones de 44 */
+.emoji-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tap),1fr));gap:var(--sp-1)}
+.emoji-opt{height:var(--tap);border:1.5px solid transparent;border-radius:var(--radius-md);background:var(--bg);font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.emoji-opt:active{transform:scale(.94)}
+.emoji-opt[aria-pressed="true"]{border-color:var(--save);background:var(--save-light)}
+.emoji-otro{margin-top:var(--sp-2)}
+.ahorro-cerrar{width:100%;margin-top:var(--sp-3)}
+
 /* ── Dashboard narrativo (pestaña #page-dash, opción 2a del handoff) ──
    El mes contado en frases: un titular y tarjetas de un hallazgo cada una, que se abren y
    muestran la comparación que las respalda. El header reusa .mov-topbar de Movimientos; "Ver
