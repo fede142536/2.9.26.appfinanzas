@@ -57,11 +57,14 @@ function showPage(id,btn){
   const saliendo=document.querySelector(".page.active");
   if(saliendo) scrollPorPagina[saliendo.id.replace(/^page-/,"")]=window.scrollY;
   document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
-  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach(b=>{ b.classList.remove("active"); b.removeAttribute("aria-current"); });
   const entrando=document.getElementById("page-"+id);
   entrando.classList.add("active");
   animarEntradaDeCards(entrando);
-  if(btn) btn.classList.add("active");
+  // [AAA navegacion] La pestaña activa del menú se marca siempre (también si se llegó por un atajo y no tocando el
+  // ítem) y se anuncia como página actual.
+  const navActivo=btn || document.querySelector('.nav-btn[onclick*="\''+id+'\'"]');
+  if(navActivo){ navActivo.classList.add("active"); navActivo.setAttribute("aria-current","page"); }
   // El FAB abre directo a Cargar — no tiene sentido mostrarlo ESTANDO ya en Cargar.
   // Se chequea que exista antes de tocarlo: si faltara, un TypeError acá cortaría toda la
   // función y la pantalla quedaría a medio renderizar.
@@ -91,6 +94,7 @@ function showPage(id,btn){
   // si se hace primero el navegador recorta la posición al alto viejo (más corto) y quedás
   // más arriba de donde estabas.
   window.scrollTo(0, PAGINAS_SIEMPRE_ARRIBA.includes(id) ? 0 : (scrollPorPagina[id]||0));
+  if(typeof fabCargarMostrar==="function") fabCargarMostrar();   // el botón del perro vuelve a verse al cambiar de pantalla
 }
 // El menú lateral ya no tiene botón para "Cargar" (ver punto 1) — showPage() ahora
 // acepta btn=null (ver el chequeo agregado ahí) para este caso.

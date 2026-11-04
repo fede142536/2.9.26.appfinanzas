@@ -89,6 +89,15 @@ function procesarArchivoSoltado(file){
   }
 }
 
+// Retira la pantalla de arranque de index.html (el ícono sobre el fondo) con un fundido corto. Es idempotente: si
+// ya se fue (o no existe, como en tests.html), no hace nada.
+function quitarSplash(){
+  const el=document.getElementById("splash");
+  if(!el || !el.classList) return;
+  el.classList.add("listo");
+  setTimeout(()=>{ if(el.parentNode) el.remove(); }, 260);
+}
+
 // Arranque de la app. checkLock() muestra (si corresponde) la pantalla de PIN y devuelve
 // una Promise que recién se resuelve cuando no hace falta PIN o cuando el correcto ya fue
 // ingresado (y, si el cifrado está activo, los datos ya quedaron descifrados en memoria).
@@ -110,6 +119,7 @@ async function bootApp(){
   // depender de ese caché.
   showPage('mov', document.querySelector('.nav-btn[onclick*="\'mov\'"]'));
   renderMovs();
+  quitarSplash();
   checkOnboarding();
   atajoAlArrancar();   // si abriste la app desde un atajo del ícono (Cargar gasto, Cerrar el mes…), te lleva ahí
   // Con delay: que el usuario vea primero sus datos, no un diálogo tapando la pantalla
