@@ -266,19 +266,19 @@
 <div class="modal-overlay" id="modal-filtro-fecha" onclick="if(event.target===this)closeFiltroFechaModal()">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
-    <div class="modal-title">📅 Buscar por fecha</div>
-    <div class="type-toggle" style="margin-bottom:14px">
-      <button type="button" class="type-btn" id="ff-tab-dia" onclick="setFiltroFechaTab('dia')">Día</button>
-      <button type="button" class="type-btn" id="ff-tab-rango" onclick="setFiltroFechaTab('rango')">Rango</button>
-      <button type="button" class="type-btn" id="ff-tab-mes" onclick="setFiltroFechaTab('mes')">Mes</button>
-      <button type="button" class="type-btn" id="ff-tab-anio" onclick="setFiltroFechaTab('anio')">Año</button>
+    <div class="modal-title" style="display:flex;align-items:center;gap:8px"><svg class="mov-icon-svg" style="width:22px;height:22px" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Buscar por fecha</div>
+    <div class="seg-filter seg-filter-modal" role="tablist" aria-label="Qué querés buscar">
+      <button type="button" class="seg-btn" role="tab" aria-selected="true" id="ff-tab-dia" aria-controls="ff-panel-dia" onclick="setFiltroFechaTab('dia')">Día</button>
+      <button type="button" class="seg-btn" role="tab" aria-selected="false" id="ff-tab-rango" aria-controls="ff-panel-rango" onclick="setFiltroFechaTab('rango')">Rango</button>
+      <button type="button" class="seg-btn" role="tab" aria-selected="false" id="ff-tab-mes" aria-controls="ff-panel-mes" onclick="setFiltroFechaTab('mes')">Mes</button>
+      <button type="button" class="seg-btn" role="tab" aria-selected="false" id="ff-tab-anio" aria-controls="ff-panel-anio" onclick="setFiltroFechaTab('anio')">Año</button>
     </div>
-    <div id="ff-panel-dia">
+    <div id="ff-panel-dia" role="tabpanel" aria-labelledby="ff-tab-dia">
       <div class="form-group"><label class="form-label" for="ff-dia">Fecha exacta</label>
         <input type="date" id="ff-dia" class="form-input">
       </div>
     </div>
-    <div id="ff-panel-rango" style="display:none">
+    <div id="ff-panel-rango" role="tabpanel" aria-labelledby="ff-tab-rango" style="display:none">
       <div class="two-col">
         <div class="form-group"><label class="form-label" for="ff-rango-desde">Desde</label>
           <input type="date" id="ff-rango-desde" class="form-input">
@@ -288,12 +288,12 @@
         </div>
       </div>
     </div>
-    <div id="ff-panel-mes" style="display:none">
+    <div id="ff-panel-mes" role="tabpanel" aria-labelledby="ff-tab-mes" style="display:none">
       <div class="form-group"><label class="form-label" for="ff-mes">Mes</label>
         <input type="month" id="ff-mes" class="form-input">
       </div>
     </div>
-    <div id="ff-panel-anio" style="display:none">
+    <div id="ff-panel-anio" role="tabpanel" aria-labelledby="ff-tab-anio" style="display:none">
       <div class="form-group"><label class="form-label" for="ff-anio">Año</label>
         <select id="ff-anio" class="form-select"></select>
       </div>
@@ -329,11 +329,11 @@
     <div class="modal-handle"></div>
     <div class="modal-title">Editar movimiento</div>
     <div id="edit-form-content"></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
+    <button type="button" class="btn-sm" id="edit-repetir" style="width:100%;margin-top:8px" onclick="repetirDesdeEditor()">🔁 Repetir este movimiento (con la fecha de hoy)</button>
+    <div class="edit-acciones">
       <button class="btn-sm u-flex1" onclick="closeEditModal()">Cancelar</button>
       <button class="btn-primary" style="flex:2;background:var(--accent);color:#fff;padding:11px" onclick="guardarEdit()">Guardar cambios</button>
     </div>
-    <button type="button" class="btn-sm" id="edit-repetir" style="width:100%;margin-top:8px" onclick="repetirDesdeEditor()">🔁 Repetir este movimiento (con la fecha de hoy)</button>
   </div>
 </div>
 
@@ -884,26 +884,27 @@
       <button class="mov-topbar-arrow" onclick="cambiarMes(-1)" id="btn-mes-prev" aria-label="Mes anterior">‹</button>
       <div class="mov-topbar-month">
         <span class="mov-topbar-eyebrow">Movimientos</span>
-        <span id="mes-label" class="mov-topbar-label" role="button" tabindex="0" aria-label="Mes mostrado. Tocá para limpiar el filtro de fecha" onclick="if(filtroFecha)limpiarFiltroFecha()" style="cursor:pointer"></span>
+        <span id="mes-label" class="mov-topbar-label" onclick="if(filtroFecha)limpiarFiltroFecha()"></span>
       </div>
       <button class="mov-topbar-arrow" onclick="cambiarMes(1)" id="btn-mes-next" aria-label="Mes siguiente">›</button>
     </div>
-    <button class="mov-icon-btn" id="btn-mov-search" onclick="toggleMovSearch()" aria-label="Buscar movimientos">🔍</button>
-    <button class="mov-icon-btn" onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha">📅</button>
+    <button class="mov-icon-btn" id="btn-mov-search" onclick="toggleMovSearch()" aria-label="Buscar movimientos"><svg class="mov-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20.5 20.5"/></svg></button>
+    <button class="mov-icon-btn" onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha"><svg class="mov-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
   </div>
   <div id="mov-search-row" class="mov-search-row" style="display:none;padding:10px 16px 0">
     <input type="search" id="mov-search" aria-label="Buscar movimientos" placeholder="Buscar por nota, categoría, ticker…" oninput="onSearchMovs()">
+    <div id="mov-search-count" class="mov-search-count" role="status"></div>
   </div>
-  <div id="mov-cierre-aviso" style="display:none"></div>
-  <div id="mov-anual-aviso" style="display:none"></div>
-  <div class="mov-summary" id="mov-summary"></div>
+  <div id="mov-cierre-aviso" role="status" style="display:none"></div>
+  <div id="mov-anual-aviso" role="status" style="display:none"></div>
   <div class="seg-filter" id="mov-filtros"></div>
-  <div id="mov-tarjeta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
-  <div id="mov-cat-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;gap:6px"></div>
-  <div id="mov-cuenta-filtro" style="padding:6px 16px 0;display:none;flex-wrap:wrap;align-items:center;gap:6px"></div>
+  <div class="mov-summary" id="mov-summary"></div>
+  <div id="mov-tarjeta-filtro" class="mov-chips" style="display:none"></div>
+  <div id="mov-cat-filtro" class="mov-chips" style="display:none"></div>
+  <div id="mov-cuenta-filtro" class="mov-chips" style="display:none"></div>
   <div id="mov-cuenta-resumen" class="cuenta-resumen" style="display:none"></div>
   <div id="mov-arrastre" class="info-line" style="display:none"></div>
-  <div id="gcal-aviso" class="venc-wrap" style="display:none"></div>
+  <div id="gcal-aviso" class="venc-wrap" role="status" style="display:none"></div>
   <div id="mov-presup-resumen" style="padding:0 16px 8px;display:none"></div>
   <div class="tx-list" id="tx-list"></div>
 </div>

@@ -1210,6 +1210,123 @@ html:has(#page-cargar.active){scroll-padding-bottom:calc(88px + var(--safe-b))}
 .mes-corto .form-select{padding-left:12px;padding-right:8px}
 .aum-edit-monto .amount-input{font-size:22px;font-weight:700}
 
+/* ═══════════════════════════════════════════
+   [AAA movimientos] Movimientos (#page-mov) y su editor (#modal-edit) — ronda 1
+   ═══════════════════════════════════════════
+   Va después del bloque [AAA sistema] a propósito: pisa reglas suyas (chips de 44, .venc-ok, .btn-sm) solo dentro de Movimientos. */
+
+/* Cifras de 12 dígitos: entran ENTERAS. El JS pone en --n el largo del texto y la cifra se achica según el ancho de su contenedor
+   (cqw) hasta un piso; recién ahí corta con "…". Antes el importe de un mosaico terminaba en "$1.111.111.1…" (perdías el orden de magnitud).
+   Tope = el tamaño de siempre. Sin soporte de cqw (muy viejo) queda el tamaño fijo con "…", como antes. */
+.mov-summary-num{container-type:inline-size;width:100%}
+.mov-summary-val{font-size:clamp(22px,calc(100cqw / (var(--n,8) * .66)),34px);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mov-mosaic-grid{container-type:inline-size}
+.mov-mosaic-val{font-size:clamp(12px,calc(((100cqw - var(--sp-2)) / 2 - 28px) / (var(--n,8) * .62)),19px)}
+.mov-mosaic-wide .mov-mosaic-val{font-size:clamp(12px,calc((100cqw - 28px) / (var(--n,8) * .62)),19px)}
+/* El nombre del mosaico baja a una segunda línea en vez de cortarse ("Frecuentes por p…"); con subgrid las filas de una misma fila
+   de mosaicos quedan alineadas entre sí (título, cifra y subtítulo), aunque uno de los títulos ocupe dos líneas. */
+.mov-mosaic-name{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;line-height:1.25}
+@supports (grid-template-rows:subgrid){
+  .mov-mosaic-grid{row-gap:0}
+  .mov-mosaic{display:grid;grid-row:span 3;grid-template-rows:subgrid;row-gap:0;margin-bottom:var(--sp-2);align-content:start}
+  .mov-mosaic-val,.mov-mosaic-sub{margin-top:6px}
+  .mov-mosaic-grid{margin-bottom:calc(-1 * var(--sp-2))}
+}
+/* Mosaicos neutros (Cantidad, Gastos USD): superficie y aro propios; antes tenían el fondo de la página y parecían texto suelto. */
+.mov-mosaic[data-tono="neutro"]{background:var(--surface);box-shadow:inset 0 0 0 1px var(--border)}
+.mov-mosaic[data-tono="neutro"] .mov-mosaic-glyph{background:var(--bg)}
+.mov-topbar-eyebrow{font-size:var(--fs-xs)}
+/* 16 px (no --fs-lg 17): a 360 px de ancho "Noviembre 2026" tiene que entrar entre las dos flechas de 44 sin partirse. */
+.mov-topbar-label{white-space:nowrap}
+.mov-topbar-month{min-width:128px;max-width:100%}
+/* Con un filtro de fechas activo, las flechas ‹ › se van (no se pueden usar) y el rótulo "📅 fecha ✕" ocupa su lugar sin partirse en dos
+   líneas; si es muy largo, el texto termina en "…" y la ✕ queda siempre a la vista. */
+.mov-topbar-center:has(.mes-label-x) .mov-topbar-arrow{display:none}
+#mes-label:has(.mes-label-x){display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1);max-width:100%;font-size:var(--fs-base)}
+#mes-label[role="button"]{cursor:pointer}
+.cierre-aviso>span{text-wrap:pretty}
+.mov-icon-svg-sm{width:16px;height:16px;flex-shrink:0;stroke-width:2.2}
+.mes-label-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mes-label-x{flex-shrink:0;margin-left:0}
+/* Íconos de la barra (buscar, fecha): trazo de 2 px en el color del texto, mismo peso que el ☰ (antes eran emoji a color, y el calendario siempre decía "July 17"). */
+.mov-icon-svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
+.mov-search-count{min-height:20px;padding:var(--sp-1) 2px 0;font-size:var(--fs-sm);color:var(--muted)}
+.mov-search-row input{height:var(--tap);padding:0 var(--sp-3);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);font-size:var(--fs-base)}
+
+/* Aviso de cierre de mes / de año: "Ver" es una acción de texto, no un botón con borde que pese más que el aviso. */
+.cierre-aviso{gap:var(--sp-2)}
+.cierre-aviso .btn-sm{min-height:32px;padding:0 var(--sp-3);border:0;border-radius:var(--radius-pill);background:transparent;color:var(--accent);font-size:var(--fs-md);font-weight:700}
+.cierre-aviso .btn-sm:active{background:var(--surface)}
+
+/* Chips de cuenta, categoría y tarjeta. Caja REAL de 44 px (32 de dibujo, la misma altura que el segmentado, + 6 de borde transparente
+   arriba y abajo) con las filas pegadas y sin margen negativo: las cajas de dos filas ya NO se pisan (antes 11 px: el toque en el
+   borde de abajo de un chip activaba el de la fila siguiente y, a 2-10 px bajo el segmentado, el chip "Sin cuenta"). El hueco visible
+   entre filas es de 12 px. 6 px de padding arriba: el halo de 44 del segmentado llega 3 px por debajo de su caja y la distancia
+   visible hasta la primera fila queda en 12 px, igual que entre filas. */
+.mov-chips{flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:0;padding:6px 16px 0}
+.mov-chips .filter-chip.filter-chip{border-block-width:6px;margin-block:0;line-height:32px;padding-inline:12px;min-height:var(--tap);max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* El nombre largo de una cuenta termina en "…" y la cantidad queda siempre visible (antes el chip se salía de la pantalla). */
+.mov-chips .filter-chip.filter-chip:has(.filter-chip-txt){display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1)}
+.filter-chip-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filter-chip .txt-muted{color:inherit}
+.mov-chips .filter-chip-label{align-self:center;min-height:var(--tap);display:inline-flex;align-items:center}
+.cuenta-resumen{margin-top:var(--sp-1)}
+#mov-presup-resumen{margin-top:var(--sp-1)}
+
+/* Franja de vencimientos: nombre y detalle en dos líneas a la izquierda, acción a la derecha (antes el detalle quedaba
+   alineado a la derecha y partido en dos líneas desparejas). Los botones son tonales: seis "✓ Pagado" rellenos competían con el título. */
+.venc-fila{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"nom ok" "txt ok";column-gap:var(--sp-3);row-gap:1px;align-items:center;padding:6px 0}
+.venc-fila+.venc-fila{border-top:1px solid var(--border)}
+.venc-fila>.venc-nombre{grid-area:nom}
+.venc-fila>.venc-txt{grid-area:txt;flex:none;text-align:left;font-size:var(--fs-sm);line-height:1.35}
+.venc-fila>.venc-ok{grid-area:ok}
+.venc-franja+.venc-franja{margin-top:var(--sp-2)}
+.venc-franja .venc-ok.venc-ok{background-color:var(--surface);color:var(--warning);box-shadow:inset 0 0 0 1.5px var(--warning)}
+.venc-franja .venc-vencida .venc-ok.venc-ok{background-color:var(--surface);color:var(--danger);box-shadow:inset 0 0 0 1.5px var(--danger)}
+.venc-franja .venc-ok.venc-cobrado{background-color:var(--surface);color:var(--success);box-shadow:inset 0 0 0 1.5px var(--success)}
+.venc-franja .venc-ok.venc-ok:active{background-color:transparent}
+.venc-mas{min-height:var(--tap);display:flex;align-items:center;padding:0;margin-block:-6px -8px}
+
+/* Filas: la etiqueta de cuenta se acorta con "…" (antes, un nombre largo tapaba todo el subtítulo y se cortaba sin puntos). */
+#tx-list .tx-sub{display:flex;align-items:center;gap:5px}
+#tx-list .tx-sub-txt{flex:0 1 auto}
+.tx-sub .tx-cuenta{flex:0 0 auto;min-width:0;max-width:65%;overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-xs)}
+.js-toggle-pago,.js-toggle-recup{font-size:var(--fs-xs)}
+#tx-list .tx-icon{font-size:var(--fs-base)}
+/* Entrada de las filas: 300 ms con la curva del sistema y SOLO en la primera carga o al cambiar de mes/período (.anima, ver renderMovs). */
+#tx-list tx-item{animation:none}
+#tx-list.anima tx-item{animation:slideUpFade var(--dur-3) var(--ease) forwards}
+.tx-cat{display:flex;align-items:center;gap:6px}
+/* Si título + badge no entran en una línea, el badge baja a una segunda (el título nunca queda en 0 px ni el badge en "D…"). */
+.tx-cat{flex-wrap:wrap;row-gap:2px}
+.tx-cat-txt{min-width:4.5ch;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.tx-cat .badge{flex:0 1 auto;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+
+/* Deslizar a la derecha: Editar y Repetir lado a lado, 66×60 cada uno (REVEAL_L = 132 en movimientos.js). */
+.tx-swipe-bg-left{width:132px;flex-direction:row}
+.tx-swipe-bg-left .tx-swipe-act{flex:1;width:auto;height:100%;min-width:var(--tap)}
+
+/* Estado vacío con guía y llamado a la acción. */
+.empty-titulo{font-size:var(--fs-base);font-weight:600;color:var(--text)}
+.empty-guia{font-size:var(--fs-md);line-height:1.45;margin:var(--sp-2) auto 0;max-width:30em}
+.empty-cta{width:auto;margin-top:var(--sp-4);padding:0 var(--sp-5);background:var(--accent);color:var(--on-solid)}
+
+/* Modal "Buscar por fecha": el mismo segmentado que la pantalla (antes: botones .type-btn de 31 px con estilos en línea). */
+.seg-filter-modal{margin:0 0 var(--sp-3)}
+#modal-filtro-fecha .two-col{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+#modal-filtro-fecha input[type="date"].form-input,#modal-filtro-fecha input[type="month"].form-input{min-width:0;width:100%}
+
+/* Editor: Cancelar / Guardar quedan a la vista al pie de la hoja mientras se desplaza (los formularios de gasto frecuente miden más de
+   dos pantallas: antes había que bajar hasta el final para guardar). La barra tapa el relleno inferior de la hoja (bottom negativo). */
+#modal-edit .modal{padding-bottom:0}
+#modal-edit .edit-acciones{display:flex;gap:var(--sp-2);margin-top:var(--sp-3);padding:var(--sp-2) 0 calc(var(--sp-3) + var(--safe-b));position:sticky;bottom:0;background:var(--surface);z-index:2}
+#modal-edit .edit-acciones::before{content:"";position:absolute;left:0;right:0;top:calc(-1 * var(--sp-3));height:var(--sp-3);background:linear-gradient(transparent,var(--surface));pointer-events:none}
+
+/* Editor: Tarjeta + "+" + Categoría — la tarjeta lleva el nombre largo ("Mercado Pa…"), se le da más ancho. */
+#modal-edit .two-col:has(#edit-tc-tarj){grid-template-columns:1.5fr 1fr}
+#modal-edit .u-row-6>.btn-sm{min-width:var(--tap)}
+
 
 .informe-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .informe-tabla{width:100%;border-collapse:collapse;font-size:12px}

@@ -1725,11 +1725,11 @@ function renderEditTcForm(t){
     const cambiosTarj=Array.isArray(t.tarjetas)?t.tarjetas.slice().sort((a,b)=>a.desde.localeCompare(b.desde)):[];
     return `
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--warning-light);color:var(--warning);margin-bottom:10px">🔁 GASTO FRECUENTE</div>
-      <div class="form-group"><label class="form-label">Descripción</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-desc">Descripción</label>
         <input type="text" id="edit-tc-desc" class="form-input" value="${escapeHtml(t.desc)}">
       </div>
       <div class="two-col">
-        <div class="form-group"><label class="form-label">Tarjeta</label>
+        <div class="form-group"><label class="form-label" for="edit-tc-tarj">Tarjeta</label>
           <div class="u-row-6">
             <select id="edit-tc-tarj" class="form-select u-flex1">
               ${getTarjetas().map(nm=>`<option ${tarjetaSel===nm?'selected':''}>${escapeHtml(nm)}</option>`).join("")}
@@ -1738,18 +1738,18 @@ function renderEditTcForm(t){
             <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('edit-tc-tarj')" title="Agregar tarjeta nueva">+</button>
           </div>
         </div>
-        <div class="form-group"><label class="form-label">Categoría</label>
+        <div class="form-group"><label class="form-label" for="edit-tc-cat">Categoría</label>
           <input type="text" id="edit-tc-cat" class="form-input" value="${escapeHtml(t.cat)}">
         </div>
       </div>
       <div class="inset" id="edit-tc-tarj-opc">
         <div class="two-col">
-          <div class="form-group"><label class="form-label">Tarjeta desde el mes</label>
+          <div class="form-group"><label class="form-label" for="edit-tc-tarj-mes">Tarjeta desde el mes</label>
             <input type="month" id="edit-tc-tarj-mes" class="form-input" value="${ymTarj}" onchange="onEditTcTarjMes()">
           </div>
           <div class="form-group"><label class="form-label">&nbsp;</label>
             <label style="display:flex;align-items:center;gap:8px;font-size:13px;min-height:40px;cursor:pointer">
-              <input type="checkbox" id="edit-tc-tarj-solo" style="width:18px;height:18px;cursor:pointer;accent-color:var(--warning)"> Solo ese mes
+              <input type="checkbox" id="edit-tc-tarj-solo" class="chk-custom" style="--chk:var(--warning)"> Solo ese mes
             </label>
           </div>
         </div>
@@ -1769,14 +1769,14 @@ function renderEditTcForm(t){
           `).join("")}
         </div>`:""}
       <div class="two-col">
-        <div class="form-group"><label class="form-label">Mes de inicio</label>
+        <div class="form-group"><label class="form-label" for="edit-tc-inicio">Mes de inicio</label>
           <input type="month" id="edit-tc-inicio" class="form-input" value="${t.mesInicio||''}">
         </div>
-        <div class="form-group"><label class="form-label">Mes de fin (opcional)</label>
+        <div class="form-group"><label class="form-label" for="edit-tc-fin">Mes de fin (opcional)</label>
           <input type="month" id="edit-tc-fin" class="form-input" value="${t.mesFin||''}">
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Cuenta</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-cuenta">Cuenta</label>
         <div class="u-row">
           <select id="edit-tc-cuenta" class="form-select u-flex1">
             ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
@@ -1785,11 +1785,11 @@ function renderEditTcForm(t){
           <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Día de vencimiento (opcional)</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-frec-dia">Día de vencimiento (opcional)</label>
         <input type="number" id="edit-tc-frec-dia" class="form-input" value="${diaValido(t.diaVto)||""}" placeholder="Ej: 10" inputmode="numeric" min="1" max="31" step="1">
         <p style="font-size:10px;color:var(--muted);margin-top:4px">Para que la app te avise antes de que venza este gasto.</p>
       </div>
-      <div class="form-group"><label class="form-label">Moneda</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-moneda-frec">Moneda</label>
         <select id="edit-tc-moneda-frec" class="form-select" onchange="document.getElementById('edit-tc-aum-prefix').textContent=this.value==='USD'?'USD':'$'">
           <option value="ARS" ${(t.moneda||'ARS')==='ARS'?'selected':''}>🇦🇷 Pesos (ARS)</option>
           <option value="USD" ${t.moneda==='USD'?'selected':''}>🇺🇸 Dólares (USD)</option>
@@ -1827,7 +1827,7 @@ function renderEditTcForm(t){
         <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Configurá un "Mes de fin" para que deje de aparecer desde ese mes en adelante. Los meses anteriores se mantienen en el historial.</p>
         <button type="button" class="btn-sm" style="color:var(--danger);width:100%" onclick="darDeBajaFrec(${t.id})">Dar de baja desde el próximo mes</button>
       </div>
-      <div class="form-group"><label class="form-label">Nota</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-nota">Nota</label>
         <textarea id="edit-tc-nota" class="form-textarea">${escapeHtml(t.nota)}</textarea>
       </div>
     `;
@@ -1835,11 +1835,11 @@ function renderEditTcForm(t){
   // Cuotas: edición simple
   return `
     <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--warning-light);color:var(--warning);margin-bottom:10px">CUOTAS · ${t.cuotasTotal}x</div>
-    <div class="form-group"><label class="form-label">Descripción</label>
+    <div class="form-group"><label class="form-label" for="edit-tc-desc">Descripción</label>
       <input type="text" id="edit-tc-desc" class="form-input" value="${(t.desc||'').replace(/"/g,'&quot;')}">
     </div>
     <div class="two-col">
-      <div class="form-group"><label class="form-label">Tarjeta</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-tarj">Tarjeta</label>
         <div class="u-row-6">
           <select id="edit-tc-tarj" class="form-select u-flex1">
             ${getTarjetas().map(nm=>`<option ${t.tarjeta===nm?'selected':''}>${escapeHtml(nm)}</option>`).join("")}
@@ -1848,30 +1848,30 @@ function renderEditTcForm(t){
           <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('edit-tc-tarj')" title="Agregar tarjeta nueva">+</button>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Categoría</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-cat">Categoría</label>
         <input type="text" id="edit-tc-cat" class="form-input" value="${escapeHtml(t.cat)}">
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Moneda</label>
+    <div class="form-group"><label class="form-label" for="edit-tc-moneda">Moneda</label>
       <select id="edit-tc-moneda" class="form-select" onchange="document.getElementById('edit-tc-prefix').textContent=this.value==='USD'?'USD':'$'">
         <option value="ARS" ${(t.moneda||'ARS')==='ARS'?'selected':''}>🇦🇷 Pesos (ARS)</option>
         <option value="USD" ${t.moneda==='USD'?'selected':''}>🇺🇸 Dólares (USD)</option>
       </select>
     </div>
-    <div class="form-group"><label class="form-label">Monto total</label>
+    <div class="form-group"><label class="form-label" for="edit-tc-total">Monto total</label>
       <div class="amount-wrap"><span class="amount-prefix" id="edit-tc-prefix">${t.moneda==='USD'?'USD':'$'}</span>
         <input type="number" id="edit-tc-total" class="form-input amount-input" value="${t.total||0}" inputmode="decimal" step="any">
       </div>
     </div>
     <div class="two-col">
-      <div class="form-group"><label class="form-label">Cuotas totales</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-cuotas">Cuotas totales</label>
         <input type="number" id="edit-tc-cuotas" class="form-input" value="${t.cuotasTotal||1}" min="1">
       </div>
-      <div class="form-group"><label class="form-label">1ª cuota en</label>
+      <div class="form-group"><label class="form-label" for="edit-tc-inicio">1ª cuota en</label>
         <input type="month" id="edit-tc-inicio" class="form-input" value="${t.mesInicio||''}">
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Cuenta</label>
+    <div class="form-group"><label class="form-label" for="edit-tc-cuenta">Cuenta</label>
       <div class="u-row">
         <select id="edit-tc-cuenta" class="form-select u-flex1">
           ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
@@ -1880,7 +1880,7 @@ function renderEditTcForm(t){
         <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Nota</label>
+    <div class="form-group"><label class="form-label" for="edit-tc-nota">Nota</label>
       <textarea id="edit-tc-nota" class="form-textarea">${(t.nota||'').replace(/</g,'&lt;')}</textarea>
     </div>
   `;
