@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v224**
+**Versión actual: v225**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 4 de noviembre de 2026
 
+- AAA importar: zonas de carga, historial, vista previa, aviso de arrastre, hojas con Cerrar fijo y reporte imprimible responsive
+- **v225** · AAA tanda 2 parcial (dashboard y año completo, informe y cierre)
 - AAA anio: Año completo, Informe, Cierre del mes e imágenes compartibles
   - Cifras que se achican o pasan a columna (adiós desborde 402>390 con importes de 12 dígitos), variación con color de buena/mala noticia
   - Año sin movimientos: año actual + invitación, sin 'undefined'
