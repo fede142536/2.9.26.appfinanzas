@@ -14,7 +14,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v227">
+<meta name="enola-version" content="enola-v228">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <!-- Color de la barra del sistema = color de fondo de la app (claro #f7f6f2 / oscuro #000). Los dos primeros siguen al sistema; applyTheme() (config-ui.js)
@@ -39,9 +39,9 @@
 <!-- Chart.js y SheetJS viven en js/vendor (versiones fijas, ver js/vendor/LEEME.md): la app no baja código de ningún CDN.
      defer es IMPORTANTE, no cosmético: el HTML se parsea sin esperar estos archivos, así la pantalla nunca queda en blanco por una carga lenta
      (los gráficos y el Excel se protegen solos si todavía no están; ver renderChartMensualBI y handleXlsx). -->
-<script defer src="js/vendor/xlsx.full.min.js?v=227"></script>
-<script defer src="js/vendor/chart.umd.js?v=227"></script>
-<link rel="stylesheet" href="styles.css?v=227">
+<script defer src="js/vendor/xlsx.full.min.js?v=228"></script>
+<script defer src="js/vendor/chart.umd.js?v=228"></script>
+<link rel="stylesheet" href="styles.css?v=228">
 </head>
 <body>
 <!-- Pantalla de arranque [AAA navegacion]: hasta que el script de la app dibuja Movimientos (main.js la retira), la
@@ -259,9 +259,9 @@
 
 <!-- MODAL DETALLE DE INSTRUMENTO (Cartera → tocar un ticker) -->
 <div class="modal-overlay" id="modal-instrumento-detail" onclick="if(event.target===this)closeInstrumentoDetail()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:78vh;display:flex;flex-direction:column;padding-bottom:calc(20px + env(safe-area-inset-bottom))">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
-    <div id="instrumento-detail-content" style="overflow-y:auto;display:flex;flex-direction:column;gap:12px"></div>
+    <div id="instrumento-detail-content" class="inv-det"></div>
   </div>
 </div>
 
@@ -945,12 +945,12 @@
         <span class="mov-topbar-eyebrow">Inversiones</span>
         <span id="inv-mes-label" class="mov-topbar-label"></span>
       </div>
-      <button class="mov-topbar-arrow" id="inv-mes-next" onclick="cambiarMesInv(1)" aria-label="Mes siguiente">›</button>
+      <button class="mov-topbar-arrow" id="inv-mes-next" onclick="cambiarMesInv(1)" aria-label="Mes siguiente" disabled aria-disabled="true">›</button>
     </div>
     <div style="width:40px;flex-shrink:0"></div>
   </div>
   <div id="inv-summary"></div>
-  <div class="seg-filter" style="margin:14px 16px 0">
+  <div class="seg-filter" style="margin:14px 16px 0" role="group" aria-label="Qué mirar de tus inversiones">
     <button class="seg-btn" id="inv-tab-mes" onclick="setInvVista('mes')">Este mes</button>
     <button class="seg-btn" id="inv-tab-cart" onclick="setInvVista('cart')">Cartera</button>
     <button class="seg-btn" id="inv-tab-evo" onclick="setInvVista('evo')">Evolución</button>
@@ -958,8 +958,8 @@
   <div id="inv-movs" class="inv-panel"></div>
   <div id="inv-cartera" class="inv-panel"></div>
   <div id="inv-evo-panel" class="inv-panel inv-panel-pad">
-    <div id="inv-historico-kpis" style="display:flex;justify-content:space-between;align-items:center;gap:10px"></div>
-    <div style="position:relative;height:120px"><canvas id="chart-inv-historico"></canvas></div>
+    <div id="inv-historico-kpis" class="inv-evo-kpis"></div>
+    <div id="inv-evo-grafico" class="inv-evo-grafico"><canvas id="chart-inv-historico"></canvas></div>
     <div id="inv-top-tickers"></div>
   </div>
   <div style="height:24px"></div>
@@ -1128,11 +1128,11 @@
 
 <!-- HOJA: CONCILIAR CON EL BROKER -->
 <div class="modal-overlay" id="modal-concil" onclick="if(event.target===this)cerrarConciliacion()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:88vh;overflow-y:auto">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
-    <div class="modal-title">🔎 Fondo vs. broker</div>
+    <div class="modal-title"><span aria-hidden="true">🔎</span> Fondo vs. broker</div>
     <div id="concil-detalle"></div>
-    <button class="btn-sm" style="width:100%;margin-top:14px" onclick="cerrarConciliacion()">Cerrar</button>
+    <div class="concil-cerrar-barra"><button type="button" class="btn-sm concil-cerrar" onclick="cerrarConciliacion()">Cerrar</button></div>
   </div>
 </div>
 
@@ -1496,43 +1496,43 @@
      existiría y showPage() se cortaría con un TypeError dejando la pantalla a medio pintar. -->
 <button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento"></button>
 
-<script src="js/estado-categorias.js?v=227"></script>
-<script src="js/resultado-inversiones.js?v=227"></script>
-<script src="js/render-comun.js?v=227"></script>
-<script src="js/form-cargar.js?v=227"></script>
-<script src="js/movimientos.js?v=227"></script>
-<script src="js/editar-movimiento.js?v=227"></script>
-<script src="js/tarjetas-inversiones.js?v=227"></script>
-<script src="js/analisis.js?v=227"></script>
-<script src="js/cambio-moneda.js?v=227"></script>
-<script src="js/traspasos.js?v=227"></script>
-<script src="js/dashboard.js?v=227"></script>
-<script src="js/inflacion.js?v=227"></script>
-<script src="js/ahorros.js?v=227"></script>
-<script src="js/conciliacion.js?v=227"></script>
-<script src="js/papelera.js?v=227"></script>
-<script src="js/carga-rapida.js?v=227"></script>
-<script src="js/atajos.js?v=227"></script>
-<script src="js/aumentos.js?v=227"></script>
-<script src="js/retiro-por-venta.js?v=227"></script>
-<script src="js/selector-mes.js?v=227"></script>
-<script src="js/decimales.js?v=227"></script>
-<script src="js/recuperable.js?v=227"></script>
-<script src="js/resumen-anual.js?v=227"></script>
-<script src="js/repetir.js?v=227"></script>
-<script src="js/informe-periodo.js?v=227"></script>
-<script src="js/cierre-mes.js?v=227"></script>
-<script src="js/huella.js?v=227"></script>
-<script src="js/cuentas-sugeridas.js?v=227"></script>
-<script src="js/graficos-interactivos.js?v=227"></script>
-<script src="js/importar-exportar.js?v=227"></script>
-<script src="js/cuentas-tarjetas-categorias.js?v=227"></script>
-<script src="js/config-ui.js?v=227"></script>
-<script src="js/calendario-google.js?v=227"></script>
-<script src="js/backup-drive.js?v=227"></script>
-<script src="js/presupuestos.js?v=227"></script>
-<script src="js/seguridad-pin.js?v=227"></script>
-<script src="js/main.js?v=227"></script>
+<script src="js/estado-categorias.js?v=228"></script>
+<script src="js/resultado-inversiones.js?v=228"></script>
+<script src="js/render-comun.js?v=228"></script>
+<script src="js/form-cargar.js?v=228"></script>
+<script src="js/movimientos.js?v=228"></script>
+<script src="js/editar-movimiento.js?v=228"></script>
+<script src="js/tarjetas-inversiones.js?v=228"></script>
+<script src="js/analisis.js?v=228"></script>
+<script src="js/cambio-moneda.js?v=228"></script>
+<script src="js/traspasos.js?v=228"></script>
+<script src="js/dashboard.js?v=228"></script>
+<script src="js/inflacion.js?v=228"></script>
+<script src="js/ahorros.js?v=228"></script>
+<script src="js/conciliacion.js?v=228"></script>
+<script src="js/papelera.js?v=228"></script>
+<script src="js/carga-rapida.js?v=228"></script>
+<script src="js/atajos.js?v=228"></script>
+<script src="js/aumentos.js?v=228"></script>
+<script src="js/retiro-por-venta.js?v=228"></script>
+<script src="js/selector-mes.js?v=228"></script>
+<script src="js/decimales.js?v=228"></script>
+<script src="js/recuperable.js?v=228"></script>
+<script src="js/resumen-anual.js?v=228"></script>
+<script src="js/repetir.js?v=228"></script>
+<script src="js/informe-periodo.js?v=228"></script>
+<script src="js/cierre-mes.js?v=228"></script>
+<script src="js/huella.js?v=228"></script>
+<script src="js/cuentas-sugeridas.js?v=228"></script>
+<script src="js/graficos-interactivos.js?v=228"></script>
+<script src="js/importar-exportar.js?v=228"></script>
+<script src="js/cuentas-tarjetas-categorias.js?v=228"></script>
+<script src="js/config-ui.js?v=228"></script>
+<script src="js/calendario-google.js?v=228"></script>
+<script src="js/backup-drive.js?v=228"></script>
+<script src="js/presupuestos.js?v=228"></script>
+<script src="js/seguridad-pin.js?v=228"></script>
+<script src="js/main.js?v=228"></script>
 
 <script>
 // ═══════════════════════════════════════════
