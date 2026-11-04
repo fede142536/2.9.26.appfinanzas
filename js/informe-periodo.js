@@ -165,13 +165,9 @@ function informeHTML(inf){
     <div class="cierre-barra"><div style="width:${Math.min(c.pct,100)}%"></div></div>${c.subs.length?`<div class="informe-subs">${c.subs.map(s=>`${escapeHtml(s.sub||"Sin subcategoría")} ${fmtAbbr(s.monto)}`).join(" · ")}</div>`:""}</div>`).join("");
   const fuentes=inf.fuentes.slice(0,5).map(f=>`<div class="informe-fila"><span>${getIcon(f.cat,"💰")} ${escapeHtml(f.cat)}</span><strong>${fmtTotal(f.monto)}</strong></div>`).join("");
   const grandes=inf.gastosGrandes.map(g=>`<div class="informe-fila"><span>${escapeHtml(fmtDiaMes(g.fecha))} · ${escapeHtml(g.desc)} <span class="txt-muted">${escapeHtml(g.cat)}</span></span><strong>${fmtTotal(g.monto)}</strong></div>`).join("");
-  const hall=inf.hallazgos.map(h=>`<p class="cierre-nota">${h.icono} ${escapeHtml(h.texto)}</p>`).join("");
-  return `<div class="cierre-hero"><div class="txt-xs txt-muted">Disponible en el período</div><div class="cierre-hero-num" style="color:${col}">${informeFmt(inf.disponible)}</div></div>
-    <div class="cierre-fila3">
-      <div><span class="txt-xs txt-muted">Ingresos</span><strong style="color:var(--success)">${fmtTotal(inf.ingresos)}</strong></div>
-      <div><span class="txt-xs txt-muted">Gastos</span><strong style="color:var(--danger)">${fmtTotal(inf.gastos)}</strong></div>
-      <div><span class="txt-xs txt-muted">Ahorrado</span><strong style="color:var(--save)">${fmtTotal(inf.ahorrado)}</strong></div>
-    </div>
+  const hall=inf.hallazgos.map(h=>`<p class="cierre-nota"><span class="nota-ico" aria-hidden="true">${h.icono}</span><span>${escapeHtml(h.texto)}</span></p>`).join("");
+  return `<div class="cierre-hero"><div class="txt-xs txt-muted">Disponible en el período</div><div class="cierre-hero-num" style="color:${col};--n:${informeFmt(inf.disponible).length}">${informeFmt(inf.disponible)}</div></div>
+    ${cifras3HTML([{etq:"Ingresos", valor:fmtTotal(inf.ingresos), color:"var(--success)"}, {etq:"Gastos", valor:fmtTotal(inf.gastos), color:"var(--danger)"}, {etq:"Ahorrado", valor:fmtTotal(inf.ahorrado), color:"var(--save)"}])}
     <div class="cierre-sec">Para tener en cuenta</div>${hall}
     <div class="cierre-sec">Mes a mes</div>${informeTablaHTML(inf)}
     <p class="txt-xs txt-muted" style="margin:6px 0 0;line-height:1.4">“Sin créd./inv.” deja afuera créditos, préstamos, inversiones y MEP: es lo que de verdad entró y salió de tu bolsillo.</p>
@@ -234,52 +230,119 @@ function partirEnRenglones(ctx, texto, ancho){
   return out;
 }
 const INFORME_IMG_MAX_HALLAZGOS=6;
-function dibujarInforme(canvas, inf){
-  const W=1080, pad=64, ctx=canvas.getContext("2d"), FUENTE="system-ui,-apple-system,sans-serif";
-  const cats=inf.categorias.slice(0,5);
-  const hall=inf.hallazgos.slice(0,INFORME_IMG_MAX_HALLAZGOS), masHall=inf.hallazgos.length-hall.length;
-  ctx.font=`500 28px ${FUENTE}`;
-  const bloques=hall.map(h=>partirEnRenglones(ctx, `${h.icono} ${h.texto}`, W-2*pad-8));
-  const lineasHall=bloques.reduce((a,b)=>a+b.length,0);
-  const conMeses=inf.meses.filter(x=>x.hayDatos);
-  const yBase=560+240, yCats=yBase+(inf.meses.length>12?160:120);
-  const H=yCats+cats.length*92+70+(hall.length?70+lineasHall*40+hall.length*14+(masHall>0?44:0):0)+80;
-  canvas.width=W; canvas.height=H;
-  ctx.fillStyle="#f7f6f2"; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle="#1f6e68"; ctx.fillRect(0,0,W,16);
-  const txt=(t,x,y,size,color,peso,align)=>{ ctx.font=`${peso||500} ${size}px ${FUENTE}`; ctx.fillStyle=color; ctx.textAlign=align||"left"; ctx.fillText(t,x,y); };
-  txt("Enola · Informe", pad, 110, 52, "#1a1a18", 700);
-  txt(inf.desde===inf.hasta ? mesLbl(inf.desde) : `${mesLbl(inf.desde)} a ${mesLbl(inf.hasta)}`, pad, 156, 30, "#6e6d65");
-  txt("Disponible en el período", pad, 236, 30, "#6e6d65");
-  txt((inf.disponible<0?"−":"")+fmtTotal(Math.abs(inf.disponible)), pad, 316, 84, inf.disponible>=0?"#1f6e68":"#a32d2d", 700);
-  const col=(i,etq,val,color)=>{ const x=pad+i*((W-2*pad)/3); txt(etq, x, 396, 26, "#6e6d65"); txt(val, x, 442, 38, color, 700); };
-  col(0,"Ingresos",fmtTotal(inf.ingresos),"#2d7a3a"); col(1,"Gastos",fmtTotal(inf.gastos),"#a32d2d"); col(2,"Ahorrado",fmtTotal(inf.ahorrado),"#1f6e68");
-  txt("Sin créditos ni inversiones", pad, 500, 26, "#6e6d65");
-  txt((inf.netoOp<0?"−":"")+fmtTotal(Math.abs(inf.netoOp)), W-pad, 500, 30, inf.netoOp>=0?"#1f6e68":"#a32d2d", 700, "right");
-  // Barras: lo que quedó cada mes
-  txt("Mes a mes", pad, 560, 30, "#6e6d65", 700);
-  const n=Math.max(inf.meses.length,1), ancho=(W-2*pad)/n, max=Math.max(...conMeses.map(x=>Math.abs(x.disponible)),1);
-  ctx.fillStyle="#cfccc3"; ctx.fillRect(pad, yBase, W-2*pad, 3);
-  const hueco=n>24 ? 1 : n>12 ? 3 : 8, paso=n<=12 ? 1 : Math.ceil(100/ancho);
-  inf.meses.forEach((x,i)=>{
-    if(x.hayDatos){ const h=Math.max(Math.abs(x.disponible)/max*220, 6); ctx.fillStyle=x.disponible>=0?"#1f6e68":"#a32d2d";
-      if(x.disponible>=0) ctx.fillRect(pad+i*ancho+hueco, yBase-h, ancho-2*hueco, h); else ctx.fillRect(pad+i*ancho+hueco, yBase+3, ancho-2*hueco, Math.min(h,40)); }
-    if(i%paso===0) txt(n<=12 ? mesCortoInforme(x.ym).split(" ")[0] : mesCortoInforme(x.ym), pad+i*ancho+ancho/2, yBase+(n<=12 ? 66 : 76), n<=12 ? 24 : 20, "#6e6d65", 500, "center");
+// ── Piezas para compartir (canvas, sin librerías) ──
+// Las tres imágenes (resumen del mes, del año e informe) comparten estos ladrillos: mismo ancho, margen, fuente de la app y colores
+// (fijos, de la paleta clara: la imagen se manda por WhatsApp y no debe depender del tema del celular; todos ≥ 4,5:1 sobre el fondo).
+// El alto se mide con una pasada en seco (`imgLienzo`), así nunca sobra ni falta lugar, ni queda el pie encima del último renglón.
+const IMG={W:1080, pad:64, fuente:'"Plus Jakarta Sans",system-ui,-apple-system,sans-serif', fondo:"#f7f6f2", franja:"#1f6e68", tinta:"#1a1a18", suave:"#5f5e56",
+  pista:"#e8e5df", eje:"#cfccc3", save:"#165959", ing:"#1e5c2c", gasto:"#942727", barra:"#1f6e68"};
+const imgMonto=n=>(n<0?"−":"")+fmtTotal(Math.abs(n));
+const imgFuente=(size,peso)=>`${peso||500} ${size}px ${IMG.fuente}`;
+function imgT(ctx, t, x, y, size, color, peso, align){ ctx.font=imgFuente(size,peso); ctx.fillStyle=color; ctx.textAlign=align||"left"; ctx.fillText(t, x, y); }
+function imgAncho(ctx, t, size, peso){ ctx.font=imgFuente(size,peso); return ctx.measureText(t).width; }
+// El mayor tamaño (hasta `size`, piso `min`) con el que el texto entra en `ancho`.
+function imgAjustar(ctx, t, ancho, size, peso, min){ let s=size; while(s>min && imgAncho(ctx,t,s,peso)>ancho) s-=2; return s; }
+// Corta con "…" lo que igual no entra.
+function imgRecortar(ctx, t, ancho, size, peso){
+  let s=String(t); if(imgAncho(ctx,s,size,peso)<=ancho) return s;
+  while(s.length>1 && imgAncho(ctx,s+"…",size,peso)>ancho) s=s.slice(0,-1);
+  return s.trimEnd()+"…";
+}
+function imgPastilla(ctx, x, y, w, h, color){
+  if(!(w>0)) return; const r=Math.min(h/2, w/2);
+  ctx.fillStyle=color; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.fill();
+}
+// Espera a que la tipografía de la app esté lista (el dibujo es síncrono: si no está, usa la del sistema, que también se ve bien).
+async function imgFuentesListas(){
+  try{ if(document.fonts && document.fonts.load) await Promise.all([400,500,600,700].map(p=>document.fonts.load(`${p} 32px "Plus Jakarta Sans"`))); }catch(e){ /* sigue con la del sistema */ }
+}
+// Dibuja dos veces: la primera, sobre un lienzo de 1×1, solo para saber hasta dónde llega (devuelve el alto); la segunda, de verdad.
+function imgLienzo(canvas, dibujar){
+  const medida=document.createElement("canvas"); medida.width=1; medida.height=1;
+  const H=Math.ceil(dibujar(medida.getContext("2d"), IMG.W));
+  canvas.width=IMG.W; canvas.height=H;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle=IMG.fondo; ctx.fillRect(0,0,IMG.W,H); ctx.fillStyle=IMG.franja; ctx.fillRect(0,0,IMG.W,16);
+  dibujar(ctx, IMG.W); return canvas;
+}
+// Título, la cifra grande y tres cifras en columna (todas se achican para entrar: un importe de 12 dígitos no pisa a su vecina).
+function imgCabecera(ctx, o){
+  const {pad,W}=IMG, ancho=W-2*pad; let y=110;
+  imgT(ctx, o.titulo, pad, y, imgAjustar(ctx,o.titulo,ancho,52,700,36), IMG.tinta, 700);
+  if(o.sub){ y+=48; imgT(ctx, o.sub, pad, y, imgAjustar(ctx,o.sub,ancho,30,500,22), IMG.suave); }
+  y+=80; imgT(ctx, o.etiqueta, pad, y, 30, IMG.suave);
+  y+=80; imgT(ctx, o.valor, pad, y, imgAjustar(ctx,o.valor,ancho,84,700,44), o.color, 700);
+  const colW=ancho/3, tam=Math.min(...o.cols.map(c=>imgAjustar(ctx,c.valor,colW-20,38,700,22)));
+  y+=80; o.cols.forEach((c,i)=>imgT(ctx, c.etiqueta, pad+i*colW, y, 26, IMG.suave));
+  y+=46; o.cols.forEach((c,i)=>imgT(ctx, c.valor, pad+i*colW, y, tam, c.color, 700));
+  if(o.extra){
+    y+=58; imgT(ctx, o.extra.etiqueta, pad, y, 26, IMG.suave);
+    const lugar=ancho-imgAncho(ctx,o.extra.etiqueta,26)-24;
+    imgT(ctx, o.extra.valor, W-pad, y, imgAjustar(ctx,o.extra.valor,lugar,30,700,20), o.extra.color, 700, "right");
+  }
+  return y;
+}
+// Rótulo de una sección; devuelve la línea base de su primer renglón.
+function imgSeccion(ctx, y, texto){ y+=82; imgT(ctx, texto, IMG.pad, y, 28, IMG.suave, 700); return y+24; }
+// Barras de lo que quedó cada mes (arriba lo positivo, abajo lo negativo). items: [{valor, hay, etq}]. Devuelve la línea base de las etiquetas.
+function imgBarras(ctx, y, items, {alto=200, neg=44, tam=24}={}){
+  const {pad,W}=IMG, n=Math.max(items.length,1), ancho=(W-2*pad)/n, base=y+alto, hueco=n>24?1:n>12?3:8;
+  const max=Math.max(...items.filter(x=>x.hay).map(x=>Math.abs(x.valor)),1);
+  ctx.fillStyle=IMG.eje; ctx.fillRect(pad, base, W-2*pad, 3);
+  let paso=1; items.forEach(x=>{ paso=Math.max(paso, Math.ceil((imgAncho(ctx,x.etq,tam,500)+14)/ancho)); });
+  items.forEach((x,i)=>{
+    if(x.hay){
+      const h=Math.max(Math.abs(x.valor)/max*alto, 6);
+      if(x.valor>=0){ ctx.fillStyle=IMG.barra; ctx.fillRect(pad+i*ancho+hueco, base-h, ancho-2*hueco, h); }
+      else { ctx.fillStyle=IMG.gasto; ctx.fillRect(pad+i*ancho+hueco, base+3, ancho-2*hueco, Math.min(Math.max(h/alto*neg,6), neg)); }
+    }
+    if(i%paso===0){ const w=imgAncho(ctx,x.etq,tam,500), cx=Math.max(pad+w/2, Math.min(W-pad-w/2, pad+i*ancho+ancho/2)); imgT(ctx, x.etq, cx, base+neg+34, tam, IMG.suave, 500, "center"); }
   });
-  let y=yCats;
+  return base+neg+34;
+}
+// Filas "nombre ........ importe · %" con su barra. El nombre se corta con "…" antes de pisar el importe.
+function imgCats(ctx, y, cats){
+  const {pad,W}=IMG, ancho=W-2*pad;
   cats.forEach(c=>{
-    txt(c.cat, pad, y, 32, "#1a1a18", 600); txt(`${fmtTotal(c.monto)}  ·  ${Math.round(c.pct)}%`, W-pad, y, 30, "#6e6d65", 500, "right");
-    ctx.fillStyle="#e8e5df"; ctx.fillRect(pad, y+16, W-2*pad, 14);
-    ctx.fillStyle="#1f6e68"; ctx.fillRect(pad, y+16, (W-2*pad)*Math.min(c.pct,100)/100, 14);
+    const der=`${fmtTotal(c.monto)}  ·  ${Math.round(c.pct)}%`, tam=imgAjustar(ctx,der,ancho*0.62,30,500,22), wder=imgAncho(ctx,der,tam,500);
+    imgT(ctx, imgRecortar(ctx,c.cat,ancho-wder-28,32,600), pad, y, 32, IMG.tinta, 600);
+    imgT(ctx, der, W-pad, y, tam, IMG.suave, 500, "right");
+    imgPastilla(ctx, pad, y+18, ancho, 14, IMG.pista); imgPastilla(ctx, pad, y+18, Math.max(ancho*Math.min(c.pct,100)/100, 14), 14, IMG.barra);
     y+=92;
   });
-  if(hall.length){
-    y+=20; txt("Para tener en cuenta", pad, y, 30, "#6e6d65", 700); y+=52;
-    bloques.forEach(b=>{ b.forEach(l=>{ txt(l, pad, y, 28, "#1a1a18"); y+=40; }); y+=14; });
-    if(masHall>0) txt(`…y ${masHall} más en el informe de la app`, pad, y, 26, "#9a998f");
-  }
-  txt("Hecho con Enola", W/2, H-36, 24, "#9a998f", 500, "center");
-  return canvas;
+  return y-92+18+14;
+}
+// Frases con su ícono en una columna propia y el texto partido en renglones con sangría. notas: [{icono, texto}].
+function imgNotas(ctx, y, notas){
+  const {pad,W}=IMG, x=pad+52;
+  notas.forEach(n=>{
+    const lineas=partirEnRenglones((ctx.font=imgFuente(28,500), ctx), n.texto, W-pad-x);
+    imgT(ctx, n.icono, pad, y, 28, IMG.tinta, 500);
+    lineas.forEach((l,i)=>imgT(ctx, l, x, y+i*40, 28, IMG.tinta, 500));
+    y+=Math.max(lineas.length,1)*40+14;
+  });
+  return y-14;
+}
+// El pie; devuelve el alto total.
+function imgPie(ctx, y){ y+=64; imgT(ctx, "Hecho con Enola", IMG.W/2, y, 24, IMG.suave, 500, "center"); return y+56; }
+
+function dibujarInforme(canvas, inf){
+  const cats=inf.categorias.slice(0,5), conMeses=inf.meses.length;
+  const hall=inf.hallazgos.slice(0,INFORME_IMG_MAX_HALLAZGOS), masHall=inf.hallazgos.length-hall.length;
+  return imgLienzo(canvas, (ctx)=>{
+    let y=imgCabecera(ctx, {titulo:"Enola · Informe", sub:inf.desde===inf.hasta ? mesLbl(inf.desde) : `${mesLbl(inf.desde)} a ${mesLbl(inf.hasta)}`,
+      etiqueta:"Disponible en el período", valor:imgMonto(inf.disponible), color:inf.disponible>=0?IMG.save:IMG.gasto,
+      cols:[{etiqueta:"Ingresos", valor:fmtTotal(inf.ingresos), color:IMG.ing}, {etiqueta:"Gastos", valor:fmtTotal(inf.gastos), color:IMG.gasto}, {etiqueta:"Ahorrado", valor:fmtTotal(inf.ahorrado), color:IMG.save}],
+      extra:{etiqueta:"Sin créditos ni inversiones", valor:imgMonto(inf.netoOp), color:inf.netoOp>=0?IMG.save:IMG.gasto}});
+    y=imgSeccion(ctx, y, "Mes a mes");
+    y=imgBarras(ctx, y, inf.meses.map(x=>({valor:x.disponible, hay:x.hayDatos, etq:conMeses<=12 ? mesCortoInforme(x.ym).split(" ")[0] : mesCortoInforme(x.ym)})), {tam:conMeses<=12?24:20});
+    if(cats.length){ y=imgSeccion(ctx, y, "En qué se fue la plata"); y=imgCats(ctx, y+32, cats); }
+    if(hall.length){
+      y=imgSeccion(ctx, y, "Para tener en cuenta"); y=imgNotas(ctx, y+32, hall);
+      if(masHall>0){ y+=44; imgT(ctx, `…y ${masHall} más en el informe de la app`, IMG.pad, y, 26, IMG.suave); }
+    }
+    return imgPie(ctx, y);
+  });
 }
 // Manda un PNG por el menú de compartir (WhatsApp, etc.) o, si el navegador no puede, lo descarga.
 async function entregarPNG(canvas, nombre, titulo){
@@ -303,6 +366,7 @@ function informeActual(){
 }
 async function compartirInforme(){
   const inf=informeActual(); if(!inf) return;
+  await imgFuentesListas();
   await entregarPNG(dibujarInforme(document.createElement("canvas"), inf), `enola-informe-${inf.desde}_${inf.hasta}.png`, "Informe de Enola");
 }
 async function compartirInformeTexto(){

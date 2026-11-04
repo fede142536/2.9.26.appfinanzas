@@ -117,7 +117,24 @@ function ctxDelChequeo(){
   return {movs, tcs, mesFn:getMesMov, vencTc:leerVencTc(), hoy, metas, backupDias:diasDesde(localStorage.getItem("fultimobackup")),
           conciliacion:conc, incompletos, vencidos:vencidosSinPagar(hoy, movs, leerVencTc()), ingresosPorCobrar:ingresosFrecPorCobrar(currentYM(), hoy)};
 }
-const pctFlecha=p=>p===null ? "" : `<span class="cierre-delta ${p>0?"sube":p<0?"baja":""}">${p>0?"▲":p<0?"▼":"="} ${Math.abs(p)}%</span>`;
+// [AAA anio] El color de la variación dice si es buena o mala NOTICIA, no si subió: ingresos que suben = bien (verde azulado), gastos que suben = ojo (ámbar).
+// `subirEsBueno` es true en los ingresos; sin él (null) la flecha queda neutra. El nombre accesible dice la dirección con palabras.
+const pctFlecha=(p, subirEsBueno)=>{
+  if(p===null) return "";
+  const tono=subirEsBueno===undefined||subirEsBueno===null||p===0 ? "" : ((p>0)===!!subirEsBueno ? "bien" : "mal");
+  return `<span class="cierre-delta ${p>0?"sube":p<0?"baja":""} ${tono}" role="img" aria-label="${p>0?"Subió":p<0?"Bajó":"Sin cambio:"} ${Math.abs(p)} por ciento"><span aria-hidden="true">${p>0?"▲":p<0?"▼":"="} ${Math.abs(p)}%</span></span>`;
+};
+// Una frase con emoji al principio ("📈 Auto subió…"): el emoji va en su propia columna y el texto no se enrosca debajo de él.
+function notaHTML(n){
+  const m=/^(\p{Extended_Pictographic}\uFE0F?)\s+([\s\S]*)$/u.exec(n);
+  return m ? `<p class="cierre-nota"><span class="nota-ico" aria-hidden="true">${m[1]}</span><span>${m[2]}</span></p>` : `<p class="cierre-nota">${n}</p>`;
+}
+// Las tres cifras de arriba (ingresos, gastos, ahorrado). Un importe largo achica su letra (el JS pasa el largo en --n); si es larguísimo
+// (≥ 13 caracteres: cientos de millones) las tres pasan a una columna con el rótulo a la izquierda, así nada se corta ni desborda.
+function cifras3HTML(items){
+  const n=Math.max(...items.map(i=>String(i.valor).length));
+  return `<div class="cierre-fila3${n>=13?" apilada":""}">${items.map(i=>`<div><span class="txt-xs txt-muted">${i.etq}</span><strong style="color:${i.color};--n:${n}">${i.valor}</strong>${i.extra||""}</div>`).join("")}</div>`;
+}
 
 function resumenMesHTML(r){
   if(!r.hayDatos) return `<p class="txt-sm txt-muted" style="margin:12px 0">No hay movimientos en ${escapeHtml(mesLbl(r.ym))}.</p>`;
@@ -129,15 +146,11 @@ function resumenMesHTML(r){
   if(r.mayor) notas.push(`💸 Tu gasto más grande fue <strong>${escapeHtml(r.mayor.desc)}</strong>: ${fmtTotal(r.mayor.monto)}.`);
   if(r.aMano>0) notas.push(`💸 Sacaste ${fmtTotal(r.aMano)} de tus ahorros que quedaron a mano: están sumados a lo disponible.`);
   if(r.ahorrado>0 || r.retirado>0) notas.push(`🏦 Ahorraste ${fmtTotal(r.ahorrado)}${r.retirado>0?` y usaste ${fmtTotal(r.retirado)} de tus ahorros`:""}.`);
-  return `<div class="cierre-hero"><div class="txt-xs txt-muted">Te quedó disponible</div><div class="cierre-hero-num" style="color:${col}">${fmtTotal(r.disponible)}</div></div>
-    <div class="cierre-fila3">
-      <div><span class="txt-xs txt-muted">Ingresos</span><strong style="color:var(--success)">${fmtTotal(r.ingresos)}</strong>${pctFlecha(r.dIngresos)}</div>
-      <div><span class="txt-xs txt-muted">Gastos</span><strong style="color:var(--danger)">${fmtTotal(r.gastos)}</strong>${pctFlecha(r.dGastos)}</div>
-      <div><span class="txt-xs txt-muted">Ahorrado</span><strong style="color:var(--save)">${fmtTotal(r.ahorrado)}</strong></div>
-    </div>
-    <p class="txt-xs txt-muted" style="margin:4px 0 10px">Los porcentajes comparan con el mes anterior.</p>
+  return `<div class="cierre-hero"><div class="txt-xs txt-muted">Te quedó disponible</div><div class="cierre-hero-num" style="color:${col};--n:${informeFmt(r.disponible).length}">${informeFmt(r.disponible)}</div></div>
+    ${cifras3HTML([{etq:"Ingresos", valor:fmtTotal(r.ingresos), color:"var(--success)", extra:pctFlecha(r.dIngresos,true)}, {etq:"Gastos", valor:fmtTotal(r.gastos), color:"var(--danger)", extra:pctFlecha(r.dGastos,false)}, {etq:"Ahorrado", valor:fmtTotal(r.ahorrado), color:"var(--save)"}])}
+    ${r.dIngresos!==null||r.dGastos!==null?`<p class="cierre-pie txt-xs txt-muted">Los porcentajes comparan con el mes anterior.</p>`:""}
     ${cats?`<div class="cierre-sec">En qué se fue la plata</div>${cats}`:""}
-    ${notas.length?`<div class="cierre-sec">Para mirar</div>${notas.map(n=>`<p class="cierre-nota">${n}</p>`).join("")}`:""}`;
+    ${notas.length?`<div class="cierre-sec">Para mirar</div>${notas.map(notaHTML).join("")}`:""}`;
 }
 function chequeoHTML(items, ym){
   const ico={ok:"✅", pendiente:"⚠️", info:"ℹ️"};
@@ -235,36 +248,23 @@ function descartarAvisoCierre(ym){
 // ── Compartir el resumen como imagen ──
 // Se dibuja en un canvas (sin librerías): un PNG de 1080 px de ancho, listo para mandar por WhatsApp.
 function dibujarResumenMes(canvas, r){
-  const W=1080, pad=64, ctx=canvas.getContext("2d");
-  const filas=Math.min(r.top.length,5);
+  const cats=r.top.slice(0,5);
   const notas=[];
   r.subas.forEach(s=>notas.push(`${s.cat} subió ${s.pct}% vs tu promedio`));
   if(r.mayor) notas.push(`Gasto más grande: ${r.mayor.desc} (${fmtTotal(r.mayor.monto)})`);
-  const H=430+filas*92+(notas.length?70+notas.length*52:0)+80;
-  canvas.width=W; canvas.height=H;
-  ctx.fillStyle="#f7f6f2"; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle="#1f6e68"; ctx.fillRect(0,0,W,16);
-  const txt=(t,x,y,size,color,peso,align)=>{ ctx.font=`${peso||500} ${size}px system-ui,-apple-system,sans-serif`; ctx.fillStyle=color; ctx.textAlign=align||"left"; ctx.fillText(t,x,y); };
-  txt("Enola · "+mesLbl(r.ym), pad, 110, 52, "#1a1a18", 700);
-  txt("Te quedó disponible", pad, 190, 30, "#6e6d65");
-  txt(fmtTotal(r.disponible), pad, 270, 84, r.disponible>=0?"#1f6e68":"#a32d2d", 700);
-  const col=(i,etq,val,color)=>{ const x=pad+i*((W-2*pad)/3); txt(etq, x, 350, 26, "#6e6d65"); txt(val, x, 396, 38, color, 700); };
-  col(0,"Ingresos",fmtTotal(r.ingresos),"#2d7a3a"); col(1,"Gastos",fmtTotal(r.gastos),"#a32d2d"); col(2,"Ahorrado",fmtTotal(r.ahorrado),"#1f6e68");
-  let y=470;
-  r.top.slice(0,5).forEach(c=>{
-    txt(c.cat, pad, y, 32, "#1a1a18", 600); txt(`${fmtTotal(c.monto)}  ·  ${c.pct}%`, W-pad, y, 30, "#6e6d65", 500, "right");
-    ctx.fillStyle="#e8e5df"; ctx.fillRect(pad, y+16, W-2*pad, 14);
-    ctx.fillStyle="#1f6e68"; ctx.fillRect(pad, y+16, (W-2*pad)*Math.min(c.pct,100)/100, 14);
-    y+=92;
+  return imgLienzo(canvas, (ctx)=>{
+    let y=imgCabecera(ctx, {titulo:"Enola · "+mesLbl(r.ym), etiqueta:"Te quedó disponible", valor:imgMonto(r.disponible), color:r.disponible>=0?IMG.save:IMG.gasto,
+      cols:[{etiqueta:"Ingresos", valor:fmtTotal(r.ingresos), color:IMG.ing}, {etiqueta:"Gastos", valor:fmtTotal(r.gastos), color:IMG.gasto}, {etiqueta:"Ahorrado", valor:fmtTotal(r.ahorrado), color:IMG.save}]});
+    if(cats.length){ y=imgSeccion(ctx, y, "En qué se fue la plata"); y=imgCats(ctx, y+32, cats); }
+    if(notas.length){ y=imgSeccion(ctx, y, "Para mirar"); y=imgNotas(ctx, y+32, notas.map(texto=>({icono:"•", texto}))); }
+    return imgPie(ctx, y);
   });
-  if(notas.length){ y+=20; txt("Para mirar", pad, y, 30, "#6e6d65", 700); y+=52; notas.forEach(n=>{ txt("• "+n, pad, y, 28, "#1a1a18"); y+=52; }); }
-  txt("Hecho con Enola", W/2, H-36, 24, "#9a998f", 500, "center");
-  return canvas;
 }
 async function compartirResumenMes(){
   const ym=cierreYM; if(!ym) return;
   const r=resumenDelMes(ym, getMesMov, e=>gananciaInvDelMes(e, movs), movs);
   if(!r.hayDatos){ showToast("No hay movimientos para compartir"); return; }
+  await imgFuentesListas();
   const canvas=dibujarResumenMes(document.createElement("canvas"), r);
   const blob=await new Promise(res=>canvas.toBlob(res,"image/png"));
   if(!blob){ showToast("No se pudo armar la imagen"); return; }

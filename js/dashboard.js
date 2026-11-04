@@ -18,17 +18,19 @@ function renderDashYearCompleto(){
   const histYears = [...new Set(HIST_MONTHLY.map(d=>parseInt(d.mes.slice(0,4))))];
   const liveYears = [...new Set(movs.map(m=>parseInt(String(m.fecha||"").slice(0,4))).filter(y=>y>2000))];
   const years = [...new Set([...histYears,...liveYears])].sort();
+  // [AAA anio] Sin movimientos no hay años con datos: se muestra el actual (antes quedaba "undefined" en los títulos).
+  if(!years.length) years.push(Number(currentYM().slice(0,4)));
   if(!years.includes(dashYear)) dashYear = years[years.length-1];
   const tabsEl=document.getElementById("year-tabs");
   if(tabsEl) tabsEl.innerHTML=years.map(y=>
-    `<div role="button" tabindex="0" class="year-tab${y===dashYear?" active":""}" onclick="setDashYear(${y},this)">${y}</div>`
+    `<div role="button" tabindex="0" class="year-tab${y===dashYear?" active":""}" aria-pressed="${y===dashYear}" onclick="setDashYear(${y},this)">${y}</div>`
   ).join("");
   renderDashYear();
 }
 function setDashYear(y,el){
   dashYear=y;
-  document.querySelectorAll(".year-tab").forEach(t=>t.classList.remove("active"));
-  el.classList.add("active");
+  document.querySelectorAll(".year-tab").forEach(t=>{ t.classList.remove("active"); t.setAttribute("aria-pressed","false"); });
+  el.classList.add("active"); el.setAttribute("aria-pressed","true");
   renderDashYear();
 }
 // "Ver el año completo" se arma recién al abrirse (no en cada renderDash): así el canvas de
@@ -70,7 +72,7 @@ function cambiarDashMes(delta){
   const nuevo=addMonths(dashMes, delta);
   if(nuevo>hoyYM) return; // no se puede ir al futuro
   const primero=primerMesConDatos();
-  if(delta<0 && primero && nuevo<primero) return; // nada que mostrar más atrás
+  if(delta<0 && (!primero || nuevo<primero)) return; // nada que mostrar más atrás (sin datos cargados, tampoco hay a dónde ir)
   dashMes=nuevo;
   dashInsightAbierto=null;
   renderDashResumen();
@@ -148,7 +150,7 @@ function construirInsights(ym, mesData, monthlyAnio){
     if(!hayProm || !prom) return ".";
     const pct=Math.round((val-prom)/Math.abs(prom)*100);
     if(Math.abs(pct)<=3) return ": en línea con tu promedio.";
-    return `: ${Math.abs(pct)}% ${pct>0?"más":"menos"} ${fraseNormal}`;
+    return `: ${Math.abs(pct).toLocaleString("es-AR")}% ${pct>0?"más":"menos"} ${fraseNormal}`;
   }
 
   const out=[];
@@ -212,7 +214,7 @@ function construirInsights(ym, mesData, monthlyAnio){
         const max=Math.max(arriba.val, arriba.avg);
         out.push({
           icon:getIcon(arriba.cat,"🏷"), bg:"var(--danger-light)",
-          a:`En ${arriba.cat} `, b:`gastaste ${Math.round((arriba.ratio-1)*100)}% más`, bc:"var(--danger)",
+          a:`En ${arriba.cat} `, b:`gastaste ${Math.round((arriba.ratio-1)*100).toLocaleString("es-AR")}% más`, bc:"var(--danger)",
           c:" que lo habitual.",
           rows:[filaInsight(Mes, arriba.val, max, "var(--danger)"), filaInsight("Promedio", arriba.avg, max, "color-mix(in srgb,var(--danger) 40%,var(--surface))")],
           action:"Ver gastos de "+arriba.cat, actionFn:()=>irAGastosDeCategoria(ym, arriba.cat)
@@ -224,7 +226,7 @@ function construirInsights(ym, mesData, monthlyAnio){
         const max=Math.max(abajo.val, abajo.avg);
         out.push({
           icon:getIcon(abajo.cat,"🏷"), bg:"var(--success-light)",
-          a:`En ${abajo.cat} `, b:`gastaste ${Math.round((1-abajo.ratio)*100)}% menos`, bc:"var(--success)",
+          a:`En ${abajo.cat} `, b:`gastaste ${Math.round((1-abajo.ratio)*100).toLocaleString("es-AR")}% menos`, bc:"var(--success)",
           c:" que lo habitual.",
           rows:[filaInsight(Mes, abajo.val, max, "var(--success)"), filaInsight("Promedio", abajo.avg, max, "color-mix(in srgb,var(--success) 40%,var(--surface))")]
         });
@@ -288,15 +290,17 @@ function construirInsightHTML(it, i){
       <span class="dash-insight-row-val">${r.val}</span>
     </div>`).join("");
   const detalleHTML = it.detalle ? `<div class="dash-insight-detalle">${escapeHtml(it.detalle)}</div>` : "";
-  const accionHTML = it.action ? `<span class="dash-insight-action" onclick="event.stopPropagation();dashInsightAccion(${i})">${escapeHtml(it.action)} ›</span>` : "";
-  return `<div class="dash-insight-card" role="button" tabindex="0" aria-expanded="false" onclick="toggleDashInsight(${i})">
-    <div class="dash-insight-top">
-      <span class="dash-insight-icon" style="background:${it.bg}">${it.icon}</span>
+  // [AAA dashboard] La acción es un <button> de verdad (antes un <span> sin foco ni rol, dentro de otro role=button) y el que se
+  // expande es la cabecera (role=button + aria-expanded + aria-controls), no la tarjeta entera con sus hijos.
+  const accionHTML = it.action ? `<button type="button" class="dash-insight-action" onclick="event.stopPropagation();dashInsightAccion(${i})">${escapeHtml(it.action)} ›</button>` : "";
+  return `<div class="dash-insight-card" onclick="toggleDashInsight(${i})">
+    <div class="dash-insight-top" role="button" tabindex="0" aria-expanded="false" aria-controls="dash-insight-cuerpo-${i}">
+      <span class="dash-insight-icon" style="background:${it.bg}" aria-hidden="true">${it.icon}</span>
       <span class="dash-insight-frase">${escapeHtml(it.a)}<strong style="color:${it.bc}">${escapeHtml(it.b)}</strong>${escapeHtml(it.c)}</span>
-      <span class="dash-insight-chev">▾</span>
+      <svg class="dash-insight-chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>
     </div>
     <div class="dash-insight-body-wrap">
-      <div class="dash-insight-body">${bodyRows}${detalleHTML}${accionHTML}</div>
+      <div class="dash-insight-body" id="dash-insight-cuerpo-${i}">${bodyRows}${detalleHTML}${accionHTML}</div>
     </div>
   </div>`;
 }
@@ -316,11 +320,10 @@ function toggleDashInsight(i){
   dashInsightAbierto = (dashInsightAbierto===i) ? null : i;
   document.querySelectorAll("#dash-insights-lista .dash-insight-card").forEach((card,idx)=>{
     const abierta=idx===dashInsightAbierto;
-    card.setAttribute("aria-expanded", String(abierta));
+    const cab=card.querySelector(".dash-insight-top");
+    if(cab) cab.setAttribute("aria-expanded", String(abierta));
     const wrap=card.querySelector(".dash-insight-body-wrap");
     if(wrap) wrap.style.gridTemplateRows = abierta ? "1fr" : "0fr";
-    const chev=card.querySelector(".dash-insight-chev");
-    if(chev) chev.textContent = abierta ? "▴" : "▾";
     card.querySelectorAll(".dash-insight-row-fill").forEach(f=>{
       f.style.width = abierta ? (f.dataset.w||"0")+"%" : "0%";
     });
@@ -337,8 +340,15 @@ function renderDashResumen(){
   const primero=primerMesConDatos();
   const btnPrev=document.getElementById("dash-mes-prev");
   const btnNext=document.getElementById("dash-mes-next");
-  if(btnPrev) btnPrev.style.color = (primero && addMonths(ym,-1)<primero) ? "var(--border)" : "var(--muted)";
-  if(btnNext) btnNext.style.color = (ym>=hoyYM) ? "var(--border)" : "var(--muted)";
+  // [AAA dashboard] En el tope de cada lado la flecha se esconde (como en Movimientos) y queda deshabilitada de verdad: antes seguía
+  // siendo un botón activo, gris casi invisible (1,24:1). Si tenía el foco, este pasa a la flecha que sigue sirviendo.
+  const sinAtras = !primero || addMonths(ym,-1)<primero, sinAdelante = ym>=hoyYM;
+  [[btnPrev,sinAtras,btnNext],[btnNext,sinAdelante,btnPrev]].forEach(([b,off,otro])=>{
+    if(!b) return;
+    const teniaFoco = document.activeElement===b;
+    b.disabled = off; b.setAttribute("aria-disabled", String(off));
+    if(off && teniaFoco && otro && !otro.disabled) otro.focus();
+  });
 
   const {monthly}=getDashData(year);
   const mesData=monthly.find(d=>d.mes===ym);
@@ -346,9 +356,10 @@ function renderDashResumen(){
   const subEl=document.getElementById("dash-headline-sub");
   const listaEl=document.getElementById("dash-insights-lista");
   if(!mesData){
+    const esActualVacio = ym===hoyYM;
     if(headlineEl) headlineEl.textContent=`No hay movimientos cargados en ${mesLbl(ym)}.`;
     if(subEl) subEl.textContent="";
-    if(listaEl) listaEl.innerHTML=dashEnlacesAnio(year);
+    if(listaEl) listaEl.innerHTML=dashVacioHTML(esActualVacio)+dashEnlacesAnio(year);
     dashInsightsActuales=[];
     return;
   }
@@ -367,6 +378,13 @@ function renderDashResumen(){
     listaEl.innerHTML=dashInsightsActuales.map((it,i)=>construirInsightHTML(it,i)).join("")
       + dashEnlacesAnio(year);
   }
+}
+// [AAA dashboard] Mes sin movimientos: guía y salida (antes quedaba solo el titular y un enlace al año).
+function dashVacioHTML(esActual){
+  const guia = esActual
+    ? "Cuando cargues tu primer gasto o ingreso del mes, acá vas a ver cómo viene."
+    : "No hay nada cargado en este mes. Podés mirar otro con las flechas o cargar un movimiento.";
+  return `<div class="empty dash-vacio"><div class="empty-icon" aria-hidden="true">📭</div><div class="empty-guia">${guia}</div><button type="button" class="btn-primary empty-cta" onclick="abrirCarga()">Cargar un movimiento</button></div>`;
 }
 // El enlace al pie del resumen del mes: el año completo (resumen para compartir, gráficos y, desde ahí, el informe de cualquier período). `year` = el año del mes que se mira.
 function dashEnlacesAnio(year){
@@ -511,9 +529,22 @@ function getDashData(year){
   return {monthly: merged, cats: catData, catsIngreso: catIngreso};
 }
 
+// [AAA anio] Una fila de "Gastos/Ingresos por categoría": ícono aparte (el nombre largo envuelve sin dejarlo solo en su renglón), nombre, barra
+// y importe. Mide 44 de alto porque se toca (abre el detalle de la categoría). El color sale de un token (en oscuro es el pastel del tema).
+function barraCategoriaHTML(cat, comp, val, max, color, onclick){
+  return `<div role="button" tabindex="0" class="bar-row" onclick="${onclick}">
+    <div class="bar-label"><span class="bar-ico">${getIcon(cat,"")}</span><span class="bar-nom">${escapeHtml(cat)}${comp}</span></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${Math.max(Math.round(val/max*100),2)}%;background:${color}"></div></div>
+    <div class="bar-val">${fmtAbbr(val)}</div>
+  </div>`;
+}
+
 function renderDashYear(){
   const catData2 = getDashData(dashYear);
   const {monthly: yearData, cats: catData} = catData2;
+  // [AAA anio] Un año sin nada no muestra cuatro tarjetas que dicen "Sin datos": solo la invitación de arriba.
+  const yf=document.getElementById("dash-year-full");
+  if(yf) yf.classList.toggle("anio-sin-datos", !yearData.length && !Object.keys(catData).length && !Object.keys(catData2.catsIngreso||{}).length);
   // La cabecera (disponible, ingresos, gastos, ahorrado y su variación contra el año anterior) es la misma
   // que el resumen del año para compartir: una sola cuenta (resumenDelAnio) y un solo lugar.
   pintarResumenAnio(dashYear);
@@ -540,13 +571,9 @@ function renderDashYear(){
         // comparar, así el % no confunde inflación con gasto real — ver INFLACION_MENSUAL_ARS.
         const valPrev=deflactarARS(catDataPrev[cat]||0, yearPrev+"-07", dashYear+"-07");
         const comp=compAnioAnterior(val, valPrev, hayGastosAnioAnterior, false, inflacionOk);
-        return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail(${attrJS(cat)})">
-          <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxVal*100)}%;background:#a32d2d"></div></div>
-          <div class="bar-val">${fmtAbbr(val)}</div>
-        </div>`;
+        return barraCategoriaHTML(cat, comp, val, maxVal, "var(--danger)", `showCatDetail(${attrJS(cat)})`);
       }).join("")
-    : `<p class="txt-md txt-muted">Sin datos para ${dashYear}</p>`;
+    : `<p class="txt-md txt-muted">Sin gastos en ${dashYear}.</p>`;
   // ── INGRESOS POR CATEGORÍA (mismo estilo que gastos) ──
   const sortedIng=Object.entries(catData2.catsIngreso||{}).sort((a,b)=>b[1]-a[1]);
   const maxValIng=sortedIng[0]?sortedIng[0][1]:1;
@@ -560,13 +587,9 @@ function renderDashYear(){
         const valPrev=deflactarARS(catIngresoPrev[cat]||0, yearPrev+"-07", dashYear+"-07");
         // En ingresos subir es bueno, al revés que en gastos.
         const comp=compAnioAnterior(val, valPrev, hayIngresosAnioAnterior, true, inflacionOkIng);
-        return `<div role="button" tabindex="0" class="bar-row" style="cursor:pointer" onclick="showCatDetail(${attrJS(cat)},'Ingreso')">
-          <div class="bar-label">${getIcon(cat,"")} ${escapeHtml(cat)}${comp}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/maxValIng*100)}%;background:#2d7a3a"></div></div>
-          <div class="bar-val">${fmtAbbr(val)}</div>
-        </div>`;
+        return barraCategoriaHTML(cat, comp, val, maxValIng, "var(--success)", `showCatDetail(${attrJS(cat)},'Ingreso')`);
       }).join("")
-    : `<p class="txt-md txt-muted">Sin ingresos para ${dashYear}</p>`;
+    : `<p class="txt-md txt-muted">Sin ingresos en ${dashYear}.</p>`;
   renderDashCuentas();
 }
 
@@ -605,7 +628,7 @@ function renderDashCuentas(){
     movsAnio.push(...getMesMov(ym));
   });
   if(!movsAnio.length){
-    el.innerHTML=`<p class="txt-md txt-muted">Sin datos para ${dashYear}.</p>`;
+    el.innerHTML=`<p class="txt-md txt-muted">Sin movimientos en ${dashYear}.</p>`;
     return;
   }
   // Agrupar por cuenta (excluir USD del cálculo ARS para no mezclar monedas)
@@ -632,12 +655,12 @@ function renderDashCuentas(){
     const balColor=c.balance>=0?"var(--success)":"var(--danger)";
     const sign=c.balance>=0?"+":"";
     const cuentaEsc=attrJS(c.cuenta);
-    return `<div role="button" tabindex="0" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showCuentaDetail(${cuentaEsc})">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div class="txt-md txt-strong">💳 ${escapeHtml(c.cuenta)}</div>
-        <div style="font-size:13px;font-weight:600;color:${balColor}">${sign}${fmtS(c.balance)}</div>
+    return `<div role="button" tabindex="0" class="cuenta-fila" onclick="showCuentaDetail(${cuentaEsc})">
+      <div class="cuenta-top">
+        <div class="cuenta-nom">💳 ${escapeHtml(c.cuenta)}</div>
+        <div class="cuenta-saldo" style="color:${balColor}">${sign}${fmtS(c.balance)}</div>
       </div>
-      <div class="txt-xs txt-muted">
+      <div class="cuenta-det">
         Ingresos: <span style="color:var(--success)">${fmtAbbr(c.ing)}</span>
         · Gastos: <span style="color:var(--danger)">${fmtAbbr(c.gas)}</span>${c.aho>0?` · Ahorrado: <span style="color:var(--save)">${fmtAbbr(c.aho)}</span>`:""}
         · ${c.count} movs
@@ -750,7 +773,7 @@ function renderDashUSD(){
   const netoColor=r.neto>=0?"var(--success)":"var(--danger)";
   let html=`<div class="inset">
     <div class="seccion-label">Saldo neto USD ${dashYear}</div>
-    <div style="font-size:22px;font-weight:600;color:${netoColor};margin-top:3px">${r.neto>=0?"+":""}USD ${fmtNum2(r.neto)}</div>
+    <div style="font-size:var(--fs-xl);font-weight:700;color:${netoColor};margin-top:3px">${r.neto>=0?"+":""}USD ${fmtNum2(r.neto)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">Lo que te entró menos lo que se te fue de la mano</div>
   </div>`;
 
@@ -785,7 +808,7 @@ function renderDashUSD(){
 
   // ── La lista, que es lo que permite ver de dónde sale cada número ──
   const n=r.movimientos.length;
-  html+=`<div role="button" tabindex="0" class="mt-14" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:8px 0"
+  html+=`<div role="button" tabindex="0" class="mt-14 usd-lista-btn" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:8px 0"
        aria-expanded="${usdListaAbierta}" onclick="toggleUsdLista()">
     <span class="seccion-label">Ver los ${n} ${n===1?"movimiento":"movimientos"} en USD</span>
     <span class="txt-sm txt-muted">${usdListaAbierta?"▲":"▼"}</span>
@@ -1304,13 +1327,15 @@ function promedioMensualHTML(yearData){
 
 function detalleMesHTML(d){
   const balColor=d.balance>=0?"var(--success)":"var(--danger)";
-  return `<div style="display:flex;justify-content:space-around;align-items:center;text-align:center;flex-wrap:wrap;gap:6px">
-      <div><div class="seccion-label txt-micro">${mesLbl(d.mes)}</div></div>
-      <div><div class="txt-micro txt-muted">Ingresos</div><div style="font-size:13px;font-weight:600;color:var(--success)">${fmtS(d.ingreso)}</div></div>
-      <div><div class="txt-micro txt-muted">Gastos</div><div style="font-size:13px;font-weight:600;color:var(--danger)">${fmtS(d.gasto)}</div></div>
-      ${d.ahorrado>0?`<div><div class="txt-micro txt-muted">Ahorrado</div><div style="font-size:13px;font-weight:600;color:var(--save)">${fmtS(d.ahorrado)}</div></div>`:""}
-      <div><div class="txt-micro txt-muted">Balance</div><div style="font-size:13px;font-weight:600;color:${balColor}">${fmtS(d.balance)}</div></div>
-    </div>`;
+  // [AAA anio] El mes arriba y las cifras en una grilla pareja (antes se acomodaban a ojo y "Balance" caía solo a un segundo renglón).
+  const n=Math.max(...[d.ingreso,d.gasto,d.balance].map(v=>fmtS(v).length));
+  return `<div class="det-mes"><div class="det-mes-nom">${mesLbl(d.mes)}</div>
+    <div class="det-mes-grid" style="--n:${n}">
+      <div><span class="det-etq">Ingresos</span><strong style="color:var(--success)">${fmtS(d.ingreso)}</strong></div>
+      <div><span class="det-etq">Gastos</span><strong style="color:var(--danger)">${fmtS(d.gasto)}</strong></div>
+      ${d.ahorrado>0?`<div><span class="det-etq">Ahorrado</span><strong style="color:var(--save)">${fmtS(d.ahorrado)}</strong></div>`:""}
+      <div><span class="det-etq">Balance</span><strong style="color:${balColor}">${fmtS(d.balance)}</strong></div>
+    </div></div>`;
 }
 
 function renderChartMensualBI(yearData){
@@ -1323,7 +1348,8 @@ function renderChartMensualBI(yearData){
   const detEl=document.getElementById("dash-detail");
   if(detEl && yearData.length) detEl.innerHTML=detalleMesHTML(yearData[yearData.length-1]);
   if(chartMensualInstance){ chartMensualInstance.destroy(); chartMensualInstance=null; }
-  const labels=yearData.map(d=>d.mes.slice(5));
+  // [AAA anio] "Ene", "Feb"… en vez de "01", "02": se lee sin tener que contar.
+  const labels=yearData.map(d=>MESES[parseInt(d.mes.slice(5),10)-1].slice(0,3));
   const muted=themeColor('--muted'), border=themeColor('--border');
   const accent=themeColor('--accent'), surface=themeColor('--surface');
   chartMensualInstance=new Chart(canvas.getContext("2d"), {
@@ -1349,12 +1375,12 @@ function renderChartMensualBI(yearData){
       interaction:{mode:"index", intersect:false},
       plugins:{
         legend:{display:true, position:"bottom",
-          labels:{color:muted, boxWidth:8, boxHeight:8, usePointStyle:true, pointStyle:"circle", padding:12, font:{size:10}}},
+          labels:{color:muted, boxWidth:8, boxHeight:8, usePointStyle:true, pointStyle:"circle", padding:12, font:{size:11}}},
         tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmtS(ctx.parsed.y)}`}}
       },
       scales:{
-        x:{grid:{display:false}, ticks:{color:muted, font:{size:9}}},
-        y:{grid:{color:border}, ticks:{color:muted, font:{size:9}, callback:v=>fmtAbbr(v)}}
+        x:{grid:{display:false}, ticks:{color:muted, font:{size:10}, maxRotation:0, minRotation:0, autoSkip:false}},
+        y:{grid:{color:border}, ticks:{color:muted, font:{size:10}, callback:v=>fmtAbbr(v)}}
       },
       onClick:(evt, elements)=>{
         if(!elements.length) return;
