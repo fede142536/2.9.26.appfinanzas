@@ -44,36 +44,45 @@
 <link rel="stylesheet" href="styles.css?v=223">
 </head>
 <body>
+<!-- Pantalla de arranque [AAA navegacion]: hasta que el script de la app dibuja Movimientos (main.js la retira), la
+     pantalla muestra el ícono de Enola sobre el fondo del tema en vez de quedar en blanco. Va por debajo de la pantalla de
+     bloqueo (9999). Sus estilos van en línea (se ve igual aunque el CSS cacheado sea viejo) y se retira sola a los 8 s por si
+     el arranque falla: el aviso de error de más abajo tiene que poder verse. -->
+<div id="splash" aria-hidden="true" style="position:fixed;inset:0;z-index:9990;display:flex;align-items:center;justify-content:center;background:var(--bg,#f7f6f2)">
+  <img src="icon-192.png" alt="" width="88" height="88" style="border-radius:20px;box-shadow:0 8px 24px rgba(0,0,0,.12)">
+</div>
+<script>setTimeout(function(){ var s=document.getElementById("splash"); if(s) s.remove(); }, 8000);</script>
 <!-- Aviso de versión desactualizada. Los estilos van inline a propósito: styles.css también
      se sirve desde caché, y este cartel tiene que verse bien justamente cuando lo cacheado
      quedó viejo. -->
-<div id="version-vieja" role="alert" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:var(--banner-bg,#924f00);color:var(--banner-fg,#fff);padding:10px 14px;font:500 13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:var(--shadow-pop,0 2px 10px rgba(0,0,0,.25))">
+<div id="version-vieja" role="status" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:var(--banner-bg,#924f00);color:var(--banner-fg,#fff);padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px 16px;font:500 13px/1.4 system-ui,-apple-system,sans-serif;box-shadow:var(--shadow-pop,0 2px 10px rgba(0,0,0,.25))">
   <div style="max-width:560px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between">
-    <span id="version-vieja-msg" style="flex:1;min-width:0"></span>
-    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:var(--banner-fg,#fff);color:var(--banner-bg,#924f00);border:none;border-radius:8px;padding:12px 16px;min-height:44px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:700;font-size:14px">Hay una versión nueva de Enola</div>
+      <div id="version-vieja-msg" style="margin-top:2px"></div>
+    </div>
+    <button type="button" id="version-vieja-btn" style="flex-shrink:0;background:var(--banner-fg,#fff);color:var(--banner-bg,#924f00);border:none;border-radius:12px;padding:0 16px;min-height:44px;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer">Actualizar</button>
   </div>
 </div>
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- AVISO DE ERROR NO ATRAPADO.
      En una PWA en el celular no hay consola: hasta ahora, si algo fallaba, la app
      simplemente no hacía nada y no había forma de saber por qué (nos costó varias rondas
      a ciegas diagnosticar el bug del PIN). Esto hace que cualquier falla futura sea
      legible y copiable desde el propio teléfono. -->
-<div id="error-banner" role="alert" aria-live="assertive" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:10003;background:var(--danger-light);border-top:2px solid var(--danger);padding:12px 14px;max-height:55vh;overflow-y:auto">
-  <div style="display:flex;align-items:flex-start;gap:10px">
-    <span style="font-size:16px;line-height:1.3">⚠️</span>
-    <div class="u-flex1 u-min0">
-      <div style="font-size:12px;font-weight:600;color:var(--danger)">Ocurrió un error</div>
-      <div id="error-banner-msg" style="font-size:12px;color:var(--text);word-break:break-word;margin-top:2px"></div>
-      <pre id="error-banner-detalle" style="display:none;font-size:10px;color:var(--muted);white-space:pre-wrap;word-break:break-word;margin-top:8px"></pre>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button class="btn-sm" style="font-size:11px;padding:5px 10px" onclick="toggleErrorDetalle()" id="error-banner-toggle">Ver detalle</button>
-        <button class="btn-sm" style="font-size:11px;padding:5px 10px" onclick="copiarError()">Copiar</button>
-      </div>
+<div id="error-banner" class="error-banner" role="alert" aria-live="assertive" style="display:none">
+  <span class="error-banner-ico" aria-hidden="true">⚠️</span>
+  <div class="error-banner-cuerpo">
+    <div class="error-banner-titulo">Ocurrió un error</div>
+    <div id="error-banner-msg" class="error-banner-msg"></div>
+    <pre id="error-banner-detalle" class="error-banner-detalle" style="display:none"></pre>
+    <div class="error-banner-acciones">
+      <button class="btn-sm" onclick="toggleErrorDetalle()" id="error-banner-toggle">Ver detalle</button>
+      <button class="btn-sm" onclick="copiarError()">Copiar</button>
     </div>
-    <button style="background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1;padding:0 4px" onclick="cerrarErrorBanner()" aria-label="Cerrar aviso de error">×</button>
   </div>
+  <button class="error-banner-cerrar" onclick="cerrarErrorBanner()" aria-label="Cerrar aviso de error">×</button>
 </div>
 
 <!-- DIÁLOGO GENÉRICO (reemplaza alert/confirm/prompt nativos del navegador).
@@ -86,7 +95,7 @@
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
     <div class="modal-title" id="dialogo-titulo"></div>
-    <p id="dialogo-mensaje" style="font-size:14px;color:var(--text);line-height:1.5;margin-bottom:14px;white-space:pre-line"></p>
+    <p id="dialogo-mensaje" class="dialogo-mensaje"></p>
     <div class="form-group" id="dialogo-input-group" style="display:none">
       <div style="position:relative">
         <input type="text" id="dialogo-input" class="form-input" autocomplete="off" aria-labelledby="dialogo-mensaje" style="padding-right:84px">
@@ -131,8 +140,8 @@
 </div>
 
 <!-- DRAG & DROP GLOBAL: overlay que aparece al arrastrar un archivo sobre la app (Excel/CSV/JSON) -->
-<div id="drop-overlay" style="display:none;position:fixed;inset:0;background:var(--accent,#145283);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:32px;pointer-events:none">
-  <div>
+<div id="drop-overlay" aria-hidden="true" style="display:none;position:fixed;inset:0;background:var(--accent,#145283);z-index:10000;align-items:center;justify-content:center;text-align:center;padding:24px;pointer-events:none">
+  <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--on-solid,#fff);border-radius:20px;padding:24px">
     <div style="font-size:56px;margin-bottom:14px">📂</div>
     <div style="font-size:20px;font-weight:700;color:var(--on-solid,#fff)">Soltá el archivo acá</div>
     <div style="font-size:13px;color:var(--on-solid,#fff);margin-top:6px">Excel (.xlsx/.xls/.csv) o backup (.json)</div>
@@ -1477,7 +1486,7 @@
   <button class="nav-btn" onclick="showPage('dash',this);closeSideMenu()"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span></button>
   <button class="nav-btn" onclick="showPage('ahorro',this);closeSideMenu()"><span class="nav-icon">🏦</span><span class="nav-label">Ahorros</span></button>
   <button class="nav-btn" onclick="showPage('import',this);closeSideMenu()"><span class="nav-icon">📥</span><span class="nav-label">Importar</span></button>
-  <button class="nav-btn" onclick="closeSideMenu();abrirCierreMes()"><span class="nav-icon">🗓</span><span class="nav-label">Cerrar el mes</span></button>
+  <button class="nav-btn" onclick="closeSideMenu();abrirCierreMes()"><span class="nav-icon">🗓️</span><span class="nav-label">Cerrar el mes</span></button>
   <button class="nav-btn" onclick="showPage('config',this);closeSideMenu()"><span class="nav-icon">⚙️</span><span class="nav-label">Configuración</span></button>
 </div>
 
@@ -1565,15 +1574,18 @@
       canal.port1.onmessage=function(ev){
         var instalada=(ev.data && ev.data.version) || "";
         if(!instalada || instalada===esperada) return;
-        msg.textContent="Tenés guardada una versión vieja ("+instalada+"). Algunas cosas pueden no andar bien hasta que actualices.";
+        msg.textContent="Actualizá para que todo ande bien: algunas pantallas pueden fallar con la versión que tenés guardada.";
+        cartel.title="Versión guardada: "+instalada+" · versión nueva: "+esperada;
         cartel.style.display="block";
         // El cartel es fixed: sin esto tapa el header de la app, y como el header es sticky
         // con top:0, al scrollear se le volvería a meter abajo igual. Se corre todo lo demás
-        // hacia abajo la altura del cartel.
+        // hacia abajo la altura del cartel. --cartel-h lo usan las barras de arriba y los botones fijos
+        // (styles.css); la regla de abajo cubre el caso de un CSS cacheado viejo que todavía no la conoce.
         var alto=cartel.offsetHeight;
         document.body.style.paddingTop=alto+"px";
+        document.documentElement.style.setProperty("--cartel-h", alto+"px");
         var est=document.createElement("style");
-        est.textContent=".header{top:"+alto+"px}";
+        est.textContent=".header,.mov-topbar{top:"+alto+"px}";
         document.head.appendChild(est);
       };
       sw.postMessage({tipo:"GET_VERSION"}, [canal.port2]);

@@ -51,6 +51,7 @@
   --invest:#4841a5;--invest-light:#eeedfe;--save:#165959;--save-light:#e0f5f5;
   --warning-fill:#b87410;--warning-solid:#e0a030;--on-warning-solid:#2a1800;
   --on-solid:#fff;--focus:var(--accent);--grad-fin:black;--banner-bg:#924f00;--banner-fg:#fff;
+  --toast-bg:#1f1f22;--toast-fg:#fff;--toast-accion:#8fe0d4;
   --radius:14px;--radius-sm:8px;--radius-md:12px;--radius-lg:20px;--radius-pill:999px;
   --shadow:0 8px 24px rgba(0,0,0,.05);--shadow-sm:0 1px 3px rgba(0,0,0,.12);--shadow-pop:0 10px 30px rgba(0,0,0,.18);
   --surface-glass:rgba(255,255,255,.82);
@@ -69,6 +70,7 @@
   --invest:#b3abeb;--invest-light:#26223a;--save:#7dcfcf;--save-light:#1a3535;
   --warning-fill:#e5a652;--warning-solid:#e5a652;--on-warning-solid:#0b0b0c;
   --on-solid:#0b0b0c;--grad-fin:white;--banner-bg:#e5a652;--banner-fg:#0b0b0c;
+  --toast-bg:#ececf0;--toast-fg:#141416;--toast-accion:#095049;
   --shadow:0 8px 24px rgba(0,0,0,.6);--shadow-sm:0 1px 3px rgba(0,0,0,.5);--shadow-pop:0 10px 30px rgba(0,0,0,.7);
   --surface-glass:rgba(28,28,30,.78);
   color-scheme:dark;
@@ -1026,6 +1028,90 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .mov-icon-btn:active,.mov-topbar-arrow:active,.side-menu-close:active,.cierre-x:active,.tx-del:active,.tx-edit:active,.copia-borrar:active{background:var(--border)}
 .field-link:active{opacity:.6}
 .nav-btn:active,.pin-key:active{transition-duration:var(--dur-1)}
+
+/* ═══════════════════════════════════════════
+   [AAA navegacion] NAVEGACIÓN, MENÚ, AVISOS Y HOJAS
+   ═══════════════════════════════════════════
+   Va después de las reglas de cada componente y antes de "movimiento reducido": pisa lo anterior sin reordenarlo.
+   --cartel-h: alto del cartel de "versión vieja" (lo fija el script de index.html); las barras de arriba y los botones
+   fijos de arriba se corren esa altura para que el cartel no los tape. */
+.header,.mov-topbar{top:var(--cartel-h,0px)}
+#hamburger-btn{top:calc(var(--cartel-h,0px) + 6px);transition:transform var(--dur-1) var(--ease)}
+#hamburger-btn:active{transform:scale(.94)}
+
+/* Pantalla de arranque (index.html #splash): el ícono sobre el fondo del tema hasta que se dibuja Movimientos. */
+#splash{transition:opacity var(--dur-2) var(--ease)}
+#splash.listo{opacity:0;pointer-events:none}
+#splash img{animation:splashLate 1.4s ease-in-out infinite alternate}
+@keyframes splashLate{from{opacity:.8;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+
+/* Cambio de pestaña: solo un fundido. Antes era un scale(.98) sobre la pantalla entera, que además le cambiaba el "bloque
+   contenedor" a los botones fijos de adentro (la calculadora saltaba mientras duraba la animación). */
+@keyframes pageEnter{from{opacity:0}to{opacity:1}}
+.page.active{animation:pageEnter var(--dur-2) var(--ease)}
+
+/* MENÚ LATERAL. Cerrado es visibility:hidden (con retraso para no cortar la animación de salida): sus 8 botones ya no
+   entran en el orden del Tab ni los lee un lector de pantalla desde atrás de la pantalla. */
+#side-menu{visibility:hidden;transition:transform var(--dur-3) var(--ease),visibility 0s linear var(--dur-3);overscroll-behavior:contain;padding:var(--safe-t) 0 var(--safe-b)}
+#side-menu.open{visibility:visible;transition:transform var(--dur-3) var(--ease),visibility 0s}
+#side-menu-overlay{transition:opacity var(--dur-3) var(--ease)}
+#side-menu:focus,.modal:focus{outline:none}
+.side-menu-header{padding:var(--sp-2) var(--sp-2) var(--sp-2) 20px;min-height:64px;margin-bottom:var(--sp-2)}
+.side-menu-close{margin:0}
+.nav-btn{padding:12px 20px;min-height:48px;gap:var(--sp-3)}
+.nav-icon{font-size:20px;width:28px}
+.nav-btn.active{box-shadow:inset 3px 0 0 var(--accent)}
+.nav-btn:focus-visible{outline-offset:-3px}
+
+/* HOJAS MODALES. Se cierran con la misma animación con la que se abren: antes el visibility pasaba a hidden de golpe y la
+   hoja desaparecía sin salir. overscroll-behavior: el scroll de una hoja no arrastra la pantalla de atrás, y mientras
+   hay una hoja (o el menú) abierta la pantalla no se mueve. El alto usa dvh: con la barra del navegador a medio
+   esconder, 90vh se pasaba de la pantalla visible. */
+.modal-overlay{transition:opacity var(--dur-2) var(--ease),visibility 0s linear var(--dur-2);overscroll-behavior:contain}
+.modal-overlay.open{transition:opacity var(--dur-2) var(--ease),visibility 0s}
+.modal{max-height:90vh;max-height:90dvh;overscroll-behavior:contain;transform:translateY(24px);transition:transform var(--dur-3) var(--ease)}
+.modal-handle{touch-action:none}
+body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
+
+/* AVISO (toast): abajo, centrado, por encima del botón del perro (56 px + 24) y de la barra de Guardar; con el teclado
+   en pantalla se apoya sobre el teclado (--kb) y con un aviso de error abajo, sobre ese aviso (--toast-extra). Superficie
+   inversa (oscura en claro, clara en oscuro): se distingue del fondo en los dos temas. Vacío o escondido no recibe toques. */
+.toast{top:auto;bottom:calc(96px + var(--safe-b) + var(--kb,0px) + var(--toast-extra,0px));background:var(--toast-bg);color:var(--toast-fg);
+  -webkit-backdrop-filter:none;backdrop-filter:none;border-radius:var(--radius-lg);font-size:var(--fs-md);z-index:10004;
+  box-shadow:var(--shadow-pop);transform:translate(-50%,16px);opacity:0;pointer-events:none;
+  transition:transform var(--dur-2) var(--ease),opacity var(--dur-2) var(--ease)}
+.toast.show{transform:translate(-50%,0);opacity:1;pointer-events:auto;transition:transform var(--dur-3) var(--ease),opacity var(--dur-2) var(--ease)}
+.toast.con-accion{gap:var(--sp-1);padding:var(--sp-1) var(--sp-2) var(--sp-1) 20px}
+.toast-accion{color:var(--toast-accion);min-height:var(--tap);padding:0 var(--sp-3);border-radius:var(--radius-md);font-size:var(--fs-md);
+  transition:background-color var(--dur-1) var(--ease)}
+.toast-accion:active{background:rgba(127,127,127,.22)}
+.toast-accion:focus-visible{outline:2px solid currentColor;outline-offset:-2px}
+
+/* BOTÓN DEL PERRO: se esconde mientras bajás por una lista (js/render-comun.js) y vuelve al subir. Enfocado con el
+   teclado siempre se ve. El anillo claro lo separa de lo que pasa por debajo. */
+#fab-cargar{border:2px solid var(--surface);box-shadow:var(--shadow-pop);transition:transform var(--dur-2) var(--ease),opacity var(--dur-2) var(--ease)}
+#fab-cargar.fab-oculto:not(:focus-visible){transform:translateY(calc(100% + var(--sp-5) + var(--safe-b)));opacity:0;pointer-events:none}
+/* CALCULADORA de Cargar: sube a la barra de arriba (a la derecha, simétrica al ☰) en vez de flotar sobre el formulario, donde tapaba
+   el 📅 de la fecha. Es solo su posición: el botón y lo que abre son los de siempre. */
+#fab-calculadora{top:calc(var(--cartel-h,0px) + 6px);bottom:auto;right:calc(var(--sp-2) + var(--safe-r));width:var(--tap);height:var(--tap);font-size:22px;box-shadow:var(--shadow-sm)}
+
+/* AVISO DE ERROR (index.html #error-banner): abajo, sube desde el borde, respeta la barra de gestos y su ✕ mide 44. */
+.error-banner{position:fixed;left:0;right:0;bottom:0;z-index:10003;align-items:flex-start;gap:var(--sp-2);background:var(--danger-light);
+  border-top:2px solid var(--danger);padding:var(--sp-3) var(--sp-1) calc(var(--sp-3) + var(--safe-b)) var(--sp-4);max-height:55vh;max-height:55dvh;
+  overflow-y:auto;overscroll-behavior:contain;box-shadow:0 -8px 24px rgba(0,0,0,.18);animation:errorSube var(--dur-3) var(--ease)}
+@keyframes errorSube{from{transform:translateY(100%)}to{transform:none}}
+.error-banner-ico{font-size:var(--fs-lg);line-height:1.3;padding-top:var(--sp-1)}
+.error-banner-cuerpo{flex:1;min-width:0;padding-top:var(--sp-1)}
+.error-banner-titulo{font-size:var(--fs-md);font-weight:600;color:var(--danger)}
+.error-banner-msg{font-size:var(--fs-sm);color:var(--text);word-break:break-word;margin-top:2px}
+.error-banner-detalle{font-size:var(--fs-xs);color:var(--muted);white-space:pre-wrap;word-break:break-word;margin-top:var(--sp-2)}
+.error-banner-acciones{display:flex;gap:var(--sp-2);margin-top:var(--sp-2);flex-wrap:wrap}
+.error-banner-cerrar{flex-shrink:0;width:var(--tap);height:var(--tap);border:none;border-radius:50%;background:none;color:var(--muted);font-size:22px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;padding-bottom:.31em;cursor:pointer;transition:background-color var(--dur-1) var(--ease)}
+.error-banner-cerrar:active{background:var(--border)}
+
+/* DIÁLOGO (alerta / confirmación / prompt): el mensaje en el cuerpo de 15 px de la app. */
+.dialogo-mensaje{font-size:var(--fs-base);color:var(--text);line-height:1.5;margin-bottom:var(--sp-4);white-space:pre-line}
 
 /* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO
