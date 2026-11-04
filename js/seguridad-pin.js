@@ -396,7 +396,7 @@ function pinPress(d){
   const largo=pinLen();
   if(pinBuffer.length>=largo) return;
   vibrar(15);
-  if(pinBuffer.length===0) quitarErrorPin(true);   // empieza un intento nuevo: el aviso del anterior ya cumplió
+  if(pinBuffer.length===0) quitarErrorPin(true);   // empieza un intento nuevo: se va el rojo y el aviso del anterior (salvo el de la espera, que sigue contando)
   pinBuffer+=d;
   updatePinDisplay();
   if(pinBuffer.length===largo){
@@ -407,8 +407,7 @@ function pinBackspace(){
   if(pinBuffer.length>0){
     pinBuffer=pinBuffer.slice(0,-1);
     updatePinDisplay();
-    document.getElementById("pin-error").textContent="";
-    quitarErrorPin();
+    quitarErrorPin(true);
   }
 }
 
@@ -438,9 +437,9 @@ document.addEventListener("keydown", e=>{
 });
 
 // [AAA bloqueo] El error se dice de tres formas, para que no dependa del movimiento ni del color: el texto (con role="alert"), el sacudón de la
-// pantalla y los puntitos/el campo en rojo, que quedan hasta el próximo intento. Con prefers-reduced-motion el sacudón no se mueve (lo apaga el CSS)
+// pantalla y los puntitos/el campo en rojo, que quedan hasta el próximo intento (el primer dígito, Retroceso o escribir en el campo los quitan).
+// El aviso de la espera por intentos NO se borra al tocar una tecla: sigue contando hasta que termina la espera. Con prefers-reduced-motion el sacudón no se mueve (lo apaga el CSS)
 // pero el rojo sí se ve. La animación es una clase (.sacudon): se reinicia sacándola y poniéndola de nuevo.
-let pinErrorTimer=null;
 function sacudirPin(){
   ["pin-display","pin-texto-wrap"].forEach(id=>{
     const el=document.getElementById(id); if(!el) return;
@@ -448,12 +447,13 @@ function sacudirPin(){
     el.classList.add("sacudon", "con-error");
     el.addEventListener("animationend", ()=>el.classList.remove("sacudon"), {once:true});
   });
-  clearTimeout(pinErrorTimer); pinErrorTimer=setTimeout(()=>quitarErrorPin(), 2500);
 }
 function quitarErrorPin(tambienTexto){
-  clearTimeout(pinErrorTimer);
   ["pin-display","pin-texto-wrap"].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove("con-error","sacudon"); });
-  if(tambienTexto){ const e=document.getElementById("pin-error"); if(e) e.textContent=""; }
+  if(tambienTexto){
+    const e=document.getElementById("pin-error");
+    if(e && !(segundosDeEsperaPin()>0 && AVISO_ESPERA.test(e.textContent))) e.textContent="";   // en plena espera el aviso se queda (solo comportamiento visual: no toca los intentos)
+  }
 }
 // [AAA bloqueo] La espera por intentos cuenta hacia atrás en pantalla (antes el "28 s" se quedaba quieto y nunca se despejaba). Solo repinta el
 // texto del aviso y no toca ningún contador de seguridad: los segundos salen de segundosDeEsperaPin(). El lector de pantalla oye el aviso una
@@ -465,7 +465,7 @@ function iniciarCuentaAtrasPin(){
   const err=document.getElementById("pin-error");
   if(!err || segundosDeEsperaPin()<=0 || !AVISO_ESPERA.test(err.textContent)) return;
   const demasiados=err.textContent.startsWith("Demasiados");
-  const texto=seg=>demasiados ? `Demasiados intentos. Probá de nuevo en ${textoEspera(seg)}.` : `PIN incorrecto. Esperá ${textoEspera(seg)} para volver a intentar.`;
+  const texto=seg=>demasiados ? `Demasiados intentos. Probá en ${textoEspera(seg)}.` : `PIN incorrecto. Esperá ${textoEspera(seg)}.`;
   pinCuentaAtras=setInterval(()=>{
     const e=document.getElementById("pin-error");
     if(!e || !AVISO_ESPERA.test(e.textContent)){ clearInterval(pinCuentaAtras); pinCuentaAtras=null; return; }   // el aviso ya es otro (o se borró): no se pisa
@@ -495,7 +495,7 @@ async function checkPin(){
   // Con intentos fallidos de más hay que esperar: ni se prueba el PIN.
   const espera=segundosDeEsperaPin();
   if(espera>0){
-    err.textContent=`Demasiados intentos. Probá de nuevo en ${textoEspera(espera)}.`;
+    err.textContent=`Demasiados intentos. Probá en ${textoEspera(espera)}.`;
     pinBuffer=""; setTimeout(updatePinDisplay, 300); sacudirPin(); iniciarCuentaAtrasPin();
     return;
   }
@@ -561,7 +561,7 @@ async function checkPin(){
   } else {
     const f=registrarFalloPin();
     const e=esperaTrasFallos(f.n);
-    err.textContent=e>0 ? `PIN incorrecto. Esperá ${textoEspera(e)} para volver a intentar.` : "PIN incorrecto";
+    err.textContent=e>0 ? `PIN incorrecto. Esperá ${textoEspera(e)}.` : "PIN incorrecto";
     pinBuffer="";
     setTimeout(updatePinDisplay, 300);
     sacudirPin();
@@ -846,23 +846,23 @@ function renderPinStatus(){
     el.innerHTML=`
       <p class="pin-estado">✓ ${alfa?"Código alfanumérico activo":`PIN activo (${largo} dígitos)`}. Se va a pedir cada vez que abras la app.</p>
       ${!alfa && largo>=PIN_LEN_NUEVO?`<p class="txt-xs txt-muted pin-nota">¿Querés más seguridad? Con “Cambiar PIN” podés usar un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p>`:""}
-      ${!alfa && largo<PIN_LEN_NUEVO?`<div class="inset mb-10" style="border-left:3px solid var(--warning)"><p class="txt-sm" style="margin:0 0 8px">Tu PIN tiene ${largo} dígitos y se puede adivinar en minutos. Pasá a ${PIN_LEN_NUEVO} dígitos o a un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p><button class="btn-sm" style="width:100%" onclick="changePin()">Reforzar mi PIN</button></div>`:""}
+      ${!alfa && largo<PIN_LEN_NUEVO?`<div class="pin-aviso"><p>Tu PIN tiene ${largo} dígitos y se puede adivinar en minutos. Pasá a ${PIN_LEN_NUEVO} dígitos o a un código de ${CODIGO_MIN} a ${CODIGO_MAX} letras y números.</p><button class="btn-sm pin-btn-ancho" onclick="changePin()">Reforzar mi PIN</button></div>`:""}
       <div class="u-row">
         <button class="btn-sm u-flex1" onclick="changePin()">Cambiar PIN</button>
-        <button class="btn-sm" style="flex:1;color:var(--danger)" onclick="removePin()">Desactivar</button>
+        <button class="btn-sm u-flex1 pin-btn-peligro" onclick="removePin()">Desactivar</button>
       </div>
-      <label class="opt-row" style="--chk:var(--save);margin-top:12px">
+      <label class="opt-row pin-cifrar">
         <span class="opt-icon">🔒</span>
         <span class="opt-text"><span class="opt-title">Cifrar los backups</span><span class="opt-sub">El archivo, el menú de compartir y Drive. Se abren con tu PIN o código</span></span>
         <input type="checkbox" id="backup-cifrado-chk" class="chk-custom" ${localStorage.getItem(BACKUP_CIFRADO_KEY)==="0"?"":"checked"} onchange="onBackupCifradoToggle(this)">
       </label>
-      <div class="form-group" style="margin-top:12px"><label class="form-label" for="autolock-sel">Volver a pedir el PIN</label>
+      <div class="form-group pin-autolock"><label class="form-label" for="autolock-sel">Volver a pedir el PIN</label>
         <select id="autolock-sel" class="form-select" onchange="cambiarAutoLock(this.value)">${AUTOLOCK_OPCIONES.map(([v,t])=>`<option value="${v}"${v===opcion?" selected":""}>${v==="nunca"?"Nunca (la app queda abierta)":`Si salís o no la usás ${t.replace("a ","")}`}</option>`).join("")}</select>
-        <p class="txt-xs txt-muted" style="margin-top:4px">Si salís de la app o la dejás sin tocar ese tiempo, vuelve a pedir el PIN.</p></div>`;
+        <p class="txt-xs txt-muted pin-ayuda-baja">Si salís de la app o la dejás sin tocar ese tiempo, vuelve a pedir el PIN.</p></div>`;
   } else {
     el.innerHTML=`
       <p class="txt-sm txt-muted mb-10">El PIN te protege si alguien toma tu celular. Es opcional.</p>
-      <button class="btn-primary" style="background:var(--accent);color:var(--on-solid);width:100%" onclick="setupPin()">🔐 Activar PIN</button>`;
+      <button class="btn-primary pin-activar" onclick="setupPin()">🔐 Activar PIN</button>`;
   }
   if(typeof renderHuellaStatus==="function") renderHuellaStatus();
 }

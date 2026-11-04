@@ -515,7 +515,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
      parte de la pantalla; los dos espaciadores ::before/::after centran el contenido y, si no entra (poco alto, apaisado), se achican a 0 y la pantalla
      se desplaza en vez de cortar lo de arriba. Safe areas (muesca y barra de gestos) sumadas al margen.
    · Teclas de 64×88 px (56 y 48 en pantallas bajas): objetivo táctil muy por encima de los 44. Borde --border-mid (el --border es solo divisor).
-   · Error: texto (role="alert") + sacudón + puntitos/campo en rojo que quedan hasta el próximo intento; con prefers-reduced-motion no hay movimiento. */
+   · Error: texto (role="alert") + sacudón + puntitos/campo en rojo que quedan hasta el próximo intento (el primer dígito o Retroceso los quita; el aviso de la espera sigue contando); con prefers-reduced-motion no hay movimiento. */
 .lock{position:fixed;inset:var(--vv-top,0px) 0 var(--vv-bottom,0px) 0;z-index:9999;background:var(--bg);flex-direction:column;align-items:center;overflow-y:auto;overscroll-behavior:contain;
   padding:calc(var(--sp-5) + var(--safe-t)) calc(var(--sp-5) + var(--safe-r)) calc(var(--sp-5) + var(--safe-b)) calc(var(--sp-5) + var(--safe-l))}
 .lock::before,.lock::after{content:"";flex:1 0 0}
@@ -523,7 +523,7 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .lock-logo{font-size:48px;line-height:1;margin-bottom:var(--sp-2)}
 .lock-titulo{margin:0 0 var(--sp-1);font-size:var(--fs-xl);font-weight:700;line-height:1.2;color:var(--text)}
 .lock-texto{margin:0 0 var(--sp-5);font-size:var(--fs-base);line-height:1.4;color:var(--muted);text-align:center}
-.pin-display{display:flex;gap:var(--sp-3);margin-bottom:var(--sp-2)}
+.pin-display{display:flex;gap:var(--sp-3);margin-bottom:var(--sp-1)}
 .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);background:transparent;transition:background-color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease)}
 .pin-dot.filled{background:var(--accent);border-color:var(--accent);animation:pinPop var(--dur-2) var(--ease)}
 @keyframes pinPop{0%{transform:scale(.6)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
@@ -534,11 +534,13 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .pin-texto-wrap{display:flex;flex-direction:column;align-items:stretch;gap:var(--sp-2);width:100%;max-width:288px;margin-bottom:var(--sp-2)}
 .pin-texto{text-align:center;font-size:var(--fs-xl);letter-spacing:.12em}
 .pin-texto:placeholder-shown{letter-spacing:0;font-size:var(--fs-lg)}
-.pin-texto-wrap.con-error .pin-texto{border-color:var(--danger)}
+.pin-texto-wrap.con-error .pin-texto,.pin-texto-wrap.con-error .pin-texto:focus-visible{border-color:var(--danger)}
+.pin-texto-wrap.con-error .pin-texto:focus-visible{outline-color:var(--danger)}   /* con foco y error: un solo aro, en rojo */
 .pin-texto-acciones{display:flex;gap:var(--sp-2)}
 .lock .lock-btn-sec{flex:1;min-height:var(--tap);font-size:var(--fs-md)}
 .lock .lock-btn-pri{flex:2;padding:var(--sp-2);background:var(--accent);color:var(--on-solid)}
-.pin-error{margin:0 0 var(--sp-4);min-height:42px;max-width:300px;font-size:var(--fs-base);font-weight:500;line-height:1.4;color:var(--danger);text-align:center;text-wrap:balance}
+/* Un solo renglón reservado (los avisos son cortos: "PIN incorrecto. Esperá 30 s."): el teclado no se mueve cuando aparece y entre puntos y teclas quedan ~33 px. */
+.pin-error{margin:0 0 var(--sp-2);min-height:1.4em;max-width:100%;font-size:var(--fs-base);font-weight:500;line-height:1.4;color:var(--danger);text-align:center;text-wrap:balance}
 .pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);width:100%;max-width:288px}
 .pin-key{height:64px;padding:0;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);font-weight:500;border:1px solid var(--border-mid);background:var(--surface);color:var(--text);border-radius:var(--radius-md);cursor:pointer;position:relative;overflow:hidden;
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;transition:background-color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease),color var(--dur-1) var(--ease),transform var(--dur-1) var(--ease)}
@@ -546,9 +548,9 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .pin-key-vacio{visibility:hidden;pointer-events:none}
 .lock .lock-huella{margin-top:var(--sp-4);min-height:var(--tap);padding:0 var(--sp-4);font-size:var(--fs-md)}
 @media (max-height:700px){ .pin-key{height:56px} .lock-texto{margin-bottom:var(--sp-4)} .lock-huella{margin-top:var(--sp-3)} }
-@media (max-height:560px){ .lock-logo{display:none} .pin-key{height:48px} .pin-pad{gap:var(--sp-2)} .pin-error{min-height:21px;margin-bottom:var(--sp-2)} }
-@media (max-height:480px){ .lock{padding-top:calc(var(--sp-3) + var(--safe-t));padding-bottom:calc(var(--sp-3) + var(--safe-b))} .pin-key{height:var(--tap)} .lock-texto{margin-bottom:var(--sp-3)} .pin-error{min-height:21px;margin-bottom:var(--sp-2)} .lock-huella{margin-top:var(--sp-2)} }   /* apaisado: entran las 4 filas sin desplazar */
-@media (max-height:420px){ .lock{padding-top:calc(var(--sp-2) + var(--safe-t));padding-bottom:calc(var(--sp-2) + var(--safe-b))} .lock-texto{display:none} .lock-titulo{margin-bottom:var(--sp-3)} }
+@media (max-height:560px){ .lock-logo{display:none} .pin-key{height:48px} .pin-pad{gap:var(--sp-2)} }
+@media (max-height:480px){ .lock{padding-top:calc(var(--sp-3) + var(--safe-t));padding-bottom:calc(var(--sp-3) + var(--safe-b))} .pin-key{height:var(--tap)} .lock-texto{margin-bottom:var(--sp-3)} .lock-huella{margin-top:var(--sp-2)} }   /* apaisado: entran las 4 filas sin desplazar */
+@media (max-height:420px){ .lock{padding-top:calc(var(--sp-3) + var(--safe-t));padding-bottom:calc(var(--sp-3) + var(--safe-b))} .lock-texto{display:none} .lock-titulo{margin-bottom:var(--sp-2)} .pin-key{height:40px} .pin-pad{gap:6px} .lock-huella{margin-top:var(--sp-2)} }   /* teclas de 40: con la huella visible entra todo en 360 de alto */
 @media (prefers-reduced-motion:reduce){ .pin-display.sacudon,.pin-texto-wrap.sacudon,.pin-dot.filled{animation:none} }
 /* [AAA bloqueo] Bienvenida. Las tres láminas comparten el mismo lugar (grilla apilada): el ícono no salta entre pasos. Puntos ≥3:1 (--border-strong). */
 .onb{position:fixed;inset:0;z-index:9998;background:var(--bg);flex-direction:column;overflow-y:auto;overscroll-behavior:contain}
@@ -566,6 +568,16 @@ tx-item{display:block;position:relative;overflow:hidden;border-radius:var(--radi
 .ob-dot.active{background:var(--accent);width:24px}
 .onb .onb-siguiente{width:100%;background:var(--accent);color:var(--on-solid)}
 .onb .onb-saltar{width:100%;margin-top:var(--sp-2);border:none;background:none;min-height:var(--tap);font-size:var(--fs-base);font-weight:500;color:var(--muted)}
+@media (max-height:480px){   /* apaisado: ícono más chico, márgenes reducidos, y puntos + botones en una fila */
+  .onb-cuerpo{padding:calc(var(--sp-3) + var(--safe-t)) calc(var(--sp-6) + var(--safe-r)) var(--sp-2) calc(var(--sp-6) + var(--safe-l))}
+  .onb-slides{max-width:480px}
+  .onb-emoji{font-size:40px;margin-bottom:var(--sp-2)}
+  .onb-titulo{margin-bottom:var(--sp-2)}
+  .onb-pie{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-2) calc(var(--sp-6) + var(--safe-r)) calc(var(--sp-3) + var(--safe-b)) calc(var(--sp-6) + var(--safe-l))}
+  .onb-puntos{margin-bottom:0}
+  .onb .onb-siguiente{flex:1;width:auto}
+  .onb .onb-saltar{width:auto;margin-top:0;padding:0 var(--sp-3)}
+}
 /* MODAL */
 /* display:flex siempre (no "none"), oculto vía opacity+visibility para poder animar la transición.
    pointer-events:none cuando está cerrado evita que capture toques mientras es invisible. */
@@ -1164,4 +1176,14 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .pin-estado{margin:0 0 var(--sp-3);font-size:var(--fs-md);font-weight:500;line-height:1.4;color:var(--success)}
 .pin-estado-huella{margin:var(--sp-3) 0 var(--sp-2)}
 .pin-nota{margin:calc(-1*var(--sp-1)) 0 var(--sp-3)}
-#pin-status .btn-sm,#huella-status .btn-sm{min-height:var(--tap)}
+/* Ayuda de la huella (inactiva o no disponible): mismo cuerpo de 13 px que el estado "activada", en gris. Aviso de PIN débil: borde ámbar a la izquierda y radio solo a la derecha (el borde recto no se curva). */
+.pin-ayuda{margin:var(--sp-3) 0 var(--sp-2);font-size:var(--fs-md);line-height:1.4;color:var(--muted)}
+.pin-ayuda-baja{margin-top:var(--sp-1)}
+.pin-aviso{background:var(--bg);border-left:3px solid var(--warning);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:var(--sp-3);margin-bottom:var(--sp-3)}
+.pin-aviso p{margin:0 0 var(--sp-2);font-size:var(--fs-md);line-height:1.4;color:var(--text)}
+.pin-btn-ancho{width:100%}
+.pin-btn-peligro{color:var(--danger)}
+.pin-cifrar{--chk:var(--save);margin-top:var(--sp-3)}
+.pin-autolock{margin-top:var(--sp-3)}
+.pin-activar{width:100%;background:var(--accent);color:var(--on-solid)}
+#pin-status .btn-sm,#huella-status .btn-sm{min-height:var(--tap)}   /* 44 reales aquí; el resto de Config sigue en 36 + halo: lo unificará config */

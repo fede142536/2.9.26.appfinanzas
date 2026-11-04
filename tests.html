@@ -10656,6 +10656,9 @@ test("desbloquear: PIN malo cuenta, a los 5 errores hay que esperar, y el bueno 
   igual(leerFallosPin().n, 4); cierto(err.textContent==="PIN incorrecto", "hasta el 4º error no espera");
   await teclear("333333"); cierto(/Esperá 30[\s\u00a0]s/.test(err.textContent), err.textContent); cierto(segundosDeEsperaPin()>0 && segundosDeEsperaPin()<=30);   // [AAA bloqueo] la cifra y la unidad van unidas por un espacio duro (\u00a0)
   await teclear("482916"); cierto(/Demasiados intentos/.test(err.textContent), "con la espera puesta ni siquiera prueba el PIN bueno: "+err.textContent); igual(encKey, null); igual(resolvio.length, 0);
+  // [AAA bloqueo] tocar una tecla (o Retroceso) en plena espera NO borra el aviso que cuenta los segundos
+  pinPress("1"); cierto(/Demasiados intentos/.test(err.textContent), "el aviso de la espera se borró con la primera tecla: "+err.textContent);
+  pinBackspace(); cierto(/Demasiados intentos/.test(err.textContent), "el aviso de la espera se borró con Retroceso: "+err.textContent); igual(pinBuffer, "");
   localStorage.setItem(PIN_FALLOS_KEY, JSON.stringify({n:5, hasta:Date.now()-1}));   // ya pasó la espera
   await teclear("482916");
   cierto(!!encKey && encCache && encCache.fmovs3.includes('"id":7'), "no desbloqueó con el PIN bueno"); igual(lock.style.display, "none"); igual(resolvio.length, 1, "se resolvió checkLock");
