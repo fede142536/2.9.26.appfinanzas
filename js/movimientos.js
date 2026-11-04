@@ -135,9 +135,11 @@ function setFiltroFechaTab(tab){
   filtroFechaTab=tab;
   ["dia","rango","mes","anio"].forEach(t=>{
     document.getElementById("ff-panel-"+t).style.display=(t===tab)?"block":"none";
+    // [AAA movimientos] La pestaña elegida se marca con .active (mismo selector segmentado que Todos/Gastos/Ingresos) y aria-selected;
+    // antes se pintaba con estilos en línea (fondo --accent y color:#fff fijo, que en oscuro dependía de una red de seguridad).
     const btn=document.getElementById("ff-tab-"+t);
-    if(t===tab){ btn.style.background="var(--accent)"; btn.style.color="#fff"; }
-    else { btn.style.background=""; btn.style.color=""; }
+    btn.classList.toggle("active", t===tab);
+    btn.setAttribute("aria-selected", t===tab ? "true" : "false");
   });
 }
 function aplicarFiltroFecha(){
@@ -170,7 +172,7 @@ function aplicarFiltroFecha(){
   // se puede tocar para volver al mes actual — antes esto ya funcionaba con un tap (el
   // onclick de #mes-label en index.html), pero sin ningún indicio visual el usuario no lo
   // descubría solo y volvía a abrir el modal para reconfigurar el mes manualmente.
-  document.getElementById("mes-label").innerHTML=`📅 ${label} <span class="mes-label-x">✕</span>`;
+  document.getElementById("mes-label").innerHTML=`<span class="mes-label-txt">📅 ${label}</span> <span class="mes-label-x">✕</span>`;
   document.getElementById("btn-mes-prev").style.visibility="hidden";
   document.getElementById("btn-mes-next").style.visibility="hidden";
   renderMovs();
@@ -458,7 +460,7 @@ function pintarFiltroCuenta(base, filtrada){
   if(filtroCuenta && !opciones.some(o=>o.v===filtroCuenta)) opciones.push({v:filtroCuenta, txt:nombreFiltroCuenta(filtroCuenta), n:0});
   chips.style.display="flex";
   chips.innerHTML=`<span class="filter-chip-label">🏦 Cuenta</span><span role="button" tabindex="0" class="filter-chip ${filtroCuenta===''?'active':''}" onclick="setFiltroCuenta('')">Todas</span>`
-    +opciones.map(o=>`<span role="button" tabindex="0" class="filter-chip ${filtroCuenta===o.v?'active':''}" onclick="setFiltroCuenta(${attrJS(o.v)})">${escapeHtml(o.txt)} <span class="txt-muted">${o.n}</span></span>`).join("");
+    +opciones.map(o=>`<span role="button" tabindex="0" class="filter-chip ${filtroCuenta===o.v?'active':''}" onclick="setFiltroCuenta(${attrJS(o.v)})"><span class="filter-chip-txt">${escapeHtml(o.txt)}</span> <span class="txt-muted">${o.n}</span></span>`).join("");
   if(!res) return;
   if(!filtroCuenta){ res.style.display="none"; res.innerHTML=""; return; }
   const r=resumenDeCuenta(filtrada);
@@ -888,13 +890,19 @@ function renderTxListaLazy(show){
 // `attr` (opcional): atributos extra para el <div> raíz, p. ej. data-mosaico="…" para poder
 // encontrarlo y repintarlo en el lugar sin armar el resumen entero (ver actualizarFrecPorPagar).
 function mosaicoHTML(glyph, name, color, val, sub, attr){
-  const tint = color==="var(--text)" ? "var(--bg)" : color.replace(")", "-light)");
-  return `<div class="mov-mosaic" style="background:${tint}"${attr?" "+attr:""}>
+  const neutro = color==="var(--text)";
+  // [AAA movimientos] El mosaico neutro (Cantidad, Gastos USD) ya no es del color del fondo de la página (no se veía como tarjeta):
+  // lleva superficie y aro propios (data-tono="neutro", ver styles.css). Un atributo y no una clase: otros lugares buscan
+  // 'class="mov-mosaic"' exacto para ensancharlo (mosaicosGridHTML, actualizarFrecPorPagar).
+  const estilo = neutro ? "" : ` style="background:${color.replace(")", "-light)")}"`;
+  // --n = largo del texto de la cifra: styles.css la achica (cqw) para que un importe de 12 dígitos entre entero en vez de cortarse con "…".
+  const largo = String(val).replace(/<[^>]*>/g,"").length;
+  return `<div class="mov-mosaic"${estilo}${neutro?' data-tono="neutro"':""}${attr?" "+attr:""}>
     <div class="mov-mosaic-top">
       <span class="mov-mosaic-glyph" style="color:${color}">${glyph}</span>
       <span class="mov-mosaic-name" style="color:${color}">${escapeHtml(name)}</span>
     </div>
-    <span class="mov-mosaic-val">${val}</span>
+    <span class="mov-mosaic-val" style="--n:${largo}">${val}</span>
     ${sub?`<span class="mov-mosaic-sub">${escapeHtml(sub)}</span>`:""}
   </div>`;
 }
@@ -974,6 +982,7 @@ function mosaicosGridHTML(mosaicos){
   return `<div class="mov-mosaic-grid">${items.join("")}</div>`;
 }
 
+let ultimoBalanceAnimado=null;   // "período|cifra" del último balance animado (ver más abajo)
 function renderMovs(){
   const mesMovs = filtroFecha ? getMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getMesMov(mesActual);
   const mesTcs = filtroFecha ? getTcMovsEnRango(filtroFecha.desde, filtroFecha.hasta) : getTcMovsEnMes(mesActual);
@@ -1070,7 +1079,7 @@ function renderMovs(){
 
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">Tarjetas ${periodoTxt}</span>
-      <span class="mov-summary-val" style="color:var(--warning)">${fmtTotal(totalTcARS)}</span>
+      <span class="mov-summary-val" style="--n:${fmtTotal(totalTcARS).length};color:var(--warning)">${fmtTotal(totalTcARS)}</span>
     </div>`;
     const mosTc=[];
     if(cantTc){
@@ -1148,7 +1157,7 @@ function renderMovs(){
     const labelTxt=filtroCategoria?escapeHtml(filtroCategoria):`Gastado ${periodoTxt}`;
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">${labelTxt}</span>
-      <span class="mov-summary-val" style="color:var(--danger)">${fmtTotal(gastosTotalARS)}</span>
+      <span class="mov-summary-val" style="--n:${fmtTotal(gastosTotalARS).length};color:var(--danger)">${fmtTotal(gastosTotalARS)}</span>
     </div>`;
     const mosGasto=[];
     if(gastosTotalUSD>0) mosGasto.push(mosaicoHTML("$","Gastos USD","var(--text)",`USD ${fmtNum2(gastosTotalUSD)}`,""));
@@ -1220,7 +1229,7 @@ function renderMovs(){
     const labelIngTxt=filtroCategoria?escapeHtml(filtroCategoria):`Ingresó ${periodoTxt}`;
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">${labelIngTxt}</span>
-      <span class="mov-summary-val" style="color:var(--success)">${fmtTotal(ingTotalARS)}</span>
+      <span class="mov-summary-val" style="--n:${fmtTotal(ingTotalARS).length};color:var(--success)">${fmtTotal(ingTotalARS)}</span>
     </div>`;
     const mosIng=[];
     if(ingTotalUSD>0) mosIng.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${fmtNum2(ingTotalUSD)}`,"por cambio"));
@@ -1318,7 +1327,7 @@ function renderMovs(){
     const balLabel=filtroFecha?"Balance del período":"Balance del mes";
     let html=`<div class="mov-summary-num">
       <span class="mov-summary-label">${balLabel}</span>
-      <span class="mov-summary-val" id="chip-mov-bal" style="color:${disponible>=0?"var(--success)":"var(--danger)"}">${fmtTotal(0)}</span>
+      <span class="mov-summary-val" id="chip-mov-bal" style="--n:${fmtTotal(disponible).length};color:${disponible>=0?"var(--success)":"var(--danger)"}">${fmtTotal(0)}</span>
       ${guardado>0?`<span class="mov-summary-sub">Disponible, ya descontado lo ahorrado (${fmtTotal(guardado)})</span>`:""}
       ${rp.retiradoAMano>0?`<span class="mov-summary-sub">Incluye ${fmtTotal(rp.retiradoAMano)} que sacaste de tus ahorros</span>`:""}
     </div>`;
@@ -1377,7 +1386,13 @@ function renderMovs(){
     });
     html+=mosaicosGridHTML(mosTodos);
     document.getElementById("mov-summary").innerHTML=html;
-    animarNumero(document.getElementById("chip-mov-bal"), disponible, 700, fmtTotal);
+    // [AAA movimientos] El balance "cuenta" hasta su valor solo cuando cambia de período o de cifra: antes volvía a contar desde $0
+    // en CADA toque de un filtro o chip (parpadeo sin aportar nada), y no respetaba "reducir movimiento".
+    const elBal=document.getElementById("chip-mov-bal");
+    const claveBal=(filtroFecha ? filtroFecha.desde+"|"+filtroFecha.hasta : mesActual)+"|"+disponible;
+    if(prefiereMenosMovimiento() || claveBal===ultimoBalanceAnimado) elBal.textContent=fmtTotal(disponible);
+    else animarNumero(elBal, disponible, 700, fmtTotal);
+    ultimoBalanceAnimado=claveBal;
     document.getElementById("mov-tarjeta-filtro").style.display="none";
     document.getElementById("mov-cat-filtro").style.display="none";
     arrastreEl.style.display="none";
@@ -1451,11 +1466,20 @@ function renderMovs(){
   const antesDeCuenta=show;
   if(filtroCuenta && (filtro==="Todos"||filtro==="Gasto"||filtro==="Ingreso")) show=show.filter(m=>coincideCuenta(m, filtroCuenta));
   pintarFiltroCuenta(antesDeCuenta, show);
+  // [AAA movimientos] La búsqueda dice cuántos encontró ahí mismo, bajo el campo: antes el aviso de "sin resultados" quedaba
+  // varias pantallas más abajo, detrás de los mosaicos, y parecía que no pasaba nada.
+  const cuentaBusq=document.getElementById("mov-search-count");
+  if(cuentaBusq) cuentaBusq.textContent = searchQuery ? (show.length ? `${show.length} ${show.length===1?"resultado":"resultados"}` : "Sin resultados") : "";
   const list=document.getElementById("tx-list");
   if(!show.length){
-    if(searchQuery) list.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div>Sin resultados para "${escapeHtml(searchQuery)}"</div>`;
-    else if(filtroFecha) list.innerHTML=`<div class="empty"><div class="empty-icon">📅</div>Sin movimientos en ${filtroFecha.label}</div>`;
-    else list.innerHTML=`<div class="empty"><div class="empty-icon">📭</div>Sin movimientos este mes</div>`;
+    // [AAA movimientos] Cada vacío dice por qué y qué hacer (antes: solo "Sin movimientos este mes", sin salida). El texto de
+    // usuario (búsqueda, rango) pasa por escapeHtml; la etiqueta del rango sale de aplicarFiltroFecha() y ya es fecha o mes.
+    const vacio=(icono, titulo, guia, boton)=>`<div class="empty"><div class="empty-icon">${icono}</div><div class="empty-titulo">${titulo}</div>${guia?`<div class="empty-guia">${guia}</div>`:""}${boton||""}</div>`;
+    const botonCargar=`<button type="button" class="btn-primary empty-cta" onclick="abrirCarga()">Cargar un movimiento</button>`;
+    if(searchQuery) list.innerHTML=vacio("🔍", `Sin resultados para "${escapeHtml(searchQuery)}"`, "Probá con otra palabra: la búsqueda mira nota, categoría, subcategoría y ticker.", "");
+    else if(filtroFecha) list.innerHTML=vacio("📅", `Sin movimientos en ${escapeHtml(filtroFecha.label)}`, "No hay nada cargado en esas fechas. Tocá la fecha de arriba para volver al mes.", "");
+    else if(!movs.length && !tcs.length) list.innerHTML=vacio("📭", "Todavía no cargaste nada", "Cuando cargues tu primer gasto o ingreso, lo vas a ver acá, ordenado por día.", botonCargar);
+    else list.innerHTML=vacio("📭", "Sin movimientos este mes", filtro==="Todos" ? "Nada cargado en este período. Podés cargar uno ahora o mirar otro mes." : "No hay movimientos de este tipo en este mes. Probá con \"Todos\" u otro mes.", filtro==="Todos" ? botonCargar : "");
     return;
   }
   renderTxListaLazy(show);
