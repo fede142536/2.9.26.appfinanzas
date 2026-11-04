@@ -9966,6 +9966,27 @@ test("avisos y hojas: el CSS los ubica sin tapar la barra de arriba y cierran an
   cierto(/#fab-cargar\.fab-oculto/.test(bloque) && /#fab-calculadora\{[^}]*top:/.test(bloque), "el perro se esconde al bajar y la calculadora sube a la barra de arriba");
 });
 
+test("hojas: toda hoja abierta tiene nombre accesible (su título, o 'Ventana' si no hay)", ()=>conHojaDePrueba(async ({ov, pausa})=>{
+  ov.querySelector(".modal").insertAdjacentHTML("afterbegin",'<div class="modal-title">Editar movimiento</div>');
+  ov.classList.add("open"); await pausa();
+  const caja=ov.querySelector(".modal"), id=caja.getAttribute("aria-labelledby");
+  cierto(id && document.querySelector("#"+id).textContent==="Editar movimiento", "aria-labelledby tiene que apuntar al título: "+id);
+  ov.classList.remove("open"); await pausa();
+  ov.querySelector(".modal-title").remove(); caja.removeAttribute("aria-labelledby"); delete caja.dataset.nombreAuto;
+  ov.classList.add("open"); await pausa();
+  igual(caja.getAttribute("aria-label"), "Ventana", "sin título, un nombre genérico");
+}));
+
+test("navegación: el cartel de versión no tapa el menú ni las hojas, y el perro se repliega en reposo (CSS)", async ()=>{
+  const css=await (await fetch("styles.css")).text();
+  const bloque=css.slice(css.indexOf("[AAA navegacion] NAVEGACIÓN"));
+  cierto(/#side-menu\{[^}]*padding:calc\(var\(--safe-t\) \+ var\(--cartel-h/.test(bloque), "el menú reserva el alto del cartel");
+  cierto(/\.modal-overlay\{padding-top:var\(--cartel-h/.test(bloque), "las hojas reservan el alto del cartel");
+  cierto(/\.modal\{max-height:calc\(90vh - var\(--cartel-h/.test(bloque), "la hoja se achica lo que ocupa el cartel");
+  cierto(/#fab-cargar\.fab-replegado[^{]*\{transform:translateX\(calc\(100% \+ var\(--sp-5\) \+ var\(--safe-r\) - 31px\)\)/.test(bloque), "el perro se repliega dejando asomar 31 px");
+  cierto(/#fab-cargar\.fab-replegado::after\{[^}]*left:-14px/.test(bloque), "con un halo que completa los 44 px de toque");
+});
+
 grupo("Monto recuperable: cobrar");
 
 const GASTO_REC=(extra)=>({id:500, tipo:"Gasto", cat:"Regalos", subcat:"Familia", importe:50000, moneda:"ARS", cuenta:"Mercado Libre", fecha:"2026-10-26", nota:"", recuperable:25000, ...(extra||{})});

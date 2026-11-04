@@ -274,6 +274,7 @@ function _toastUbicar(t){
   const eb=document.getElementById("error-banner");
   const h=(eb && eb.style && eb.style.display && eb.style.display!=="none") ? (eb.offsetHeight||0) : 0;
   if(t.style && t.style.setProperty) t.style.setProperty("--toast-extra", h+"px");
+  if(t.classList) t.classList.toggle("sobre-error", h>0);
 }
 function ocultarToast(){
   const t=document.getElementById("toast");
@@ -384,6 +385,17 @@ function _capaSuperior(){
 }
 function _esCampoDeTexto(el){ return !!el && (el.tagName==="TEXTAREA" || el.tagName==="SELECT" || (el.tagName==="INPUT" && !/^(button|checkbox|radio|submit|reset|range|color|file)$/.test(el.type))); }
 
+// Toda hoja tiene nombre accesible: se apunta (aria-labelledby) al título de la hoja, creándole un id si falta; sin título, un aria-label genérico.
+function _nombrarCapa(capa){
+  const caja=_cajaDeCapa(capa);
+  if(!caja || !caja.hasAttribute) return;
+  if(caja.dataset && caja.dataset.nombreAuto){ caja.removeAttribute("aria-label"); caja.removeAttribute("aria-labelledby"); }   // lo puso esta función: se recalcula (el título se llena al abrir)
+  else if(caja.hasAttribute("aria-label") || caja.hasAttribute("aria-labelledby")) return;
+  const tit=caja.querySelector(".modal-title, h1, h2, h3");
+  if(tit && tit.textContent.trim()){ if(!tit.id) tit.id=(capa.id||"capa")+"-titulo"; caja.setAttribute("aria-labelledby", tit.id); }
+  else caja.setAttribute("aria-label", "Ventana");
+  if(caja.dataset) caja.dataset.nombreAuto="1";
+}
 function _entrarEnCapa(capa){
   const caja=_cajaDeCapa(capa);
   if(caja.contains(document.activeElement)) return;     // ya hay foco adentro (p. ej. el diálogo lo pone solo)
@@ -417,6 +429,7 @@ function _sincronizarCapas(){
   abiertas.forEach(c=>{
     if(_capasAbiertas.has(c)) return;
     _capasAbiertas.set(c, _abridorDe(c));
+    _nombrarCapa(c);
     if(_capaSuperior()===c) _entrarEnCapa(c);
   });
   Array.from(_capasAbiertas.keys()).forEach(c=>{
@@ -437,6 +450,7 @@ let _observarCapa=()=>{};   // registra una capa creada después del arranque (l
     menu.setAttribute("role","dialog"); menu.setAttribute("aria-modal","true"); menu.setAttribute("aria-label","Menú principal");
   }
   document.querySelectorAll('[onclick*="toggleSideMenu"]').forEach(b=>{ b.setAttribute("aria-haspopup","dialog"); b.setAttribute("aria-controls","side-menu"); b.setAttribute("aria-expanded","false"); });
+  document.querySelectorAll(".modal-overlay:not(#modal-dialogo)").forEach(_nombrarCapa);   // (el diálogo genérico se nombra solo al abrirse)
   const mo=new MutationObserver(_sincronizarCapas);
   _observarCapa=c=>mo.observe(c,{attributes:true,attributeFilter:["class"]});
   document.querySelectorAll(".modal-overlay, #side-menu").forEach(_observarCapa);
@@ -468,10 +482,19 @@ let _observarCapa=()=>{};   // registra una capa creada después del arranque (l
 // abajo de la página, o si lo enfocás con el teclado. Es lo que hacen los botones flotantes de las apps nativas.
 function fabCargarMostrar(){
   const fab=document.getElementById("fab-cargar");
-  if(fab) fab.classList.remove("fab-oculto");
+  if(fab && fab.classList) fab.classList.remove("fab-oculto","fab-replegado");
   _fabUltimoY=window.scrollY;
+  _fabProgramarRepliegue();
 }
-let _fabUltimoY=0;
+let _fabUltimoY=0, _fabIdle=null;
+// Tras 2,5 s sin movimiento el botón se repliega contra el borde (ver styles.css); se programa de nuevo con cada scroll.
+function _fabProgramarRepliegue(){
+  clearTimeout(_fabIdle);
+  _fabIdle=setTimeout(()=>{
+    const fab=document.getElementById("fab-cargar");
+    if(fab && fab.classList && !fab.classList.contains("fab-oculto") && document.activeElement!==fab) fab.classList.add("fab-replegado");
+  }, 2500);
+}
 (function(){
   const fab=document.getElementById("fab-cargar");
   if(!fab || !fab.classList) return;
@@ -480,11 +503,15 @@ let _fabUltimoY=0;
     pendiente=false;
     const y=window.scrollY, dy=y-_fabUltimoY;
     const maximo=document.documentElement.scrollHeight-window.innerHeight;
-    if(y<=24 || y>=maximo-8) { fab.classList.remove("fab-oculto"); _fabUltimoY=y; return; }
-    if(dy>=8){ fab.classList.add("fab-oculto"); _fabUltimoY=y; }
-    else if(dy<=-8){ fab.classList.remove("fab-oculto"); _fabUltimoY=y; }
+    if(y<=24 || y>=maximo-8) { fab.classList.remove("fab-oculto","fab-replegado"); _fabUltimoY=y; _fabProgramarRepliegue(); return; }
+    if(dy>=8){ fab.classList.add("fab-oculto"); fab.classList.remove("fab-replegado"); _fabUltimoY=y; }
+    else if(dy<=-8){ fab.classList.remove("fab-oculto","fab-replegado"); _fabUltimoY=y; _fabProgramarRepliegue(); }
+    else _fabProgramarRepliegue();
   };
   window.addEventListener("scroll", ()=>{ if(!pendiente){ pendiente=true; requestAnimationFrame(evaluar); } }, {passive:true});
+  fab.addEventListener("focusin", ()=>{ clearTimeout(_fabIdle); fab.classList.remove("fab-replegado"); });
+  fab.addEventListener("focusout", _fabProgramarRepliegue);
+  _fabProgramarRepliegue();
 })();
 // Teclado en pantalla: en Chrome del celular el teclado tapa lo que está fijo abajo (el aviso). --kb es lo que
 // mide el teclado; el aviso se apoya encima de él. Con el zoom del pellizco no se calcula.
