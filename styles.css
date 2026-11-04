@@ -1036,6 +1036,8 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
    --cartel-h: alto del cartel de "versión vieja" (lo fija el script de index.html); las barras de arriba y los botones
    fijos de arriba se corren esa altura para que el cartel no los tape. */
 .header,.mov-topbar{top:var(--cartel-h,0px)}
+/* Alto mínimo igual al de la barra de Movimientos (56 + 1 de borde): el ☰ de 44 px (a 6 px del borde) cabe entero y queda centrado también en el encabezado de una sola línea (Configuración). */
+.header{min-height:57px;display:flex;flex-direction:column;justify-content:center}
 #hamburger-btn{top:calc(var(--cartel-h,0px) + 6px);transition:transform var(--dur-1) var(--ease)}
 #hamburger-btn:active{transform:scale(.94)}
 
@@ -1080,7 +1082,8 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
   -webkit-backdrop-filter:none;backdrop-filter:none;border-radius:var(--radius-lg);font-size:var(--fs-md);z-index:10004;
   box-shadow:var(--shadow-pop);transform:translate(-50%,16px);opacity:0;pointer-events:none;
   transition:transform var(--dur-2) var(--ease),opacity var(--dur-2) var(--ease)}
-.toast.show{transform:translate(-50%,0);opacity:1;pointer-events:auto;transition:transform var(--dur-3) var(--ease),opacity var(--dur-2) var(--ease)}
+.toast.show{transform:translate(-50%,0);opacity:1;transition:transform var(--dur-3) var(--ease),opacity var(--dur-2) var(--ease)}
+.toast.show.con-accion{pointer-events:auto}   /* un aviso común deja pasar el toque a lo que tapa; el que trae botón lo recibe */
 .toast.con-accion{gap:var(--sp-1);padding:var(--sp-1) var(--sp-2) var(--sp-1) 20px}
 .toast-accion{color:var(--toast-accion);min-height:var(--tap);padding:0 var(--sp-3);border-radius:var(--radius-md);font-size:var(--fs-md);
   transition:background-color var(--dur-1) var(--ease)}
