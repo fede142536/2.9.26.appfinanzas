@@ -1109,6 +1109,7 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .error-banner-msg{font-size:var(--fs-sm);color:var(--text);word-break:break-word;margin-top:2px}
 .error-banner-detalle{font-size:var(--fs-xs);color:var(--muted);white-space:pre-wrap;word-break:break-word;margin-top:var(--sp-2)}
 .error-banner-acciones{display:flex;gap:var(--sp-2);margin-top:var(--sp-2);flex-wrap:wrap}
+.error-banner-acciones .btn-sm{min-height:var(--tap)}
 .error-banner-cerrar{flex-shrink:0;width:var(--tap);height:var(--tap);border:none;border-radius:50%;background:none;color:var(--muted);font-size:22px;line-height:1;
   display:inline-flex;align-items:center;justify-content:center;padding-bottom:.31em;cursor:pointer;transition:background-color var(--dur-1) var(--ease)}
 .error-banner-cerrar:active{background:var(--border)}
