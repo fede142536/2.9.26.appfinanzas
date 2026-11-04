@@ -68,19 +68,22 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn, estado
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,W,H);
 
-  const padL=44, padR=12, padT=10, padB=24;
-  const cw=W-padL-padR, ch=H-padT-padB;
+  const padR=12, padT=10, padB=24;
   const minV=Math.min(...values, 0);
   const maxV=Math.max(...values, 0);
   const range=maxV-minV||1;
+  // [AAA inversiones] El margen izquierdo se ajusta al rótulo más ancho (mínimo 44): con cifras de 12 dígitos la etiqueta del eje Y
+  // se cortaba contra el borde. El color del texto es --muted (≥7:1) en vez del gris fijo #888780 (3,6:1 sobre blanco).
+  ctx.font="10px system-ui";
+  const padL=Math.max(44, Math.ceil(Math.max(...[0,1,2,3].map(i=>ctx.measureText(fmtEje(minV+(range*i/3))).width)))+8);
+  const cw=W-padL-padR, ch=H-padT-padB;
 
   const isDark=document.documentElement.getAttribute("data-theme")==="dark";
   const gridColor=isDark?"rgba(255,255,255,.08)":"rgba(0,0,0,.06)";
-  const textColor=isDark?"#9a9890":"#888780";
+  const textColor=themeColor("--muted")||(isDark?"#9a9890":"#888780");
 
   // Grid horizontal y labels Y
   ctx.fillStyle=textColor;
-  ctx.font="10px system-ui";
   ctx.textAlign="right";
   for(let i=0;i<=3;i++){
     const v=minV+(range*i/3);

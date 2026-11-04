@@ -259,9 +259,9 @@
 
 <!-- MODAL DETALLE DE INSTRUMENTO (Cartera → tocar un ticker) -->
 <div class="modal-overlay" id="modal-instrumento-detail" onclick="if(event.target===this)closeInstrumentoDetail()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:78vh;display:flex;flex-direction:column;padding-bottom:calc(20px + env(safe-area-inset-bottom))">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
-    <div id="instrumento-detail-content" style="overflow-y:auto;display:flex;flex-direction:column;gap:12px"></div>
+    <div id="instrumento-detail-content" class="inv-det"></div>
   </div>
 </div>
 
@@ -945,12 +945,12 @@
         <span class="mov-topbar-eyebrow">Inversiones</span>
         <span id="inv-mes-label" class="mov-topbar-label"></span>
       </div>
-      <button class="mov-topbar-arrow" id="inv-mes-next" onclick="cambiarMesInv(1)" aria-label="Mes siguiente">›</button>
+      <button class="mov-topbar-arrow" id="inv-mes-next" onclick="cambiarMesInv(1)" aria-label="Mes siguiente" disabled aria-disabled="true">›</button>
     </div>
     <div style="width:40px;flex-shrink:0"></div>
   </div>
   <div id="inv-summary"></div>
-  <div class="seg-filter" style="margin:14px 16px 0">
+  <div class="seg-filter" style="margin:14px 16px 0" role="group" aria-label="Qué mirar de tus inversiones">
     <button class="seg-btn" id="inv-tab-mes" onclick="setInvVista('mes')">Este mes</button>
     <button class="seg-btn" id="inv-tab-cart" onclick="setInvVista('cart')">Cartera</button>
     <button class="seg-btn" id="inv-tab-evo" onclick="setInvVista('evo')">Evolución</button>
@@ -958,8 +958,8 @@
   <div id="inv-movs" class="inv-panel"></div>
   <div id="inv-cartera" class="inv-panel"></div>
   <div id="inv-evo-panel" class="inv-panel inv-panel-pad">
-    <div id="inv-historico-kpis" style="display:flex;justify-content:space-between;align-items:center;gap:10px"></div>
-    <div style="position:relative;height:120px"><canvas id="chart-inv-historico"></canvas></div>
+    <div id="inv-historico-kpis" class="inv-evo-kpis"></div>
+    <div id="inv-evo-grafico" class="inv-evo-grafico"><canvas id="chart-inv-historico"></canvas></div>
     <div id="inv-top-tickers"></div>
   </div>
   <div style="height:24px"></div>
@@ -1120,11 +1120,11 @@
 
 <!-- HOJA: CONCILIAR CON EL BROKER -->
 <div class="modal-overlay" id="modal-concil" onclick="if(event.target===this)cerrarConciliacion()">
-  <div class="modal" role="dialog" aria-modal="true" style="max-height:88vh;overflow-y:auto">
+  <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-handle"></div>
-    <div class="modal-title">🔎 Fondo vs. broker</div>
+    <div class="modal-title"><span aria-hidden="true">🔎</span> Fondo vs. broker</div>
     <div id="concil-detalle"></div>
-    <button class="btn-sm" style="width:100%;margin-top:14px" onclick="cerrarConciliacion()">Cerrar</button>
+    <div class="concil-cerrar-barra"><button type="button" class="btn-sm concil-cerrar" onclick="cerrarConciliacion()">Cerrar</button></div>
   </div>
 </div>
 

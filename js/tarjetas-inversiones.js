@@ -1430,9 +1430,13 @@ function attachInvSwipe(container){
     };
     content.addEventListener("touchend", onEnd);
     content.addEventListener("touchcancel", onEnd);
+    // [AAA inversiones] Tocar la fila cerrada abre el editor (igual que en Movimientos: antes solo se podía editar deslizando, y con
+    // teclado o lector de pantalla no había forma; Enter/Espacio llegan como click por el listener de teclado de render-comun.js); si está abierta por el swipe, el toque la cierra.
     content.addEventListener("click", e=>{
-      if(openState!==0){ e.stopPropagation(); e.preventDefault(); cerrar(); }
+      if(openState!==0){ e.stopPropagation(); e.preventDefault(); cerrar(); return; }
+      openEditModal(id);
     }, true);
+
   });
 }
 
@@ -1440,8 +1444,10 @@ function renderInv(){
   const ymSel=mesInv;
   const hoyYM=currentYM();
   document.getElementById("inv-mes-label").textContent=mesLbl(ymSel);
+  // [AAA inversiones] En el mes actual la flecha › se deshabilita de verdad (disabled + aria-disabled) y el CSS la esconde sin mover
+  // el rótulo (antes: color --border a 1,24:1 y se anunciaba como activa).
   const nextBtn=document.getElementById("inv-mes-next");
-  if(nextBtn) nextBtn.style.color = (ymSel>=hoyYM) ? "var(--border)" : "var(--muted)";
+  if(nextBtn){ const tope=ymSel>=hoyYM; nextBtn.disabled=tope; nextBtn.setAttribute("aria-disabled", tope?"true":"false"); }
 
   ["mes","cart","evo"].forEach(v=>{
     const btn=document.getElementById("inv-tab-"+v);
@@ -1464,15 +1470,26 @@ function renderInv(){
   renderInvHistorico();
 }
 
+// [AAA inversiones] Estado vacío con título, guía y una salida (antes: una línea suelta, sin qué hacer). Reusa .empty de Movimientos.
+function invVacioHTML(icono, titulo, guia, conBoton){
+  return `<div class="empty"><div class="empty-icon" aria-hidden="true">${icono}</div><div class="empty-titulo">${titulo}</div>${guia?`<div class="empty-guia">${guia}</div>`:""}${conBoton?`<button type="button" class="btn-primary empty-cta" onclick="abrirCargaInversion()">Cargar una inversión</button>`:""}</div>`;
+}
+// Abre Cargar ya en el tipo Inversión (la salida de los vacíos).
+function abrirCargaInversion(){
+  abrirCarga();
+  setTipo("Inversion");
+}
+
 // Número grande del header: lo que se sumó (o se sacó) de la CARTERA en el mes (invSigno/sumInvNeto)
 function renderInvSummary(ymSel, invsMes){
   const el=document.getElementById("inv-summary");
   const netoARS=sumInvNeto(invsMes), netoUSD=sumInvNetoUSD(invsMes);
+  // Sin ninguna inversión cargada en toda la app no hay nada que resumir: la guía y el botón viven en el panel de abajo.
+  if(!movs.some(m=>m.tipo==="Inversion")){ el.innerHTML=""; return; }
   if(!invsMes.length){
-    el.innerHTML=`<div style="padding:18px 20px 4px;display:flex;flex-direction:column;align-items:center;gap:2px">
-      <span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Sin movimientos</span>
-      <span style="font-size:34px;font-weight:700;letter-spacing:-1.2px;color:var(--muted)">—</span>
-      <span style="font-size:12px;color:var(--muted);margin-top:4px">Cambiá de mes con ‹ ›</span>
+    el.innerHTML=`<div class="inv-hero">
+      <span class="inv-hero-lbl">Sin movimientos</span>
+      <span class="inv-hero-val inv-hero-vacio" aria-hidden="true">—</span>
     </div>`;
     return;
   }
@@ -1480,7 +1497,6 @@ function renderInvSummary(ymSel, invsMes){
   const principal = soloUsd ? netoUSD : netoARS;
   const heroUp = principal>=0;
   const lbl = heroUp ? "Sumaste a la cartera" : "Sacaste de la cartera";
-  const heroColor = heroUp ? "var(--invest)" : "var(--text)";
   const heroFmt = soloUsd ? "fmtInvNetoUsd" : "fmtInvNeto";
   const mostrarUsd = !soloUsd && netoUSD;
   const pusoArs=invsMes.filter(m=>!isInvSalida(m)).reduce((s,m)=>s+(m.importe||0),0);
@@ -1488,14 +1504,17 @@ function renderInvSummary(ymSel, invsMes){
   const cobroArs=invsMes.filter(isInvSalida).reduce((s,m)=>s+(m.importe||0),0);
   const cobroUsd=invsMes.filter(isInvSalida).reduce((s,m)=>s+(m.importeUSD||0),0);
   const partes=(a,u)=>[a?fmtS(a):"", u?fmtUsdInv(u):""].filter(Boolean).join(" y ");
-  const sub = (pusoArs||pusoUsd||cobroArs||cobroUsd)
-    ? `Pusiste ${partes(pusoArs,pusoUsd)||"—"} · Cobraste ${partes(cobroArs,cobroUsd)||"—"}`
-    : "Cambiá de mes con ‹ ›";
-  el.innerHTML=`<div style="padding:18px 20px 4px;display:flex;flex-direction:column;align-items:center;gap:2px">
-    <span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">${lbl}</span>
-    <span style="font-size:34px;font-weight:700;letter-spacing:-1.2px;color:${heroColor}" data-animar="${principal}" data-animar-fmt="${heroFmt}">${window[heroFmt](principal)}</span>
-    ${mostrarUsd?`<span style="font-size:13px;font-weight:600;color:${netoUSD>=0?"var(--invest)":"var(--text)"}" data-animar="${netoUSD}" data-animar-fmt="fmtInvNetoUsd">${fmtInvNetoUsd(netoUSD)}</span>`:""}
-    <span style="font-size:12px;color:var(--muted);margin-top:4px">${sub}</span>
+  // Solo se nombra lo que hubo: antes decía "Pusiste — · Cobraste $…" con un guion donde no hubo nada.
+  // Cada parte es un bloque que no se parte por la mitad; el punto medio queda al final de la primera, nunca al principio de una línea.
+  const trozos=[ (pusoArs||pusoUsd) ? `Pusiste ${partes(pusoArs,pusoUsd)}` : "", (cobroArs||cobroUsd) ? `Cobraste ${partes(cobroArs,cobroUsd)}` : "" ].filter(Boolean);
+  const sub=trozos.map((t,i)=>`<span class="inv-hero-trozo">${t}${i<trozos.length-1?" ·":""}</span>`).join(" ");
+  const txtPrincipal=window[heroFmt](principal);
+  // --n = largo de la cifra: el CSS la achica para que entre entera (mismo recurso que los mosaicos de Movimientos).
+  el.innerHTML=`<div class="inv-hero">
+    <span class="inv-hero-lbl">${lbl}</span>
+    <span class="inv-hero-val${heroUp?"":" baja"}" style="--n:${txtPrincipal.length}" data-animar="${principal}" data-animar-fmt="${heroFmt}">${txtPrincipal}</span>
+    ${mostrarUsd?`<span class="inv-hero-usd${netoUSD>=0?"":" baja"}" data-animar="${netoUSD}" data-animar-fmt="fmtInvNetoUsd">${fmtInvNetoUsd(netoUSD)}</span>`:""}
+    ${sub?`<span class="inv-hero-sub">${sub}</span>`:""}
   </div>`;
   animarNumerosDe(el);
 }
@@ -1504,21 +1523,24 @@ function renderInvSummary(ymSel, invsMes){
 function renderInvMovs(invsMes, ymSel){
   const el=document.getElementById("inv-movs");
   if(!invsMes.length){
-    el.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:28px 14px;margin:0">Sin movimientos en ${mesLbl(ymSel)}</p>`;
+    el.innerHTML = movs.some(m=>m.tipo==="Inversion")
+      ? invVacioHTML("📭", `Sin movimientos en ${escapeHtml(mesLbl(ymSel))}`, "No cargaste compras ni cobros este mes. Mirá otro mes con las flechas o cargá una inversión.", true)
+      : invVacioHTML("📈", "Todavía no cargaste inversiones", "Cuando cargues la compra de un fondo, acción o bono, vas a ver acá lo que pusiste y lo que cobraste cada mes.", true);
     return;
   }
-  el.innerHTML=invsMes.map((m,i)=>{
+  el.innerHTML=invsMes.map(m=>{
     const sale=isInvSalida(m);
-    return `<div class="inv-swipe" data-id="${m.id}" style="${i?"border-top:1px solid var(--border)":""}">
-      <div class="tx-swipe-bg tx-swipe-bg-left">✎ Editar</div>
-      <div class="tx-swipe-bg tx-swipe-bg-right">🗑 Eliminar</div>
-      <div class="inv-row inv-row-content">
-        <div class="inv-row-icon">${getIcon(m.cat,"📦")}</div>
+    const nombre=escapeHtml(`Editar ${invBadgeTxt(m).toLowerCase()} de ${m.ticker||"sin ticker"}, ${m.cat}, ${fdInv(m.fecha)}, ${invMontoTxt(m)}`);
+    return `<div class="inv-swipe" data-id="${m.id}">
+      <div class="tx-swipe-bg tx-swipe-bg-left" aria-hidden="true">✎ Editar</div>
+      <div class="tx-swipe-bg tx-swipe-bg-right" aria-hidden="true">🗑 Eliminar</div>
+      <div class="inv-row inv-row-content" role="button" tabindex="0" aria-label="${nombre}">
+        <div class="inv-row-icon" aria-hidden="true">${getIcon(m.cat,"📦")}</div>
         <div class="inv-row-mid">
           <div class="inv-row-top"><span class="inv-row-ticker">${escapeHtml(m.ticker||"?")}</span><span class="inv-row-badge ${sale?"sale":"entra"}">${invBadgeTxt(m)}</span></div>
-          <span class="inv-row-sub">${escapeHtml(m.cat)} · ${fdInv(m.fecha)}</span>
+          <span class="inv-row-sub"><span class="inv-row-cat">${escapeHtml(m.cat)}</span><span class="inv-row-fecha"> · ${fdInv(m.fecha)}</span></span>
         </div>
-        <span class="inv-row-amt" style="color:${sale?"var(--success)":"var(--text)"}">${invMontoTxt(m)}</span>
+        <span class="inv-row-amt${sale?" sale":""}">${invMontoTxt(m)}</span>
       </div>
     </div>`;
   }).join("");
@@ -1530,7 +1552,7 @@ function renderInvCartera(){
   const el=document.getElementById("inv-cartera");
   const allInv=movs.filter(m=>m.tipo==="Inversion");
   if(!allInv.length){
-    el.innerHTML=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:24px 14px;margin:0">Sin inversiones cargadas todavía</p>`;
+    el.innerHTML=invVacioHTML("📈", "Todavía no cargaste inversiones", "Cuando cargues la compra de un fondo, acción o bono, vas a ver acá cada posición con su monto.", true);
     return;
   }
   const porTicker={};
@@ -1552,36 +1574,39 @@ function renderInvCartera(){
   const ordenAbiertas=[...usdAb, ...arsAb];
   const totArs=arsAb.reduce((s,p)=>s+p.ars,0), totUsd=usdAb.reduce((s,p)=>s+p.usd,0);
 
-  let html=`<div style="padding:10px 14px 0;display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted)">
+  let html=`<div class="inv-cart-head">
     <span>${abiertas.length} ${abiertas.length===1?"posición":"posiciones"}</span>
-    <span>${totArs?`<strong style="color:var(--invest)">${fmtS(totArs)}</strong>`:""}${totArs&&totUsd?" · ":""}${totUsd?`<strong style="color:var(--invest)">${fmtUsdInv(totUsd)}</strong>`:""}</span>
+    <span class="inv-cart-tot">${totArs?`<strong>${fmtS(totArs)}</strong>`:""}${totArs&&totUsd?" · ":""}${totUsd?`<strong>${fmtUsdInv(totUsd)}</strong>`:""}</span>
   </div>`;
   if(!abiertas.length){
-    html+=`<p style="font-size:13px;color:var(--muted);text-align:center;padding:24px 14px;margin:0">Sin posiciones abiertas</p>`;
+    html+=`<p class="inv-vacio">Sin posiciones abiertas</p>`;
   } else {
-    html+=ordenAbiertas.map((p,i)=>{
+    html+=ordenAbiertas.map(p=>{
       const maxV = p.esUsd ? (usdAb[0]?usdAb[0].usd:1) : (arsAb[0]?arsAb[0].ars:1);
       const val = p.esUsd ? p.usd : p.ars;
       const pct = Math.max(0, Math.round(val/(maxV||1)*100));
       const share = p.esUsd ? pct+"% de tus USD" : pct+"% de tus $";
-      const tickerEsc=attrJS(p.ticker);
-      return `<div class="inv-row" style="${i?"border-top:1px solid var(--border)":""};cursor:pointer" onclick="showInstrumentoDetail(${tickerEsc})">
-        <div class="inv-row-icon">${getIcon(p.cat,"📦")}</div>
+      const valTxt = p.esUsd?fmtUsdInv(p.usd):fmtS(p.ars);
+      const abrir=`showInstrumentoDetail(${attrJS(p.ticker)})`;
+      return `<div class="inv-row inv-row-tap" role="button" tabindex="0" aria-label="${escapeHtml(`Ver el detalle de ${p.ticker}, ${valTxt}`)}" onclick="${abrir}">
+        <div class="inv-row-icon" aria-hidden="true">${getIcon(p.cat,"📦")}</div>
         <div class="inv-pos-col">
-          <div class="inv-pos-top"><span class="inv-row-ticker">${escapeHtml(p.ticker)}</span><span style="font-size:14px;font-weight:600">${p.esUsd?fmtUsdInv(p.usd):fmtS(p.ars)}</span></div>
+          <div class="inv-pos-top"><span class="inv-row-ticker">${escapeHtml(p.ticker)}</span><span class="inv-pos-val">${valTxt}</span></div>
           <div class="inv-pos-bar-row"><div class="inv-pos-track"><div class="inv-pos-fill" style="width:${pct}%"></div></div><span class="inv-pos-share">${share}</span></div>
         </div>
       </div>`;
     }).join("");
   }
   if(cerradas.length){
-    html+=`<button type="button" class="inv-cerradas-link" data-cerrado="1" data-n="${cerradas.length}" onclick="toggleInvCerradas(this)">Ver ${cerradas.length} ${cerradas.length===1?"posición cerrada":"posiciones cerradas"} ›</button>
-      <div class="inv-cerradas-lista" style="display:none">`+cerradas.map((p,i)=>{
+    html+=`<button type="button" class="inv-cerradas-link" data-cerrado="1" data-n="${cerradas.length}" aria-expanded="false" onclick="toggleInvCerradas(this)">Ver ${cerradas.length} ${cerradas.length===1?"posición cerrada":"posiciones cerradas"} ›</button>
+      <div class="inv-cerradas-lista" style="display:none">`+cerradas.map(p=>{
         const val = p.esUsd ? p.usd : p.ars;
-        return `<div class="inv-row" style="${i?"border-top:1px solid var(--border)":""};cursor:pointer;color:var(--muted)" onclick="showInstrumentoDetail(${attrJS(p.ticker)})">
-          <div class="inv-row-icon">${getIcon(p.cat,"📦")}</div>
-          <div class="inv-row-mid"><span class="inv-row-ticker" style="color:var(--muted)">${escapeHtml(p.ticker)}</span><span class="inv-row-sub">${escapeHtml(p.cat)}</span></div>
-          <span style="font-size:13px;color:var(--muted)">${p.esUsd?fmtUsdInv(val):fmtS(val)}</span>
+        const valTxt = p.esUsd?fmtUsdInv(val):fmtS(val);
+        const abrir=`showInstrumentoDetail(${attrJS(p.ticker)})`;
+        return `<div class="inv-row inv-row-tap" role="button" tabindex="0" aria-label="${escapeHtml(`Ver el detalle de ${p.ticker} (cerrada), ${valTxt}`)}" onclick="${abrir}">
+          <div class="inv-row-icon" aria-hidden="true">${getIcon(p.cat,"📦")}</div>
+          <div class="inv-row-mid"><span class="inv-row-ticker">${escapeHtml(p.ticker)}</span><span class="inv-row-sub">${escapeHtml(p.cat)}</span></div>
+          <span class="inv-pos-val">${valTxt}</span>
         </div>`;
       }).join("")+`</div>`;
   }
@@ -1593,6 +1618,7 @@ function toggleInvCerradas(btn){
   const abrir=btn.dataset.cerrado==="1";
   panel.style.display=abrir?"":"none";
   btn.dataset.cerrado=abrir?"0":"1";
+  btn.setAttribute("aria-expanded", abrir?"true":"false");
   btn.textContent=abrir?"Ocultar posiciones cerradas ‹":`Ver ${btn.dataset.n} ${btn.dataset.n==="1"?"posición cerrada":"posiciones cerradas"} ›`;
 }
 
@@ -1605,25 +1631,38 @@ function setInvEvoCur(c){
   invEvoChartSel={v:null};
   renderInvHistorico();
 }
+// [AAA inversiones] Etiquetas del eje Y compactas (K / M) y en la moneda elegida: con 12 dígitos la etiqueta entera se cortaba contra el borde.
+function fmtEjeInv(pref){
+  return v=>{
+    const abs=Math.abs(v), sg=v<0?"−":"";
+    const num=(n,dec)=>n.toLocaleString("es-AR",{maximumFractionDigits:dec});
+    if(abs>=1e6) return sg+pref+num(abs/1e6, abs>=1e8?0:1)+"M";
+    if(abs>=1e3) return sg+pref+num(abs/1e3, 0)+"K";
+    return sg+pref+num(abs,0);
+  };
+}
 function renderInvHistorico(){
   const allInv=movs.filter(m=>m.tipo==="Inversion");
   const kpisEl=document.getElementById("inv-historico-kpis");
   const canvas=document.getElementById("chart-inv-historico");
   const topEl=document.getElementById("inv-top-tickers");
+  const cajaGrafico=document.getElementById("inv-evo-grafico");
   if(!kpisEl||!canvas||!topEl) return;
 
   if(!allInv.length){
-    kpisEl.innerHTML=`<p style="font-size:13px;color:var(--muted);margin:0">Sin inversiones cargadas</p>`;
+    kpisEl.innerHTML=invVacioHTML("📈", "Todavía no cargaste inversiones", "Cuando cargues la compra de un fondo, acción o bono, vas a ver acá cómo crece lo que invertiste mes a mes.", true);
+    if(cajaGrafico) cajaGrafico.style.display="none";
     canvas.getContext("2d").clearRect(0,0,canvas.width,canvas.height);
     topEl.innerHTML="";
     return;
   }
+  if(cajaGrafico) cajaGrafico.style.display="";
 
-  kpisEl.innerHTML=`<div class="inv-cur-pills">
-      <button type="button" class="inv-cur-btn${invEvoCur==="ars"?" active":""}" onclick="setInvEvoCur('ars')">Pesos</button>
-      <button type="button" class="inv-cur-btn${invEvoCur==="usd"?" active":""}" onclick="setInvEvoCur('usd')">Dólares</button>
+  kpisEl.innerHTML=`<div class="inv-cur-pills" role="group" aria-label="Moneda del gráfico">
+      <button type="button" class="inv-cur-btn${invEvoCur==="ars"?" active":""}" aria-pressed="${invEvoCur==="ars"}" onclick="setInvEvoCur('ars')">Pesos</button>
+      <button type="button" class="inv-cur-btn${invEvoCur==="usd"?" active":""}" aria-pressed="${invEvoCur==="usd"}" onclick="setInvEvoCur('usd')">Dólares</button>
     </div>
-    <div id="inv-evo-lectura" style="display:flex;flex-direction:column;align-items:flex-end"></div>`;
+    <div id="inv-evo-lectura" class="inv-evo-lectura"></div>`;
 
   // Acumulado mensual en perspectiva CARTERA (invSigno), en la moneda elegida — nunca se suma
   // ARS con USD. Meses sin movimiento se completan en 0 para que el eje no mienta sobre el tiempo.
@@ -1640,15 +1679,18 @@ function renderInvHistorico(){
   const values=serie.map(d=>{ acum+=d.monto; return Math.round(acum*100)/100; });
 
   const tipEl=document.getElementById("inv-evo-lectura");
-  const fmtLinea=(ym,v)=>`<span style="font-size:11px;color:var(--muted)">Invertido a fin de ${mesLbl(ym).split(" ")[0]}</span>
-    <span style="font-size:15px;font-weight:700;color:var(--invest)">${invEvoCur==="usd"?fmtUsdInv(v):fmtTotal(v)}</span>`;
+  const fmtLinea=(ym,v)=>`<span class="inv-evo-lbl">Invertido a fin de ${mesLbl(ym).split(" ")[0]}</span>
+    <span class="inv-evo-val">${invEvoCur==="usd"?fmtUsdInv(v):fmtTotal(v)}</span>`;
   // El eje Y también tiene que hablar en la moneda elegida: un "$552" en la vista Dólares sería
   // plata que no es (regla del handoff: pesos y dólares nunca se mezclan ni se confunden). Sin
   // el prefijo "USD" (el pill de arriba ya aclara la moneda): con él, el texto no entraba en
   // los 44px del margen izquierdo del gráfico y se recortaba.
-  const fmtEjeUsd=v=>Math.abs(v).toLocaleString("es-AR",{maximumFractionDigits:0});
   drawInteractiveLine(canvas, labels, values, themeColor("--invest"), tipEl, fmtLinea, invEvoChartSel,
-    invEvoCur==="usd" ? fmtEjeUsd : undefined);
+    fmtEjeInv(invEvoCur==="usd" ? "" : "$"));
+  // El gráfico es un <canvas>: sin texto alternativo un lector de pantalla no recibe nada. La lectura de arriba cambia al tocar un punto.
+  const ultimo=values.length-1;
+  canvas.setAttribute("role","img");
+  canvas.setAttribute("aria-label",`Gráfico de lo invertido en ${invEvoCur==="usd"?"dólares":"pesos"}, acumulado mes a mes, de ${mesLbl(labels[0])} a ${mesLbl(labels[ultimo])}. A fin de ${mesLbl(labels[ultimo])}: ${invEvoCur==="usd"?fmtUsdInv(values[ultimo]):fmtTotal(values[ultimo])}.`);
 
   // "Dónde más pusiste": top 3 tickers de la moneda elegida (perspectiva cartera)
   const porTicker={};
@@ -1665,12 +1707,12 @@ function renderInvHistorico(){
     .slice(0,3);
   if(topItems.length){
     const maxV=topItems[0].val;
-    topEl.innerHTML=`<div style="border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:8px">
-      <span style="font-size:12px;font-weight:600;color:var(--muted)">Dónde más pusiste</span>`+
-      topItems.map(p=>`<div style="display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:center">
-        <span style="font-size:12.5px;font-weight:700;letter-spacing:.3px">${escapeHtml(p.ticker)}</span>
-        <div style="height:6px;border-radius:3px;background:var(--border);overflow:hidden"><div style="height:100%;width:${Math.round(p.val/maxV*100)}%;background:var(--invest)"></div></div>
-        <span style="font-size:12.5px;font-weight:600;min-width:80px;text-align:right">${invEvoCur==="usd"?fmtUsdInv(p.val):fmtS(p.val)}</span>
+    topEl.innerHTML=`<div class="inv-top">
+      <span class="inv-top-tit">Dónde más pusiste</span>`+
+      topItems.map(p=>`<div class="inv-top-row">
+        <span class="inv-top-tick">${escapeHtml(p.ticker)}</span>
+        <div class="inv-top-track"><div class="inv-top-fill" style="width:${Math.round(p.val/maxV*100)}%"></div></div>
+        <span class="inv-top-val">${invEvoCur==="usd"?fmtUsdInv(p.val):fmtS(p.val)}</span>
       </div>`).join("")+`</div>`;
   } else {
     topEl.innerHTML="";
@@ -1679,12 +1721,14 @@ function renderInvHistorico(){
 
 function borrarMovInv(id,btn){
   if(btn && btn.dataset.confirm!=="1"){
+    // [AAA inversiones] Pide confirmar con un texto que se lee (antes: rojo sobre el fondo rojo del botón, "?", y a los 2,5 s el
+    // rótulo quedaba como "×" en vez de "🗑 Eliminar").
     btn.dataset.confirm="1";
-    btn.style.color="var(--danger)";
-    btn.style.fontWeight="bold";
-    btn.textContent="?";
+    btn.dataset.txt=btn.textContent;
+    btn.classList.add("confirmando");
+    btn.textContent="¿Seguro?";
     setTimeout(()=>{
-      if(btn){btn.dataset.confirm="0";btn.style.color="";btn.style.fontWeight="";btn.textContent="×";}
+      if(btn){btn.dataset.confirm="0";btn.classList.remove("confirmando");btn.textContent=btn.dataset.txt||"🗑 Eliminar";}
     },2500);
     return;
   }
