@@ -933,8 +933,9 @@ input[style*="outline:none"]:focus-visible{outline:2px solid var(--focus)!import
 #page-cargar .card .form-select{background-color:var(--bg)}
 .mes-corto .form-select{padding-left:12px;padding-right:24px}
 /* Cargar: Categoría lleva el nombre más largo ("🛒 Supermercado ⭐" = 140 px) y es obligatoria; Subcategoría es opcional: se reparte el ancho
-   1,7 / 1 para que la categoría más común entre entera a 360 px (con 1/1 se leía "Supermer…"). */
-#page-cargar .two-col:has(#inp-cat){grid-template-columns:1.7fr 1fr}
+   1,5 / 1 (y relleno lateral de 10/22) para que la categoría más común entre entera a 360 px (con 1/1 se leía "Supermer…"). */
+#page-cargar .two-col:has(#inp-cat){grid-template-columns:1.5fr 1fr}
+#page-cargar .two-col:has(#inp-cat) .form-select{padding-left:10px;padding-right:22px;background-position:right 7px center}
 .chk-custom{background:var(--border-strong)}
 .chk-custom:checked{background:var(--chk,var(--accent))}
 /* Base de componentes: botón = mismo radio que el input; el "Ver" de un aviso no debe pesar más que el aviso. */
@@ -953,8 +954,8 @@ input[style*="outline:none"]:focus-visible{outline:2px solid var(--focus)!import
 /* !important en las tres reglas siguientes: pisan colores escritos en línea por el JS/HTML (style="background:var(--warning)…",
    style="color:#fff", la cifra de 34 px). Botón ámbar sólido = ámbar vivo con texto oscuro; en oscuro los rellenos son claros y el
    blanco fijo no se lee, así que decide --on-solid; la cifra grande de Tarjetas usa el ámbar vivo (texto grande: alcanzan 3:1). */
-button[style*="background:var(--warning)"]{background:var(--warning-solid)!important;color:var(--on-warning-solid)!important}
 button[style*="color:#fff"],label.btn-primary[style*="color:#fff"],button[style*="color: rgb(255, 255, 255)"]{color:var(--on-solid)!important}
+button[style*="background:var(--warning)"]{background:var(--warning-solid)!important;color:var(--on-warning-solid)!important}
 div[style*="font-size:34px"][style*="color:var(--warning)"]{color:var(--warning-fill)!important}
 /* La barra del mes elegido en la línea de tiempo de Tarjetas lleva el ámbar vivo (relleno). !important: su fondo viene en línea desde el JS. */
 .tc-col[aria-pressed="true"] .tc-col-bar{background-color:var(--warning-fill)!important}
