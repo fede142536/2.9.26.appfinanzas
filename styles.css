@@ -9,29 +9,28 @@
    uno nuevo, se define en :root Y en [data-theme="dark"].
 
    COLOR · cada par tiene un tono de TEXTO (--accent, --danger…) y un fondo suave (-light).
-     --text     texto principal                 17:1 claro · 14:1 oscuro
-     --muted    texto atenuado (rótulos, notas)   7,6:1 sobre blanco · 7,1:1 sobre la tarjeta oscura
-     --accent   azul · acción, selección, enlaces     (6,8:1 · 7,3:1)
-     --danger   rojo · gasto, error, borrar            (8,0:1 · 6,7:1)
-     --success  verde · ingreso, ok                    (6,6:1 · 8,5:1)
-     --warning  ámbar · tarjeta, aviso                 (6,3:1 · 8,0:1)  [en claro es un ocre naranja: el ámbar vivo no llega a 4,5:1 como texto]
-     --warning-fill   ámbar vivo para RELLENOS sin texto (barras de progreso), ≥3:1 sobre la tarjeta.
-     --warning-solid + --on-warning-solid   botón ámbar con texto oscuro (ámbar vivo #e0a030, 7,5:1)
-     Texto GRANDE en ámbar (la cifra de Tarjetas, ≥24 px): --warning-fill (3,8:1 sobre blanco, 3,5:1 sobre --bg).: así el botón conserva la calidez.
-   --invest   violeta · inversión                    (7,8:1 · 6,9:1)
-     --save     teal · ahorro                          (7,4:1 · 8,5:1)
-     Los 6 tonos de texto cumplen AA (≥4,5:1) sobre --bg, --surface y todos los -light, en ambos temas.
-   --on-solid   color del texto SOBRE un relleno sólido semántico (botón, chip activo): blanco en claro,
-                casi negro en oscuro (los tonos del oscuro son claros). Nunca escribas color:var(--on-solid) sobre un relleno.
+     --text     texto principal                         17:1 claro · 14:1 oscuro
+     --muted    texto atenuado (rótulos, notas)         7,6:1 sobre blanco · 7,1:1 sobre la tarjeta oscura
+     --accent   azul · acción, selección, enlaces       8,2:1 · 9,0:1
+     --danger   rojo · gasto, error, borrar             8,1:1 · 8,0:1
+     --success  verde · ingreso, ok                     8,0:1 · 9,5:1
+     --warning  ámbar · tarjeta, aviso                  6,3:1 · 9,0:1   (en claro es un ocre naranja: el ámbar vivo no llega a 4,5:1 como texto)
+     --invest   violeta · inversión                     8,2:1 · 8,1:1
+     --save     teal · ahorro                           8,1:1 · 9,5:1
+     (contraste sobre blanco en claro · sobre la tarjeta #1c1c1e en oscuro). Los 6 tonos cumplen AA (≥4,5:1) sobre --bg,
+     --surface y todos los -light en ambos temas. Sobre su propio fondo suave (-light) llegan a ≥7:1 (AAA) en los dos temas,
+     salvo el ámbar en claro (5,5:1): más oscuro dejaría de verse ámbar y pasaría a marrón.
+   --warning-fill     ámbar vivo para RELLENOS sin texto (barras) y texto GRANDE ≥24 px (la cifra de Tarjetas): 3,8:1 sobre blanco.
+   --warning-solid + --on-warning-solid   botón ámbar con texto oscuro (ámbar vivo #e0a030, 7,5:1): conserva la calidez.
+   --on-solid   texto SOBRE un relleno sólido semántico (botón, chip activo): blanco en claro, casi negro en oscuro (los tonos
+                del oscuro son claros). Nunca escribas un blanco fijo sobre un relleno semántico.
+   --muted-on-tint  texto chico atenuado SOBRE fondos tintados (track de segmentados, chips, mosaicos): ≥7:1 en ambos temas.
+   --border         divisor decorativo (líneas, fondo de segmentados). No lo uses como único borde de un control.
+   --border-mid     borde de botones con texto (el texto ya los identifica): .btn-sm.
    --border-strong  borde de controles (inputs, interruptor apagado): ≥3:1 sobre la tarjeta (WCAG 1.4.11).
-   --surface-2  superficie elevada SOBRE un fondo --border (segmento activo de un segmentado, píldora activa): blanco en claro, gris #3a3a3c en oscuro.
-   --muted-on-tint  texto chico atenuado SOBRE fondos tintados (track de segmentados, chips, mosaicos): ≥7:1 en claro, ≥6,8:1 en oscuro.
+   --surface-2      superficie elevada SOBRE un fondo --border (segmento activo, píldora activa): blanco / #3a3a3c.
    --banner-bg/-fg  cartel de "versión vieja" (index.html, estilos en línea a propósito: tiene que verse aunque el CSS esté viejo).
-   --muted-on-tint  texto chico atenuado SOBRE fondos tintados (track de segmentados, chips, mosaicos): ≥7:1 en claro, ≥6,8:1 en oscuro.
-   --banner-bg/-fg  cartel de "versión vieja" (index.html, estilos en línea a propósito: tiene que verse aunque el CSS esté viejo).
-   --border-mid  borde de botones con texto (el texto ya los identifica; no exigen 3:1): botón secundario .btn-sm.
-   --border     divisor decorativo (líneas, fondo de segmentados). No lo uses como único borde de un control.
-   --focus      anillo de foco del teclado.
+   --focus          anillo de foco del teclado.
 
    FORMA · radios: --radius-sm 8 (botones chicos) · --radius-md 12 (inputs, botones) · --radius 14 (tarjetas)
            --radius-lg 20 (hojas modales) · --radius-pill 999 (chips, píldoras).
@@ -40,15 +39,18 @@
    ESPACIADO · grilla de 4 px: --sp-1 4 · --sp-2 8 · --sp-3 12 · --sp-4 16 (margen lateral de página) · --sp-5 24 · --sp-6 32.
    TIPOGRAFÍA · Plus Jakarta Sans. Escala corta: --fs-micro 10 · --fs-xs 11 · --fs-sm 12 · --fs-md 13 ·
            --fs-base 15 (cuerpo, inputs) · --fs-lg 17 (títulos de pantalla) · --fs-xl 22 · --fs-hero 44 (importe).
-           Cifras siempre tabulares (ya está en body). Hoy la escala es el OBJETIVO: quedan tamaños sueltos en reglas de cada pantalla (aaa/sistema/TAMANOS_SUELTOS.md). Pesos: 400 cuerpo · 500 énfasis · 600 rótulos y botones · 700 cifras y títulos.
+           Cifras siempre tabulares (ya está en body). La escala es el OBJETIVO: quedan tamaños sueltos en reglas de cada pantalla
+           (aaa/sistema/TAMANOS_SUELTOS.md). Pesos: 400 cuerpo · 500 énfasis · 600 rótulos y botones · 700 cifras y títulos.
    TÁCTIL · --tap 44px: todo lo que se toca mide (o tiene área clicable de) 44×44. Ver el bloque [AAA sistema] más abajo.
    ═══════════════════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#f7f6f2;--surface:#fff;--border:#e8e5df;--border-strong:#8a887f;--border-mid:#b8b5ab;--text:#1a1a18;--muted:#55544d;
-  --accent:#175e96;--accent-light:#e5f0fb;--danger:#962828;--danger-light:#fcebeb;
-  --success:#226a33;--success-light:#e8f5eb;--warning:#924f00;--warning-fill:#b87410;--warning-solid:#e0a030;--on-warning-solid:#2a1800;--muted-on-tint:#4a493f;--banner-bg:#924f00;--banner-fg:#fff;--warning-light:#faeeda;
-  --invest:#4b43ab;--invest-light:#eeedfe;--save:#175f5f;--save-light:#e0f5f5;
-  --surface-2:#fff;--on-solid:#fff;--focus:var(--accent);--grad-fin:black;
+  --bg:#f7f6f2;--surface:#fff;--surface-2:#fff;--border:#e8e5df;--border-mid:#b8b5ab;--border-strong:#8a887f;
+  --text:#1a1a18;--muted:#55544d;--muted-on-tint:#4a493f;
+  --accent:#145283;--accent-light:#e5f0fb;--danger:#942727;--danger-light:#fcebeb;
+  --success:#1e5c2c;--success-light:#e8f5eb;--warning:#924f00;--warning-light:#faeeda;
+  --invest:#4841a5;--invest-light:#eeedfe;--save:#165959;--save-light:#e0f5f5;
+  --warning-fill:#b87410;--warning-solid:#e0a030;--on-warning-solid:#2a1800;
+  --on-solid:#fff;--focus:var(--accent);--grad-fin:black;--banner-bg:#924f00;--banner-fg:#fff;
   --radius:14px;--radius-sm:8px;--radius-md:12px;--radius-lg:20px;--radius-pill:999px;
   --shadow:0 8px 24px rgba(0,0,0,.05);--shadow-sm:0 1px 3px rgba(0,0,0,.12);--shadow-pop:0 10px 30px rgba(0,0,0,.18);
   --surface-glass:rgba(255,255,255,.82);
@@ -60,11 +62,13 @@
   color-scheme:light;
 }
 [data-theme="dark"]{
-  --bg:#000000;--surface:#1c1c1e;--border:rgba(255,255,255,.1);--border-strong:#727275;--border-mid:rgba(255,255,255,.26);--text:#e8e6e0;--muted:#aaa8a0;
-  --accent:#66b0ee;--accent-light:#1d3045;--danger:#ee8383;--danger-light:#3a2020;
-  --success:#84c68e;--success-light:#1f3322;--warning:#e5a652;--warning-fill:#e5a652;--warning-solid:#e5a652;--on-warning-solid:#0b0b0c;--muted-on-tint:#c2c0b8;--banner-bg:#e5a652;--banner-fg:#0b0b0c;--warning-solid:#e5a652;--on-warning-solid:#0b0b0c;--muted-on-tint:#c2c0b8;--banner-bg:#e5a652;--banner-fg:#0b0b0c;--warning-light:#3a2c18;
-  --invest:#a69ce8;--invest-light:#26223a;--save:#66c6c6;--save-light:#1a3535;
-  --surface-2:#3a3a3c;--on-solid:#0b0b0c;--grad-fin:white;
+  --bg:#000000;--surface:#1c1c1e;--surface-2:#3a3a3c;--border:rgba(255,255,255,.1);--border-mid:rgba(255,255,255,.26);--border-strong:#727275;
+  --text:#e8e6e0;--muted:#aaa8a0;--muted-on-tint:#d2d0c8;
+  --accent:#88c3f3;--accent-light:#1d3045;--danger:#f19a9a;--danger-light:#3a2020;
+  --success:#96cf9f;--success-light:#1f3322;--warning:#e9b36c;--warning-light:#3a2c18;
+  --invest:#b3abeb;--invest-light:#26223a;--save:#7dcfcf;--save-light:#1a3535;
+  --warning-fill:#e5a652;--warning-solid:#e5a652;--on-warning-solid:#0b0b0c;
+  --on-solid:#0b0b0c;--grad-fin:white;--banner-bg:#e5a652;--banner-fg:#0b0b0c;
   --shadow:0 8px 24px rgba(0,0,0,.6);--shadow-sm:0 1px 3px rgba(0,0,0,.5);--shadow-pop:0 10px 30px rgba(0,0,0,.7);
   --surface-glass:rgba(28,28,30,.78);
   color-scheme:dark;
@@ -882,7 +886,9 @@ canvas{width:100%!important;max-width:100%}
    [AAA sistema] REGLAS GLOBALES
    ═══════════════════════════════════════════
    Reglas transversales (tacto, foco, selección, safe areas, estados). Van acá, antes del bloque de
-   movimiento reducido, para pisar a los componentes sin tocar sus reglas. Los tokens están al principio. */
+   movimiento reducido, para pisar a los componentes sin tocar sus reglas. Los tokens están al principio.
+   !important: solo donde hay que pisar un style="" escrito en línea (HTML o JS), que no se puede ganar de otra forma.
+   Cada uno lleva su motivo en el comentario de arriba. El resto se gana por especificidad. */
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:manipulation;scroll-padding-top:64px}
 body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow-wrap:break-word}
 ::selection{background:var(--accent-light);color:var(--text)}
@@ -891,20 +897,27 @@ body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overfl
    Plus Jakarta es más ancha que la del sistema: lo que no entra se corta con "…" en vez de quedar mocho. */
 button,input,select,textarea{font-family:inherit;letter-spacing:inherit;font-variant-numeric:inherit}
 input,select{text-overflow:ellipsis}
-.type-btn{word-spacing:.25em}
+/* Selector de tipo de Cargar: la etiqueta entera tiene que entrar en la píldora a 360 px (los botones tienen overflow:hidden, y el
+   texto es un solo nodo: no admite gap). Plus Jakarta tiene el espacio más angosto que la fuente del sistema: se le devuelve aire a
+   "↑ Gasto", "↓ Ingreso", "◈ Inv.", "▣ Tarj."; "💱 Cambio" ya lo trae del propio emoji y es el que más justo entra (60,4 de 63 a 360 px). */
+#page-cargar>.type-toggle .type-btn{padding-inline:0;min-height:var(--tap)}
+#page-cargar>.type-toggle .type-btn:not(#btn-cambio){word-spacing:.2em}
 /* Un control deshabilitado se ve apagado y no engaña al dedo (vale para disabled y para aria-disabled="true").
    Los botones-ícono pierden también el fondo de :active. */
 button:disabled,.btn-primary:disabled,.btn-sm:disabled,input:disabled,select:disabled,[aria-disabled="true"]{opacity:.4;cursor:default}
 button:disabled:active,button[aria-disabled="true"]:active{transform:none;background-color:transparent}
 button:disabled,button[aria-disabled="true"]{-webkit-user-select:none;user-select:none}
 /* FOCO del teclado. Una sola regla para todo campo y botón: anillo de 2px (--focus) con separación.
-   Los campos de la app apagan el outline de :focus a propósito (usan borde + halo); acá se vuelve a dar una señal ≥3:1 con
-   :focus-visible. El !important es por los inputs con outline:none escrito en línea (monto de depósito). */
-input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--focus)!important;outline-offset:1px}
+   Los campos de la app apagan el outline de :focus a propósito (usan borde + halo); acá se vuelve a dar una señal ≥3:1 con :focus-visible. */
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
+/* !important: hay inputs con style="outline:none" en línea (monto de depósito). */
+input[style*="outline:none"]:focus-visible{outline:2px solid var(--focus)!important}
 .form-input:focus-visible,.form-select:focus-visible,.form-textarea:focus-visible{border-color:var(--focus)}
-#page-cargar .card .form-input:focus-visible,#page-cargar .card .form-select:focus-visible,#page-cargar .card .form-textarea:focus-visible,
-#page-cargar .amount-hero .amount-input:focus-visible{border-color:var(--tema-color,var(--accent));outline-color:var(--tema-color,var(--accent))!important}
-#page-cargar .amount-hero .amount-input:focus-visible{outline-offset:6px;border-radius:var(--radius-sm)}
+#page-cargar .card .form-input:focus-visible,#page-cargar .card .form-select:focus-visible,#page-cargar .card .form-textarea:focus-visible{border-color:var(--tema-color,var(--accent));outline-color:var(--tema-color,var(--accent))}
+/* Monto de Cargar: el input es chico y sin borde; el anillo va alrededor de TODO el monto (prefijo + cifra), con el color del tipo. */
+#page-cargar .amount-hero{width:fit-content;margin-inline:auto;padding-inline:var(--sp-4);border-radius:var(--radius-md)}
+#page-cargar .amount-hero:has(.amount-input:focus-visible){outline:2px solid var(--tema-color,var(--accent));outline-offset:0}
+#page-cargar .amount-hero .amount-input:focus,#page-cargar .amount-hero .amount-input:focus-visible{outline:none;box-shadow:none}
 .mov-search-row input:focus-visible{border-color:var(--focus)}
 .btn-primary:focus-visible,.filter-chip.active:focus-visible,.year-tab.active:focus-visible{outline-color:var(--text)}
 /* Campos: borde ≥3:1 (WCAG 1.4.11), alto táctil, placeholder legible. */
@@ -914,13 +927,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 #page-cargar .card .form-input,#page-cargar .card .form-select,#page-cargar .card .form-textarea{border-color:var(--border-strong)}
 /* Select: flecha propia (la nativa está apagada con appearance:none y no se veía que fuera desplegable), y el texto largo
    termina en "…" sin pisar la flecha. El trazo de la flecha es --muted en cada tema. */
-.form-select{padding-right:28px;text-overflow:ellipsis;white-space:nowrap;background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;
+.form-select,#page-cargar .card .form-select{padding-right:24px;text-overflow:ellipsis;white-space:nowrap;background-repeat:no-repeat;background-position:right 8px center;background-size:12px 8px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2355544d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
-[data-theme="dark"] .form-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aaa8a0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
-#page-cargar .card .form-select{padding-right:28px;background-color:var(--bg);background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2355544d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
-[data-theme="dark"] #page-cargar .card .form-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aaa8a0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
-.mes-corto .form-select{padding-right:30px}
+[data-theme="dark"] .form-select,[data-theme="dark"] #page-cargar .card .form-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23aaa8a0' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#page-cargar .card .form-select{background-color:var(--bg)}
+.mes-corto .form-select{padding-left:12px;padding-right:24px}
+/* Cargar: Categoría lleva el nombre más largo ("🛒 Supermercado ⭐" = 140 px) y es obligatoria; Subcategoría es opcional: se reparte el ancho
+   1,7 / 1 para que la categoría más común entre entera a 360 px (con 1/1 se leía "Supermer…"). */
+#page-cargar .two-col:has(#inp-cat){grid-template-columns:1.7fr 1fr}
 .chk-custom{background:var(--border-strong)}
 .chk-custom:checked{background:var(--chk,var(--accent))}
 /* Base de componentes: botón = mismo radio que el input; el "Ver" de un aviso no debe pesar más que el aviso. */
@@ -932,20 +946,25 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px soli
 .toast{top:calc(var(--sp-4) + var(--safe-t))}
 #fab-cargar{right:calc(var(--sp-5) + var(--safe-r))}
 #fab-calculadora{right:calc(var(--sp-4) + var(--safe-r))}
-/* Piso de legibilidad: nada de texto por debajo de 10 px. Texto chico sobre fondos tintados: --muted-on-tint (≥7:1). */
-.seg-btn,.seg-btn-count,.tx-cuenta,.mov-mosaic-sub,.currency-pill,.date-chip{color:var(--muted-on-tint)}
+/* Texto chico atenuado sobre fondos tintados: --muted-on-tint (≥7:1). */
+.seg-btn,.seg-btn-count,.tx-cuenta,.mov-mosaic-sub,.currency-pill,.date-chip,.type-btn,.cierre-x,.tc-col-lbl{color:var(--muted-on-tint)}
 .seg-btn.active,.currency-pill.active{color:var(--text);background:var(--surface-2)}
 .tx-del{color:var(--muted)}
-/* Botón ámbar sólido: el ámbar vivo con texto oscuro (también los escritos en línea con background:var(--warning)). */
-/* Cifra protagonista en ámbar (texto grande: alcanza con 3:1): el ámbar vivo en vez del ocre de texto chico. */
-div[style*="font-size:34px"][style*="color:var(--warning)"]{color:var(--warning-fill)!important}
+/* !important en las tres reglas siguientes: pisan colores escritos en línea por el JS/HTML (style="background:var(--warning)…",
+   style="color:#fff", la cifra de 34 px). Botón ámbar sólido = ámbar vivo con texto oscuro; en oscuro los rellenos son claros y el
+   blanco fijo no se lee, así que decide --on-solid; la cifra grande de Tarjetas usa el ámbar vivo (texto grande: alcanzan 3:1). */
 button[style*="background:var(--warning)"]{background:var(--warning-solid)!important;color:var(--on-warning-solid)!important}
+button[style*="color:#fff"],label.btn-primary[style*="color:#fff"],button[style*="color: rgb(255, 255, 255)"]{color:var(--on-solid)!important}
+div[style*="font-size:34px"][style*="color:var(--warning)"]{color:var(--warning-fill)!important}
+/* La barra del mes elegido en la línea de tiempo de Tarjetas lleva el ámbar vivo (relleno). !important: su fondo viene en línea desde el JS. */
+.tc-col[aria-pressed="true"] .tc-col-bar{background-color:var(--warning-fill)!important}
 
 /* OBJETIVOS TÁCTILES (≥44×44). Hay TRES herramientas, según dónde viva el control:
    1) Botones-ícono: el elemento mide 44.
    2) Chips y botones chicos DENTRO de un contenedor con scroll u overflow:hidden (.filter-row, .year-tabs, .tc-res): un halo ::after
-      se recorta ahí, así que la caja es REAL: 44 de alto con bordes transparentes de 8 px, y el dibujo (28 px) se pinta solo en
-      el área del padding (background-clip) con el aro como sombra interior. Se ve igual que antes y se toca en 44.
+      se recorta ahí, así que la caja es REAL: 44 de alto con bordes transparentes de 8 px y margin-block:-8px (el layout sigue siendo
+      el de un chip de 28), y el dibujo se pinta solo en el área del padding (background-clip) con el aro como sombra interior.
+      Se ve y se espacia igual que antes y se toca en 44. Las cajas de dos filas vecinas se pisan 10 px: cada chip conserva ≥34 propios.
    3) Controles sueltos (sin recorte): halo invisible ::after de 44, no cambia el layout. NO usarlo dentro de overflow ≠ visible. */
 #hamburger-btn{width:var(--tap);height:var(--tap);top:6px;left:8px}
 .side-menu-close{min-width:var(--tap);min-height:var(--tap);display:inline-flex;align-items:center;justify-content:center;padding:0;margin:-6px -8px -6px 0}
@@ -953,24 +972,31 @@ button[style*="background:var(--warning)"]{background:var(--warning-solid)!impor
 .mov-topbar-arrow{width:var(--tap);height:var(--tap)}
 .cierre-x{min-width:var(--tap);min-height:var(--tap);margin:-12px -10px -12px -6px;display:inline-flex;align-items:center;justify-content:center}
 .tx-del,.tx-edit{min-width:var(--tap);min-height:var(--tap);padding:0;display:inline-flex;align-items:center;justify-content:center}
-/* El glifo × queda bajo el centro de su caja en Plus Jakarta: se sube para alinear con el texto vecino. */
-.tx-del,.side-menu-close,.cierre-x,.copia-borrar{padding-bottom:.14em}
+/* El glifo × queda ~0,19 em bajo el centro de su caja en Plus Jakarta (medido con canvas): se compensa para que quede en el centro exacto. */
+.tx-del,.side-menu-close,.cierre-x{padding-bottom:.38em}
+.copia-borrar{display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:0 8px .38em}
+.side-menu-close{padding-bottom:.31em}
 .date-chip{min-height:var(--tap)}
 .date-cal-btn{width:var(--tap);height:var(--tap)}
-#page-cargar>.type-toggle .type-btn{min-height:var(--tap)}
 .tc-col{flex-basis:var(--tap)}
-/* (2) caja real con borde transparente */
-.filter-chip,.year-tab,.tc-res-btn,.venc-ok{box-sizing:border-box;min-height:var(--tap);
-  border-width:8px 0!important;border-style:solid;border-block-color:transparent!important;background-clip:padding-box!important;padding-block:0}
-.tc-res-btn,.venc-ok{display:inline-flex;align-items:center;justify-content:center}
-.filter-chip,.year-tab{display:inline-block;line-height:28px;text-align:center;white-space:nowrap;border-radius:var(--radius-pill);box-shadow:inset 0 0 0 1px var(--border);margin-block:-3px}
-.filter-chip.active,.year-tab.active{box-shadow:inset 0 0 0 1px var(--accent)}
-.tc-res-btn,.venc-ok{border-radius:var(--radius-sm)/calc(var(--radius-sm) + 8px);margin-block:-8px}
-.filter-row,.year-tabs{padding-top:var(--sp-2);padding-bottom:var(--sp-1)}
+/* (2) caja real con borde transparente. La clase doble (.x.x) sube la especificidad para ganarle a .x.active y a los background:
+   en shorthand sin usar !important. Los chips/pestañas llevan 8,5 px arriba y abajo (27 de dibujo = el alto de siempre) con margen
+   negativo igual: el ritmo vertical visible es el de antes (paso de 33 px entre filas, 6 px de hueco). */
+.filter-chip.filter-chip,.year-tab.year-tab,.tc-res-btn.tc-res-btn,.venc-ok.venc-ok{box-sizing:border-box;min-height:var(--tap);padding-block:0;
+  border-width:8px 0;border-style:solid;border-block-color:transparent;background-clip:padding-box;margin-block:-8px}
+.tc-res-btn.tc-res-btn,.venc-ok.venc-ok{display:inline-flex;align-items:center;justify-content:center;border-radius:var(--radius-sm)/calc(var(--radius-sm) + 8px)}
+.filter-chip.filter-chip,.year-tab.year-tab{display:inline-block;line-height:27px;text-align:center;white-space:nowrap;border-radius:var(--radius-pill);box-shadow:inset 0 0 0 1px var(--border);border-block-width:8.5px;margin-block:-8.5px}
+.filter-chip.filter-chip{padding-inline:13px}
+.year-tab.year-tab{padding-inline:15px}
+.filter-chip.active.active,.year-tab.active.active{box-shadow:inset 0 0 0 1px var(--accent)}
+/* Los carruseles recortan en vertical: dejan 8 px arriba y abajo para la caja, y el de abajo se devuelve con margen negativo. */
+.filter-row,.year-tabs{padding-top:10px;padding-bottom:var(--sp-2);margin-bottom:calc(-1 * var(--sp-2))}
+/* !important: los presets del informe traen style="margin-bottom:8px" en línea; ese hueco ya lo cubre el padding de abajo. */
+.filter-row[style*="margin-bottom"]{margin-bottom:0!important}
 .tc-res-link{border-block:15px solid transparent;margin-block:-15px;position:relative}
+.dash-insight-action{display:flex;align-items:center;min-height:var(--tap)}
 .dash-year-link{display:flex;align-items:center;justify-content:center;min-height:var(--tap)}
 label:has(>input[type="checkbox"]:not(.chk-custom)){min-height:var(--tap);display:flex;align-items:center;gap:var(--sp-2)}
-.dash-insight-action{display:flex;align-items:center;min-height:var(--tap)}
 /* (3) halo ::after, solo para controles SIN recorte */
 .seg-btn,.btn-sm,.currency-pill,.field-link,.copia-borrar,.meta-edit,#mes-label,.js-toggle-pago{position:relative}
 .meta-edit{position:absolute}
@@ -980,14 +1006,19 @@ label:has(>input[type="checkbox"]:not(.chk-custom)){min-height:var(--tap);displa
 /* Botones de solo símbolo (×, ✎) escritos con style="background:none…" en listas: conservan su tamaño, ganan halo de 44. */
 button[style*="background:none"]:not([style*="position"]){position:relative}
 button[style*="background:none"]::after{content:"";position:absolute;left:50%;top:50%;width:max(100%,var(--tap));height:max(100%,var(--tap));transform:translate(-50%,-50%)}
+/* Configuración, administrador de categorías (js/cuentas-tarjetas-categorias.js: estilos en línea, el markup no se toca desde acá).
+   Reglas de contexto, sin cambiar el alto de las filas: el ícono gana un halo de 44; el par ▲/▼ vuelve a su alto compacto (el
+   .btn-sm de 36 lo hacía crecer 42 px por fila) y cada uno toma un halo de 44 de ancho × 29 de alto hacia afuera de la pila
+   (dos botones apilados no pueden tener 44 cada uno: queda documentado en GUIA.md). "+ Sub" y × de categoría usan el halo de .btn-sm. */
+#page-config .cat-row button[title="Cambiar ícono"]{position:relative}
+#page-config .cat-row button[title="Cambiar ícono"]::after{content:"";position:absolute;left:50%;top:50%;width:var(--tap);height:var(--tap);transform:translate(-50%,-50%)}
+#page-config .cat-row button[title="Subir"],#page-config .cat-row button[title="Bajar"]{min-height:0}
+#page-config .cat-row button[title="Subir"]::after{top:auto;bottom:0;height:29px;transform:translateX(-50%)}
+#page-config .cat-row button[title="Bajar"]::after{top:0;height:29px;transform:translateX(-50%)}
 /* Interruptor un poco más grande (46×28): se ve y se toca mejor. */
 .chk-custom{width:46px;height:28px}
 .chk-custom::after{top:3px;left:3px;width:22px;height:22px}
 .chk-custom:checked::after{left:21px}
-/* Red de seguridad: botones con color:#fff escrito en línea (HTML o JS) sobre un relleno semántico. En el tema
-   oscuro los rellenos son claros y el blanco no se lee: --on-solid decide. */
-button[style*="color:#fff"],label.btn-primary[style*="color:#fff"],button[style*="color: rgb(255, 255, 255)"]{color:var(--on-solid)!important}
-button[style*="background:var(--warning)"]{color:var(--on-warning-solid)!important}
 /* Estado :active parejo: todo lo que se toca devuelve señal al instante. */
 .filter-chip,.year-tab,.seg-btn,.btn-sm,.tc-res-btn,.venc-ok,.mov-icon-btn,.mov-topbar-arrow,.side-menu-close,.cierre-x,.tx-del,.tx-edit,.copia-borrar,.meta-edit{transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
 .filter-chip:active,.year-tab:active,.seg-btn:active,.btn-sm:active,.tc-res-btn:active,.venc-ok:active{transform:scale(.96)}
