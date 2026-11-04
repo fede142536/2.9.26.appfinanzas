@@ -881,12 +881,12 @@
       <button class="mov-topbar-arrow" onclick="cambiarMes(-1)" id="btn-mes-prev" aria-label="Mes anterior">‹</button>
       <div class="mov-topbar-month">
         <span class="mov-topbar-eyebrow">Movimientos</span>
-        <span id="mes-label" class="mov-topbar-label" role="button" tabindex="0" aria-label="Mes mostrado. Tocá para limpiar el filtro de fecha" onclick="if(filtroFecha)limpiarFiltroFecha()" style="cursor:pointer"></span>
+        <span id="mes-label" class="mov-topbar-label" onclick="if(filtroFecha)limpiarFiltroFecha()"></span>
       </div>
       <button class="mov-topbar-arrow" onclick="cambiarMes(1)" id="btn-mes-next" aria-label="Mes siguiente">›</button>
     </div>
-    <button class="mov-icon-btn" id="btn-mov-search" onclick="toggleMovSearch()" aria-label="Buscar movimientos">🔍</button>
-    <button class="mov-icon-btn" onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha">📅</button>
+    <button class="mov-icon-btn" id="btn-mov-search" onclick="toggleMovSearch()" aria-label="Buscar movimientos"><svg class="mov-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20.5 20.5"/></svg></button>
+    <button class="mov-icon-btn" onclick="openFiltroFechaModal()" id="btn-filtro-fecha" title="Buscar por fecha" aria-label="Buscar por fecha"><svg class="mov-icon-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></button>
   </div>
   <div id="mov-search-row" class="mov-search-row" style="display:none;padding:10px 16px 0">
     <input type="search" id="mov-search" aria-label="Buscar movimientos" placeholder="Buscar por nota, categoría, ticker…" oninput="onSearchMovs()">

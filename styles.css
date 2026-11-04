@@ -1123,8 +1123,12 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
    líneas; si es muy largo, el texto termina en "…" y la ✕ queda siempre a la vista. */
 .mov-topbar-center:has(.mes-label-x) .mov-topbar-arrow{display:none}
 #mes-label:has(.mes-label-x){display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-1);max-width:100%;font-size:var(--fs-base)}
+#mes-label[role="button"]{cursor:pointer}
+.cierre-aviso>span{text-wrap:pretty}
 .mes-label-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mes-label-x{flex-shrink:0;margin-left:0}
+/* Íconos de la barra (buscar, fecha): trazo de 2 px en el color del texto, mismo peso que el ☰ (antes eran emoji a color, y el calendario siempre decía "July 17"). */
+.mov-icon-svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
 .mov-search-count{min-height:20px;padding:var(--sp-1) 2px 0;font-size:var(--fs-sm);color:var(--muted)}
 .mov-search-row input{height:var(--tap);padding:0 var(--sp-3);border:1.5px solid var(--border-strong);border-radius:var(--radius-md);font-size:var(--fs-base)}
 
@@ -1168,6 +1172,9 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .tx-sub .tx-cuenta{flex:0 0 auto;min-width:0;max-width:65%;overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-xs)}
 .js-toggle-pago,.js-toggle-recup{font-size:var(--fs-xs)}
 #tx-list .tx-icon{font-size:var(--fs-base)}
+.tx-cat{display:flex;align-items:center;gap:6px}
+.tx-cat-txt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.tx-cat .badge{flex-shrink:0}
 
 /* Estado vacío con guía y llamado a la acción. */
 .empty-titulo{font-size:var(--fs-base);font-weight:600;color:var(--text)}

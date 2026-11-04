@@ -99,6 +99,19 @@ function abrirCarga(){
   closeSideMenu();
 }
 
+// [AAA movimientos] El rótulo del mes solo es un botón (rol, foco y nombre) cuando hay un filtro de fechas que limpiar; antes era
+// siempre un "botón" que decía "tocá para limpiar el filtro" aunque no hubiera ninguno.
+function etiquetaMesAccesible(){
+  const el=document.getElementById("mes-label");
+  if(!el) return;
+  if(filtroFecha){
+    el.setAttribute("role","button"); el.setAttribute("tabindex","0");
+    el.setAttribute("aria-label",`Filtro de fechas: ${filtroFecha.label}. Tocá para volver al mes`);
+  } else {
+    el.removeAttribute("role"); el.removeAttribute("tabindex"); el.removeAttribute("aria-label");
+  }
+}
+
 function cambiarMes(d){
   if(filtroFecha) limpiarFiltroFecha(); // navegar mes desactiva el filtro custom
   mesActual = addMonths(mesActual, d);
@@ -175,6 +188,7 @@ function aplicarFiltroFecha(){
   document.getElementById("mes-label").innerHTML=`<span class="mes-label-txt">📅 ${label}</span> <span class="mes-label-x">✕</span>`;
   document.getElementById("btn-mes-prev").style.visibility="hidden";
   document.getElementById("btn-mes-next").style.visibility="hidden";
+  etiquetaMesAccesible();
   renderMovs();
 }
 // Vuelve al modo normal (mes actual con flechas)
@@ -183,6 +197,7 @@ function limpiarFiltroFecha(){
   document.getElementById("mes-label").textContent=mesLbl(mesActual);
   document.getElementById("btn-mes-prev").style.visibility="visible";
   document.getElementById("btn-mes-next").style.visibility="visible";
+  etiquetaMesAccesible();
   renderMovs();
 }
 // Devuelve todos los movimientos (incluyendo virtuales de gastos frecuentes) cuya fecha
@@ -459,8 +474,8 @@ function pintarFiltroCuenta(base, filtrada){
   const opciones=cuentas.map(c=>({v:c.cuenta||SIN_CUENTA, txt:c.cuenta||"Sin cuenta", n:c.n}));
   if(filtroCuenta && !opciones.some(o=>o.v===filtroCuenta)) opciones.push({v:filtroCuenta, txt:nombreFiltroCuenta(filtroCuenta), n:0});
   chips.style.display="flex";
-  chips.innerHTML=`<span class="filter-chip-label">🏦 Cuenta</span><span role="button" tabindex="0" class="filter-chip ${filtroCuenta===''?'active':''}" onclick="setFiltroCuenta('')">Todas</span>`
-    +opciones.map(o=>`<span role="button" tabindex="0" class="filter-chip ${filtroCuenta===o.v?'active':''}" onclick="setFiltroCuenta(${attrJS(o.v)})"><span class="filter-chip-txt">${escapeHtml(o.txt)}</span> <span class="txt-muted">${o.n}</span></span>`).join("");
+  chips.innerHTML=`<span class="filter-chip-label">🏦 Cuenta</span><span role="button" tabindex="0" class="filter-chip ${filtroCuenta===''?'active':''}" aria-pressed="${filtroCuenta===''}" onclick="setFiltroCuenta('')">Todas</span>`
+    +opciones.map(o=>`<span role="button" tabindex="0" class="filter-chip ${filtroCuenta===o.v?'active':''}" aria-pressed="${filtroCuenta===o.v}" onclick="setFiltroCuenta(${attrJS(o.v)})"><span class="filter-chip-txt">${escapeHtml(o.txt)}</span> <span class="txt-muted">${o.n}</span></span>`).join("");
   if(!res) return;
   if(!filtroCuenta){ res.style.display="none"; res.innerHTML=""; return; }
   const r=resumenDeCuenta(filtrada);
@@ -539,12 +554,14 @@ function construirCuerpoTxItem(m){
     // cualquier gasto y que en los totales. El badge "DE AHORROS" aclara de dónde salió.
     else if(isRetiro) amt=`-${fmtS(m.importe)}`;
     else amt=`${isTc||m.tipo==="Gasto"?"-":"+"}${fmtS(m.importe)}`;
-    let cat,sub;
+    // [AAA movimientos] `cat` = el texto del título (se acorta con "…" si no entra) y `catExtra` = sus badges (nunca se esconden):
+    // antes iban juntos en un solo texto con elipsis y un título largo se llevaba puesto el "DE AHORROS" o el "USD".
+    let cat,sub,catExtra="";
     if(isTc){
       cat=escapeHtml(m.desc);
       const monedaPref=m.moneda==="USD"?"USD ":"";
       const monedaBadge=m.moneda==="USD"?` <span class="badge badge-accent">USD</span>`:"";
-      cat+=monedaBadge;
+      catExtra+=monedaBadge;
       if(m.frecuente){
         sub=subtituloFila([subcatVisible(m.subcat), "🔁 Mensual fijo"]);
       } else {
@@ -558,7 +575,8 @@ function construirCuerpoTxItem(m){
       const invBadge=invEsIngreso
         ?` <span class="badge badge-accent">📥 RECUPERO</span>`
         :` <span class="badge badge-accent">📤 INVERTIDO</span>`;
-      cat=`${escapeHtml(m.cat)}${invBadge}`;
+      cat=escapeHtml(m.cat);
+      catExtra=invBadge;
       // El ticker pasa al subtítulo, junto con la operación corta (ver handoff de Movimientos):
       // m.subcat se guarda como "{categoría} {operación}" (p.ej. "CEDEARs Compra SPY"), así que
       // alcanza con sacarle el prefijo de la categoría y, si termina en el ticker, también eso.
@@ -578,8 +596,9 @@ function construirCuerpoTxItem(m){
       else if(esTraspaso(m)) badge=` <span class="badge badge-accent">↔️ TRASPASO</span>`;
       else if(isAhorro) badge=` <span class="badge badge-save">AHORRO</span>`;
       else if(isRetiro) badge=` <span class="badge badge-save">DE AHORROS</span>`;
-      cat=`${escapeHtml(m.cat)}${badge}`;
-      if(!badge && m.recuperable>0 && !tieneRecuperable(m)) cat+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
+      cat=escapeHtml(m.cat);
+      catExtra=badge;
+      if(!badge && m.recuperable>0 && !tieneRecuperable(m)) catExtra+=` <span class="badge badge-accent">🔁 ${fmtAbbr(m.recuperable)}</span>`;
       // El botón de pago/impago de un gasto frecuente (pedido del usuario, solo como ayuda
       // memoria: no cambia ningún cálculo) va debajo del monto, no en el título — ver el
       // texto que arma esta sección en el handoff de Movimientos. El texto en estado impago
@@ -614,7 +633,7 @@ function construirCuerpoTxItem(m){
     const iconClass=claseTipoDeMov(m);
     return `<div class="tx-icon ${iconClass}">${icon}</div>
       <div class="tx-info">
-        <div class="tx-cat">${cat}</div>
+        <div class="tx-cat"><span class="tx-cat-txt">${cat}</span>${catExtra}</div>
         <div class="tx-sub"><span class="tx-sub-txt">${subtituloFila([sub, !isTc&&m.nota?escapeHtml(m.nota.slice(0,24)):""])}</span>${etiquetaCuentaFila(m)}</div>
         ${!isTc?renderTagsChips(m):""}
       </div>
@@ -1035,7 +1054,7 @@ function renderMovs(){
   };
   const segLabels=[["Todos","Todos"],["Gasto","Gastos"],["Ingreso","Ingresos"],["Tarjeta","Tarjetas"]];
   document.getElementById("mov-filtros").innerHTML = segLabels.map(([key,label])=>
-    `<button type="button" class="seg-btn${filtro===key?' active':''}" onclick="setFiltro('${key}')">${label}<span class="seg-btn-count">${segCounts[key]}</span></button>`
+    `<button type="button" class="seg-btn${filtro===key?' active':''}" aria-pressed="${filtro===key}" onclick="setFiltro('${key}')">${label}<span class="seg-btn-count">${segCounts[key]}</span></button>`
   ).join("");
 
   // ── RESUMEN ADAPTADO AL FILTRO ──
@@ -1054,8 +1073,8 @@ function renderMovs(){
     const subFiltroEl=document.getElementById("mov-tarjeta-filtro");
     if(tarjetasUnicas.length>1){
       subFiltroEl.innerHTML=`
-        <span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===''?'active':''}" onclick="setFiltroTarjeta('')">Todas</span>
-        ${tarjetasUnicas.map(t=>`<span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===t?'active':''}" onclick="setFiltroTarjeta(${attrJS(t)})">${escapeHtml(t)}</span>`).join("")}`;
+        <span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===''?'active':''}" aria-pressed="${filtroTarjeta===''}" onclick="setFiltroTarjeta('')">Todas</span>
+        ${tarjetasUnicas.map(t=>`<span role="button" tabindex="0" class="filter-chip ${filtroTarjeta===t?'active':''}" aria-pressed="${filtroTarjeta===t}" onclick="setFiltroTarjeta(${attrJS(t)})">${escapeHtml(t)}</span>`).join("")}`;
       subFiltroEl.style.display="flex";
     } else {
       subFiltroEl.style.display="none";
@@ -1120,8 +1139,8 @@ function renderMovs(){
     const catFilterEl=document.getElementById("mov-cat-filtro");
     if(catsUnicas.length>1){
       catFilterEl.innerHTML=`
-        <span role="button" tabindex="0" class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
-        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria(${attrJS(c)})">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
+        <span role="button" tabindex="0" class="filter-chip ${filtroCategoria===''?'active':''}" aria-pressed="${filtroCategoria===''}" onclick="setFiltroCategoria('')">Todas</span>
+        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" aria-pressed="${filtroCategoria===c}" onclick="setFiltroCategoria(${attrJS(c)})">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
       catFilterEl.style.display="flex";
     } else {
       catFilterEl.style.display="none";
@@ -1206,8 +1225,8 @@ function renderMovs(){
     const catFilterEl=document.getElementById("mov-cat-filtro");
     if(catsUnicas.length>1){
       catFilterEl.innerHTML=`
-        <span role="button" tabindex="0" class="filter-chip ${filtroCategoria===''?'active':''}" onclick="setFiltroCategoria('')">Todas</span>
-        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" onclick="setFiltroCategoria(${attrJS(c)})">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
+        <span role="button" tabindex="0" class="filter-chip ${filtroCategoria===''?'active':''}" aria-pressed="${filtroCategoria===''}" onclick="setFiltroCategoria('')">Todas</span>
+        ${catsUnicas.map(c=>`<span role="button" tabindex="0" class="filter-chip ${filtroCategoria===c?'active':''}" aria-pressed="${filtroCategoria===c}" onclick="setFiltroCategoria(${attrJS(c)})">${getIcon(c,"")} ${escapeHtml(c)}</span>`).join("")}`;
       catFilterEl.style.display="flex";
     } else {
       catFilterEl.style.display="none";
