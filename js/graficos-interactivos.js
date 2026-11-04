@@ -31,6 +31,15 @@ function indicesDeEtiquetas(puntos, anchoMinimo){
   return idxs;
 }
 
+// Ancho que necesita el eje Y para que ninguna etiqueta ("$67901,9M") se corte contra el borde
+// izquierdo del canvas: 44 px de siempre, o más si las cifras son largas. Deja el `ctx.font` listo.
+const FUENTE_EJE_PX=10;
+function fuenteEje(peso){ return `${peso?peso+" ":""}${FUENTE_EJE_PX}px ${getComputedStyle(document.body).fontFamily||"system-ui"}`; }
+function anchoEjeY(ctx, textos){
+  ctx.font=fuenteEje();
+  return Math.max(44, Math.ceil(Math.max(...textos.map(t=>ctx.measureText(t).width)))+10);
+}
+
 // Índice del punto que el usuario tocó en el gráfico de línea (o de la barra, en el de barras).
 // Viven ACÁ, fuera de la función que dibuja, porque cada tap la vuelve a llamar desde cero para
 // redibujar con el marcador: una variable local se perdería en cada redibujo. null = todavía no
@@ -68,19 +77,21 @@ function drawInteractiveLine(canvas, labels, values, color, tipEl, fmtFn, estado
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,W,H);
 
-  const padL=44, padR=12, padT=10, padB=24;
-  const cw=W-padL-padR, ch=H-padT-padB;
+  const padR=12, padT=10, padB=24;
   const minV=Math.min(...values, 0);
   const maxV=Math.max(...values, 0);
   const range=maxV-minV||1;
+  const padL=anchoEjeY(ctx, [0,1,2,3].map(i=>fmtEje(minV+(range*i/3))));
+  const cw=W-padL-padR, ch=H-padT-padB;
 
   const isDark=document.documentElement.getAttribute("data-theme")==="dark";
   const gridColor=isDark?"rgba(255,255,255,.08)":"rgba(0,0,0,.06)";
-  const textColor=isDark?"#9a9890":"#888780";
+  // Texto de los ejes con el color atenuado del sistema (≥4,5:1): el gris fijo de antes daba 3,5:1 en claro.
+  const textColor=themeColor('--muted');
 
   // Grid horizontal y labels Y
   ctx.fillStyle=textColor;
-  ctx.font="10px system-ui";
+  ctx.font=fuenteEje();
   ctx.textAlign="right";
   for(let i=0;i<=3;i++){
     const v=minV+(range*i/3);
@@ -172,20 +183,21 @@ function drawInteractiveBars(canvas, labels, values, tipEl, fmtFn){
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,W,H);
 
-  const padL=44, padR=12, padT=10, padB=24;
-  const cw=W-padL-padR, ch=H-padT-padB;
+  const padR=12, padT=10, padB=24;
   const minV=Math.min(...values, 0);
   const maxV=Math.max(...values, 0);
   const range=(maxV-minV)||1;
+  const padL=anchoEjeY(ctx, [0,1,2,3].map(i=>fmtAbbr(minV+(range*i/3))));
+  const cw=W-padL-padR, ch=H-padT-padB;
   const zeroY=padT+ch-((0-minV)/range)*ch;
 
   const isDark=document.documentElement.getAttribute("data-theme")==="dark";
   const gridColor=isDark?"rgba(255,255,255,.08)":"rgba(0,0,0,.06)";
-  const textColor=isDark?"#9a9890":"#888780";
+  const textColor=themeColor('--muted');
 
   // Grid + labels Y
   ctx.fillStyle=textColor;
-  ctx.font="10px system-ui";
+  ctx.font=fuenteEje();
   ctx.textAlign="right";
   for(let i=0;i<=3;i++){
     const v=minV+(range*i/3);
@@ -227,7 +239,7 @@ function drawInteractiveBars(canvas, labels, values, tipEl, fmtFn){
   const centros=bars.map(b=>({x:b.x+barW/2, label:b.label}));
   indicesDeEtiquetas(centros, 34).forEach(i=>{
     ctx.fillStyle = i===seleccionBarra ? themeColor('--text') : textColor;
-    ctx.font = i===seleccionBarra ? "700 10px system-ui" : "10px system-ui";
+    ctx.font = i===seleccionBarra ? fuenteEje("700") : fuenteEje();
     dibujarEtiquetaX(ctx, etiquetaMes(centros[i].label), centros[i].x, H-6, W);
   });
 
@@ -312,9 +324,9 @@ const fechaCortaMeta=iso=>{ const [y,m,d]=String(iso).split("-"); return `${d}/$
 // La línea chica de la tarjeta de una meta con fecha: "📅 mar 2027 · $333.000/mes". null si no aplica.
 function planMetaTarjeta(plan){
   if(!plan.fecha || plan.estado==="cumplida" || plan.estado==="sinFecha") return null;
-  if(plan.estado==="vencida") return {txt:`📅 Venció el ${fechaCortaMeta(plan.fecha)}`, color:"var(--danger)"};
+  if(plan.estado==="vencida") return {txt:`📅 Venció el ${fechaCortaMeta(plan.fecha)}`, color:"var(--danger)", estado:"vencida"};
   const color=plan.estado==="atrasada" ? "var(--danger)" : plan.estado==="aTiempo" ? "var(--save)" : "var(--muted)";
-  return {txt:`📅 ${mesCortoMeta(plan.fecha)} · ${fmtTotal(Math.ceil(plan.porMes))}/mes`, color};
+  return {txt:`📅 ${mesCortoMeta(plan.fecha)} · ${fmtTotal(Math.ceil(plan.porMes))}/mes`, color, estado:plan.estado};
 }
 // El detalle para el editor: lo que necesitás ahorrar y cómo venís.
 function planMetaDetalle(plan){
@@ -340,6 +352,25 @@ function avisoPlanMeta(){
   el.style.display=txt?"":"none"; el.textContent=txt;
 }
 
+// Emojis sugeridos para una meta: botones de 44 px que escriben en #meta-emoji (el campo sigue siendo
+// la fuente de verdad y admite cualquier otro emoji).
+const EMOJIS_META=["🎯","🏖️","🚗","🏠","💊","✈️","🎓","💍","📱","🐶","💰","🏋️","🎸","🌍"];
+function renderEmojiPickerMeta(){
+  const el=document.getElementById("emoji-picker");
+  if(!el) return;
+  el.innerHTML=EMOJIS_META.map(e=>`<button type="button" class="emoji-opt" aria-pressed="false" aria-label="Emoji ${e}" data-emoji="${e}" onclick="elegirEmojiMeta(this.dataset.emoji)">${e}</button>`).join("");
+  sincronizarEmojiPickerMeta();
+}
+function elegirEmojiMeta(e){
+  const inp=document.getElementById("meta-emoji");
+  if(inp) inp.value=e;
+  sincronizarEmojiPickerMeta();
+}
+function sincronizarEmojiPickerMeta(){
+  const v=((document.getElementById("meta-emoji")||{}).value||"").trim();
+  document.querySelectorAll("#emoji-picker .emoji-opt").forEach(b=>b.setAttribute("aria-pressed", b.dataset.emoji===v ? "true" : "false"));
+}
+
 function openMetaModal(){
   editingMetaId=null;
   document.getElementById("meta-modal-title").textContent="Nueva meta de ahorro";
@@ -348,6 +379,7 @@ function openMetaModal(){
   document.getElementById("meta-emoji").value="🎯";
   const fe=document.getElementById("meta-fecha"); if(fe) fe.value="";
   llenarSelectFondoMeta("");
+  renderEmojiPickerMeta();
   document.getElementById("btn-guardar-meta").textContent="Crear meta";
   document.getElementById("modal-meta").classList.add("open");
 }
@@ -365,6 +397,7 @@ function openEditMetaModal(id){
   document.getElementById("meta-emoji").value=iconoSeguro(m.emoji)||"🎯";
   const fe=document.getElementById("meta-fecha"); if(fe) fe.value=m.fechaObjetivo||"";
   llenarSelectFondoMeta(m.fondoCat||"", m.fondoSub||"");
+  renderEmojiPickerMeta();
   document.getElementById("btn-guardar-meta").textContent="Guardar cambios";
   document.getElementById("modal-meta").classList.add("open");
 }
@@ -427,13 +460,14 @@ function renderMetas(){
   }
 
   const nueva=`<button type="button" class="meta-card-nueva" onclick="openMetaModal()" aria-label="Nueva meta">
-      <span style="font-size:22px">＋</span><span style="font-size:12px;font-weight:600">Nueva meta</span>
+      <span class="meta-nueva-mas" aria-hidden="true">＋</span><span class="meta-nueva-txt">Nueva meta</span>
     </button>`;
 
   if(!metas.length){
-    el.innerHTML=`<div class="meta-card-nueva" style="grid-column:1/-1" onclick="openMetaModal()">
-      <span style="font-size:22px">＋</span><span style="font-size:12px;font-weight:600">Creá tu primera meta</span>
-    </div>`;
+    el.innerHTML=`<button type="button" class="meta-card-nueva meta-card-primera" onclick="openMetaModal()">
+      <span class="meta-nueva-mas" aria-hidden="true">＋</span><span class="meta-nueva-txt">Creá tu primera meta</span>
+      <span class="meta-nueva-guia">Poné un objetivo y seguí cuánto te falta.</span>
+    </button>`;
     return;
   }
 
@@ -445,18 +479,18 @@ function renderMetas(){
     const falta=Math.max(0,m.objetivo-monto);
     const atada=!!m.fondoCat;
     const plan=planMetaTarjeta(planDeMeta(m,movs,hoyLocal()));
-    const aria=`${m.nombre}, ${pct}%, ${cumplida?"meta cumplida":"faltan "+fmtTotal(falta)}${plan?", "+plan.txt.replace("📅 ",""):""}. ${atada?"Toma su monto de "+nombreFondoMeta(m)+". Cargar un ahorro":"Depositar"}`;
+    const aria=`${m.nombre}, ${pct}%, ${cumplida?"meta cumplida":"faltan "+fmtTotal(falta)}${plan?", "+plan.txt.replace("📅 ","")+(plan.estado==="atrasada"?" (vas atrasado)":plan.estado==="aTiempo"?" (vas a tiempo)":""):""}. ${atada?"Toma su monto de "+nombreFondoMeta(m)+". Cargar un ahorro":"Depositar"}`;
     return `<div class="meta-wrap"><button type="button" class="meta-card" aria-label="${escapeHtml(aria)}"
         onpointerdown="metaCardDown(${m.id})" onpointerup="metaCardUp()" onpointerleave="metaCardUp()"
         oncontextmenu="metaCardContextMenu(event,${m.id})" onclick="metaCardClick(${m.id})">
       <span class="meta-ring" style="background:conic-gradient(var(--save) ${pct*3.6}deg,var(--border) 0)">
         <span class="meta-ring-inner${cumplida?' cumplida':''}">${cumplida?"✓":escapeHtml(emoji)}</span>
       </span>
-      <span class="meta-nombre">${escapeHtml(m.nombre)}${atada?` <span title="Toma su monto de ${escapeHtml(nombreFondoMeta(m))}" aria-hidden="true">🔗</span>`:""}</span>
+      <span class="meta-nombre"><span class="meta-nombre-t">${escapeHtml(m.nombre)}</span>${atada?`<span class="meta-nombre-link" title="Toma su monto de ${escapeHtml(nombreFondoMeta(m))}" aria-hidden="true">🔗</span>`:""}</span>
       <span class="meta-pct">${pct}%</span>
       <span class="meta-falta">${cumplida?"¡Meta cumplida!":"Faltan "+fmtTotal(falta)}</span>
-      ${plan?`<span class="meta-plan" style="color:${plan.color}">${escapeHtml(plan.txt)}</span>`:""}
-    </button><button type="button" class="meta-edit" aria-label="Editar la meta ${escapeHtml(m.nombre)}" onclick="openEditMetaModal(${m.id})">✎</button></div>`;
+      ${plan?`<span class="meta-plan" style="color:${plan.color}">${plan.txt.split(" · ").map((t,i,v)=>v.length>1?`<span class="meta-plan-t">${escapeHtml(t)}${i<v.length-1?" ·":""}</span>`:escapeHtml(t)).join(" ")}</span>`:""}
+    </button><button type="button" class="meta-edit" aria-label="Editar la meta ${escapeHtml(m.nombre)}" onclick="openEditMetaModal(${m.id})"><svg class="mov-icon-svg mov-icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg></button></div>`;
   }).join("")+nueva;
 }
 
@@ -575,7 +609,8 @@ function actualizarPreviewDeposito(){
   } else {
     previewEl.textContent=`Te faltan ${fmtTotal(Math.max(0,m.objetivo-m.actual))}`;
   }
-  if(btn) btn.style.opacity = monto>0 ? "1" : ".5";
+  // aria-disabled (no disabled): el sistema lo pinta apagado y un toque igual avisa "Ingresá un monto".
+  if(btn) btn.setAttribute("aria-disabled", monto>0 ? "false" : "true");
 }
 function depositarMeta(){
   const id=parseInt(document.getElementById("dep-meta").value);

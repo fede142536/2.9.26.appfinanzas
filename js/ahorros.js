@@ -78,7 +78,9 @@ function renderAhorro(){
   const fondoMsg=document.getElementById("fondo-msg");
   if(fondoMsg){
     if(!ahorrosArr.length){
-      fondoMsg.style.display="block";
+      // La guía vive en el estado vacío de la card de historial (#ahorro-vacio): acá se conserva el texto
+      // pero no se muestra, para no decir lo mismo dos veces.
+      fondoMsg.style.display="none";
       fondoMsg.innerHTML="Cargá un gasto y marcalo como <strong>🏦 Es un ahorro</strong> para verlo acá.";
     } else if(!usingUserData){
       fondoMsg.style.display="block";
@@ -124,14 +126,16 @@ function calcularFondoUSD(){
 function renderAhorroSaldo(fondoAcum, fondoUSD){
   const el=document.getElementById("fondo-kpis");
   if(!el) return;
+  // --n = largo del texto final: el CSS achica la cifra para que entre entera (ver [AAA ahorros]).
+  const largo=String(fmtTotal(fondoAcum)).length;
   el.innerHTML=`
     <div class="ahorro-saldo-disp">
       <span class="ahorro-saldo-label">Disponible</span>
-      <span class="ahorro-saldo-val" style="color:${fondoAcum>=0?"var(--save)":"var(--danger)"}" data-animar="${fondoAcum}">${fmtTotal(0)}</span>
+      <span class="ahorro-saldo-val" style="--n:${largo};color:${fondoAcum>=0?"var(--save)":"var(--danger)"}" data-animar="${fondoAcum}">${fmtTotal(0)}</span>
     </div>
     ${fondoUSD!==0?`<div class="ahorro-saldo-usd">
       <span class="ahorro-saldo-usd-label">Fondo USD</span>
-      <span class="ahorro-saldo-usd-val">USD ${fmtNum2(fondoUSD)}</span>
+      <span class="ahorro-saldo-usd-val${fondoUSD<0?" neg":""}">USD ${fmtNum2(fondoUSD)}</span>
     </div>`:""}`;
   animarNumerosDe(el);
 }
@@ -170,7 +174,7 @@ function renderUSD(){
     card.style.display="none";
     return;
   }
-  card.style.display="grid";
+  card.style.display="flex";
 
   // Cash disponible = lo que entró menos lo que salió. El depósito al fondo SALE del cash
   // (por eso gastosUSD ahora lo incluye) y el retiro VUELVE al cash, así que se suma.
@@ -185,6 +189,9 @@ function renderUSD(){
   document.getElementById("usd-cell-cash").textContent=`USD ${fmtNum2(cashUSD)}`;
   document.getElementById("usd-cell-fondo").textContent=`USD ${fmtNum2(fondoUSD)}`;
   document.getElementById("usd-cell-total").textContent=`USD ${fmtNum2(cashUSD+fondoUSD)}`;
+  // Un saldo negativo no se pinta con el verde del ahorro: rojo, igual que en el ranking.
+  document.getElementById("usd-cell-fondo").className="ahorro-usd-cell-val "+(fondoUSD<0?"neg":"save");
+  document.getElementById("usd-cell-total").className="ahorro-usd-cell-val"+(cashUSD+fondoUSD<0?" neg":"");
 
   // Lo de abajo alimenta la hoja #modal-usd-detail, que se abre al tocar la línea de dólares.
   const cashColor=cashUSD>=0?"save":"negative";
@@ -280,6 +287,22 @@ function renderAhorroChart(){
   // dólares y abre el detalle al tocar. Se muestra uno u otro, nunca los dos: tenerlos juntos
   // era mostrar el mismo dato dos veces. El selector y esta misma línea de lectura (en las
   // otras vistas) ya dicen qué se está mirando, así que no hace falta una descripción aparte.
+  // Sin ahorros no hay qué elegir ni dibujar: la card muestra una guía con un camino (#ahorro-vacio)
+  // en vez de un selector y un hueco en blanco.
+  const vacioEl=document.getElementById("ahorro-vacio");
+  const sinAhorros=!ahorroState.ahorrosArr.length && !ahorroState.depositos.length && !ahorroState.retiros.length;
+  const histCard=document.getElementById("ahorro-hist-card");
+  if(histCard) histCard.classList.toggle("sin-ahorros", sinAhorros);
+  if(vacioEl) vacioEl.hidden=!sinAhorros;
+  if(sinAhorros){
+    canvas.style.display="none";
+    if(tipEl){ tipEl.textContent=""; tipEl.style.display="none"; }
+    const rk=document.getElementById("ahorro-ranking"); if(rk) rk.style.display="none";
+    limpiarSeleccionLinea();
+    // El ranking se sigue armando (con su mensaje de vacío en "Por categoría"), aunque la guía de arriba lo reemplaza a la vista.
+    renderAhorroRanking();
+    return;
+  }
   const esCategoria = ahorroState.view==="categoria";
   const ranking=document.getElementById("ahorro-ranking");
   if(ranking) ranking.style.display = esCategoria ? "" : "none";
@@ -307,6 +330,7 @@ function renderAhorroChart(){
   }
 
   const view=ahorroState.view;
+  canvas.setAttribute("aria-label", view==="acum" ? "Gráfico del ahorro acumulado mes a mes. Tocá un punto para ver su valor." : "Gráfico de lo depositado y retirado cada mes. Tocá una barra para ver su valor.");
   if(view==="acum"){
     // Vista acumulada: curva clásica
     drawInteractiveLine(
@@ -327,6 +351,15 @@ function renderAhorroChart(){
       (ym,val)=>lecturaAhorroHTML("mensual",ym,val)
     );
   }
+}
+
+// Camino del estado vacío: abre Cargar ya en "Gasto" y con "Es un ahorro" activado (mismo gesto que
+// irACargarAhorroDeMeta, pero sin categoría elegida).
+function cargarUnAhorro(){
+  abrirCarga();
+  setTipo("Gasto");
+  const chk=document.getElementById("inp-ahorro");
+  if(chk){ chk.checked=true; onAhorroToggle(); }
 }
 
 // Ranking de categorías de ahorro: tarjeta debajo del gráfico
@@ -388,7 +421,7 @@ function renderAhorroRanking(){
     const icon=getIcon(it.cat,"🏦");
     const catEsc=attrJS(it.cat);
     return `<div class="ahorro-rank-row" role="button" tabindex="0" onclick="showAhorroCatDetail(${catEsc})">
-      <div class="ahorro-rank-cat">${icon} ${escapeHtml(it.cat)}</div>
+      <div class="ahorro-rank-cat"><span class="ahorro-rank-icono" aria-hidden="true">${icon}</span><span class="ahorro-rank-nombre">${escapeHtml(it.cat)}</span></div>
       <div class="ahorro-rank-val" style="color:${c}">
         ${it.saldoArs!==0?fmtS(it.saldoArs):""}
         ${it.saldoUsd!==0?`<small style="color:${cUsd}">USD ${fmtNum2(it.saldoUsd)}</small>`:""}

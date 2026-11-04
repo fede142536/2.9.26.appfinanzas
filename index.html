@@ -322,7 +322,7 @@
     <div class="modal-handle"></div>
     <div class="modal-title" id="ahorrocat-detail-title">Detalle</div>
     <div id="ahorrocat-detail-content" style="overflow-y:auto;max-height:65vh"></div>
-    <button class="btn-sm" style="margin-top:14px" onclick="closeAhorroCatDetail()">Cerrar</button>
+    <button class="btn-sm ahorro-cerrar" onclick="closeAhorroCatDetail()">Cerrar</button>
   </div>
 </div>
 
@@ -1058,7 +1058,7 @@
   <div class="mov-topbar">
     <button class="mov-icon-btn" onclick="toggleSideMenu()" aria-label="Abrir menú">☰</button>
     <span class="ahorro-header-title">Ahorros</span>
-    <div style="width:40px;flex-shrink:0"></div>
+    <div class="ahorro-header-spacer" aria-hidden="true"></div>
   </div>
 
   <!-- Franja de saldo: reemplaza los chips Disponible/Depositado/Retirado de antes. Depositado
@@ -1077,8 +1077,8 @@
   <div class="metas-grid" id="metas-list"></div>
 
   <!-- Historial: selector + lectura + gráfico/ranking + línea de dólares, todo en una sola card -->
-  <div class="card" style="margin:12px 16px 0;padding:14px;display:flex;flex-direction:column;gap:12px">
-    <div class="ahorro-view-tabs" id="ahorro-view-selector">
+  <div class="card ahorro-hist" id="ahorro-hist-card">
+    <div class="ahorro-view-tabs" id="ahorro-view-selector" role="group" aria-label="Vista del historial de ahorros">
       <button class="seg-btn active" data-view="acum" onclick="setAhorroView('acum')">Acumulado</button>
       <button class="seg-btn" data-view="mensual" onclick="setAhorroView('mensual')">Por mes</button>
       <button class="seg-btn" data-view="categoria" onclick="setAhorroView('categoria')">Por categoría</button>
@@ -1087,9 +1087,17 @@
     <!-- Línea de lectura: antes solo se llenaba al tocar el gráfico; ahora muestra el último
          mes por defecto, así nunca queda vacía (ver drawInteractiveLine/Bars). Reemplaza a
          #ahorro-view-desc, que decía lo mismo que ya dicen el selector y esta línea. -->
-    <div id="ahorro-tooltip"></div>
+    <div id="ahorro-tooltip" aria-live="polite"></div>
 
-    <canvas id="chart-fondo" height="110"></canvas>
+    <canvas id="chart-fondo" height="110" role="img" aria-label="Gráfico de tus ahorros"></canvas>
+
+    <!-- Estado vacío de la card: sin ahorros no hay selector ni gráfico, hay una guía y un camino (ver renderAhorroChart). -->
+    <div id="ahorro-vacio" class="ahorro-vacio" hidden>
+      <div class="ahorro-vacio-icono" aria-hidden="true">🏦</div>
+      <div class="empty-titulo">Todavía no hay ahorros para mostrar</div>
+      <p class="empty-guia">Cargá un gasto y marcalo como <strong>Es un ahorro</strong>: acá vas a ver cuánto llevás, mes a mes.</p>
+      <button type="button" class="btn-primary empty-cta ahorro-vacio-cta" onclick="cargarUnAhorro()">Cargar un ahorro</button>
+    </div>
 
     <!-- El desglose por categoría ES la tercera vista, no una tarjeta aparte: antes había dos
          cosas mostrando lo mismo (un dibujo en canvas que mezclaba monedas y cortaba nombres, y
@@ -1098,7 +1106,7 @@
 
     <!-- Línea de dólares: antes era una card aparte (#usd-card), ahora vive acá y tocarla abre
          el detalle en una hoja (#modal-usd-detail) en vez de mostrarlo siempre desplegado. -->
-    <div id="usd-card" style="display:none" onclick="openUsdDetalle()" role="button" tabindex="0">
+    <div id="usd-card" style="display:none" onclick="openUsdDetalle()" role="button" tabindex="0" aria-label="Dólares billete: ver el detalle">
       <div class="ahorro-usd-cell"><span class="ahorro-usd-cell-label">💵 Cash</span><span class="ahorro-usd-cell-val" id="usd-cell-cash"></span></div>
       <div class="ahorro-usd-cell"><span class="ahorro-usd-cell-label">💵 Fondo</span><span class="ahorro-usd-cell-val save" id="usd-cell-fondo"></span></div>
       <div class="ahorro-usd-cell"><span class="ahorro-usd-cell-label">💵 Total</span><span class="ahorro-usd-cell-val" id="usd-cell-total"></span></div>
@@ -1140,9 +1148,8 @@
       </div>
     </div>
     <div class="deposito-monto">
-      <span style="font-size:20px;font-weight:600;color:var(--save)">$</span>
+      <span class="deposito-moneda" aria-hidden="true">$</span>
       <input type="text" id="dep-monto" class="amount-input" aria-label="Monto a depositar"
-        style="padding-left:0;font-size:38px;font-weight:700;letter-spacing:-1px;background:transparent;border:none;outline:none;field-sizing:content;min-width:1ch;max-width:240px;color:var(--text)"
         placeholder="0" inputmode="decimal" oninput="aplicarMascaraMiles(this,formatearNumeroConMiles);actualizarPreviewDeposito()">
     </div>
     <div class="deposito-chips">
@@ -1152,7 +1159,7 @@
       <button type="button" class="deposito-chip" onclick="depositoChipCompletar()">Completar</button>
     </div>
     <div class="deposito-preview" id="deposito-preview"></div>
-    <button class="btn-primary" style="background:var(--save);color:#fff" id="btn-depositar" onclick="depositarMeta()">Depositar</button>
+    <button class="btn-primary btn-save" id="btn-depositar" onclick="depositarMeta()" aria-disabled="true">Depositar</button>
   </div>
 </div>
 
@@ -1195,16 +1202,12 @@
       <div id="meta-fondo-aviso" style="display:none;margin-top:8px;padding:8px 10px;background:var(--warning-light);border-radius:var(--radius-sm);font-size:12px;line-height:1.4"></div>
       <p class="txt-xs txt-muted" style="margin-top:4px">Atada a un ahorro, la meta siempre muestra su saldo: no hace falta cargarlo a mano.</p>
     </div>
-    <div class="form-group"><label class="form-label" for="meta-emoji">Emoji</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap" id="emoji-picker">
-        🎯🏖️🚗🏠💊✈️🎓💍📱🐶💰🏋️🎸🌍
-        <script>
-          document.getElementById('emoji-picker').querySelectorAll('*').forEach(el=>{});
-        </script>
-      </div>
-      <input type="text" id="meta-emoji" class="form-input" style="margin-top:8px" placeholder="Ej: 🏖️" maxlength="2" value="🎯">
+    <div class="form-group"><label class="form-label" id="meta-emoji-lbl" for="meta-emoji">Emoji</label>
+      <!-- Los botones los arma renderEmojiPickerMeta() (js/graficos-interactivos.js). -->
+      <div class="emoji-picker" id="emoji-picker" role="group" aria-labelledby="meta-emoji-lbl"></div>
+      <input type="text" id="meta-emoji" class="form-input emoji-otro" placeholder="O escribí el tuyo: 🏖️" maxlength="4" value="🎯" oninput="sincronizarEmojiPickerMeta()">
     </div>
-    <button class="btn-primary" style="background:var(--save);color:#fff" id="btn-guardar-meta" onclick="guardarMeta()">Crear meta</button>
+    <button class="btn-primary btn-save" id="btn-guardar-meta" onclick="guardarMeta()">Crear meta</button>
   </div>
 </div>
 
