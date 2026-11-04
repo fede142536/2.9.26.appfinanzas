@@ -1005,7 +1005,7 @@ function showInstrumentoDetail(ticker){
     .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   const contentEl=document.getElementById("instrumento-detail-content");
   if(!movsTicker.length){
-    contentEl.innerHTML=`<p class="txt-md txt-muted">Sin movimientos para este instrumento.</p>`;
+    contentEl.innerHTML=`<h2 class="inv-det-ticker">${escapeHtml(ticker)}</h2><p class="txt-md txt-muted">Sin movimientos para este instrumento.</p>`;
     document.getElementById("modal-instrumento-detail").classList.add("open");
     return;
   }
@@ -1019,39 +1019,43 @@ function showInstrumentoDetail(ticker){
   };
   const puso=movsTicker.filter(m=>!isInvSalida(m)), cobro=movsTicker.filter(isInvSalida);
 
-  let html=`<div style="display:flex;align-items:center;gap:12px">
-    <span style="width:44px;height:44px;border-radius:50%;background:var(--invest-light);display:flex;align-items:center;justify-content:center;font-size:20px">${getIcon(cat,"📦")}</span>
-    <div style="flex:1;display:flex;flex-direction:column;gap:1px;min-width:0">
-      <span style="font-size:17px;font-weight:700;letter-spacing:.3px">${escapeHtml(ticker)}</span>
-      <span style="font-size:12px;color:var(--muted)">${escapeHtml(cat)}${cuenta?" · "+escapeHtml(cuenta):""}</span>
+  // [AAA inversiones] Hoja con clases (.inv-det*): el ticker es el título (nombre accesible de la hoja), las cifras largas se achican
+  // o bajan de línea en vez de empujar, las filas son botones reales y las dos acciones quedan fijas abajo aunque la lista sea larga.
+  let html=`<div class="inv-det-cab">
+    <span class="inv-det-icono" aria-hidden="true">${getIcon(cat,"📦")}</span>
+    <div class="inv-det-quien">
+      <h2 class="inv-det-ticker">${escapeHtml(ticker)}</h2>
+      <span class="inv-det-sub">${escapeHtml(cat)}${cuenta?" · "+escapeHtml(cuenta):""}</span>
     </div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0">
-      <span style="font-size:11px;color:var(--muted)">Invertido</span>
-      <span style="font-size:17px;font-weight:700;color:var(--invest)">${valorTxt}</span>
+    <div class="inv-det-total">
+      <span class="inv-det-total-lbl">Invertido</span>
+      <span class="inv-det-total-val">${valorTxt}</span>
     </div>
   </div>
-  <div style="display:flex;gap:16px;font-size:12px;padding:10px 12px;background:var(--bg);border-radius:10px">
-    <span><span style="color:var(--muted)">Pusiste </span><strong>${sumaTxt(puso)}</strong></span>
-    <span><span style="color:var(--muted)">Cobraste </span><strong style="color:var(--success)">${sumaTxt(cobro)}</strong></span>
+  <div class="inv-det-resumen">
+    <span><span class="inv-det-lbl">Pusiste </span><strong>${sumaTxt(puso)}</strong></span>
+    <span><span class="inv-det-lbl">Cobraste </span><strong class="sale">${sumaTxt(cobro)}</strong></span>
   </div>
-  <div style="display:flex;flex-direction:column">`+
-  movsTicker.map((m,i)=>{
+  <div class="inv-det-lista">`+
+  movsTicker.map(m=>{
     const sale=isInvSalida(m);
-    return `<div style="display:flex;align-items:center;gap:12px;min-height:50px;${i?"border-top:1px solid var(--border)":""};cursor:pointer" onclick="closeInstrumentoDetail();openEditModal(${m.id})">
-      <span style="width:30px;height:30px;border-radius:50%;background:${sale?"var(--success-light)":"var(--invest-light)"};color:${sale?"var(--success)":"var(--invest)"};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${sale?"↓":"↑"}</span>
-      <div style="flex:1;display:flex;flex-direction:column;gap:1px;min-width:0">
-        <span style="font-size:13.5px;font-weight:600">${escapeHtml(m.subcat||m.cat)}</span>
-        <span style="font-size:11.5px;color:var(--muted)">${fdyInv(m.fecha)}</span>
-      </div>
-      <span style="font-size:13.5px;font-weight:600;color:${sale?"var(--success)":"var(--text)"}">${invMontoTxt(m)}</span>
-    </div>`;
+    const nombre=escapeHtml(`Editar ${m.subcat||m.cat}, ${fdyInv(m.fecha)}, ${invMontoTxt(m)}`);
+    return `<button type="button" class="inv-det-fila" aria-label="${nombre}" onclick="closeInstrumentoDetail();openEditModal(${m.id})">
+      <span class="inv-det-flecha${sale?" sale":""}" aria-hidden="true">${sale?"↓":"↑"}</span>
+      <span class="inv-det-fila-mid">
+        <span class="inv-det-fila-tit">${escapeHtml(m.subcat||m.cat)}</span>
+        <span class="inv-det-fila-fecha">${fdyInv(m.fecha)}</span>
+      </span>
+      <span class="inv-det-fila-monto${sale?" sale":""}">${invMontoTxt(m)}</span>
+    </button>`;
   }).join("")+
   `</div>
-  <div style="display:flex;gap:8px">
-    <button type="button" style="flex:1;height:44px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);font-size:13px;font-weight:600;cursor:pointer" onclick="irACargarInversion(${attrJS(ticker)},'cobro')">Cargar cobro</button>
-    <button type="button" style="flex:1;height:44px;border:none;border-radius:12px;background:var(--invest);color:#fff;font-size:13px;font-weight:600;cursor:pointer" onclick="irACargarInversion(${attrJS(ticker)},'compra')">Sumar compra</button>
+  <div class="inv-det-acciones">
+    <button type="button" class="inv-det-btn" onclick="irACargarInversion(${attrJS(ticker)},'cobro')">Cargar cobro</button>
+    <button type="button" class="inv-det-btn inv-det-btn-main" onclick="irACargarInversion(${attrJS(ticker)},'compra')">Sumar compra</button>
   </div>`;
   contentEl.innerHTML=html;
+  contentEl.scrollTop=0;
   document.getElementById("modal-instrumento-detail").classList.add("open");
 }
 function closeInstrumentoDetail(){
