@@ -439,11 +439,11 @@
       <button type="button" class="mov-topbar-arrow" onclick="cierreMesCambiar(1)" aria-label="Mes siguiente">›</button>
     </div>
     <div id="cierre-cuerpo"></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-sm u-flex1" id="cierre-compartir" onclick="compartirResumenMes()">📤 Compartir resumen</button>
-      <button class="btn-primary" id="cierre-btn" style="flex:1.2;background:var(--save);color:#fff;padding:11px" onclick="alternarCierreMes()">Cerrar el mes</button>
+    <div class="anio-acciones">
+      <button class="btn-sm" id="cierre-compartir" onclick="compartirResumenMes()">📤 Compartir resumen</button>
+      <button class="btn-primary" id="cierre-btn" onclick="alternarCierreMes()">Cerrar el mes</button>
     </div>
-    <button class="btn-sm" style="width:100%;margin-top:8px" onclick="cerrarCierreMes()">Cerrar esta pantalla</button>
+    <button class="btn-sm anio-cerrar" onclick="cerrarCierreMes()">Cerrar esta pantalla</button>
   </div>
 </div>
 
@@ -456,17 +456,17 @@
       <div class="form-group"><label class="form-label" for="informe-desde">Desde</label><input type="month" id="informe-desde" class="form-input" onchange="informeCambioMes()"></div>
       <div class="form-group"><label class="form-label" for="informe-hasta">Hasta</label><input type="month" id="informe-hasta" class="form-input" onchange="informeCambioMes()"></div>
     </div>
-    <div class="filter-row" style="margin-bottom:8px">
+    <div class="filter-row informe-presets">
       <span role="button" tabindex="0" class="filter-chip" id="informe-preset-antes" onclick="informeElegir('antes')">Antes de usar la app</span>
       <span role="button" tabindex="0" class="filter-chip" onclick="informeElegir('anio')">Este año</span>
       <span role="button" tabindex="0" class="filter-chip" onclick="informeElegir('seis')">Últimos 6 meses</span>
     </div>
     <div id="informe-cuerpo"></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-primary" id="informe-compartir" style="flex:1;background:var(--save);color:#fff;padding:11px" onclick="compartirInforme()">📤 Compartir informe</button>
+    <div class="anio-acciones">
+      <button class="btn-primary" id="informe-compartir" onclick="compartirInforme()">📤 Compartir informe</button>
       <button class="btn-sm" id="informe-compartir-texto" onclick="compartirInformeTexto()">📝 Como texto</button>
     </div>
-    <button class="btn-sm" style="width:100%;margin-top:8px" onclick="cerrarInforme()">Cerrar</button>
+    <button class="btn-sm anio-cerrar" onclick="cerrarInforme()">Cerrar</button>
   </div>
 </div>
 
@@ -1001,11 +1001,11 @@
       <span class="ahorro-header-title">Año completo</span>
       <div style="width:40px;flex-shrink:0"></div>
     </div>
-    <div class="year-tabs" id="year-tabs"></div>
+    <div class="year-tabs" id="year-tabs" role="group" aria-label="Año"></div>
     <div class="card" id="dash-anio-card">
       <div id="dash-anio-cabecera"></div>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="btn-primary" id="anual-compartir" style="flex:1;background:var(--save);color:#fff;padding:11px" onclick="compartirResumenAnual()">📤 Compartir</button>
+      <div class="anio-acciones">
+        <button class="btn-primary" id="anual-compartir" onclick="compartirResumenAnual()">📤 Compartir</button>
         <button class="btn-sm" onclick="abrirInforme()">📑 Otro período</button>
       </div>
     </div>
@@ -1024,9 +1024,9 @@
          de contra una escala aparte. -->
     <div class="card">
       <div class="card-title">Ingresos, gastos y balance</div>
-      <div id="dash-promedio" class="txt-xs txt-muted" style="text-align:center;margin-bottom:8px"></div>
-      <div id="dash-detail" style="background:var(--bg);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--muted);text-align:center">Tocá un mes para ver el detalle</div>
-      <div style="position:relative;height:230px"><canvas id="chart-mensual"></canvas></div>
+      <div id="dash-promedio" class="txt-xs txt-muted anio-promedio"></div>
+      <div id="dash-detail" class="anio-detalle" aria-live="polite">Tocá un mes para ver el detalle</div>
+      <div style="position:relative;height:230px"><canvas id="chart-mensual" role="img" aria-label="Gráfico de ingresos, gastos y balance mes a mes"></canvas></div>
     </div>
     <div class="card">
       <div class="card-title">Gastos por categoría</div>

@@ -1561,3 +1561,76 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .pin-autolock{margin-top:var(--sp-3)}
 .pin-activar{width:100%;background:var(--accent);color:var(--on-solid)}
 #pin-status .btn-sm,#huella-status .btn-sm{min-height:var(--tap)}   /* 44 reales aquí; el resto de Config sigue en 36 + halo: lo unificará config */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [AAA anio] Año completo (#dash-year-full), Informe de un período (#modal-informe) y Cierre del mes (#modal-cierre) — ronda 1
+   Cifras que se achican en vez de desbordar (el JS pasa el largo en --n), delta con color de "buena/mala noticia", filas de 44, notas con el
+   ícono en su columna. Guía: aaa/anio/GUIA_ELEMENTO.md
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* Botones de abajo de las tarjetas/hojas: mismo alto (44) los dos y el principal en teal con texto del sistema */
+.anio-acciones{display:flex;gap:var(--sp-2);margin-top:var(--sp-3)}
+.anio-acciones>.btn-primary{flex:1.2;min-width:0;background:var(--save);color:var(--on-solid);padding:0 var(--sp-3)}
+.anio-acciones>.btn-sm{flex:1;min-width:0;min-height:var(--tap)}
+#dash-anio-card .anio-acciones>.btn-primary{flex:1}
+#dash-anio-card .anio-acciones>.btn-sm{flex:0 0 auto}
+.anio-cerrar{width:100%;margin-top:var(--sp-2);min-height:var(--tap)}
+/* Cifras de arriba (ingresos / gastos / ahorrado): una letra para las tres, que se achica según la más larga; con importes de cientos de
+   millones pasan a una columna con el rótulo a la izquierda */
+.cierre-fila3>div{container-type:inline-size;min-width:0}
+.cierre-fila3 strong{display:block;white-space:nowrap;font-size:clamp(11px,calc(100cqw / (var(--n,10) * .6)),var(--fs-base))}
+.cierre-fila3.apilada{flex-direction:column;gap:6px}
+.cierre-fila3.apilada>div{flex-direction:row;align-items:baseline;gap:var(--sp-2);text-align:left;padding:10px var(--sp-3)}
+.cierre-fila3.apilada strong{margin-left:auto;font-size:clamp(11px,calc((100cqw - 150px) / (var(--n,10) * .6)),var(--fs-base))}
+.cierre-fila3.apilada .cierre-delta{flex:none;white-space:nowrap}
+.cierre-delta.bien{color:var(--save)}
+.cierre-delta.mal{color:var(--warning)}
+.cierre-pie{margin:var(--sp-2) 0 0;text-align:center}
+.cierre-hero{container-type:inline-size}
+.cierre-hero-num{font-size:clamp(24px,calc(100cqw / (var(--n,8) * .62)),34px);white-space:nowrap}
+/* Notas con ícono: el emoji en su propia columna, el texto no se enrosca debajo */
+.cierre-nota:has(.nota-ico){display:flex;gap:var(--sp-2)}
+.cierre-nota{text-wrap:pretty;margin-bottom:var(--sp-2)}
+.nota-ico{flex:none;width:1.5em;text-align:center}
+/* Categorías del resumen: aire entre filas y el nombre largo se corta con "…" antes de pisar el importe */
+.cierre-cat{margin-bottom:var(--sp-3)}
+.cierre-cat-top{align-items:baseline}
+.cierre-cat-top>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cierre-cat-top>span:last-child{flex:none}
+.cierre-barra{margin-top:6px}
+.informe-fila>strong{flex:none}
+/* Presets del informe: envuelven (antes era un carrusel que se cortaba y desbordaba a 360) y alinean con los campos de arriba */
+#modal-informe .informe-presets{flex-wrap:wrap;overflow:visible;row-gap:14px;padding:0;margin-bottom:var(--sp-3)}
+/* Año completo */
+.anio-promedio{text-align:center;margin-bottom:var(--sp-2);line-height:1.5}
+.anio-detalle{background:var(--bg);border-radius:var(--radius-sm);padding:var(--sp-3);margin-bottom:var(--sp-3);font-size:var(--fs-sm);color:var(--muted);text-align:center}
+.det-mes-nom{font-size:var(--fs-xs);font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-on-tint);margin-bottom:var(--sp-2)}
+.det-mes-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2) var(--sp-3)}
+.det-mes-grid>div{container-type:inline-size;min-width:0}
+.det-mes-grid>div:last-child:nth-child(odd){grid-column:1/-1}
+.det-etq{display:block;font-size:var(--fs-xs);color:var(--muted-on-tint)}
+.det-mes-grid strong{display:block;white-space:nowrap;font-weight:700;font-size:clamp(11px,calc(100cqw / (var(--n,10) * .6)),var(--fs-base))}
+.anio-vacio{text-align:center;padding:var(--sp-4) var(--sp-2) var(--sp-2)}
+.anio-vacio .empty-cta{display:inline-flex;align-items:center;justify-content:center}
+#dash-year-full.anio-sin-datos .card:not(#dash-anio-card){display:none!important}
+/* Barras por categoría: 44 de alto (se tocan), ícono aparte, color del token (en oscuro es el pastel, no un rojo que se pierde en negro) */
+#dash-year-full .bar-wrap{gap:0}
+#dash-year-full .bar-row{min-height:var(--tap);gap:var(--sp-2);cursor:pointer}
+#dash-year-full .bar-label{display:flex;gap:6px;align-items:flex-start;width:132px;font-size:var(--fs-sm);line-height:1.3;word-break:normal}
+.bar-ico{flex:none;width:1.4em;text-align:center}
+.bar-ico:empty{display:none}
+.bar-nom{min-width:0;overflow-wrap:anywhere}
+#dash-year-full .bar-track{height:8px;background:var(--border);border-radius:var(--radius-pill)}
+#dash-year-full .bar-fill{border-radius:var(--radius-pill)}
+#dash-year-full .bar-val{font-size:var(--fs-sm);width:60px}
+/* Saldo por cuenta */
+.cuenta-fila{padding:var(--sp-3) 0;border-bottom:1px solid var(--border);cursor:pointer;min-height:var(--tap)}
+.cuenta-fila:last-child{border-bottom:0}
+.cuenta-top{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2);margin-bottom:4px}
+.cuenta-nom{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-md);font-weight:600}
+.cuenta-saldo{flex:none;font-size:var(--fs-md);font-weight:700;white-space:nowrap}
+.cuenta-det{font-size:var(--fs-xs);color:var(--muted);line-height:1.5}
+.usd-lista-btn{min-height:var(--tap)}
+.cierre-item .btn-sm{min-height:var(--tap)}
+.cierre-sec{margin:var(--sp-4) 0 var(--sp-3)}
+#dash-year-full.anio-sin-datos .anio-acciones{justify-content:center}
+.det-mes{min-width:0}
