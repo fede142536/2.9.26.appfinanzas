@@ -70,7 +70,7 @@ function cambiarDashMes(delta){
   const nuevo=addMonths(dashMes, delta);
   if(nuevo>hoyYM) return; // no se puede ir al futuro
   const primero=primerMesConDatos();
-  if(delta<0 && primero && nuevo<primero) return; // nada que mostrar más atrás
+  if(delta<0 && (!primero || nuevo<primero)) return; // nada que mostrar más atrás (sin datos cargados, tampoco hay a dónde ir)
   dashMes=nuevo;
   dashInsightAbierto=null;
   renderDashResumen();
@@ -148,7 +148,7 @@ function construirInsights(ym, mesData, monthlyAnio){
     if(!hayProm || !prom) return ".";
     const pct=Math.round((val-prom)/Math.abs(prom)*100);
     if(Math.abs(pct)<=3) return ": en línea con tu promedio.";
-    return `: ${Math.abs(pct)}% ${pct>0?"más":"menos"} ${fraseNormal}`;
+    return `: ${Math.abs(pct).toLocaleString("es-AR")}% ${pct>0?"más":"menos"} ${fraseNormal}`;
   }
 
   const out=[];
@@ -212,7 +212,7 @@ function construirInsights(ym, mesData, monthlyAnio){
         const max=Math.max(arriba.val, arriba.avg);
         out.push({
           icon:getIcon(arriba.cat,"🏷"), bg:"var(--danger-light)",
-          a:`En ${arriba.cat} `, b:`gastaste ${Math.round((arriba.ratio-1)*100)}% más`, bc:"var(--danger)",
+          a:`En ${arriba.cat} `, b:`gastaste ${Math.round((arriba.ratio-1)*100).toLocaleString("es-AR")}% más`, bc:"var(--danger)",
           c:" que lo habitual.",
           rows:[filaInsight(Mes, arriba.val, max, "var(--danger)"), filaInsight("Promedio", arriba.avg, max, "color-mix(in srgb,var(--danger) 40%,var(--surface))")],
           action:"Ver gastos de "+arriba.cat, actionFn:()=>irAGastosDeCategoria(ym, arriba.cat)
@@ -224,7 +224,7 @@ function construirInsights(ym, mesData, monthlyAnio){
         const max=Math.max(abajo.val, abajo.avg);
         out.push({
           icon:getIcon(abajo.cat,"🏷"), bg:"var(--success-light)",
-          a:`En ${abajo.cat} `, b:`gastaste ${Math.round((1-abajo.ratio)*100)}% menos`, bc:"var(--success)",
+          a:`En ${abajo.cat} `, b:`gastaste ${Math.round((1-abajo.ratio)*100).toLocaleString("es-AR")}% menos`, bc:"var(--success)",
           c:" que lo habitual.",
           rows:[filaInsight(Mes, abajo.val, max, "var(--success)"), filaInsight("Promedio", abajo.avg, max, "color-mix(in srgb,var(--success) 40%,var(--surface))")]
         });
@@ -288,15 +288,17 @@ function construirInsightHTML(it, i){
       <span class="dash-insight-row-val">${r.val}</span>
     </div>`).join("");
   const detalleHTML = it.detalle ? `<div class="dash-insight-detalle">${escapeHtml(it.detalle)}</div>` : "";
-  const accionHTML = it.action ? `<span class="dash-insight-action" onclick="event.stopPropagation();dashInsightAccion(${i})">${escapeHtml(it.action)} ›</span>` : "";
-  return `<div class="dash-insight-card" role="button" tabindex="0" aria-expanded="false" onclick="toggleDashInsight(${i})">
-    <div class="dash-insight-top">
-      <span class="dash-insight-icon" style="background:${it.bg}">${it.icon}</span>
+  // [AAA dashboard] La acción es un <button> de verdad (antes un <span> sin foco ni rol, dentro de otro role=button) y el que se
+  // expande es la cabecera (role=button + aria-expanded + aria-controls), no la tarjeta entera con sus hijos.
+  const accionHTML = it.action ? `<button type="button" class="dash-insight-action" onclick="event.stopPropagation();dashInsightAccion(${i})">${escapeHtml(it.action)} ›</button>` : "";
+  return `<div class="dash-insight-card" onclick="toggleDashInsight(${i})">
+    <div class="dash-insight-top" role="button" tabindex="0" aria-expanded="false" aria-controls="dash-insight-cuerpo-${i}">
+      <span class="dash-insight-icon" style="background:${it.bg}" aria-hidden="true">${it.icon}</span>
       <span class="dash-insight-frase">${escapeHtml(it.a)}<strong style="color:${it.bc}">${escapeHtml(it.b)}</strong>${escapeHtml(it.c)}</span>
-      <span class="dash-insight-chev">▾</span>
+      <svg class="dash-insight-chev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>
     </div>
     <div class="dash-insight-body-wrap">
-      <div class="dash-insight-body">${bodyRows}${detalleHTML}${accionHTML}</div>
+      <div class="dash-insight-body" id="dash-insight-cuerpo-${i}">${bodyRows}${detalleHTML}${accionHTML}</div>
     </div>
   </div>`;
 }
@@ -316,11 +318,10 @@ function toggleDashInsight(i){
   dashInsightAbierto = (dashInsightAbierto===i) ? null : i;
   document.querySelectorAll("#dash-insights-lista .dash-insight-card").forEach((card,idx)=>{
     const abierta=idx===dashInsightAbierto;
-    card.setAttribute("aria-expanded", String(abierta));
+    const cab=card.querySelector(".dash-insight-top");
+    if(cab) cab.setAttribute("aria-expanded", String(abierta));
     const wrap=card.querySelector(".dash-insight-body-wrap");
     if(wrap) wrap.style.gridTemplateRows = abierta ? "1fr" : "0fr";
-    const chev=card.querySelector(".dash-insight-chev");
-    if(chev) chev.textContent = abierta ? "▴" : "▾";
     card.querySelectorAll(".dash-insight-row-fill").forEach(f=>{
       f.style.width = abierta ? (f.dataset.w||"0")+"%" : "0%";
     });
@@ -337,8 +338,15 @@ function renderDashResumen(){
   const primero=primerMesConDatos();
   const btnPrev=document.getElementById("dash-mes-prev");
   const btnNext=document.getElementById("dash-mes-next");
-  if(btnPrev) btnPrev.style.color = (primero && addMonths(ym,-1)<primero) ? "var(--border)" : "var(--muted)";
-  if(btnNext) btnNext.style.color = (ym>=hoyYM) ? "var(--border)" : "var(--muted)";
+  // [AAA dashboard] En el tope de cada lado la flecha se esconde (como en Movimientos) y queda deshabilitada de verdad: antes seguía
+  // siendo un botón activo, gris casi invisible (1,24:1). Si tenía el foco, este pasa a la flecha que sigue sirviendo.
+  const sinAtras = !primero || addMonths(ym,-1)<primero, sinAdelante = ym>=hoyYM;
+  [[btnPrev,sinAtras,btnNext],[btnNext,sinAdelante,btnPrev]].forEach(([b,off,otro])=>{
+    if(!b) return;
+    const teniaFoco = document.activeElement===b;
+    b.disabled = off; b.setAttribute("aria-disabled", String(off));
+    if(off && teniaFoco && otro && !otro.disabled) otro.focus();
+  });
 
   const {monthly}=getDashData(year);
   const mesData=monthly.find(d=>d.mes===ym);
@@ -346,9 +354,10 @@ function renderDashResumen(){
   const subEl=document.getElementById("dash-headline-sub");
   const listaEl=document.getElementById("dash-insights-lista");
   if(!mesData){
+    const esActualVacio = ym===hoyYM;
     if(headlineEl) headlineEl.textContent=`No hay movimientos cargados en ${mesLbl(ym)}.`;
     if(subEl) subEl.textContent="";
-    if(listaEl) listaEl.innerHTML=dashEnlacesAnio(year);
+    if(listaEl) listaEl.innerHTML=dashVacioHTML(esActualVacio)+dashEnlacesAnio(year);
     dashInsightsActuales=[];
     return;
   }
@@ -367,6 +376,13 @@ function renderDashResumen(){
     listaEl.innerHTML=dashInsightsActuales.map((it,i)=>construirInsightHTML(it,i)).join("")
       + dashEnlacesAnio(year);
   }
+}
+// [AAA dashboard] Mes sin movimientos: guía y salida (antes quedaba solo el titular y un enlace al año).
+function dashVacioHTML(esActual){
+  const guia = esActual
+    ? "Cuando cargues tu primer gasto o ingreso del mes, acá vas a ver cómo viene."
+    : "No hay nada cargado en este mes. Podés mirar otro con las flechas o cargar un movimiento.";
+  return `<div class="empty dash-vacio"><div class="empty-icon" aria-hidden="true">📭</div><div class="empty-guia">${guia}</div><button type="button" class="btn-primary empty-cta" onclick="abrirCarga()">Cargar un movimiento</button></div>`;
 }
 // El enlace al pie del resumen del mes: el año completo (resumen para compartir, gráficos y, desde ahí, el informe de cualquier período). `year` = el año del mes que se mira.
 function dashEnlacesAnio(year){

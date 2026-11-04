@@ -979,11 +979,11 @@
         <button class="mov-topbar-arrow" id="dash-mes-prev" onclick="cambiarDashMes(-1)" aria-label="Mes anterior">‹</button>
         <div class="mov-topbar-month">
           <span class="mov-topbar-eyebrow">Resumen</span>
-          <span id="dash-mes-label" class="mov-topbar-label"></span>
+          <span id="dash-mes-label" class="mov-topbar-label" aria-live="polite"></span>
         </div>
         <button class="mov-topbar-arrow" id="dash-mes-next" onclick="cambiarDashMes(1)" aria-label="Mes siguiente">›</button>
       </div>
-      <div style="width:40px;flex-shrink:0"></div>
+      <div class="dash-topbar-espejo" aria-hidden="true"></div>
     </div>
     <div class="dash-headline">
       <span class="dash-headline-frase" id="dash-headline"></span>
