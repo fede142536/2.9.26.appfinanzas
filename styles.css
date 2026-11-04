@@ -83,12 +83,13 @@ body{font-family:'Plus Jakarta Sans',-apple-system,'SF Pro Text','Helvetica Neue
    una imagen de contenido, y aria-label ya lo describe para quien usa lector de pantalla. */
 #fab-cargar{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom, 0px));right:24px;width:56px;height:56px;border-radius:50%;background:var(--surface) url('fab-perro.jpg') center/cover;border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform 0.2s}
 #fab-cargar:active{transform:scale(.92)}
-/* Calculadora flotante de Cargar: flota por encima de la .save-bar (que es sticky, no fixed,
-   y ocupa todo el ancho con el botón Guardar) para no taparlo. El ícono es el signo "=" como
-   texto plano (no un emoji): el de calculadora de bolsillo no lo dibujan todas las fuentes de
-   emoji de Android y se veía como un cuadrito roto. */
-#fab-calculadora{position:fixed;bottom:calc(92px + env(safe-area-inset-bottom, 0px));right:16px;width:48px;height:48px;border-radius:50%;background:var(--tema-color,var(--accent));color:var(--on-solid);border:none;box-shadow:var(--shadow);z-index:90;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;cursor:pointer;transition:transform .2s}
-#fab-calculadora:active{transform:scale(.92)}
+/* [AAA cargar] Botón de la calculadora: vive en el encabezado fijo de Cargar (antes era un botón flotante de 48 px que tapaba el 📅,
+   un interruptor o el botón Guardar según el scroll). Círculo de 44 con ícono SVG (el emoji de calculadora no lo dibujan todas las
+   fuentes de Android; un SVG sí), tintado con el color del tipo activo. */
+#page-cargar #fab-calculadora{position:absolute;top:50%;right:calc(var(--sp-2) + var(--safe-r));bottom:auto;transform:translateY(-50%);width:var(--tap);height:var(--tap);border-radius:50%;
+  background:var(--tema-light,var(--accent-light));color:var(--tema-color,var(--accent));border:1px solid color-mix(in srgb,var(--tema-color,var(--accent)) 40%,transparent);box-shadow:none;z-index:1;
+  display:flex;align-items:center;justify-content:center;padding:0;font-size:0;cursor:pointer;transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+#page-cargar #fab-calculadora:active{transform:translateY(-50%) scale(.94)}
 .calc-display{background:var(--bg);border-radius:12px;padding:16px 14px;margin:4px 0 14px;text-align:right;
   font-size:30px;font-weight:700;letter-spacing:-.5px;color:var(--text);overflow-x:auto;white-space:nowrap}
 .calc-grid{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:56px;gap:8px;margin-bottom:14px}
@@ -1026,6 +1027,106 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .mov-icon-btn:active,.mov-topbar-arrow:active,.side-menu-close:active,.cierre-x:active,.tx-del:active,.tx-edit:active,.copia-borrar:active{background:var(--border)}
 .field-link:active{opacity:.6}
 .nav-btn:active,.pin-key:active{transition-duration:var(--dur-1)}
+
+/* ═══════════════════════════════════════════
+   [AAA cargar] PANTALLA CARGAR
+   ═══════════════════════════════════════════
+   Ronda 1. Va antes de "MOVIMIENTO REDUCIDO" para pisar a los componentes de Cargar sin tocar sus reglas. Tokens del sistema (GUIA.md).
+   !important solo donde hay que ganarle a otro !important de este mismo archivo (el tamaño de .amount-input). */
+
+/* Encabezado: deja lugar al botón de la calculadora (44 + margen) para que el título no pase por debajo. */
+#page-cargar>.header{padding-right:calc(var(--tap) + var(--sp-4) + var(--safe-r))}
+#fab-calculadora:focus-visible{outline:2px solid var(--tema-color,var(--accent));outline-offset:2px}
+
+/* Aviso de gastos frecuentes: una línea con el total; el detalle se despliega. Separado del encabezado (antes quedaba pegado). */
+#alertas-frecuentes:not(:empty){padding-top:var(--sp-3)}
+.aviso-frec{background:var(--warning-light);color:var(--warning);border-radius:var(--radius-sm);padding:0 var(--sp-3);margin-bottom:var(--sp-1);font-size:var(--fs-sm)}
+.aviso-frec>summary{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);min-height:var(--tap);cursor:pointer;list-style:none;line-height:1.35}
+.aviso-frec>summary::-webkit-details-marker{display:none}
+.aviso-frec>summary::after{content:"▾";flex-shrink:0;font-size:var(--fs-md);transition:transform var(--dur-2) var(--ease)}
+.aviso-frec[open]>summary::after{transform:rotate(180deg)}
+.aviso-frec-lista{font-size:var(--fs-xs);color:var(--muted);line-height:1.45;padding-bottom:var(--sp-3)}
+
+/* Carga rápida: el micrófono y "Cargar" miden 44 reales; el aviso de resultado respira. */
+#page-cargar .carga-rapida .u-row .btn-sm{min-height:var(--tap)}
+.btn-voz{min-width:var(--tap)}
+
+/* Selector de tipo: Cambio ahora es un glifo (⇄) como los otros cuatro: mismo peso visual, sin emoji de color. */
+#page-cargar>.type-toggle .type-btn{font-size:var(--fs-sm)}
+
+/* MONTO PROTAGONISTA. Toda la zona (el "$", el aire, la cifra) es un <label>: tocar cualquier parte enfoca el campo. El campo nunca baja
+   de 44 de ancho (vacío medía 35×69). La cifra ENTERA entra: la fuente baja con --monto-fs (ajustarTamanoMonto, js/config-ui.js) y el
+   texto no se corta con "…" (el reset global de input,select ponía text-overflow:ellipsis y se perdía el último dígito de 12 cifras). */
+#page-cargar .amount-hero{cursor:text;max-width:100%}
+#page-cargar .amount-card .amount-hero .amount-input{font-size:var(--monto-fs,38px)!important;min-width:max(3ch,var(--tap));max-width:100%;text-overflow:clip;transition:font-size var(--dur-2) var(--ease)}
+#page-cargar .amount-hero .amount-input::placeholder{color:var(--border-strong);opacity:1}
+/* El prefijo ($ / USD) acompaña a la cifra: misma línea base y peso, no se achica con ella. */
+#page-cargar .amount-card .amount-hero{align-items:baseline}
+
+/* Moneda ARS/USD y sentido Compro/Vendo: botones de 44 reales dentro de la píldora. */
+#page-cargar .currency-pill{height:32px}
+#page-cargar .sentido-btn{height:var(--tap);padding-inline:var(--sp-4)}
+
+/* Etiquetas de campo con enlace ("+ Nueva"): la fila mide 28 con la etiqueta y el enlace pegados al campo (proximidad) y el enlace suma un halo de 44 de
+   alto (la caja mide 28; el halo cubre 8 px por arriba y 8 por abajo, así toca bien sin robarle el toque al selector). */
+#page-cargar .field-head,#page-cargar .two-col>.form-group>.form-label,#page-cargar .field-head>.form-label{min-height:28px}
+#page-cargar .field-head{align-items:flex-end}
+#page-cargar .two-col>.form-group>.form-label,#page-cargar .field-head>.form-label{display:flex;align-items:flex-end}
+#page-cargar .field-link{align-self:stretch;display:inline-flex;align-items:flex-end;padding-left:var(--sp-3);font-size:var(--fs-sm)}
+
+/* Categoría y Subcategoría en una sola columna en pantallas de celular: medido con las 120 subcategorías reales, a 390 px la columna de
+   Subcategoría (93 px útiles) cortaba 12 nombres ("Electrodomésticos", "Renovación Alquiler"…), a 360 px 15; apiladas no se corta ninguna. */
+@media (max-width:480px){
+  #page-cargar .two-col:has(#inp-cat){grid-template-columns:1fr}
+  #page-cargar .two-col:has(#inp-cat) .form-select{padding-left:var(--sp-3);padding-right:24px;background-position:right 8px center}
+}
+
+/* Sugerencia de categoría (debajo de la nota): botón de ancho completo, 44 de alto, legible (el "tocá para aplicar" ya no se apaga con opacity). */
+.sugerencia-cat{display:block;margin-top:var(--sp-2);padding:14px var(--sp-3);border-radius:var(--radius-sm);background:var(--accent-light);color:var(--accent);font-size:var(--fs-sm);line-height:1.35;cursor:pointer;transition:transform var(--dur-1) var(--ease)}
+.sugerencia-cat:active{transform:scale(.99)}
+.sugerencia-cat:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sugerencia-cat-fuente{color:var(--muted-on-tint);font-size:var(--fs-xs)}
+
+/* Campos de importe secundarios de las opciones (día de vencimiento, monto recuperable): tamaño de campo normal, no de monto protagonista. */
+.opt-amount-wrap .amount-input{font-size:var(--fs-base)!important}
+#inv-fondo-group{margin-top:var(--sp-2)}
+.carga-rapida-guardar{min-height:var(--tap)}
+
+/* Chips de Cargar: mismo alto (44) que Hoy/Ayer/-2d/-7d. */
+.cuota-chip,.inv-cat-chip{min-height:var(--tap)}
+.inv-cat-chip{padding-inline:var(--sp-3)}
+.ticker-row{gap:var(--sp-2)}
+.ticker-chip{height:40px;padding:0 var(--sp-3);font-size:var(--fs-sm)}
+
+/* Simulador "¿Me lo banco?": el importe no se parte (antes "$1.822.575,8" / "0"), la barra cede el ancho. Lo ya comprometido es gris medio (≥3:1). */
+.sim-row{display:flex;align-items:center;gap:var(--sp-2)}
+.sim-mes{width:30px;flex-shrink:0;font-size:var(--fs-xs);font-weight:600;color:var(--muted);text-transform:uppercase}
+.sim-bar{flex:1;min-width:32px;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;display:flex}
+.sim-bar>span{height:100%}
+.sim-bar-ya{background:var(--border-strong)}
+.sim-bar-nueva{background:var(--warning)}
+.sim-val{min-width:84px;flex-shrink:0;text-align:right;white-space:nowrap;font-size:var(--fs-sm);font-weight:600}
+
+/* Barra Guardar: el .page deja 96 px abajo (era para una barra inferior que ya no existe) y la barra quedaba flotando con un hueco debajo.
+   En Cargar va pegada al borde de abajo, y el scroll por foco deja libre su alto para que el teclado no esconda el campo tras ella. */
+#page-cargar{padding-bottom:0}
+#page-cargar .save-bar{margin-top:var(--sp-3)}
+html:has(#page-cargar.active){scroll-padding-bottom:calc(88px + var(--safe-b))}
+
+/* Calculadora: visor que no corta la cuenta, "Usar este resultado" con el color del tipo, "Cerrar" a todo el ancho. */
+#modal-calculadora .calc-usar{background:var(--tema-color,var(--accent));color:var(--on-solid)}
+#modal-calculadora .calc-cerrar{width:100%;margin-top:var(--sp-2);min-height:var(--tap)}
+.calc-display{font-size:var(--calc-fs,30px);transition:font-size var(--dur-1) var(--ease)}
+.calc-btn{min-height:var(--tap)}
+
+/* Nueva categoría y selector de ícono. */
+.cat-icon-btn{font-size:var(--fs-xl);gap:var(--sp-2);justify-content:flex-start;padding:var(--sp-2) var(--sp-4);min-height:var(--tap)}
+.cat-icon-btn span+span{font-size:var(--fs-md)}
+.icon-picker{max-height:80vh}
+.icon-picker-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--sp-2);overflow-y:auto;max-height:55vh}
+.icon-opt{min-height:var(--tap);font-size:var(--fs-xl);padding:var(--sp-2);border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer;transition:transform var(--dur-1) var(--ease),background-color var(--dur-2) var(--ease)}
+.icon-opt:active{transform:scale(.94);background:var(--bg)}
+.icon-picker-cancelar{width:100%;margin-top:var(--sp-3);min-height:var(--tap)}
 
 /* ═══════════════════════════════════════════
    MOVIMIENTO REDUCIDO

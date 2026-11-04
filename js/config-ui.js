@@ -30,6 +30,37 @@ function aplicarMascaraMiles(input, formateador){
   const nuevoCursor=Math.max(0, (cursorViejo||0)+diff);
   input.setSelectionRange(nuevoCursor, nuevoCursor);
 }
+// [AAA cargar] Monto protagonista: achica la fuente para que la cifra ENTERA entre en la tarjeta (con 12 dígitos el campo cortaba
+// el final y el último dígito quedaba oculto). Mide el texto con un <span> oculto que copia la tipografía real del campo (el canvas no
+// aplica las cifras tabulares y se queda corto); la fuente base y el piso (18 px) salen del CSS (--monto-fs). Si la tarjeta está
+// oculta (ancho 0) no hace nada: se reajusta al mostrarla (setTipo).
+function ajustarTamanoMonto(el){
+  if(!el || !el.closest || !el.style) return;
+  const hero=el.closest(".amount-hero");
+  const tarjeta=hero && hero.parentElement;
+  if(!tarjeta || !tarjeta.clientWidth) return;
+  el.style.removeProperty("--monto-fs");
+  const cs=getComputedStyle(el), ct=getComputedStyle(tarjeta), ch=getComputedStyle(hero);
+  const base=parseFloat(cs.fontSize);
+  const medidor=document.createElement("span");
+  medidor.textContent=el.value || el.placeholder || "0";
+  medidor.style.cssText="position:absolute;visibility:hidden;white-space:pre;left:-9999px;top:0;"
+    +`font-family:${cs.fontFamily};font-size:${base}px;font-weight:${cs.fontWeight};letter-spacing:${cs.letterSpacing};font-variant-numeric:${cs.fontVariantNumeric};font-feature-settings:${cs.fontFeatureSettings}`;
+  hero.appendChild(medidor);
+  const ancho=medidor.getBoundingClientRect().width;
+  medidor.remove();
+  const pre=hero.querySelector(".amount-prefix");
+  const libre=tarjeta.clientWidth-parseFloat(ct.paddingLeft)-parseFloat(ct.paddingRight)-parseFloat(ch.paddingLeft)-parseFloat(ch.paddingRight)
+    -(pre?pre.offsetWidth:0)-(parseFloat(ch.columnGap)||0)-8;
+  if(ancho>libre) el.style.setProperty("--monto-fs", Math.max(18,Math.floor(base*libre/ancho))+"px");
+}
+function ajustarTodosLosMontos(){
+  document.querySelectorAll(".amount-hero .amount-input").forEach(ajustarTamanoMonto);
+}
+document.addEventListener("input", e=>{
+  if(e.target && e.target.matches && e.target.matches(".amount-hero .amount-input")) ajustarTamanoMonto(e.target);
+});
+window.addEventListener("resize", ajustarTodosLosMontos);
 // Limpia un valor formateado con puntos de miles y coma decimal para poder parsearlo:
 // quita los puntos (son separador de miles, no decimal) y convierte la coma en punto decimal.
 function limpiarImporte(str){
@@ -216,7 +247,12 @@ function cerrarCalculadora(){
 }
 function actualizarDisplayCalc(){
   const d=document.getElementById("calc-display");
-  if(d) d.textContent=calcExpr||"0";
+  if(!d) return;
+  d.textContent=calcExpr||"0";
+  // [AAA cargar] Una cuenta larga no se corta: la fuente baja por tramos y, si igual no entra, el visor muestra el final (lo último que tipeaste).
+  const n=d.textContent.length;
+  d.style.setProperty("--calc-fs", n>24 ? "18px" : n>18 ? "22px" : n>14 ? "26px" : "30px");
+  d.scrollLeft=d.scrollWidth;
 }
 function calcEsOperador(ch){
   return ch==="+"||ch==="−"||ch==="×"||ch==="÷";

@@ -47,10 +47,11 @@ function renderAlertasFrecuentes(){
   const movsMes=getTcMovsEnMes(hoyYM).filter(m=>m.frecuente);
   if(!movsMes.length){el.innerHTML="";return;}
   const total=movsMes.reduce((s,m)=>s+m.importe,0);
-  el.innerHTML=`<div style="background:var(--warning-light);color:var(--warning);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px">
-    <strong>🔁 Gastos frecuentes este mes:</strong> ${movsMes.length} ${movsMes.length===1?"servicio":"servicios"} por un total de <strong>${fmtS(total)}</strong>
-    <div style="font-size:11px;margin-top:4px;color:var(--muted)">${movsMes.map(m=>`${escapeHtml(m.desc)} (${fmtAbbr(m.importe)})`).join(" · ")}</div>
-  </div>`;
+  // [AAA cargar] Una línea con el total y el detalle plegado: la lista de servicios (3 líneas) empujaba el formulario hacia abajo.
+  el.innerHTML=`<details class="aviso-frec">
+    <summary><span><strong>🔁 Gastos frecuentes este mes:</strong> ${movsMes.length} ${movsMes.length===1?"servicio":"servicios"} · <strong>${fmtS(total)}</strong></span></summary>
+    <div class="aviso-frec-lista">${movsMes.map(m=>`${escapeHtml(m.desc)} (${fmtAbbr(m.importe)})`).join(" · ")}</div>
+  </details>`;
 }
 
 // ═══════════════════════════════════════════
@@ -324,7 +325,7 @@ function sugerirCategoria(){
   el._sugerencia=sug;
   const icon=getIcon(sug.cat,"💡");
   const fuenteLabel=sug.fuente==="historial"?"según tu historial":"sugerido";
-  el.innerHTML=`💡 <strong>${icon} ${escapeHtml(sug.cat)}${sug.subcat?" / "+escapeHtml(sug.subcat):""}</strong> <span style="opacity:.7;font-size:11px">· ${fuenteLabel} · tocá para aplicar</span>`;
+  el.innerHTML=`💡 <strong>${icon} ${escapeHtml(sug.cat)}${sug.subcat?" / "+escapeHtml(sug.subcat):""}</strong> <span class="sugerencia-cat-fuente">· ${fuenteLabel} · tocá para aplicar</span>`;
   el.style.display="block";
 }
 
@@ -464,6 +465,7 @@ function setTipo(t){
   if(t==="Tarjeta"){ buildTcCats(); buildTarjetaSelect("tc-tarjeta"); buildCuotasChips(); }
   if(t==="Inversion"){ buildInvCats(); buildTickerRecientes(); }
   if(t==="Cambio"){ buildCuentaSelect("cambio-cuenta"); setSentidoCambio(sentidoCambio); }
+  if(typeof ajustarTodosLosMontos==="function") ajustarTodosLosMontos();   // [AAA cargar] los campos recién mostrados ya tienen ancho: se ajusta la fuente del monto
 }
 
 // ═══════════════════════════════════════════
@@ -633,14 +635,15 @@ function correrSimulacionInline(){
     return;
   }
   const maxTotal=Math.max(...r.filas.map(f=>f.total),1);
+  // [AAA cargar] Clases en vez de estilos en línea: el importe ya no se parte en dos líneas ("$1.822.575,8" / "0").
   el.innerHTML=r.filas.map(f=>`
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="width:30px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase">${escapeHtml(mesLbl(f.ym).slice(0,3))}</span>
-      <div style="flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;display:flex">
-        <span style="height:100%;width:${Math.round(f.yaComprometido/maxTotal*100)}%;background:var(--border)"></span>
-        <span style="height:100%;width:${Math.round(f.nueva/maxTotal*100)}%;background:var(--warning)"></span>
+    <div class="sim-row">
+      <span class="sim-mes">${escapeHtml(mesLbl(f.ym).slice(0,3))}</span>
+      <div class="sim-bar">
+        <span class="sim-bar-ya" style="width:${Math.round(f.yaComprometido/maxTotal*100)}%"></span>
+        <span class="sim-bar-nueva" style="width:${Math.round(f.nueva/maxTotal*100)}%"></span>
       </div>
-      <span style="width:84px;text-align:right;font-size:12px;font-weight:600">${fmtS(f.total)}</span>
+      <span class="sim-val">${fmtS(f.total)}</span>
     </div>`).join("");
 }
 // "Monto recuperable" es un switch: al prenderse muestra el campo de importe debajo.
@@ -880,5 +883,6 @@ function resetForm(t){
     calcCuota();
     enfocarCampoDeArriba("tc-desc");
   }
+  if(typeof ajustarTodosLosMontos==="function") ajustarTodosLosMontos();   // [AAA cargar] el monto vacío vuelve a su tamaño normal
 }
 
