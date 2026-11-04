@@ -1172,6 +1172,8 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .tx-sub .tx-cuenta{flex:0 0 auto;min-width:0;max-width:65%;overflow:hidden;text-overflow:ellipsis;font-size:var(--fs-xs)}
 .js-toggle-pago,.js-toggle-recup{font-size:var(--fs-xs)}
 #tx-list .tx-icon{font-size:var(--fs-base)}
+/* Entrada de las filas: 300 ms con la curva del sistema (eran 400 con "ease" y se repetían en cada toque de un filtro). */
+tx-item{animation-duration:var(--dur-3);animation-timing-function:var(--ease)}
 .tx-cat{display:flex;align-items:center;gap:6px}
 .tx-cat-txt{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .tx-cat .badge{flex-shrink:0}
