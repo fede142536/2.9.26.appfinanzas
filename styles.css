@@ -1115,6 +1115,7 @@ button[style*="background:none"]::after{content:"";position:absolute;left:50%;to
 .sim-val{min-width:84px;flex-shrink:0;text-align:right;white-space:nowrap;font-size:var(--fs-sm);font-weight:600}
 
 /* Franjas de valor (cuota / tipo de cambio): una línea, la fuente la baja ajustarLineaResumen (--resumen-fs). */
+.rate-strip{min-height:40px;box-sizing:border-box}
 .rate-strip-label{white-space:nowrap;flex-shrink:0}
 .rate-strip-val{white-space:nowrap;font-size:var(--resumen-fs,17px)}
 .rate-box-label{white-space:nowrap;flex-shrink:0}
