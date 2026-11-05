@@ -11182,6 +11182,54 @@ test("un CSV con fechas dd/mm/aaaa se lee como texto: 01/11/2026 es el 1 de novi
   igual(typeof filas[0].Fecha, "string");
 });
 
+grupo("Cuentas: editar (renombrar) con propagación");
+
+test("renombrar una cuenta cambia todos los campos cuenta y cuentaDestino, también anidados, y solo los que coinciden", ()=>{
+  const datos=[{id:1,cuenta:"Galicia"},{id:2,cuenta:"Efectivo",cuentaDestino:"Galicia"},{id:3,cuenta:"galicia"},{id:4,tarjetas:[{cuenta:"Galicia"}]},{cuenta:"Galicia Pro"}];
+  const n=renombrarCuentaEnObjeto(datos,"Galicia","Banco Nuevo");
+  igual(n,3); igual(datos[0].cuenta,"Banco Nuevo"); igual(datos[1].cuentaDestino,"Banco Nuevo"); igual(datos[1].cuenta,"Efectivo");
+  igual(datos[2].cuenta,"galicia","no toca otra grafía"); igual(datos[3].tarjetas[0].cuenta,"Banco Nuevo"); igual(datos[4].cuenta,"Galicia Pro");
+  const circular={cuenta:"X"}; circular.yo=circular; igual(renombrarCuentaEnObjeto(circular,"X","Y"),1,"un objeto que se apunta a sí mismo no cuelga");
+});
+
+test("los nombres de las cuentas de fábrica se normalizan: solo de fábrica, nada de 'Cuentas', sin repetidos ni nombres peligrosos", ()=>{
+  const r=normalizarCuentasRen({Galicia:" Galicia Pro ", Efectivo:"Efectivo", Cuentas:"Otra", Inventada:"X", MODO:"Galicia Pro", BPat:5, Balanz:"constructor", "__proto__":"hola"});
+  igual(r.Galicia,"Galicia Pro"); igual(r.Efectivo,undefined,"igual al de fábrica no se guarda"); igual(r.Cuentas,undefined); igual(r.Inventada,undefined);
+  igual(r.MODO,undefined,"un nombre ya usado no se repite"); igual(r.BPat,undefined); igual(r.Balanz,"constructor_"); igual(Object.keys(r).sort().join(","),"Balanz,Galicia");
+  igual(normalizarCuentasRen("mal"),{}); igual(normalizarCuentasRen([1]),{});
+});
+
+test("editar una cuenta de fábrica y una propia: la lista, los movimientos y los bancos cambian; Cuentas no se edita; un nombre repetido se rechaza", async ()=>{
+  const antes={movs, tcs, metas, papelera, cc:[...cuentasCustom], ren:{...getCuentasRen()}, prompt:window.mostrarPrompt, toast:window.showToast, bancos:localStorage.getItem(BANCOS_TC_KEY), render:{m:window.renderMovs, t:window.renderTarjetas}};
+  let respuesta=null, avisos=[];
+  window.mostrarPrompt=async()=>respuesta; window.showToast=m=>avisos.push(m); window.renderMovs=()=>{}; window.renderTarjetas=()=>{};
+  try{
+    movs=[{id:1,tipo:"Gasto",importe:10,cuenta:"Galicia",fecha:"2026-10-01"},{id:2,tipo:"Gasto",importe:5,cuenta:"Mi billetera",fecha:"2026-10-02"}]; tcs=[]; metas=[]; papelera=[]; cuentasCustom=["Mi billetera"];
+    guardarCuentasRen({}); guardarBancosTc({Visa:"Galicia"});
+    respuesta="Galicia Pro"; await editarCuenta("Galicia");
+    cierto(getCuentas().includes("Galicia Pro") && !getCuentas().includes("Galicia"), "la de fábrica se ve con su nombre nuevo");
+    igual(getCuentas().indexOf("Galicia Pro"), CUENTAS_DEFAULT.indexOf("Galicia"), "y en el mismo lugar de la lista");
+    igual(movs[0].cuenta,"Galicia Pro"); igual(leerBancosTc().Visa,"Galicia Pro"); igual(getCuentasRen().Galicia,"Galicia Pro");
+    respuesta="Galicia"; await editarCuenta("Galicia Pro");
+    cierto(getCuentas().includes("Galicia") && Object.keys(getCuentasRen()).length===0, "volver al nombre de fábrica quita el cambio"); igual(movs[0].cuenta,"Galicia");
+    respuesta="Billetera Plus"; await editarCuenta("Mi billetera");
+    igual(cuentasCustom.join(","),"Billetera Plus"); igual(movs[1].cuenta,"Billetera Plus");
+    avisos=[]; respuesta="efectivo"; await editarCuenta("Galicia"); cierto(avisos.some(a=>a.includes("Ya existe")) && movs[0].cuenta==="Galicia", "no se pisa otra cuenta (sin importar mayúsculas)");
+    respuesta="Cuentas"; avisos=[]; await editarCuenta("Billetera Plus"); cierto(avisos.some(a=>a.includes("reservado")), "'Cuentas' es el nombre de 'sin elegir'");
+    respuesta="Otra"; await editarCuenta("Cuentas"); cierto(getCuentas().includes("Cuentas") && !getCuentas().includes("Otra"), "Cuentas no se edita");
+  } finally { movs=antes.movs; tcs=antes.tcs; metas=antes.metas; papelera=antes.papelera; cuentasCustom=antes.cc; guardarCuentasRen(antes.ren); window.mostrarPrompt=antes.prompt; window.showToast=antes.toast;
+    window.renderMovs=antes.render.m; window.renderTarjetas=antes.render.t; if(antes.bancos===null) localStorage.removeItem(BANCOS_TC_KEY); else localStorage.setItem(BANCOS_TC_KEY, antes.bancos); }
+});
+
+test("las cuentas de fábrica renombradas viajan en la copia de seguridad", ()=>{
+  const antes={...getCuentasRen()};
+  try{
+    guardarCuentasRen({MODO:"Billetera MODO"});
+    const b=armarBackup(); igual(b.datos.cuentasRenombradas, {MODO:"Billetera MODO"});
+    const s=JSON.parse(JSON.stringify(b)); s.datos.cuentasRenombradas=JSON.parse('{"__proto__":"x","MODO":"Billetera MODO"}'); sanearBackupDatos(s.datos); igual(Object.keys(normalizarCuentasRen(s.datos.cuentasRenombradas)), ["MODO"], "la clave peligrosa se neutraliza al sanear y se descarta al leer");
+  } finally { guardarCuentasRen(antes); }
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
