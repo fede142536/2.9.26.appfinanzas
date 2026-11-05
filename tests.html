@@ -6011,7 +6011,9 @@ test("la hoja de cierre: muestra el resumen y el chequeo, cierra el mes con conf
     localStorage.removeItem(CIERRE_KEY);
     movs=[...DATOS_CIERRE(), MES_C(30,"Gasto","Super",5000,"2026-09-25",{cuenta:"Cuentas"})]; tcs=[]; metas=[];
     abrirCierreMes();
-    igual(cierreYM, "2026-09", "el 3 de octubre toca cerrar septiembre");
+    igual(cierreYM, "2026-10", "sin indicar mes, el cierre abre el mes actual (el aviso es el que pasa el mes anterior)");
+    abrirCierreMes("2026-09");
+    igual(cierreYM, "2026-09", "el aviso de cierre abre septiembre el 3 de octubre");
     const h=els[0].innerHTML;
     cierto(h.includes("Te quedó disponible") && h.includes("En qué se fue la plata") && h.includes("Para mirar") && h.includes("Antes de cerrar") && h.includes("sin cuenta"), h.slice(0,300));
     cierto(els[1].textContent.includes("Septiembre") && els[2].textContent==="Cerrar el mes" && els[4].classList.contains("open"));
@@ -11165,6 +11167,18 @@ test("el CSV no deja que una celda se ejecute como fórmula en Excel", ()=>{
   igual(celdaSegura("=HYPERLINK(\"http://x\")"), "'=HYPERLINK(\"http://x\")"); igual(celdaSegura("+54911"), "'+54911"); igual(celdaSegura("@SUM(A1)"), "'@SUM(A1)");
   igual(celdaSegura("-texto"), "'-texto"); igual(celdaSegura("\tTAB"), "'\tTAB"); igual(celdaSegura("normal"), "normal"); igual(celdaSegura("Supermercado - Dia"), "Supermercado - Dia");
   igual(celdaSegura(-5.5), "-5.5", "un número negativo no es una fórmula"); igual(celdaSegura("-1500"), "-1500", "ni un texto que es solo un número"); igual(celdaSegura(null), ""); igual(celdaSegura(undefined), "");
+});
+
+grupo("Importar: fechas de un CSV");
+
+test("un CSV con fechas dd/mm/aaaa se lee como texto: 01/11/2026 es el 1 de noviembre, no el 11 de enero", async ()=>{
+  if(typeof XLSX==="undefined") (0,eval)(await (await fetch("js/vendor/xlsx.full.min.js")).text());   // esta página no carga SheetJS: se toma la copia local de la app
+  const csv="Fecha,Ingreso/Gasto,ARS,Categoría\n01/11/2026,Gasto,\"1.234,50\",Casa\n13/10/2026,Gasto,500,Casa\n";
+  const buf=new TextEncoder().encode("\uFEFF"+csv).buffer;     // con BOM, como lo exporta Excel
+  const wb=leerLibroXlsx(buf, "gastos.CSV");
+  const filas=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:"",raw:true});
+  igual(filas.length, 2); igual(filas[0].Fecha, "01/11/2026", "la fecha tiene que llegar como texto, no como Date"); igual(filas[1].Fecha, "13/10/2026");
+  igual(typeof filas[0].Fecha, "string");
 });
 
 grupo("Aislamiento de los tests");
