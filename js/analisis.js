@@ -442,7 +442,7 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
     out.push({
       nivel:"warn", icono:"⚠️",
       titulo:`${inusuales.length} ${inusuales.length===1?"gasto":"gastos"} fuera de lo normal este mes`,
-      detalle: inusuales.map(i=>`${i.mov.nota||i.mov.cat}: ${fmtS(i.mov.importe)} (${i.veces}× tu mediana de ${i.cat})`).join(" · ")
+      detalle: inusuales.map(i=>`${i.mov.nota||i.mov.cat}: ${fmtS(i.mov.importe)} (${String(i.veces).replace(".",",")}× tu mediana de ${i.cat})`).join(" · ")
     });
   }
 

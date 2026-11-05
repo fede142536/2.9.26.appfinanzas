@@ -482,7 +482,7 @@ function exportarPDF(){
     .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:20px}
     .kpi{padding:12px;border:1px solid #cfcfc9;border-radius:8px;background:#fafaf7;break-inside:avoid}
     .kpi-label{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.04em}
-    .kpi-val{font-size:18px;font-weight:700;margin-top:4px}
+    .kpi-val{font-size:clamp(12px,2.1vw,18px);font-weight:700;margin-top:4px;white-space:nowrap}   /* una cifra de 12 dígitos no se parte en dos renglones */
     .pos{color:#1e5c2c}.neg{color:#942727}.inv{color:#4841a5}.save{color:#165959}
     .inv-linea{font-size:13px;color:#4841a5;margin:0 0 20px}
     h2{font-size:16px;margin:24px 0 10px;border-bottom:1px solid #cfcfc9;padding-bottom:6px;break-after:avoid}
@@ -512,13 +512,13 @@ function exportarPDF(){
     ${catSorted.map(([c,v])=>`<tr><td>${escapeHtml(c)}<div class="barra"><i style="width:${totalCat>0?Math.max(2,Math.round(v/totalCat*100)):0}%"></i></div></td><td class="right neg">${fmtS(v)}</td><td class="right">${pct(v)}</td></tr>`).join("")}
   </tbody></table>`:""}
   <h2>Detalle de movimientos (${inRange.length})</h2>
-  <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th class="nota-col">Nota</th><th class="right">Importe</th></tr></thead><tbody>
+  <table><thead><tr><th>Fecha</th><th class="nw">Tipo</th><th>Categoría</th><th class="nota-col">Nota</th><th class="right">Importe</th></tr></thead><tbody>
     ${inRange.map(m=>{
       const cls=m.tipo==="Ingreso"?"pos":m.tipo==="Inversion"?"inv":m.esAhorro?"save":"neg";
       const sign=m.tipo==="Ingreso"?"+":"-";
       return `<tr>
         <td class="nw">${(m.fecha||"").split("-").reverse().slice(0,3).join("/")}</td>
-        <td>${escapeHtml(m.tipo==="Inversion"?"Inversión":m.tipo)}${m.esAhorro?" 🏦":""}</td>
+        <td class="nw">${escapeHtml(m.tipo==="Inversion"?"Inversión":m.tipo)}${m.esAhorro?" 🏦":""}</td>
         <td>${escapeHtml(m.cat||"")}</td>
         <td class="nota nota-col">${escapeHtml((m.nota||"").slice(0,40))}</td>
         <td class="right ${cls}">${sign}${fmtS(m.importe)}</td>

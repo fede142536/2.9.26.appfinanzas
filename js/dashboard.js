@@ -153,6 +153,13 @@ function construirInsights(ym, mesData, monthlyAnio){
     return `: ${Math.abs(pct).toLocaleString("es-AR")}% ${pct>0?"más":"menos"} ${fraseNormal}`;
   }
 
+  // Cierre de la frase cuando el mes y el promedio son déficit: compara cuánto faltó (en magnitud), así "más" significa que faltó más.
+  function cierreFaltante(val, prom){
+    const pct=Math.round((Math.abs(val)-Math.abs(prom))/Math.abs(prom)*100);
+    if(Math.abs(pct)<=3) return ": en línea con lo que suele faltarte.";
+    return `: ${Math.abs(pct).toLocaleString("es-AR")}% ${pct>0?"más":"menos"} de lo que suele faltarte.`;
+  }
+
   const out=[];
 
   // 0. Vencimientos: lo más accionable va primero. Solo mirando el mes actual (avisar de lo que
@@ -183,7 +190,9 @@ function construirInsights(ym, mesData, monthlyAnio){
       b: fmtTotal(Math.abs(val)),
       bc: bueno?"var(--success)":"var(--danger)",
       // Si el mes y el promedio tienen signo opuesto, "1.004% menos" confunde: se dice cuánto deja o falta un mes normal.
-      c: ` en ${Mes}`+((hayProm && promBal && (val<0)!==(promBal<0)) ? `: en un mes normal te ${promBal>0?"quedan":"faltan"} ${fmtTotal(Math.abs(promBal))}.` : cierre(val, promBal, "que en un mes normal.")),
+      c: ` en ${Mes}`+((hayProm && promBal && (val<0)!==(promBal<0)) ? `: en un mes normal te ${promBal>0?"quedan":"faltan"} ${fmtTotal(Math.abs(promBal))}.`
+        : (hayProm && promBal && val<0 && promBal<0) ? cierreFaltante(val, promBal)   // los dos negativos: "más" o "menos" tiene que hablar de lo que FALTÓ, no del número con signo
+        : cierre(val, promBal, "que en un mes normal.")),
       rows: hayProm ? [
         filaInsight(Mes, val, max, bueno?"var(--success)":"var(--danger)"),
         filaInsight("Promedio", promBal, max, `color-mix(in srgb,${bueno?"var(--success)":"var(--danger)"} 40%,var(--surface))`)

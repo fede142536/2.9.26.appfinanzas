@@ -122,7 +122,7 @@ function ctxDelChequeo(){
 const pctFlecha=(p, subirEsBueno)=>{
   if(p===null) return "";
   const tono=subirEsBueno===undefined||subirEsBueno===null||p===0 ? "" : ((p>0)===!!subirEsBueno ? "bien" : "mal");
-  return `<span class="cierre-delta ${p>0?"sube":p<0?"baja":""} ${tono}" role="img" aria-label="${p>0?"Subió":p<0?"Bajó":"Sin cambio:"} ${Math.abs(p)} por ciento"><span aria-hidden="true">${p>0?"▲":p<0?"▼":"="} ${Math.abs(p)}%</span></span>`;
+  return `<span class="cierre-delta ${p>0?"sube":p<0?"baja":""} ${tono}" role="img" aria-label="${p>0?"Subió":p<0?"Bajó":"Sin cambio:"} ${Math.abs(p).toLocaleString("es-AR")} por ciento"><span aria-hidden="true">${p>0?"▲":p<0?"▼":"="} ${Math.abs(p).toLocaleString("es-AR")}%</span></span>`;
 };
 // Una frase con emoji al principio ("📈 Auto subió…"): el emoji va en su propia columna y el texto no se enrosca debajo de él.
 function notaHTML(n){
@@ -141,8 +141,8 @@ function resumenMesHTML(r){
   const col=r.disponible>=0 ? "var(--save)" : "var(--danger)";
   const cats=r.top.map(c=>`<div class="cierre-cat"><div class="cierre-cat-top"><span>${getIcon(c.cat,"📦")} ${escapeHtml(c.cat)}</span><span><strong>${fmtTotal(c.monto)}</strong> <span class="txt-muted">${c.pct}%</span></span></div><div class="cierre-barra"><div style="width:${c.pct}%"></div></div></div>`).join("");
   const notas=[];
-  r.subas.forEach(s=>notas.push(`📈 <strong>${escapeHtml(s.cat)}</strong> subió ${s.pct}% respecto de tu promedio de los últimos meses (${fmtTotal(s.monto)} vs ${fmtTotal(s.promedio)}).`));
-  r.inusuales.forEach(i=>notas.push(`⚠️ ${escapeHtml(i.desc)}: ${fmtTotal(i.monto)}, ${i.veces}× lo habitual en ${escapeHtml(i.cat)}.`));
+  r.subas.forEach(s=>notas.push(`📈 <strong>${escapeHtml(s.cat)}</strong> subió ${Number(s.pct).toLocaleString("es-AR")}% respecto de tu promedio de los últimos meses (${fmtTotal(s.monto)} vs ${fmtTotal(s.promedio)}).`));
+  r.inusuales.forEach(i=>notas.push(`⚠️ ${escapeHtml(i.desc)}: ${fmtTotal(i.monto)}, ${String(i.veces).replace(".",",")}× lo habitual en ${escapeHtml(i.cat)}.`));
   if(r.mayor) notas.push(`💸 Tu gasto más grande fue <strong>${escapeHtml(r.mayor.desc)}</strong>: ${fmtTotal(r.mayor.monto)}.`);
   if(r.aMano>0) notas.push(`💸 Sacaste ${fmtTotal(r.aMano)} de tus ahorros que quedaron a mano: están sumados a lo disponible.`);
   if(r.ahorrado>0 || r.retirado>0) notas.push(`🏦 Ahorraste ${fmtTotal(r.ahorrado)}${r.retirado>0?` y usaste ${fmtTotal(r.retirado)} de tus ahorros`:""}.`);
@@ -250,7 +250,7 @@ function descartarAvisoCierre(ym){
 function dibujarResumenMes(canvas, r){
   const cats=r.top.slice(0,5);
   const notas=[];
-  r.subas.forEach(s=>notas.push(`${s.cat} subió ${s.pct}% vs tu promedio`));
+  r.subas.forEach(s=>notas.push(`${s.cat} subió ${Number(s.pct).toLocaleString("es-AR")}% vs tu promedio`));
   if(r.mayor) notas.push(`Gasto más grande: ${r.mayor.desc} (${fmtTotal(r.mayor.monto)})`);
   return imgLienzo(canvas, (ctx)=>{
     let y=imgCabecera(ctx, {titulo:"Enola · "+mesLbl(r.ym), etiqueta:"Te quedó disponible", valor:imgMonto(r.disponible), color:r.disponible>=0?IMG.save:IMG.gasto,

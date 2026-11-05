@@ -1692,7 +1692,7 @@ function renderInvHistorico(){
 
   const tipEl=document.getElementById("inv-evo-lectura");
   const fmtLinea=(ym,v)=>`<span class="inv-evo-lbl">Invertido a fin de ${mesLbl(ym).split(" ")[0]}</span>
-    <span class="inv-evo-val">${invEvoCur==="usd"?fmtUsdInv(v):fmtTotal(v)}</span>`;
+    <span class="inv-evo-val">${invEvoCur==="usd"?(v<0?"−":"")+fmtUsdInv(v):fmtTotal(v)}</span>`;
   // El eje Y también tiene que hablar en la moneda elegida: un "$552" en la vista Dólares sería
   // plata que no es (regla del handoff: pesos y dólares nunca se mezclan ni se confunden). Sin
   // el prefijo "USD" (el pill de arriba ya aclara la moneda): con él, el texto no entraba en
@@ -1702,7 +1702,7 @@ function renderInvHistorico(){
   // El gráfico es un <canvas>: sin texto alternativo un lector de pantalla no recibe nada. La lectura de arriba cambia al tocar un punto.
   const ultimo=values.length-1;
   canvas.setAttribute("role","img");
-  canvas.setAttribute("aria-label",`Gráfico de lo invertido en ${invEvoCur==="usd"?"dólares":"pesos"}, acumulado mes a mes, de ${mesLbl(labels[0])} a ${mesLbl(labels[ultimo])}. A fin de ${mesLbl(labels[ultimo])}: ${invEvoCur==="usd"?fmtUsdInv(values[ultimo]):fmtTotal(values[ultimo])}.`);
+  canvas.setAttribute("aria-label",`Gráfico de lo invertido en ${invEvoCur==="usd"?"dólares":"pesos"}, acumulado mes a mes, de ${mesLbl(labels[0])} a ${mesLbl(labels[ultimo])}. A fin de ${mesLbl(labels[ultimo])}: ${invEvoCur==="usd"?(values[ultimo]<0?"menos ":"")+fmtUsdInv(values[ultimo]):fmtTotal(values[ultimo])}.`);
 
   // "Dónde más pusiste": top 3 tickers de la moneda elegida (perspectiva cartera)
   const porTicker={};

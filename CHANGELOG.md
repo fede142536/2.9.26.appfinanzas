@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v230**
+**Versión actual: v231**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,10 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 5 de noviembre de 2026
+
+- **v231** · Frase del balance con signo opuesto al promedio, porcentajes y abreviaturas con puntos de miles
 
 ## 4 de noviembre de 2026
 
