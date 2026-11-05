@@ -704,6 +704,8 @@ function armarBackup(){
       importHistory,
       cuentasCustom,
       cuentasRenombradas: getCuentasRen(),
+      cuentasOcultas: getCuentasOcultas(),
+      tarjetasOcultas: getTarjetasOcultas(),
       tarjetasCustom,
       presupuestos,
       catOrder,
@@ -845,6 +847,7 @@ function aplicarBackup(backup){
   }
   // Los nombres que le hayas puesto a las cuentas de fábrica viajan en la copia; una copia vieja no los trae y los datos que restaura llevan los nombres de fábrica.
   guardarCuentasRen(backup.datos.cuentasRenombradas);
+  guardarCuentasOcultas(backup.datos.cuentasOcultas); guardarTarjetasOcultas(backup.datos.tarjetasOcultas);   // lo que quitaste de las listas (una copia vieja no lo trae: vuelven todas)
   if(Array.isArray(backup.datos.tarjetasCustom)){
     tarjetasCustom=backup.datos.tarjetasCustom;
     saveTarjetasCustom();
