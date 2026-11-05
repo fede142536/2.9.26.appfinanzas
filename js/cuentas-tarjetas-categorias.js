@@ -4,9 +4,35 @@
 const CUENTAS_DEFAULT=["Cuentas","Efectivo","Tarjetas de crédito","Balanz","Cuenta DNI","Galicia","Naranja X","BPat","MODO"];
 let cuentasCustom = [];
 function saveCuentasCustom(){ setSensitiveRaw("fcuentas", JSON.stringify(cuentasCustom)); marcarDatosSucios(); }
-// Devuelve la lista completa de cuentas: default + las agregadas por el usuario (sin duplicar)
+// Las cuentas por defecto también se pueden renombrar: el nombre nuevo se guarda aparte ({ "Galicia": "Galicia Pro" }) y reemplaza al de fábrica en
+// el mismo lugar de la lista. Va como preferencia y dentro de las copias de seguridad (campo cuentasRenombradas). "Cuentas" no se toca: es la
+// opción "sin elegir" que usa toda la app para saber qué movimientos no dicen de qué banco son.
+const CUENTAS_REN_KEY="fcuentasren";
+let cuentasRenCache=null;
+function normalizarCuentasRen(o){
+  const out={}, usados=new Set();
+  if(o && typeof o==="object" && !Array.isArray(o)) Object.keys(o).forEach(k=>{
+    if(!CUENTAS_DEFAULT.includes(k) || k==="Cuentas" || typeof o[k]!=="string") return;
+    const v=nombreSeguro(o[k].trim());
+    if(!v || v===k || v==="Cuentas" || usados.has(v.toLowerCase())) return;
+    usados.add(v.toLowerCase()); out[k]=v;
+  });
+  return out;
+}
+function getCuentasRen(){
+  if(cuentasRenCache===null){ try{ cuentasRenCache=normalizarCuentasRen(JSON.parse(localStorage.getItem(CUENTAS_REN_KEY)||"{}")); }catch(e){ cuentasRenCache={}; } }
+  return cuentasRenCache;
+}
+function guardarCuentasRen(mapa){
+  cuentasRenCache=normalizarCuentasRen(mapa);
+  const ok=guardarPreferencia(CUENTAS_REN_KEY, JSON.stringify(cuentasRenCache));
+  if(typeof marcarDatosSucios==="function") marcarDatosSucios();
+  return ok;
+}
+// Devuelve la lista completa de cuentas: default (con el nombre que les hayas puesto) + las agregadas por el usuario (sin duplicar)
 function getCuentas(){
-  const todas=[...CUENTAS_DEFAULT];
+  const ren=getCuentasRen();
+  const todas=CUENTAS_DEFAULT.map(c=>ren[c]||c);
   cuentasCustom.forEach(c=>{ if(!todas.includes(c)) todas.push(c); });
   return todas;
 }
@@ -51,13 +77,60 @@ async function borrarCuentaCustom(nombre){
   buildCuentaSelect("inv-cuenta");
   buildCuentaSelect("tc-cuenta");
 }
-// Renderiza el listado de cuentas en Config (para poder agregarlas/borrarlas ahí también)
+// Cambia el nombre de una cuenta en TODO lo que la usa. Recorre movimientos, compras con tarjeta, papelera y metas y cambia los campos `cuenta`
+// y `cuentaDestino` que valgan exactamente `viejo`. Pura (modifica en el lugar) y devuelve cuántos cambió.
+function renombrarCuentaEnObjeto(x, viejo, nuevo, visto){
+  if(!x || typeof x!=="object") return 0;
+  visto=visto||new Set(); if(visto.has(x)) return 0; visto.add(x);
+  let n=0;
+  if(Array.isArray(x)){ x.forEach(e=>{ n+=renombrarCuentaEnObjeto(e,viejo,nuevo,visto); }); return n; }
+  Object.keys(x).forEach(k=>{
+    if((k==="cuenta"||k==="cuentaDestino") && x[k]===viejo){ x[k]=nuevo; n++; }
+    else if(x[k] && typeof x[k]==="object") n+=renombrarCuentaEnObjeto(x[k],viejo,nuevo,visto);
+  });
+  return n;
+}
+// Edita (renombra) una cuenta, de fábrica o propia. Todo lo cargado con la cuenta pasa a llevar el nombre nuevo.
+async function editarCuenta(nombreActual){
+  if(nombreActual==="Cuentas") return;   // es la opción "sin elegir", no una cuenta
+  const nuevo=await mostrarPrompt(`Nuevo nombre para "${nombreActual}":`, {titulo:"Editar cuenta", valorInicial:nombreActual, textoOk:"Guardar"});
+  if(nuevo===null || nuevo===undefined) return;
+  const limpio=nombreSeguro(String(nuevo).trim());
+  if(!limpio || limpio===nombreActual) return;
+  if(limpio==="Cuentas"){ showToast("Ese nombre está reservado"); return; }
+  if(getCuentas().some(c=>c.toLowerCase()===limpio.toLowerCase() && c!==nombreActual)){ showToast("Ya existe una cuenta con ese nombre"); return; }
+  // 1) La lista: una propia se cambia en su lugar; una de fábrica guarda su nombre nuevo aparte (y si vuelve al de fábrica, se quita).
+  const ren={...getCuentasRen()};
+  const original=Object.keys(ren).find(k=>ren[k]===nombreActual) || (CUENTAS_DEFAULT.includes(nombreActual) ? nombreActual : null);
+  const iPropia=cuentasCustom.indexOf(nombreActual);
+  if(iPropia>=0){ cuentasCustom[iPropia]=limpio; saveCuentasCustom(); }
+  else if(original){ if(limpio===original) delete ren[original]; else ren[original]=limpio; guardarCuentasRen(ren); }
+  else { cuentasCustom.push(limpio); saveCuentasCustom(); }   // viene de datos importados y no estaba en la lista
+  // 2) Los datos que la usan.
+  let cambios=renombrarCuentaEnObjeto(movs,nombreActual,limpio)+renombrarCuentaEnObjeto(tcs,nombreActual,limpio)+renombrarCuentaEnObjeto(metas,nombreActual,limpio);
+  const enPapelera=renombrarCuentaEnObjeto(papelera,nombreActual,limpio);
+  const bancos=leerBancosTc(); let tocoBancos=false;
+  Object.keys(bancos).forEach(t=>{ if(bancos[t]===nombreActual){ bancos[t]=limpio; tocoBancos=true; } });
+  if(tocoBancos) guardarBancosTc(bancos);
+  if(typeof filtroCuenta!=="undefined" && filtroCuenta===nombreActual) filtroCuenta=limpio;
+  if(cambios>0) save();
+  if(enPapelera>0 && typeof guardarPapelera==="function") guardarPapelera();
+  showToast(`Cuenta renombrada${cambios>0?` · ${cambios} movimiento${cambios===1?"":"s"} actualizado${cambios===1?"":"s"}`:""} ✓`);
+  // 3) Lo que se ve: la lista de Config, los selectores (conservando lo elegido) y las pantallas.
+  renderCuentasManager();
+  ["inp-cuenta","inv-cuenta","tc-cuenta"].forEach(id=>{ const s=document.getElementById(id); if(s) buildCuentaSelect(id, s.value===nombreActual ? limpio : undefined); });
+  if(typeof renderTarjetasManager==="function") renderTarjetasManager();
+  if(typeof renderMovs==="function") renderMovs();
+  if(typeof renderTarjetas==="function") renderTarjetas();
+}
+// Renderiza el listado de cuentas en Config (para poder agregarlas, editarlas y borrarlas ahí también)
 function renderCuentasManager(){
   const el=document.getElementById("cuentas-manager");
   if(!el) return;
   const html=getCuentas().map(c=>{
     const esCustom=cuentasCustom.includes(c);
-    return `<span class="cfg-chip${esCustom?' cfg-chip-propio':''}"><span class="cfg-chip-txt">💳 ${escapeHtml(c)}</span>${esCustom?`<button type="button" class="cfg-chip-x" aria-label="Quitar la cuenta ${escapeHtml(c)}" onclick="borrarCuentaCustom(${attrJS(c)})">×</button>`:''}</span>`;
+    const editable=c!=="Cuentas";
+    return `<span class="cfg-chip${esCustom?' cfg-chip-propio':''}"><span class="cfg-chip-txt">💳 ${escapeHtml(c)}</span>${editable?`<button type="button" class="cfg-chip-x cfg-chip-edit" aria-label="Editar la cuenta ${escapeHtml(c)}" onclick="editarCuenta(${attrJS(c)})">✎</button>`:''}${esCustom?`<button type="button" class="cfg-chip-x" aria-label="Quitar la cuenta ${escapeHtml(c)}" onclick="borrarCuentaCustom(${attrJS(c)})">×</button>`:''}</span>`;
   }).join("");
   el.innerHTML=`<div class="cfg-chips">${html}</div><div class="cfg-acciones"><button class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')">+ Agregar cuenta</button></div>`;
 }

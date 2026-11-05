@@ -703,6 +703,7 @@ function armarBackup(){
       metas, // ya está en memoria (loadSensitiveIntoMemory), no hace falta releer localStorage
       importHistory,
       cuentasCustom,
+      cuentasRenombradas: getCuentasRen(),
       tarjetasCustom,
       presupuestos,
       catOrder,
@@ -842,6 +843,8 @@ function aplicarBackup(backup){
     cuentasCustom=backup.datos.cuentasCustom;
     saveCuentasCustom();
   }
+  // Los nombres que le hayas puesto a las cuentas de fábrica viajan en la copia; una copia vieja no los trae y los datos que restaura llevan los nombres de fábrica.
+  guardarCuentasRen(backup.datos.cuentasRenombradas);
   if(Array.isArray(backup.datos.tarjetasCustom)){
     tarjetasCustom=backup.datos.tarjetasCustom;
     saveTarjetasCustom();

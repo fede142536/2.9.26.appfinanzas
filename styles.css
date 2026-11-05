@@ -1992,3 +1992,7 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 #usd-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:var(--sp-2)}
 #usd-kpis .chip{min-width:0}
 #usd-kpis .chip-val{white-space:nowrap}
+
+/* [AAA config] Editar cuenta: el ✎ comparte la caja de 44 del × y se ve más liviano. */
+.cfg-chip-edit{font-size:var(--fs-sm);padding:0;margin:-8px -2px -8px -2px;opacity:.8}
+.cfg-chip-edit + .cfg-chip-x{margin-left:0}   /* las dos cajas de 44 quedan una al lado de la otra, sin pisarse */
