@@ -6013,7 +6013,7 @@ test("la hoja de cierre: muestra el resumen y el chequeo, cierra el mes con conf
     abrirCierreMes();
     igual(cierreYM, "2026-10", "sin indicar mes, el cierre abre el mes actual (el aviso es el que pasa el mes anterior)");
     abrirCierreMes("2026-09");
-    igual(cierreYM, "2026-09", "el aviso de cierre abre septiembre el 3 de octubre");
+    igual(cierreYM, "2026-09", "con un mes indicado, abre ese mes");
     const h=els[0].innerHTML;
     cierto(h.includes("Te quedó disponible") && h.includes("En qué se fue la plata") && h.includes("Para mirar") && h.includes("Antes de cerrar") && h.includes("sin cuenta"), h.slice(0,300));
     cierto(els[1].textContent.includes("Septiembre") && els[2].textContent==="Cerrar el mes" && els[4].classList.contains("open"));
@@ -6033,6 +6033,7 @@ test("el aviso de cierre aparece a principio de mes, se puede descartar y no apa
     // el aviso solo se muestra mirando el mes en curso; el de los tests no es octubre, así que se prueba la lógica aparte
     igual(mesParaCerrar(hoyLocal(), getMesMov, leerMesesCerrados(), localStorage.getItem(CIERRE_AVISO_KEY)), "2026-09");
     mesActual="2026-09"; pintarAvisoCierre(); igual(el.style.display, "none", "no aparece si no estás mirando el mes en curso");
+    mesActual=currentYM(); pintarAvisoCierre(); cierto(/Cerrá <strong>[^<]+<\/strong>/.test(el.innerHTML) && el.innerHTML.includes('onclick="abrirCierreMes()"'), "el aviso nombra el mes actual y abre el cierre del mes actual: "+el.innerHTML.slice(0,200));
     descartarAvisoCierre("2026-09"); igual(localStorage.getItem(CIERRE_AVISO_KEY), "2026-09"); igual(mesParaCerrar(hoyLocal(), getMesMov, {}, localStorage.getItem(CIERRE_AVISO_KEY)), null, "descartado no vuelve");
   } finally { movs=antes.movs; window.hoyLocal=antes.hoy; filtro=antes.filtro; mesActual=antes.mes; el.remove();
     if(antes.k===null) localStorage.removeItem(CIERRE_AVISO_KEY); else localStorage.setItem(CIERRE_AVISO_KEY, antes.k); if(antes.c===null) localStorage.removeItem(CIERRE_KEY); else localStorage.setItem(CIERRE_KEY, antes.c); }

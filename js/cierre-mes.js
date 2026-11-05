@@ -176,7 +176,7 @@ function renderCierreMes(){
   if(btn){ btn.textContent=cerrado ? "Reabrir el mes" : "Cerrar el mes"; btn.classList.toggle("reabrir", !!cerrado); }
   const comp=document.getElementById("cierre-compartir"); if(comp) comp.style.display=r.hayDatos?"":"none";
 }
-// Abre el cierre del mes `ym`. Sin indicar mes (menú, atajo) abre el mes ACTUAL; el aviso de "Cerrá <mes anterior>" pasa su mes y abre ese.
+// Abre el cierre del mes `ym`. Sin indicar mes (menú, atajo, aviso de Movimientos) abre el mes ACTUAL.
 function abrirCierreMes(ym){
   if(!document.getElementById("cierre-cuerpo")) return;
   const hoy=hoyLocal();
@@ -236,8 +236,10 @@ function pintarAvisoCierre(){
   const ym=mesParaCerrar(hoyLocal(), getMesMov, leerMesesCerrados(), localStorage.getItem(CIERRE_AVISO_KEY));
   if(!ym || filtro!=="Todos" || mesActual!==currentYM()){ el.style.display="none"; el.innerHTML=""; return; }
   el.style.display="block";
-  el.innerHTML=`<div class="cierre-aviso"><span>🗓 Cerrá <strong>${escapeHtml(mesLbl(ym))}</strong>: revisá el resumen y lo pendiente.</span>
-    <button type="button" class="btn-sm" onclick="abrirCierreMes(${attrJS(ym)})">Ver</button>
+  // El aviso (que aparece los primeros días del mes, mientras el anterior sigue sin cerrar) abre el cierre del mes ACTUAL; con las flechas de
+  // la hoja se llega al anterior. `ym` (el mes anterior) solo sirve para no volver a mostrarlo cuando se lo descarta.
+  el.innerHTML=`<div class="cierre-aviso"><span>🗓 Cerrá <strong>${escapeHtml(mesLbl(currentYM()))}</strong>: revisá el resumen y lo pendiente.</span>
+    <button type="button" class="btn-sm" onclick="abrirCierreMes()">Ver</button>
     <button type="button" class="cierre-x" aria-label="Descartar el aviso" onclick="descartarAvisoCierre(${attrJS(ym)})">×</button></div>`;
 }
 function descartarAvisoCierre(ym){
