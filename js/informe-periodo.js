@@ -16,7 +16,7 @@ const esMovFinanciero=m=>INFORME_FINANCIERO.test(String(m.cat||"")) || /^\s*mep\
 // Pura. "2023-01" → "Ene ’23": corto pero con el año, para tablas y textos donde el rango cruza varios años.
 function mesCortoInforme(ym){
   const x=/^(\d{4})-(\d{2})$/.exec(String(ym||"")); if(!x) return "";
-  return MESES[Number(x[2])-1].slice(0,3)+" ’"+x[1].slice(2);
+  return MESES[Number(x[2])-1].slice(0,3)+"\u00A0’"+x[1].slice(2);
 }
 
 // Pura. Los meses de desde a hasta ("YYYY-MM"), ambos incluidos. [] si el rango no es válido.

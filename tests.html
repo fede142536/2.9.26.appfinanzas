@@ -8463,7 +8463,7 @@ grupo("Configuración plegable");
 // Las 16 tarjetas que había antes de agrupar: ninguna puede haberse perdido ni duplicado.
 const TARJETAS_CONFIG=["📈 Inflación","🎨 Apariencia","🔐 Seguridad","📲 Versión de la app","💳 Cuentas","💳 Nombres de tarjetas",
   "💾 Copia de seguridad (archivo)","🕑 Copias automáticas en este celular","☁️ Google: calendario y copia en Drive","🗓 Vencimientos",
-  "📊 Exportar para BI","Exportar a Excel","Tus datos","⚠ Zona de peligro","Presupuestos mensuales","Categorías personalizadas"];
+  "📊 Exportar para BI","Exportar a Excel","Tus datos","Zona de peligro","Presupuestos mensuales","Categorías personalizadas"];
 
 async function configHTML(){
   const html=await (await fetch("index.html")).text();
@@ -8496,7 +8496,7 @@ test("cada tarjeta quedó en la sección que dice su resumen", async ()=>{
   en("cfg-sec-copias", ["💾 Copia de seguridad (archivo)","🕑 Copias automáticas","☁️ Google: calendario","🗓 Vencimientos"]);
   en("cfg-sec-organizar", ["💳 Cuentas","💳 Nombres de tarjetas","Categorías personalizadas","Presupuestos mensuales","📈 Inflación"]);
   en("cfg-sec-exportar", ["Exportar a Excel","📊 Exportar para BI","Tus datos"]);
-  en("cfg-sec-peligro", ["⚠ Zona de peligro","confirmarBorrarTodo()"]);
+  en("cfg-sec-peligro", ["Zona de peligro","⚠ Borrar todo","confirmarBorrarTodo()"]);
   cierto(cfg.indexOf("☁️ Google: calendario") < cfg.indexOf("🗓 Vencimientos"), "Google va antes de Vencimientos");
 });
 
@@ -10533,22 +10533,22 @@ test("informe: los hallazgos dicen cuánto del déficit lo cubrió la deuda, si 
   const t=inf.hallazgos.map(h=>h.texto).join("\n");
   cierto(/déficit de \$290\.000/.test(t) && t.includes("por créditos, ventas de inversiones u operaciones MEP") && t.includes("se ve mejor que la realidad"), t);
   cierto(t.includes("“Salario” bajaron 10%") && t.includes("$1.000.000 → $900.000"), "el sueldo bajó de 1.000.000 a 900.000");
-  cierto(/Alquiler \(Casa\) pasó de \$400\.000 en Ene ’26 a \$440\.000 en Mar ’26 \(\+10%\)/.test(t), t);
+  cierto(/Alquiler \(Casa\) pasó de \$400\.000 en Ene ’26 a \$440\.000 en Mar ’26 \(\+10%\)/.test(t.replace(/\u00A0/g," ")), t);
   cierto(t.includes("69% de tus gastos") && t.includes("pagos de tarjeta de crédito"), "el peso de la tarjeta");
   cierto(t.includes("Ahorraste $50.000") && t.includes("1.3% de tus ingresos"), t);
   cierto(t.includes("En inversiones pusiste $200.000 y recuperaste $0"), t);
-  cierto(t.includes("El mes más holgado fue Ene ’26") && t.includes("En 2 de 3 meses gastaste más de lo que entró") && t.includes("Feb ’26, Mar ’26"), t);
+  { const tn=t.replace(/\u00A0/g," "); cierto(tn.includes("El mes más holgado fue Ene ’26") && tn.includes("En 2 de 3 meses gastaste más de lo que entró") && tn.includes("Feb ’26, Mar ’26"), t); }
   igual(hallazgosDelPeriodo(agregarPeriodo("2030-01","2030-02", infMes([]), null), null), [], "sin datos no hay hallazgos");
   const ok=informeDePeriodo("2026-01","2026-01", infMes([{id:1,tipo:"Ingreso",cat:"Salario",importe:1000000,moneda:"ARS",fecha:"2026-01-05"},{id:2,tipo:"Gasto",cat:"Casa",subcat:"Luz",importe:400000,moneda:"ARS",fecha:"2026-01-10"}]), null);
   cierto(ok.hallazgos.some(h=>h.texto.includes("cerró con $600.000 a favor") && h.icono==="✅"), "con superávit lo dice");
 });
 
 test("informe: los meses llevan el año en forma corta (Ene ’23), en la tabla y en los textos", ()=>{
-  igual([mesCortoInforme("2023-01"), mesCortoInforme("2026-10"), mesCortoInforme(""), mesCortoInforme("x")], ["Ene ’23", "Oct ’26", "", ""]);
+  igual([mesCortoInforme("2023-01"), mesCortoInforme("2026-10"), mesCortoInforme(""), mesCortoInforme("x")], ["Ene\u00A0’23", "Oct\u00A0’26", "", ""]   /* con espacio duro: en las imágenes no se parte entre renglones */);
   const inf=informeDePeriodo("2026-01","2026-03", infMes(INF_MOVS()), null);
   const caja=document.createElement("div"); caja.innerHTML=informeTablaHTML(inf);
-  igual([...caja.querySelectorAll("tbody tr td:first-child")].map(td=>td.textContent), ["Ene ’26","Feb ’26","Mar ’26","Total"]);
-  cierto(informeComoTexto(inf).includes("• Ene ’26: "), "el texto para compartir también");
+  igual([...caja.querySelectorAll("tbody tr td:first-child")].map(td=>td.textContent.replace(/\u00A0/g," ")), ["Ene ’26","Feb ’26","Mar ’26","Total"]);
+  cierto(informeComoTexto(inf).replace(/\u00A0/g," ").includes("• Ene ’26: "), "el texto para compartir también");
 });
 
 test("informe: la imagen para compartir usa el estilo del resumen del mes y crece con los hallazgos", ()=>{
@@ -11228,6 +11228,12 @@ test("las cuentas de fábrica renombradas viajan en la copia de seguridad", ()=>
     const b=armarBackup(); igual(b.datos.cuentasRenombradas, {MODO:"Billetera MODO"});
     const s=JSON.parse(JSON.stringify(b)); s.datos.cuentasRenombradas=JSON.parse('{"__proto__":"x","MODO":"Billetera MODO"}'); sanearBackupDatos(s.datos); igual(Object.keys(normalizarCuentasRen(s.datos.cuentasRenombradas)), ["MODO"], "la clave peligrosa se neutraliza al sanear y se descarta al leer");
   } finally { guardarCuentasRen(antes); }
+});
+
+grupo("Menores de la revisión");
+
+test("las barras del Dashboard usan el menos tipográfico como el resto de la app", ()=>{
+  igual(filaInsight("Mes", -1250000, 2000000, "red").val, "−$1,3M"); igual(filaInsight("Mes", 1250000, 2000000, "red").val, "$1,3M"); igual(filaInsight("Mes", -500, 1000, "red").val.charAt(0), "−");
 });
 
 grupo("Aislamiento de los tests");

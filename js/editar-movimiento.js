@@ -10,6 +10,7 @@ function openEditModal(id){
   // pesos y los dólares quedan como estaban). Se edita la operación entera.
   if(esPataDeCambio(m)) return openEditCambioModal(m.cambioId);
   editingId=id;
+  { const tituloEd=document.getElementById("edit-modal-titulo"); if(tituloEd) tituloEd.textContent="Editar movimiento"; }   // el editor de compras con tarjeta lo cambia: se repone
   document.getElementById("edit-form-content").innerHTML=renderEditForm(m);
   document.getElementById("modal-edit").classList.add("open");
   const rep=document.getElementById("edit-repetir"); if(rep) rep.style.display = (m.frecuente || m.pagoTarjeta || m.origenInvId || m.devolucionDeId) ? "none" : "";   // lo que no se puede repetir no ofrece el botón

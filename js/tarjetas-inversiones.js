@@ -1762,6 +1762,7 @@ function openEditTcModal(id, ym){
   editingTcId=id;
   editingTcYM=/^\d{4}-\d{2}$/.test(ym||"") ? ym : currentYM();
   document.getElementById("edit-form-content").innerHTML=renderEditTcForm(t);
+  const tituloEd=document.getElementById("edit-modal-titulo"); if(tituloEd) tituloEd.textContent="Editar compra con tarjeta";
   document.getElementById("modal-edit").classList.add("open");
   const rep=document.getElementById("edit-repetir"); if(rep) rep.style.display="none";   // "Repetir" del editor es solo para movimientos
   // Reemplazo el handler del botón de guardar
