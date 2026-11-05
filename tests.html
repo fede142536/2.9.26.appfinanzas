@@ -11236,6 +11236,48 @@ test("las barras del Dashboard usan el menos tipográfico como el resto de la ap
   igual(filaInsight("Mes", -1250000, 2000000, "red").val, "−$1,3M"); igual(filaInsight("Mes", 1250000, 2000000, "red").val, "$1,3M"); igual(filaInsight("Mes", -500, 1000, "red").val.charAt(0), "−");
 });
 
+grupo("Cuentas y tarjetas: quitar de la lista");
+
+test("las listas de ocultas solo aceptan nombres de fábrica, sin 'Cuentas' (reservada) ni repetidos", ()=>{
+  igual(normalizarOcultas(["MODO","MODO","Inventada","Cuentas",5,"BPat"], CUENTAS_DEFAULT, ["Cuentas"]), ["MODO","BPat"]);
+  igual(normalizarOcultas("mal", CUENTAS_DEFAULT), []); igual(normalizarOcultas(["Otra","Visa"], TARJETAS_DEFAULT), ["Otra","Visa"]);
+  igual(contarCuentaEnObjeto([{cuenta:"Galicia"},{cuentaDestino:"Galicia"},{x:[{cuenta:"Galicia"}]},{cuenta:"BPat"}],"Galicia"), 3);
+});
+
+test("quitar una cuenta de fábrica: sale de la lista, avisa cuántos movimientos la usan, no toca esos movimientos, se puede volver a mostrar y 'Cuentas' no se quita", async ()=>{
+  const antes={movs, tcs, cc:[...cuentasCustom], oc:[...getCuentasOcultas()], ren:{...getCuentasRen()}, confirm:window.mostrarConfirm, toast:window.showToast};
+  let mensajes=[], dijo=true;
+  window.mostrarConfirm=async m=>{ mensajes.push(m); return dijo; }; window.showToast=()=>{};
+  try{
+    movs=[{id:1,tipo:"Gasto",importe:10,cuenta:"MODO",fecha:"2026-10-01"},{id:2,tipo:"Gasto",importe:5,cuenta:"MODO",fecha:"2026-10-02"}]; tcs=[]; cuentasCustom=[]; guardarCuentasRen({}); guardarCuentasOcultas([]);
+    dijo=false; await quitarCuenta("MODO"); cierto(getCuentas().includes("MODO"), "si no confirma, sigue"); cierto(mensajes[0].includes("2 movimientos"), mensajes[0]);
+    dijo=true; await quitarCuenta("MODO"); cierto(!getCuentas().includes("MODO") && getCuentasOcultas().includes("MODO"), "confirmando, sale de la lista"); igual(movs[0].cuenta,"MODO","los movimientos la conservan");
+    await quitarCuenta("Cuentas"); cierto(getCuentas().includes("Cuentas"), "la opción 'sin elegir' no se quita");
+    mostrarCuentasOcultas(); cierto(getCuentas().includes("MODO") && getCuentasOcultas().length===0, "se puede volver a mostrar");
+    mensajes=[]; await quitarCuenta("BPat"); cierto(mensajes[0].includes("No la usaste"), mensajes[0]);
+    guardarCuentasRen({Efectivo:"Plata en mano"}); await quitarCuenta("Plata en mano"); cierto(getCuentasOcultas().includes("Efectivo") && !getCuentas().includes("Plata en mano"), "una de fábrica renombrada se quita por su nombre de fábrica");
+  } finally { movs=antes.movs; tcs=antes.tcs; cuentasCustom=antes.cc; guardarCuentasRen(antes.ren); guardarCuentasOcultas(antes.oc); window.mostrarConfirm=antes.confirm; window.showToast=antes.toast; }
+});
+
+test("quitar una tarjeta de fábrica: solo si no tiene compras, nunca la última, y se puede volver a mostrar", async ()=>{
+  const antes={tcs, tc:[...tarjetasCustom], oc:[...getTarjetasOcultas()], confirm:window.mostrarConfirm, toast:window.showToast};
+  let avisos=[]; window.mostrarConfirm=async()=>true; window.showToast=m=>avisos.push(m);
+  try{
+    tcs=[{id:1,tarjeta:"Visa",importe:100,fecha:"2026-10-01"}]; tarjetasCustom=[]; guardarTarjetasOcultas([]);
+    await quitarTarjeta("Visa"); cierto(getTarjetas().includes("Visa") && avisos.some(a=>a.includes("1 compra")), "con compras no se quita");
+    await quitarTarjeta("Amex"); cierto(!getTarjetas().includes("Amex") && getTarjetasOcultas().includes("Amex"), "sin compras sale de la lista");
+    ["Mastercard","Cabal","Naranja","Otra"].forEach(()=>{}); await quitarTarjeta("Mastercard"); await quitarTarjeta("Cabal"); await quitarTarjeta("Naranja"); await quitarTarjeta("Otra");
+    igual(getTarjetas().join(","),"Visa","queda la que tiene compras"); tcs=[]; avisos=[]; await quitarTarjeta("Visa"); cierto(avisos.some(a=>a.includes("al menos una")) && getTarjetas().length===1, "nunca queda sin tarjetas");
+    mostrarTarjetasOcultas(); igual(getTarjetas().length, TARJETAS_DEFAULT.length);
+  } finally { tcs=antes.tcs; tarjetasCustom=antes.tc; guardarTarjetasOcultas(antes.oc); window.mostrarConfirm=antes.confirm; window.showToast=antes.toast; }
+});
+
+test("lo que quitaste de las listas viaja en la copia de seguridad", ()=>{
+  const a={c:[...getCuentasOcultas()], t:[...getTarjetasOcultas()]};
+  try{ guardarCuentasOcultas(["MODO"]); guardarTarjetasOcultas(["Cabal"]); const b=armarBackup(); igual(b.datos.cuentasOcultas,["MODO"]); igual(b.datos.tarjetasOcultas,["Cabal"]); }
+  finally { guardarCuentasOcultas(a.c); guardarTarjetasOcultas(a.t); }
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

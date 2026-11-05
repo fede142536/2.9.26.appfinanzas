@@ -29,10 +29,28 @@ function guardarCuentasRen(mapa){
   if(typeof marcarDatosSucios==="function") marcarDatosSucios();
   return ok;
 }
-// Devuelve la lista completa de cuentas: default (con el nombre que les hayas puesto) + las agregadas por el usuario (sin duplicar)
+// Las cuentas de fábrica que no usás se pueden quitar de la lista (y volver a mostrar). Se guarda el nombre de FÁBRICA de cada una, aunque la hayas renombrado.
+// Quitar una cuenta no toca los movimientos que ya la tienen: la lista es lo que ofrecen los selectores. "Cuentas" no se quita (es el "sin elegir").
+const CUENTAS_OCULTAS_KEY="fcuentasoc";
+let cuentasOcultasCache=null;
+function normalizarOcultas(a, defaults, reservadas){
+  const out=[]; if(Array.isArray(a)) a.forEach(x=>{ if(typeof x==="string" && defaults.includes(x) && !(reservadas||[]).includes(x) && !out.includes(x)) out.push(x); });
+  return out;
+}
+function getCuentasOcultas(){
+  if(cuentasOcultasCache===null){ try{ cuentasOcultasCache=normalizarOcultas(JSON.parse(localStorage.getItem(CUENTAS_OCULTAS_KEY)||"[]"), CUENTAS_DEFAULT, ["Cuentas"]); }catch(e){ cuentasOcultasCache=[]; } }
+  return cuentasOcultasCache;
+}
+function guardarCuentasOcultas(lista){
+  cuentasOcultasCache=normalizarOcultas(lista, CUENTAS_DEFAULT, ["Cuentas"]);
+  const ok=guardarPreferencia(CUENTAS_OCULTAS_KEY, JSON.stringify(cuentasOcultasCache));
+  if(typeof marcarDatosSucios==="function") marcarDatosSucios();
+  return ok;
+}
+// Devuelve la lista completa de cuentas: default (con el nombre que les hayas puesto, menos las que quitaste) + las agregadas por el usuario (sin duplicar)
 function getCuentas(){
-  const ren=getCuentasRen();
-  const todas=CUENTAS_DEFAULT.map(c=>ren[c]||c);
+  const ren=getCuentasRen(), ocultas=getCuentasOcultas();
+  const todas=CUENTAS_DEFAULT.filter(c=>!ocultas.includes(c)).map(c=>ren[c]||c);
   cuentasCustom.forEach(c=>{ if(!todas.includes(c)) todas.push(c); });
   return todas;
 }
@@ -90,6 +108,37 @@ function renombrarCuentaEnObjeto(x, viejo, nuevo, visto){
   });
   return n;
 }
+// Cuántos campos `cuenta` / `cuentaDestino` valen `nombre` (misma recorrida que renombrarCuentaEnObjeto, sin cambiar nada). Pura.
+function contarCuentaEnObjeto(x, nombre, visto){
+  if(!x || typeof x!=="object") return 0;
+  visto=visto||new Set(); if(visto.has(x)) return 0; visto.add(x);
+  let n=0;
+  if(Array.isArray(x)){ x.forEach(e=>{ n+=contarCuentaEnObjeto(e,nombre,visto); }); return n; }
+  Object.keys(x).forEach(k=>{
+    if((k==="cuenta"||k==="cuentaDestino") && x[k]===nombre) n++;
+    else if(x[k] && typeof x[k]==="object") n+=contarCuentaEnObjeto(x[k],nombre,visto);
+  });
+  return n;
+}
+// Saca una cuenta de la lista. Las propias se borran; las de fábrica se ocultan (se pueden volver a mostrar).
+async function quitarCuenta(nombre){
+  if(cuentasCustom.includes(nombre)) return borrarCuentaCustom(nombre);
+  const ren=getCuentasRen();
+  const original=Object.keys(ren).find(k=>ren[k]===nombre) || (CUENTAS_DEFAULT.includes(nombre) ? nombre : null);
+  if(!original || original==="Cuentas") return;
+  const usos=contarCuentaEnObjeto(movs,nombre)+contarCuentaEnObjeto(tcs,nombre);
+  const aviso=usos ? `"${nombre}" figura en ${usos} movimiento${usos===1?"":"s"}: se saca de la lista, pero esos movimientos la conservan.` : `No la usaste en ningún movimiento.`;
+  if(!await mostrarConfirm(`¿Quitar "${nombre}" de la lista de cuentas? ${aviso} La podés volver a mostrar desde Configuración.`, {textoOk:"Quitar", peligroso:!!usos})) return;
+  guardarCuentasOcultas([...getCuentasOcultas(), original]);
+  showToast(`Cuenta "${nombre}" quitada de la lista`);
+  refrescarCuentas();
+}
+function mostrarCuentasOcultas(){ guardarCuentasOcultas([]); showToast("Cuentas de fábrica restauradas ✓"); refrescarCuentas(); }
+function refrescarCuentas(){
+  renderCuentasManager();
+  ["inp-cuenta","inv-cuenta","tc-cuenta"].forEach(id=>buildCuentaSelect(id));
+  if(typeof renderTarjetasManager==="function") renderTarjetasManager();
+}
 // Edita (renombra) una cuenta, de fábrica o propia. Todo lo cargado con la cuenta pasa a llevar el nombre nuevo.
 async function editarCuenta(nombreActual){
   if(nombreActual==="Cuentas") return;   // es la opción "sin elegir", no una cuenta
@@ -130,9 +179,10 @@ function renderCuentasManager(){
   const html=getCuentas().map(c=>{
     const esCustom=cuentasCustom.includes(c);
     const editable=c!=="Cuentas";
-    return `<span class="cfg-chip${esCustom?' cfg-chip-propio':''}"><span class="cfg-chip-txt">💳 ${escapeHtml(c)}</span>${editable?`<button type="button" class="cfg-chip-x cfg-chip-edit" aria-label="Editar la cuenta ${escapeHtml(c)}" onclick="editarCuenta(${attrJS(c)})">✎</button>`:''}${esCustom?`<button type="button" class="cfg-chip-x" aria-label="Quitar la cuenta ${escapeHtml(c)}" onclick="borrarCuentaCustom(${attrJS(c)})">×</button>`:''}</span>`;
+    return `<span class="cfg-chip${esCustom?' cfg-chip-propio':''}"><span class="cfg-chip-txt">💳 ${escapeHtml(c)}</span>${editable?`<button type="button" class="cfg-chip-x cfg-chip-edit" aria-label="Editar la cuenta ${escapeHtml(c)}" onclick="editarCuenta(${attrJS(c)})">✎</button>`:''}${editable?`<button type="button" class="cfg-chip-x" aria-label="Quitar la cuenta ${escapeHtml(c)}" onclick="quitarCuenta(${attrJS(c)})">×</button>`:''}</span>`;
   }).join("");
-  el.innerHTML=`<div class="cfg-chips">${html}</div><div class="cfg-acciones"><button class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')">+ Agregar cuenta</button></div>`;
+  const ocultas=getCuentasOcultas().length;
+  el.innerHTML=`<div class="cfg-chips">${html}</div><div class="cfg-acciones"><button class="btn-sm" onclick="agregarCuentaRapida('inp-cuenta')">+ Agregar cuenta</button>${ocultas?`<button class="btn-sm" onclick="mostrarCuentasOcultas()">Volver a mostrar las que quité (${ocultas})</button>`:""}</div>`;
 }
 
 // ═══════════════════════════════════════════
@@ -143,8 +193,22 @@ let tarjetasCustom = [];
 function saveTarjetasCustom(){ setSensitiveRaw("ftarjetas", JSON.stringify(tarjetasCustom)); marcarDatosSucios(); }
 // Devuelve todos los nombres de tarjeta: default + agregados por el usuario + cualquiera que
 // ya esté en uso en gastos cargados (por si vino de un import viejo con un nombre no listado)
+// Igual que con las cuentas: las de fábrica que no usás se pueden quitar de la lista. Una tarjeta con compras cargadas no se quita (volvería a aparecer sola).
+const TARJETAS_OCULTAS_KEY="ftarjetasoc";
+let tarjetasOcultasCache=null;
+function getTarjetasOcultas(){
+  if(tarjetasOcultasCache===null){ try{ tarjetasOcultasCache=normalizarOcultas(JSON.parse(localStorage.getItem(TARJETAS_OCULTAS_KEY)||"[]"), TARJETAS_DEFAULT); }catch(e){ tarjetasOcultasCache=[]; } }
+  return tarjetasOcultasCache;
+}
+function guardarTarjetasOcultas(lista){
+  tarjetasOcultasCache=normalizarOcultas(lista, TARJETAS_DEFAULT);
+  const ok=guardarPreferencia(TARJETAS_OCULTAS_KEY, JSON.stringify(tarjetasOcultasCache));
+  if(typeof marcarDatosSucios==="function") marcarDatosSucios();
+  return ok;
+}
 function getTarjetas(){
-  const todas=[...TARJETAS_DEFAULT];
+  const ocultas=getTarjetasOcultas();
+  const todas=TARJETAS_DEFAULT.filter(t=>!ocultas.includes(t));
   tcs.forEach(t=>{
     if(t.tarjeta && !todas.includes(t.tarjeta)) todas.push(t.tarjeta);
     (t.tarjetas||[]).forEach(c=>{ if(c.tarjeta && !todas.includes(c.tarjeta)) todas.push(c.tarjeta); });
@@ -227,6 +291,21 @@ async function borrarTarjetaCustom(nombre){
   renderTarjetasManager();
   buildTarjetaSelect("tc-tarjeta");
 }
+// Quita una tarjeta de la lista: las propias se borran, las de fábrica se ocultan (y se pueden volver a mostrar).
+async function quitarTarjeta(nombre){
+  if(tarjetasCustom.includes(nombre)) return borrarTarjetaCustom(nombre);
+  if(!TARJETAS_DEFAULT.includes(nombre)) return;
+  const usos=tcs.filter(t=>t.tarjeta===nombre || (t.tarjetas||[]).some(c=>c.tarjeta===nombre)).length;
+  if(usos){ showToast(`No se puede quitar: hay ${usos} compra${usos===1?"":"s"} con esa tarjeta. Renombrala en su lugar.`); return; }
+  if(getTarjetas().length<=1){ showToast("Tiene que quedar al menos una tarjeta"); return; }
+  if(!await mostrarConfirm(`¿Quitar "${nombre}" de la lista de tarjetas? No la usaste en ninguna compra. La podés volver a mostrar desde Configuración.`, {textoOk:"Quitar"})) return;
+  guardarTarjetasOcultas([...getTarjetasOcultas(), nombre]);
+  guardarBancosTc(conBancoDeTarjeta(leerBancosTc(), nombre, ""));
+  showToast(`Tarjeta "${nombre}" quitada de la lista`);
+  renderTarjetasManager();
+  buildTarjetaSelect("tc-tarjeta");
+}
+function mostrarTarjetasOcultas(){ guardarTarjetasOcultas([]); showToast("Tarjetas de fábrica restauradas ✓"); renderTarjetasManager(); buildTarjetaSelect("tc-tarjeta"); }
 // Renombra una tarjeta en TODOS los gastos que ya la usan (propaga el cambio),
 // y actualiza también la lista de tarjetas custom si corresponde.
 async function renombrarTarjeta(nombreActual){
@@ -275,13 +354,14 @@ function renderTarjetasManager(){
         <span class="cfg-tc-nombre">💳 ${escapeHtml(t)}${esDefault?"":' <span class="badge badge-accent">propia</span>'}</span>
         <div class="cfg-tc-acc">
           <button type="button" class="cfg-ico-btn cfg-ico-plano" aria-label="Renombrar la tarjeta ${escapeHtml(t)}" title="Renombrar" onclick="renombrarTarjeta(${tEsc})">✎</button>
-          ${esCustom?`<button type="button" class="cfg-ico-btn cfg-ico-plano cfg-ico-peligro" aria-label="Eliminar la tarjeta ${escapeHtml(t)}" title="Eliminar" onclick="borrarTarjetaCustom(${tEsc})">×</button>`:""}
+          <button type="button" class="cfg-ico-btn cfg-ico-plano cfg-ico-peligro" aria-label="${esCustom?"Eliminar":"Quitar"} la tarjeta ${escapeHtml(t)}" title="${esCustom?"Eliminar":"Quitar de la lista"}" onclick="quitarTarjeta(${tEsc})">×</button>
         </div>
       </div>
       <label class="tc-banco-fila"><span>Banco</span><select class="form-select" aria-label="Banco de ${escapeHtml(t)}" onchange="setBancoTarjeta(${tEsc}, this.value)">${opciones}</select></label>
     </div>`;
   }).join("");
-  el.innerHTML=html+`<div class="cfg-acciones"><button class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')">+ Agregar tarjeta</button></div>`;
+  const ocultasTc=getTarjetasOcultas().length;
+  el.innerHTML=html+`<div class="cfg-acciones"><button class="btn-sm" onclick="agregarTarjetaRapida('tc-tarjeta')">+ Agregar tarjeta</button>${ocultasTc?`<button class="btn-sm" onclick="mostrarTarjetasOcultas()">Volver a mostrar las que quité (${ocultasTc})</button>`:""}</div>`;
 }
 
 // ═══════════════════════════════════════════
