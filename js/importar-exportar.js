@@ -215,6 +215,16 @@ function xlsxDisponible(){
   return false;
 }
 
+// Lee el archivo como libro de SheetJS. Un CSV se lee como TEXTO SIN INTERPRETAR (raw:true): si se deja que SheetJS adivine, convierte
+// "01/11/2026" en una fecha en orden americano (enero) y la importación cae en otro mes. Así la fecha llega como texto y la lee
+// el código de más abajo, que entiende DD/MM/AAAA (el formato argentino) además de AAAA-MM-DD. Excel (.xlsx/.xls) sigue igual.
+function leerLibroXlsx(buffer, nombre){
+  if(/\.csv$/i.test(nombre||"")){
+    const texto=new TextDecoder("utf-8").decode(new Uint8Array(buffer)).replace(/^\uFEFF/,"");
+    return XLSX.read(texto,{type:"string",raw:true});
+  }
+  return XLSX.read(new Uint8Array(buffer),{type:"array",cellDates:true});
+}
 function handleXlsx(input){
   const file=input.files[0];if(!file)return;
   if(!xlsxDisponible()){ setXlsxStatus("❌ Librería de Excel no disponible (sin conexión?)","var(--danger)"); input.value=""; return; }
@@ -224,7 +234,7 @@ function handleXlsx(input){
     try{
       // raw:true para recibir valores originales (fechas como serial, números como number)
       // cellDates:true → fechas como Date objects (más confiable)
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:true});
+      const wb=leerLibroXlsx(e.target.result, file.name);
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});
       if(!rows.length){setXlsxStatus("❌ Archivo vacío","var(--danger)");return;}

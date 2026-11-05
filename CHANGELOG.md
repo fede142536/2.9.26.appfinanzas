@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v231**
+**Versión actual: v232**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,8 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 5 de noviembre de 2026
 
+- **v232** · Arreglos de la revisión independiente (tanda 2 y 3)
+  Signo en la lectura de Evolución en dólares, frase del balance con déficit en ambos lados, porcentajes y multiplicadores en es-AR (cierre, informe, imágenes), reporte para imprimir sin cifras ni columnas partidas, confirmación al eliminar categoría, Cerrar de la hoja de categoría como las demás, mosaicos USD sin cortar y selector de emoji en 7+7.
 - **v231** · Frase del balance con signo opuesto al promedio, porcentajes y abreviaturas con puntos de miles
 
 ## 4 de noviembre de 2026

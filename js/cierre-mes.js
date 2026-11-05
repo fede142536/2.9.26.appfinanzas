@@ -176,11 +176,11 @@ function renderCierreMes(){
   if(btn){ btn.textContent=cerrado ? "Reabrir el mes" : "Cerrar el mes"; btn.classList.toggle("reabrir", !!cerrado); }
   const comp=document.getElementById("cierre-compartir"); if(comp) comp.style.display=r.hayDatos?"":"none";
 }
-// Abre el cierre del mes `ym` (por defecto el que toca: el anterior durante los primeros días del mes, el actual después).
+// Abre el cierre del mes `ym`. Sin indicar mes (menú, atajo) abre el mes ACTUAL; el aviso de "Cerrá <mes anterior>" pasa su mes y abre ese.
 function abrirCierreMes(ym){
   if(!document.getElementById("cierre-cuerpo")) return;
   const hoy=hoyLocal();
-  cierreYM=ym || (Number(hoy.slice(8,10))<=CIERRE_DIAS_AVISO ? addMonths(hoy.slice(0,7),-1) : hoy.slice(0,7));
+  cierreYM=ym || hoy.slice(0,7);
   renderCierreMes();
   document.getElementById("modal-cierre").classList.add("open");
 }
