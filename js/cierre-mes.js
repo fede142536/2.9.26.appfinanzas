@@ -173,7 +173,9 @@ function renderCierreMes(){
   cuerpo.innerHTML=`${cerrado?`<div class="cierre-cerrado">✓ Mes cerrado el ${escapeHtml(fmtDiaMes(cerrado.slice(0,10)))}</div>`:""}
     ${resumenMesHTML(r)}
     <div class="cierre-sec">Antes de cerrar${pend?` · ${pend} por revisar`:" · todo en orden"}</div>${chequeoHTML(cierreItems, ym)}`;
-  if(btn){ btn.textContent=cerrado ? "Reabrir el mes" : "Cerrar el mes"; btn.classList.toggle("reabrir", !!cerrado); }
+  if(btn){ btn.textContent=cerrado ? "Reabrir el mes" : "Cerrar el mes"; btn.classList.toggle("reabrir", !!cerrado);
+    btn.disabled = !cerrado && !r.hayDatos;   // un mes sin movimientos no tiene qué cerrar
+    btn.setAttribute("aria-disabled", btn.disabled ? "true" : "false"); }
   const comp=document.getElementById("cierre-compartir"); if(comp) comp.style.display=r.hayDatos?"":"none";
 }
 // Abre el cierre del mes `ym`. Sin indicar mes (menú, atajo, aviso de Movimientos) abre el mes ACTUAL.

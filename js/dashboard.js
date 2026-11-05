@@ -132,7 +132,7 @@ function desviacionCategoriasDelMes(ym){
 
 // Arma una fila de barra "Mes vs Promedio" para una tarjeta de hallazgo.
 function filaInsight(label, val, max, color){
-  return {label, val: fmtAbbr(val), w: max>0 ? Math.round(Math.abs(val)/max*100) : 0, color};
+  return {label, val: fmtAbbr(val).replace(/^-/,"−"), w:   /* el menos tipográfico, como en el resto de la app */ max>0 ? Math.round(Math.abs(val)/max*100) : 0, color};
 }
 
 // El motor de frases: arma las tarjetas de hallazgo del mes, en el orden del handoff. Cada
@@ -185,7 +185,7 @@ function construirInsights(ym, mesData, monthlyAnio){
     const bueno=val>=0;
     const max=Math.max(Math.abs(val), Math.abs(promBal||0));
     out.push({
-      icon:"💰", bg:"var(--success-light)",
+      icon:"💰", bg: bueno?"var(--success-light)":"var(--danger-light)",
       a: bueno?"Te quedaron ":"Te faltaron ",
       b: fmtTotal(Math.abs(val)),
       bc: bueno?"var(--success)":"var(--danger)",

@@ -127,7 +127,7 @@ function dibujarResumenAnual(canvas, r){
   if(r.mayor) notas.push(`Gasto más grande: ${r.mayor.desc} (${fmtTotal(r.mayor.monto)})`);
   if(r.mesesConDatos>1) notas.push(`Gasto promedio: ${fmtTotal(r.promedioGasto)} por mes`);
   return imgLienzo(canvas, (ctx)=>{
-    let y=imgCabecera(ctx, {titulo:`Enola · Mi ${r.anio}`, etiqueta:"Me quedó disponible", valor:imgMonto(r.disponible), color:r.disponible>=0?IMG.save:IMG.gasto,
+    let y=imgCabecera(ctx, {titulo:`Enola · Mi ${r.anio}`, etiqueta:"Te quedó disponible", valor:imgMonto(r.disponible), color:r.disponible>=0?IMG.save:IMG.gasto,
       cols:[{etiqueta:"Ingresos", valor:fmtTotal(r.ingresos), color:IMG.ing}, {etiqueta:"Gastos", valor:fmtTotal(r.gastos), color:IMG.gasto}, {etiqueta:"Ahorrado", valor:fmtTotal(r.ahorrado), color:IMG.save}]});
     y=imgSeccion(ctx, y, "Mes a mes: lo que quedó");
     y=imgBarras(ctx, y, r.meses.map((x,i)=>({valor:x.disponible, hay:x.hayDatos, etq:MESES_INICIAL[i]})));
