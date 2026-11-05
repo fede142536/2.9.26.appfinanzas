@@ -182,7 +182,8 @@ function construirInsights(ym, mesData, monthlyAnio){
       a: bueno?"Te quedaron ":"Te faltaron ",
       b: fmtTotal(Math.abs(val)),
       bc: bueno?"var(--success)":"var(--danger)",
-      c: ` en ${Mes}`+cierre(val, promBal, "que en un mes normal."),
+      // Si el mes y el promedio tienen signo opuesto, "1.004% menos" confunde: se dice cuánto deja o falta un mes normal.
+      c: ` en ${Mes}`+((hayProm && promBal && (val<0)!==(promBal<0)) ? `: en un mes normal te ${promBal>0?"quedan":"faltan"} ${fmtTotal(Math.abs(promBal))}.` : cierre(val, promBal, "que en un mes normal.")),
       rows: hayProm ? [
         filaInsight(Mes, val, max, bueno?"var(--success)":"var(--danger)"),
         filaInsight("Promedio", promBal, max, `color-mix(in srgb,${bueno?"var(--success)":"var(--danger)"} 40%,var(--surface))`)

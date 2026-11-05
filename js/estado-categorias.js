@@ -726,7 +726,7 @@ function fmtAbbr(n){
   if(n===0)return "$0";
   const abs=Math.abs(n);
   const sign=n<0?"-":"";
-  if(abs>=1000000)return sign+"$"+(abs/1000000).toFixed(1).replace(".",",")+"M";
+  if(abs>=1000000)return sign+"$"+(abs/1000000).toLocaleString("es-AR",{minimumFractionDigits:1,maximumFractionDigits:1})+"M";   // con puntos de miles: "$123.456,8M"
   if(abs>=1000)return sign+"$"+(abs/1000).toFixed(0)+"K";
   return fmt(n);
 }

@@ -405,7 +405,7 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
     out.push({
       nivel: arriba?"warn":"info",
       icono: arriba?"📈":"📉",
-      titulo: `Vas ${Math.abs(comp.pct)}% ${arriba?"arriba":"abajo"} de tu mes típico`,
+      titulo: `Vas ${Math.abs(comp.pct).toLocaleString("es-AR")}% ${arriba?"arriba":"abajo"} de tu mes típico`,
       detalle: `${proyTxt} Tu mediana de los últimos ${comp.mesesBase} meses es ${fmtTotal(comp.mediana)}. No cuenta lo que pasaste a ahorros.`
     });
   }
