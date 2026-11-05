@@ -107,7 +107,7 @@ function hallazgosDelPeriodo(inf, ant){
   if(inf.invCompras>0 || inf.invVentas>0) out.push({icono:"📊", texto:`En inversiones pusiste ${F(inf.invCompras)} y recuperaste ${F(inf.invVentas)}.`});
   if(ant && ant.hayDatos && ant.ingOp>0){
     const dI=Math.round((inf.ingOp/ant.ingOp-1)*100), dG=ant.gasOp>0 ? Math.round((inf.gasOp/ant.gasOp-1)*100) : null;
-    out.push({icono:"🗓", texto:`Contra el mismo período del año anterior: ingresos de trabajo ${dI>=0?"+":""}${dI}%${dG!==null?` y gastos ${dG>=0?"+":""}${dG}%`:""}${ant.mesesConDatos<inf.mesesConDatos?`. Ojo: el año anterior tiene menos meses cargados (${ant.mesesConDatos} de ${inf.mesesConDatos}), la comparación no es pareja`:""}.`});
+    out.push({icono:"🗓", texto:`Contra el mismo período del año anterior: ingresos de trabajo ${dI>=0?"+":""}${Number(dI).toLocaleString("es-AR")}%${dG!==null?` y gastos ${dG>=0?"+":""}${Number(dG).toLocaleString("es-AR")}%`:""}${ant.mesesConDatos<inf.mesesConDatos?`. Ojo: el año anterior tiene menos meses cargados (${ant.mesesConDatos} de ${inf.mesesConDatos}), la comparación no es pareja`:""}.`});
   }
   const q=inf.calidad;
   if(q.gastos>=10){
@@ -145,7 +145,7 @@ function informeComoTexto(inf){
   L.push("Mes a mes (ingresos / gastos / disponible):");
   inf.meses.filter(x=>x.hayDatos).forEach(x=>L.push(`• ${mesCortoInforme(x.ym)}: ${F(x.ingresos)} / ${F(x.gastos)} / ${x.disponible<0?"−":""}${F(Math.abs(x.disponible))}`));
   L.push("", "En qué se fue la plata:");
-  inf.categorias.slice(0,6).forEach(c=>L.push(`• ${c.cat}: ${F(c.monto)} (${Math.round(c.pct)}%)${c.delta!==null?` · ${c.delta>=0?"+":""}${c.delta}% vs año anterior`:""}`));
+  inf.categorias.slice(0,6).forEach(c=>L.push(`• ${c.cat}: ${F(c.monto)} (${Math.round(c.pct)}%)${c.delta!==null?` · ${c.delta>=0?"+":""}${Number(c.delta).toLocaleString("es-AR")}% vs año anterior`:""}`));
   if(inf.hallazgos.length){ L.push("", "Para tener en cuenta:"); inf.hallazgos.forEach(h=>L.push(`${h.icono} ${h.texto}`)); }
   L.push("", "Hecho con Enola");
   return L.join("\n");
@@ -161,7 +161,7 @@ function informeTablaHTML(inf){
 function informeHTML(inf){
   if(!inf.hayDatos) return `<p class="txt-sm txt-muted" style="margin:12px 0">No hay movimientos en ese período.</p>`;
   const col=inf.disponible>=0 ? "var(--save)" : "var(--danger)";
-  const cats=inf.categorias.slice(0,8).map(c=>`<div class="cierre-cat"><div class="cierre-cat-top"><span>${getIcon(c.cat,"📦")} ${escapeHtml(c.cat)}</span><span><strong>${fmtTotal(c.monto)}</strong> <span class="txt-muted">${Math.round(c.pct)}%</span>${c.delta!==null?` <span class="cierre-delta ${c.delta>0?"sube":c.delta<0?"baja":""}">${c.delta>0?"▲":c.delta<0?"▼":"="} ${Math.abs(c.delta)}%</span>`:""}</span></div>
+  const cats=inf.categorias.slice(0,8).map(c=>`<div class="cierre-cat"><div class="cierre-cat-top"><span>${getIcon(c.cat,"📦")} ${escapeHtml(c.cat)}</span><span><strong>${fmtTotal(c.monto)}</strong> <span class="txt-muted">${Math.round(c.pct)}%</span>${c.delta!==null?` <span class="cierre-delta ${c.delta>0?"sube":c.delta<0?"baja":""}">${c.delta>0?"▲":c.delta<0?"▼":"="} ${Math.abs(c.delta).toLocaleString("es-AR")}%</span>`:""}</span></div>
     <div class="cierre-barra"><div style="width:${Math.min(c.pct,100)}%"></div></div>${c.subs.length?`<div class="informe-subs">${c.subs.map(s=>`${escapeHtml(s.sub||"Sin subcategoría")} ${fmtAbbr(s.monto)}`).join(" · ")}</div>`:""}</div>`).join("");
   const fuentes=inf.fuentes.slice(0,5).map(f=>`<div class="informe-fila"><span>${getIcon(f.cat,"💰")} ${escapeHtml(f.cat)}</span><strong>${fmtTotal(f.monto)}</strong></div>`).join("");
   const grandes=inf.gastosGrandes.map(g=>`<div class="informe-fila"><span>${escapeHtml(fmtDiaMes(g.fecha))} · ${escapeHtml(g.desc)} <span class="txt-muted">${escapeHtml(g.cat)}</span></span><strong>${fmtTotal(g.monto)}</strong></div>`).join("");

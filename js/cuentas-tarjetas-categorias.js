@@ -332,7 +332,9 @@ async function borrarSubcat(tipo, cat, sub){
   showToast("Subcategoría eliminada");
 }
 
-function borrarCat(t,cat){if(custom[t])delete custom[t][cat];save();buildCats();buildTcCats();buildInvCats();renderCatManager();showToast("Categoría eliminada");}
+async function borrarCat(t,cat){
+  if(!await mostrarConfirm(`¿Eliminar la categoría "${cat}"?`, {textoOk:"Eliminar", peligroso:true})) return;   // igual que la subcategoría: sin esto se borraba de un toque
+  if(custom[t])delete custom[t][cat];save();buildCats();buildTcCats();buildInvCats();renderCatManager();showToast("Categoría eliminada");}
 
 // Evalúa una expresión simple de suma/resta para el campo importe
 // Acepta: 1500, 1500.50, 1500+750+300, 1500-200, etc. Solo dígitos, +, -, ., ,

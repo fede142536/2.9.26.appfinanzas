@@ -11158,7 +11158,7 @@ test("los tickers recientes con comillas o HTML no rompen el botón y al tocarlo
 test("la conciliación y el reporte para imprimir escapan los tickers y los tipos de movimiento", async ()=>{
   const h=filasConciliacionHTML({diferencias:[], faltanEnFondo:[{ticker:XSS_PAY, lado:"compra", inv:{fecha:"2026-10-01", importe:1000}}], sobranEnFondo:[{ticker:XSS_PAY, lado:"venta", fondo:{fecha:"2026-10-01", importe:1}}], duplicados:[], ok:[], excluidos:[], anteriores:[]});
   const caja=document.createElement("div"); caja.innerHTML=h; cierto(!caja.querySelector("img") && !/<img/i.test(caja.innerHTML.replace(/&lt;img/g,"")), "la conciliación inyectó HTML");
-  const cfg=await (await fetch("js/config-ui.js")).text(); cierto(cfg.includes("<td>${escapeHtml(m.tipo===\"Inversion\"?\"Inversión\":m.tipo)}") && cfg.includes("<title>Reporte ${escapeHtml(titulo)}</title>"), "el reporte no escapa el tipo o el título");
+  const cfg=await (await fetch("js/config-ui.js")).text(); cierto(cfg.includes("<td class=\"nw\">${escapeHtml(m.tipo===\"Inversion\"?\"Inversión\":m.tipo)}") && cfg.includes("<title>Reporte ${escapeHtml(titulo)}</title>"), "el reporte no escapa el tipo o el título");
 });
 
 test("el CSV no deja que una celda se ejecute como fórmula en Excel", ()=>{

@@ -1029,7 +1029,7 @@ canvas{width:100%!important;max-width:100%}
 .deposito-chip{height:var(--tap);font-size:var(--fs-sm);border:1.5px solid var(--border-mid);padding:0 var(--sp-1)}
 .deposito-preview{font-size:var(--fs-md);margin:var(--sp-3) 0}
 /* Hoja de la meta: selector de emoji con botones de 44 */
-.emoji-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tap),1fr));gap:var(--sp-1)}
+.emoji-picker{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}   /* 14 emojis = 2 filas de 7 (con auto-fill a 360 quedaban 6+6+2) */
 .emoji-opt{height:var(--tap);border:1.5px solid transparent;border-radius:var(--radius-md);background:var(--bg);font-size:22px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .emoji-opt:active{transform:scale(.94)}
 .emoji-opt[aria-pressed="true"]{border-color:var(--save);background:var(--save-light)}
@@ -1987,3 +1987,8 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .concil-cerrar-barra{position:sticky;bottom:0;z-index:2;margin-top:var(--sp-3);background:var(--surface);padding:var(--sp-2) 0 calc(var(--sp-3) + var(--safe-b))}
 .concil-cerrar-barra::before{content:"";position:absolute;left:0;right:0;top:calc(-1 * var(--sp-3));height:var(--sp-3);background:linear-gradient(transparent,var(--surface));pointer-events:none}
 .concil-cerrar{width:100%;height:var(--tap)}
+
+/* [AAA revisión tanda 3] Hoja de dólares de Ahorros: los tres mosaicos pasan a una columna cuando no entran las cifras en una fila. */
+#usd-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:var(--sp-2)}
+#usd-kpis .chip{min-width:0}
+#usd-kpis .chip-val{white-space:nowrap}
