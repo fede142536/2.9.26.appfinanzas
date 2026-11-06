@@ -374,7 +374,7 @@ function actualizarFilaFrecPagado(id, ym, pagado, esTc){
   });
   // En el foco "Frecuentes por pagar" la barra cuenta los que siguen sin pagar (la fila pagada queda a la vista hasta el próximo repintado).
   if(filtroMosaico==="frec-por-pagar"){
-    const n=[...document.querySelectorAll("#tx-list tx-item")].filter(e=>e._m && e._m._isFrecVirtual && !e._m.pagado).length;
+    const n=[...document.querySelectorAll("#tx-list tx-item")].filter(e=>e._m && e._m._isFrecVirtual && e._m.tipo==="Gasto" && !e._m.pagado).length;
     const c=document.querySelector("#mov-foco-mosaico .mov-foco-n"); if(c) c.textContent=`${n} por pagar`;
   }
 }
@@ -948,7 +948,8 @@ function renderTxListaLazy(show){
 // mosaico elegido, con una barra "Mostrando …" para quitar el filtro. Se combina con la búsqueda y con el filtro de cuenta.
 let filtroMosaico="";   // clave del foco activo ("" = ninguno)
 const FOCOS_MOSAICO={
-  "frec-por-pagar":{titulo:"Frecuentes por pagar", ok:m=>!!m._isFrecVirtual && !m.pagado, vacio:"No quedan frecuentes por pagar ✓", guia:"Ya marcaste como pagados todos los de este período."},
+  "frec-por-pagar":{titulo:"Frecuentes por pagar", ok:m=>!!m._isFrecVirtual && m.tipo==="Gasto" && !m.pagado, vacio:"No quedan frecuentes por pagar ✓", guia:"Ya marcaste como pagados todos los de este período."},
+  "frec-por-cobrar":{titulo:"Frecuentes por cobrar", ok:m=>!!m._isFrecVirtual && m.tipo==="Ingreso", vacio:"Todavía no cobraste ningún ingreso frecuente", guia:"Los que faltan cobrar están en «Por cobrar este mes», arriba de la lista."},
   "invertido":{titulo:"Invertido", ok:m=>m.tipo==="Inversion" && !isInvSalida(m) && !(m.importeUSD>0)},
   "invertido-usd":{titulo:"Invertido USD", ok:m=>m.tipo==="Inversion" && !isInvSalida(m) && m.importeUSD>0},
   "inversiones":{titulo:"Inversiones", ok:m=>m.tipo==="Inversion"},
@@ -1028,7 +1029,8 @@ function mosaicoHTML(glyph, name, color, val, sub, attr, accion){
 // balance — el "pagado" es una ayuda memoria — solo esta cifra. Función pura sobre la lista del
 // período (los frecuentes llegan expandidos por mes, con `_isFrecVirtual` y `pagado`).
 function frecuentesPorPagar(lista){
-  const frec=(lista||[]).filter(m=>m._isFrecVirtual);
+  // Solo GASTOS frecuentes: un ingreso frecuente no se "paga", se cobra (ver frecuentesPorCobrar) y antes se contaba acá como impago para siempre.
+  const frec=(lista||[]).filter(m=>m._isFrecVirtual && m.tipo==="Gasto");
   const sin=frec.filter(m=>!m.pagado);
   const ars=sin.filter(m=>m.moneda!=="USD").reduce((s,m)=>s+(m.importe||0),0);
   const usd=sin.filter(m=>m.moneda==="USD").reduce((s,m)=>s+(m.importeOrig||0),0);
@@ -1047,6 +1049,24 @@ function frecPorPagarMosaicoHTML(r){
   else sub=`${r.pendientes} de ${r.total} sin pagar${r.usd>0&&!soloUsd?` · + USD ${fmtNum2(r.usd)}`:""}`;
   return mosaicoHTML("🔁","Frecuentes por pagar", listo?"var(--success)":"var(--warning)", val, sub,
     'data-mosaico="frec-por-pagar"', "f:frec-por-pagar");
+}
+
+// INGRESOS frecuentes del mes (un sueldo, un alquiler cobrado): se COBRAN, no se pagan. Entran al balance recién cuando llega su día o los marcás
+// cobrados (ver ingresoFrecuenteCuenta); "sin cobrar" son los que todavía no cuentan, los mismos que muestra la franja «Por cobrar este mes».
+function frecuentesPorCobrar(ym, hoyISO){
+  const hoy=hoyISO||hoyLocal();
+  const activos=movs.filter(m=>m.tipo==="Ingreso" && m.frecuente && gastoFrecActivoEnMes(m, ym));
+  const pend=ingresosFrecPorCobrar(ym, hoy);
+  const suma=(lista,usd)=>Math.round(lista.reduce((t,v)=>t+((v.moneda==="USD")===usd?(v.monto||0):0),0)*100)/100;
+  return {total:activos.length, pendientes:pend.length, ars:suma(pend,false), usd:suma(pend,true)};
+}
+function frecPorCobrarMosaicoHTML(r){
+  if(!r.total) return "";
+  const listo=r.pendientes===0;
+  const soloUsd=r.usd>0 && !r.ars;
+  const val=listo ? `${r.total} ${r.total===1?"cobrado":"cobrados"}` : (soloUsd ? `USD ${fmtNum2(r.usd)}` : fmtTotal(r.ars));
+  const sub=listo ? "Todo cobrado ✓" : `${r.pendientes} de ${r.total} sin cobrar${r.usd>0&&!soloUsd?` · + USD ${fmtNum2(r.usd)}`:""}`;
+  return mosaicoHTML("📥","Frecuentes por cobrar", listo?"var(--success)":"var(--warning)", val, sub, 'data-mosaico="frec-por-cobrar"', "f:frec-por-cobrar");
 }
 
 // La lista sobre la que se calcula lo que se ve: el mes (o el período) y, en Gastos con una
@@ -1452,6 +1472,7 @@ function renderMovs(){
     mosTodos.push(mosaicoHTML("↑","Gastos","var(--danger)",fmtTotal(gasTotal),pctDeIngreso(gasTotal), null, "tab:Gasto"));
     const mosFrec=frecPorPagarMosaicoHTML(frecuentesPorPagar(mesMovs));
     if(mosFrec) mosTodos.push(mosFrec);
+    if(!filtroFecha){ const mosCobrar=frecPorCobrarMosaicoHTML(frecuentesPorCobrar(mesActual)); if(mosCobrar) mosTodos.push(mosCobrar); }
     if(guardado>0){
       mosTodos.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(guardado),pctDeIngreso(guardado), null, "f:ahorrado"));
     }

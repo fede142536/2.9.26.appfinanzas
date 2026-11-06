@@ -2861,7 +2861,7 @@ test("cambiar la moneda de un pago desde el editor mantiene ligado su resumen", 
 // ═══════════════════════════════════════════
 grupo("Movimientos: frecuentes por pagar");
 
-const FREC=(id,monto,extra)=>({_isFrecVirtual:true, id, importe:monto, moneda:"ARS", pagado:false, ...(extra||{})});
+const FREC=(id,monto,extra)=>({_isFrecVirtual:true, tipo:"Gasto", id, importe:monto, moneda:"ARS", pagado:false, ...(extra||{})});   // las filas virtuales son copias del movimiento: llevan su tipo
 
 test("suma lo que falta pagar de los frecuentes, sin contar los pagados ni los gastos comunes", ()=>{
   const r=frecuentesPorPagar([FREC(1,300000), FREC(2,50000,{pagado:true}), FREC(3,20000), {id:4, tipo:"Gasto", importe:999999}]);
@@ -11311,7 +11311,8 @@ test("un mosaico con acción es un botón accesible y conserva su class exacta; 
 
 test("los focos de los mosaicos eligen exactamente lo que los compone", ()=>{
   const f=(c,m)=>focoMosaico(c).ok(m);
-  cierto(f("frec-por-pagar",{_isFrecVirtual:true,pagado:false}) && !f("frec-por-pagar",{_isFrecVirtual:true,pagado:true}) && !f("frec-por-pagar",{tipo:"Gasto"}), "frecuentes por pagar: solo los frecuentes sin pagar");
+  cierto(f("frec-por-pagar",{_isFrecVirtual:true,tipo:"Gasto",pagado:false}) && !f("frec-por-pagar",{_isFrecVirtual:true,tipo:"Gasto",pagado:true}) && !f("frec-por-pagar",{tipo:"Gasto"}) && !f("frec-por-pagar",{_isFrecVirtual:true,tipo:"Ingreso"}), "frecuentes por pagar: solo los GASTOS frecuentes sin pagar (un ingreso frecuente se cobra)");
+  cierto(f("frec-por-cobrar",{_isFrecVirtual:true,tipo:"Ingreso"}) && !f("frec-por-cobrar",{_isFrecVirtual:true,tipo:"Gasto"}) && !f("frec-por-cobrar",{tipo:"Ingreso"}), "frecuentes por cobrar: los ingresos frecuentes");
   cierto(f("invertido",{tipo:"Inversion",subcat:"Compra",importe:10}) && !f("invertido",{tipo:"Inversion",importeUSD:5,subcat:"Compra"}) && f("invertido-usd",{tipo:"Inversion",importeUSD:5,subcat:"Compra"}), "invertido separa pesos de dólares");
   cierto(f("inversiones",{tipo:"Inversion"}) && !f("inversiones",{tipo:"Gasto"}), "inversiones: todas");
   cierto(f("ahorrado",{esAhorro:true}) && !f("ahorrado",{}) && f("de-ahorros",{usaAhorro:true}), "ahorros");
@@ -11337,6 +11338,22 @@ test("tocar 'Frecuentes por pagar' reduce la lista a los frecuentes sin pagar; t
     aplicarAccionMosaico("f:frec-por-pagar"); setFiltro("Gasto"); igual(filtroMosaico, "", "cambiar de solapa quita el foco");
     aplicarAccionMosaico("f:frec-por-pagar"); cambiarMes(1); igual(filtroMosaico, "", "cambiar de mes quita el foco");
   } finally { movs=antes.movs; tcs=antes.tcs; mesActual=antes.mes; filtro=antes.filtro; filtroMosaico=antes.f; filtroCuenta=antes.fc; searchQuery=antes.q; caja.forEach(c=>{ if(c.nuevo) c.e.remove(); }); }
+});
+
+test("'Frecuentes por pagar' no cuenta los ingresos frecuentes, que van aparte en 'Frecuentes por cobrar'", ()=>{
+  const lista=[{_isFrecVirtual:true,tipo:"Gasto",pagado:false,importe:100,moneda:"ARS"},{_isFrecVirtual:true,tipo:"Gasto",pagado:true,importe:50,moneda:"ARS"},{_isFrecVirtual:true,tipo:"Ingreso",pagado:false,importe:999,moneda:"ARS"}];
+  const r=frecuentesPorPagar(lista); igual(r.total,2); igual(r.pendientes,1); igual(r.ars,100);
+  const antes={movs, hoy:window.hoyLocal};
+  try{
+    window.hoyLocal=()=>"2026-10-10";
+    movs=[{id:1,tipo:"Ingreso",cat:"Alquiler",subcat:"Lujan",importe:700,fecha:"2026-10-05",frecuente:true,mesInicio:"2026-10",diaCobro:5,pagos:{}},
+          {id:2,tipo:"Ingreso",cat:"Sueldo",subcat:"Empresa",importe:3000,fecha:"2026-10-25",frecuente:true,mesInicio:"2026-10",diaCobro:25,pagos:{}},
+          {id:3,tipo:"Gasto",cat:"Casa",subcat:"Luz",importe:10,fecha:"2026-10-01",frecuente:true,mesInicio:"2026-10",pagos:{}}];
+    const c=frecuentesPorCobrar("2026-10"); igual(c.total,2,"dos ingresos frecuentes"); igual(c.pendientes,1,"el del 25 todavía no llegó"); igual(c.ars,3000);
+    const html=frecPorCobrarMosaicoHTML(c); cierto(html.includes("Frecuentes por cobrar") && html.includes("1 de 2 sin cobrar") && html.includes('data-accion="f:frec-por-cobrar"'), html);
+    movs[1].pagos["2026-10"]=true; const listo=frecuentesPorCobrar("2026-10"); igual(listo.pendientes,0); cierto(frecPorCobrarMosaicoHTML(listo).includes("Todo cobrado"), "al cobrarlos todos lo dice");
+    movs=[movs[2]]; igual(frecPorCobrarMosaicoHTML(frecuentesPorCobrar("2026-10")),"","sin ingresos frecuentes no hay mosaico");
+  } finally { movs=antes.movs; window.hoyLocal=antes.hoy; }
 });
 
 grupo("Aislamiento de los tests");
