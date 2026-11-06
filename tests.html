@@ -11356,6 +11356,39 @@ test("'Frecuentes por pagar' no cuenta los ingresos frecuentes, que van aparte e
   } finally { movs=antes.movs; window.hoyLocal=antes.hoy; }
 });
 
+grupo("Editor: volver frecuente un gasto o ingreso común");
+
+test("el editor ofrece volver frecuente a un ingreso o gasto común, y no a los que tienen su propia lógica", ()=>{
+  cierto(puedeVolverseFrecuente({tipo:"Ingreso",importe:100}) && puedeVolverseFrecuente({tipo:"Gasto",importe:100}), "ingreso y gasto comunes");
+  cierto(!puedeVolverseFrecuente({tipo:"Ingreso",frecuente:true}), "los que ya son frecuentes, no");
+  cierto(!puedeVolverseFrecuente({tipo:"Gasto",esAhorro:true}) && !puedeVolverseFrecuente({tipo:"Gasto",usaAhorro:true}) && !puedeVolverseFrecuente({tipo:"Gasto",traspaso:true}) && !puedeVolverseFrecuente({tipo:"Gasto",recuperable:50}), "ahorro, retiro, traspaso y recuperable, no");
+  cierto(!puedeVolverseFrecuente({tipo:"Gasto",pagoTarjeta:{ym:"2026-10"}}) && !puedeVolverseFrecuente({tipo:"Inversion"}) && !puedeVolverseFrecuente({tipo:"Gasto",cambioId:5}), "pago de resumen, inversión y cambio, no");
+});
+
+test("el salario cargado a mano se vuelve frecuente desde el editor: ese mes queda como estaba, no se duplica y los meses que siguen figuran por cobrar", ()=>{
+  const antes={hoy:window.hoyLocal, toast:window.showToast};
+  window.hoyLocal=()=>"2026-11-06"; window.showToast=()=>{};
+  const e=abrirEdicion({id:777,tipo:"Ingreso",cat:"Sueldo",subcat:"Empresa",importe:3000000,moneda:"ARS",importeOrig:null,cuenta:"Galicia",fecha:"2026-11-02",nota:""});
+  try{
+    cierto(document.querySelector("#edit-hacer-frec"), "el editor ofrece la opción");
+    document.querySelector("#edit-hacer-frec").checked=true;
+    guardarEdit();
+    const m=movs[0] ?? e.mov; igual(m.frecuente,true); igual(m.mesInicio,"2026-11"); igual(m.mesFin,null); igual(m.pagos["2026-11"],true,"el de noviembre ya lo cobraste");
+    const nov=getMesMov("2026-11").filter(x=>x.id===777); igual(nov.length,1,"noviembre cuenta UNA vez"); igual(nov[0].importe,3000000);
+    igual(ingresosFrecPorCobrar("2026-11","2026-11-06",[m]).length,0,"noviembre no queda por cobrar");
+    const dic=ingresosFrecPorCobrar("2026-12","2026-11-06",[m]); igual(dic.length,1,"diciembre figura por cobrar"); igual(dic[0].fecha,"2026-12-02"); igual(dic[0].monto,3000000);
+    igual(getMesMov("2026-12").filter(x=>x.id===777).length,0,"y entra al balance recién cuando llega su día o lo marcás cobrado");
+    const franja=porCobrarFranjaHTML(dic,"2026-12"); cierto(franja.includes("Por cobrar en diciembre") && franja.includes("Cobrado"), franja);
+    cierto(porCobrarFranjaHTML(dic,currentYM()).includes("Por cobrar este mes"), "en el mes en curso sigue diciendo 'este mes'");
+  } finally { e.cerrar(); window.hoyLocal=antes.hoy; window.showToast=antes.toast; }
+});
+
+test("un movimiento común editado SIN tildar la opción sigue siendo común", ()=>{
+  const e=abrirEdicion({id:778,tipo:"Gasto",cat:"Casa",subcat:"Luz",importe:100,moneda:"ARS",importeOrig:null,cuenta:"Cuentas",fecha:"2026-11-02",nota:"",esAhorro:false,usaAhorro:false,traspaso:false,recuperable:0});
+  try{ guardarEdit(); cierto(!e.mov.frecuente && !movs[0].frecuente, "no se vuelve frecuente solo"); }
+  finally { e.cerrar(); }
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
