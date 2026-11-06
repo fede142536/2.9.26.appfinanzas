@@ -410,13 +410,14 @@ function marcarIngresoCobrado(id, ym){
   showToast("✓ Cobrado: ya suma a tu balance");
   renderMovs();
 }
-function porCobrarFranjaHTML(items){
+function porCobrarFranjaHTML(items, ym){
   if(!items.length) return "";
   const fmt=v=>v.moneda==="USD" ? `USD ${fmtNum2(v.monto)}` : fmtS(v.monto);
   const filas=items.map(v=>`<div class="venc-fila"><span class="venc-nombre">🔁 ${escapeHtml(v.nombre)}</span>
       <span class="venc-txt" style="color:var(--muted)">cobra el ${escapeHtml(fmtDiaMes(v.fecha))} · <strong>${fmt(v)}</strong></span>
       <button type="button" class="venc-ok venc-cobrado" aria-label="Marcar ${escapeHtml(v.nombre)} como cobrado" onclick="marcarIngresoCobrado(${Number(v.id)},${attrJS(v.ym)})">✓ Cobrado</button></div>`).join("");
-  return `<div class="venc-franja venc-por-cobrar"><div class="venc-titulo">⏳ Por cobrar este mes</div>${filas}</div>`;
+  const titulo = !ym || ym===currentYM() ? "Por cobrar este mes" : `Por cobrar en ${mesLbl(ym).split(" ")[0].toLowerCase()}`;
+  return `<div class="venc-franja venc-por-cobrar"><div class="venc-titulo">⏳ ${titulo}</div>${filas}</div>`;
 }
 
 function getMesMov(ym){
@@ -1086,7 +1087,11 @@ function pintarFranjaVencimientos(){
   const el=document.getElementById("mov-arrastre");
   if(!el) return;
   const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();
-  const html=aplica ? vencimientosFranjaHTML(proximosVencimientos(hoyLocal(), movs, leerVencTc(), undefined, undefined, VENC_VENCIDOS_LARGO), undefined, vencFranjaAbierta) + porCobrarFranjaHTML(ingresosFrecPorCobrar(currentYM(), hoyLocal())) : "";
+  // Los vencimientos son del mes en curso (avisar de lo que vence en un mes que ya pasó no sirve), pero lo que falta COBRAR se ve en el mes que mirás:
+  // un ingreso frecuente de diciembre no está en la lista hasta que llega su día, y sin esta franja no figuraba en ningún lado.
+  const verCobrar=filtro==="Todos" && !filtroFecha;
+  const html=(aplica ? vencimientosFranjaHTML(proximosVencimientos(hoyLocal(), movs, leerVencTc(), undefined, undefined, VENC_VENCIDOS_LARGO), undefined, vencFranjaAbierta) : "")
+    + (verCobrar ? porCobrarFranjaHTML(ingresosFrecPorCobrar(mesActual, hoyLocal()), mesActual) : "");
   if(html){ el.className="venc-wrap"; el.innerHTML=html; el.style.display="block"; }
   else if(filtro==="Todos"){ el.className="info-line"; el.innerHTML=""; el.style.display="none"; }   // sin restos de la franja anterior
 }

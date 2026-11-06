@@ -184,6 +184,14 @@ function closeEditModal(){
   editingId=null;
   editingCambioId=null;
 }
+// ¿Se puede volver frecuente un gasto o ingreso común desde el editor? Un ahorro, un retiro, un traspaso o un gasto con monto a recuperar tienen
+// su propia lógica y no se repiten solos; tampoco los que son parte de algo (pago de un resumen, retiro de una venta, cobro de un gasto).
+function puedeVolverseFrecuente(m){
+  if(!m || m.frecuente || (m.tipo!=="Gasto" && m.tipo!=="Ingreso")) return false;
+  if(m.pagoTarjeta || m.origenInvId || m.devolucionDeId || m.cambioId) return false;
+  if(m.tipo==="Gasto" && (m.esAhorro || m.usaAhorro || m.traspaso || m.recuperable>0)) return false;
+  return true;
+}
 function renderEditForm(m){
   if(m.tipo==="Gasto"||m.tipo==="Ingreso"){
     const esFrec=(m.tipo==="Gasto" || m.tipo==="Ingreso") && m.frecuente;
@@ -299,6 +307,14 @@ function renderEditForm(m){
       <div class="form-group"><label class="form-label" for="edit-nota">Nota</label>
         <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
+      ${!esFrec && puedeVolverseFrecuente(m)?`
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm)">
+          <input type="checkbox" id="edit-hacer-frec" class="chk-custom" style="--chk:var(--accent)">
+          <span style="color:var(--accent);font-weight:500">🔁 ${m.tipo==="Ingreso"?"Es un ingreso frecuente (se repite todos los meses)":"Es un gasto frecuente (se repite todos los meses)"}</span>
+        </label>
+        <div class="txt-xs txt-muted" style="margin:6px 4px 0">${m.tipo==="Ingreso"?"Desde el mes de la fecha, cada mes figura como «por cobrar» el mismo día y lo marcás cobrado. Este mes queda como está.":"Desde el mes de la fecha, cada mes aparece solo y lo marcás pagado. Este mes queda como está."}</div>
+      </div>`:""}
       ${m.tipo==="Gasto" && !esFrec?`
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm);margin-bottom:6px">
@@ -465,6 +481,16 @@ function guardarEdit(){
       }
     } else {
       m.fecha=document.getElementById("edit-fecha").value;
+      // Volverlo frecuente: empieza en el mes de su fecha (ese mes queda como estaba) y desde ahí se repite cada mes.
+      const hacerFrec=document.getElementById("edit-hacer-frec");
+      if(hacerFrec && hacerFrec.checked && puedeVolverseFrecuente(m)){
+        m.frecuente=true;
+        m.mesInicio=String(m.fecha||"").slice(0,7) || currentYM();
+        m.mesFin=null; m.cambios=[];
+        m.pagos=m.pagos||{};
+        if(m.tipo==="Ingreso") m.pagos[m.mesInicio]=true;   // el de este mes ya lo cobraste (es el que cargaste): no queda como «por cobrar»
+        if(typeof showToast==="function") showToast(m.tipo==="Ingreso" ? "🔁 Ingreso frecuente: se repite todos los meses" : "🔁 Gasto frecuente: se repite todos los meses");
+      }
     }
     m.nota=document.getElementById("edit-nota").value.trim();
     if(m.tipo==="Gasto" && !m.frecuente){
