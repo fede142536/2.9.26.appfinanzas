@@ -1996,3 +1996,14 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 /* [AAA config] Editar cuenta: el ✎ comparte la caja de 44 del × y se ve más liviano. */
 .cfg-chip-edit{font-size:var(--fs-sm);padding:0;margin:-8px -2px -8px -2px;opacity:.8}
 .cfg-chip-edit + .cfg-chip-x{margin-left:0}   /* las dos cajas de 44 quedan una al lado de la otra, sin pisarse */
+
+/* [AAA movimientos] Mosaicos interactivos: tocar uno filtra la lista a lo que lo compone. El estado va en atributos (data-accion, aria-pressed), no en la clase. */
+.mov-mosaic[data-accion]{position:relative;cursor:pointer;transition:transform var(--dur-1) var(--ease),box-shadow var(--dur-1) var(--ease)}
+.mov-mosaic[data-accion]::after{content:"›";position:absolute;top:10px;right:12px;font-size:var(--fs-lg);line-height:1;opacity:.45;pointer-events:none}   /* indicio de que se toca */
+.mov-mosaic[data-accion]:active{transform:scale(.98)}
+.mov-mosaic[data-accion][aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--accent)}
+.mov-mosaic[data-accion][aria-pressed="true"]::after{opacity:0}
+#mov-foco-mosaico{scroll-margin-top:calc(72px + var(--cartel-h,0px))}
+.mov-foco{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin:0 16px 10px;padding:6px 8px 6px 14px;border-radius:var(--radius-md);background:var(--accent-light);color:var(--accent);font-size:var(--fs-sm)}
+.mov-foco-txt{min-width:0}
+@media (prefers-reduced-motion:reduce){.mov-mosaic[data-accion]{transition:none}}

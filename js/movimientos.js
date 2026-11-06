@@ -119,6 +119,7 @@ function etiquetaMesAccesible(){
 function cambiarMes(d){
   if(filtroFecha) limpiarFiltroFecha(); // navegar mes desactiva el filtro custom
   mesActual = addMonths(mesActual, d);
+  filtroMosaico="";
   document.getElementById("mes-label").textContent = mesLbl(mesActual);
   renderMovs();
   animarCambioDeMes(d, document.getElementById("mov-summary"), document.getElementById("tx-list"));
@@ -260,6 +261,7 @@ function setFiltro(f){
   if(f!=="Tarjeta") filtroTarjeta="";
   if(f!=="Gasto" && f!=="Ingreso") filtroCategoria="";
   filtro=f;
+  filtroMosaico="";   // un foco de mosaico es de la solapa donde se eligió
   renderMovs();
 }
 // Aplica el sub-filtro por nombre de tarjeta (Visa, Mastercard, etc.)
@@ -370,6 +372,11 @@ function actualizarFilaFrecPagado(id, ym, pagado, esTc){
     if(content) content.innerHTML=construirCuerpoTxItem(m);
     el._conectarBadgePago();
   });
+  // En el foco "Frecuentes por pagar" la barra cuenta los que siguen sin pagar (la fila pagada queda a la vista hasta el próximo repintado).
+  if(filtroMosaico==="frec-por-pagar"){
+    const n=[...document.querySelectorAll("#tx-list tx-item")].filter(e=>e._m && e._m._isFrecVirtual && !e._m.pagado).length;
+    const c=document.querySelector("#mov-foco-mosaico .mov-foco-n"); if(c) c.textContent=`${n} por pagar`;
+  }
 }
 
 // ── Ingresos frecuentes (un sueldo, un alquiler cobrado) ──
@@ -935,6 +942,57 @@ function renderTxListaLazy(show){
 }
 
 // ═══════════════════════════════════════════
+// MOSAICOS INTERACTIVOS: tocar uno filtra la lista a los movimientos que lo componen
+// ═══════════════════════════════════════════
+// Las cifras de los mosaicos NO cambian al filtrar (siguen siendo las del período); lo que cambia es la lista de abajo, que muestra solo lo del
+// mosaico elegido, con una barra "Mostrando …" para quitar el filtro. Se combina con la búsqueda y con el filtro de cuenta.
+let filtroMosaico="";   // clave del foco activo ("" = ninguno)
+const FOCOS_MOSAICO={
+  "frec-por-pagar":{titulo:"Frecuentes por pagar", ok:m=>!!m._isFrecVirtual && !m.pagado, vacio:"No quedan frecuentes por pagar ✓", guia:"Ya marcaste como pagados todos los de este período."},
+  "invertido":{titulo:"Invertido", ok:m=>m.tipo==="Inversion" && !isInvSalida(m) && !(m.importeUSD>0)},
+  "invertido-usd":{titulo:"Invertido USD", ok:m=>m.tipo==="Inversion" && !isInvSalida(m) && m.importeUSD>0},
+  "inversiones":{titulo:"Inversiones", ok:m=>m.tipo==="Inversion"},
+  "ahorrado":{titulo:"Ahorrado", ok:m=>m.esAhorro===true},
+  "de-ahorros":{titulo:"De ahorros", ok:m=>m.usaAhorro===true},
+  "ingresos-usd":{titulo:"Ingresos USD", ok:m=>m.tipo==="Ingreso" && m.moneda==="USD"},
+  "gastos-usd":{titulo:"Gastos USD", ok:m=>(m.tipo==="Gasto" || !!m._isTc) && m.moneda==="USD"}
+};
+function focoMosaico(clave){
+  if(!clave) return null;
+  if(FOCOS_MOSAICO[clave]) return FOCOS_MOSAICO[clave];
+  if(clave.startsWith("ticker:")){ const t=clave.slice(7); return {titulo:t, ok:m=>m.tipo==="Inversion" && m.ticker===t}; }
+  return null;
+}
+function mosaicoActivo(accion){
+  if(!accion) return false;
+  return accion.startsWith("tab:") ? filtro===accion.slice(4) : accion==="f:"+filtroMosaico;
+}
+function aplicarAccionMosaico(accion){
+  if(accion.startsWith("tab:")){ setFiltro(accion.slice(4)); return; }
+  if(!accion.startsWith("f:")) return;
+  const clave=accion.slice(2);
+  filtroMosaico = filtroMosaico===clave ? "" : clave;
+  renderMovs();
+  if(filtroMosaico){   // los mosaicos quedan arriba y la lista abajo: se lleva la vista hasta ella
+    const el=document.getElementById("mov-foco-mosaico");
+    if(el && el.scrollIntoView) el.scrollIntoView({behavior: prefiereMenosMovimiento() ? "auto" : "smooth", block:"start"});
+  }
+}
+function quitarFocoMosaico(){ filtroMosaico=""; renderMovs(); }
+function pintarFocoMosaico(foco, n){
+  const el=document.getElementById("mov-foco-mosaico"); if(!el) return;
+  if(!foco){ el.style.display="none"; el.innerHTML=""; return; }
+  el.style.display="";
+  el.innerHTML=`<div class="mov-foco" role="status"><span class="mov-foco-txt">Mostrando <strong>${escapeHtml(foco.titulo)}</strong> · <span class="mov-foco-n">${n} ${n===1?"movimiento":"movimientos"}</span></span>
+    <button type="button" class="btn-sm" onclick="quitarFocoMosaico()">Ver todos</button></div>`;
+}
+// Tocar un mosaico (el listener global de render-comun.js ya convierte Enter/Espacio en click para todo role="button").
+document.addEventListener("click", e=>{
+  const t=e.target && e.target.closest ? e.target.closest("#mov-summary [data-accion]") : null;
+  if(t) aplicarAccionMosaico(t.getAttribute("data-accion"));
+});
+
+// ═══════════════════════════════════════════
 // RESUMEN: número + mosaicos (handoff Movimientos, opción 3b)
 // ═══════════════════════════════════════════
 // Una card por dato, con el fondo tintado del color del tipo (par --X/--X-light que ya existe
@@ -942,7 +1000,9 @@ function renderTxListaLazy(show){
 // --bg, no sobre un tinte de color, porque no es ni un color de tipo ni una de --X-light.
 // `attr` (opcional): atributos extra para el <div> raíz, p. ej. data-mosaico="…" para poder
 // encontrarlo y repintarlo en el lugar sin armar el resumen entero (ver actualizarFrecPorPagar).
-function mosaicoHTML(glyph, name, color, val, sub, attr){
+// `accion` (opcional): vuelve el mosaico un botón que filtra la lista a lo que lo compone ("tab:Gasto" cambia de solapa; "f:<clave>" aplica un foco, ver
+// FOCOS_MOSAICO). Lleva role/aria-pressed y NO cambia su class (otros lugares buscan 'class="mov-mosaic"' exacto): el estado va en atributos.
+function mosaicoHTML(glyph, name, color, val, sub, attr, accion){
   const neutro = color==="var(--text)";
   // [AAA movimientos] El mosaico neutro (Cantidad, Gastos USD) ya no es del color del fondo de la página (no se veía como tarjeta):
   // lleva superficie y aro propios (data-tono="neutro", ver styles.css). Un atributo y no una clase: otros lugares buscan
@@ -950,7 +1010,8 @@ function mosaicoHTML(glyph, name, color, val, sub, attr){
   const estilo = neutro ? "" : ` style="background:${color.replace(")", "-light)")}"`;
   // --n = largo del texto de la cifra: styles.css la achica (cqw) para que un importe de 12 dígitos entre entero en vez de cortarse con "…".
   const largo = String(val).replace(/<[^>]*>/g,"").length;
-  return `<div class="mov-mosaic"${estilo}${neutro?' data-tono="neutro"':""}${attr?" "+attr:""}>
+  const interactivo = accion ? ` data-accion="${escapeHtml(accion)}" role="button" tabindex="0" aria-pressed="${mosaicoActivo(accion)?"true":"false"}" aria-label="${escapeHtml(name)}: ${escapeHtml(String(val).replace(/<[^>]*>/g,""))}. Tocá para ver solo esos movimientos"` : "";
+  return `<div class="mov-mosaic"${estilo}${neutro?' data-tono="neutro"':""}${attr?" "+attr:""}${interactivo}>
     <div class="mov-mosaic-top">
       <span class="mov-mosaic-glyph" style="color:${color}">${glyph}</span>
       <span class="mov-mosaic-name" style="color:${color}">${escapeHtml(name)}</span>
@@ -985,7 +1046,7 @@ function frecPorPagarMosaicoHTML(r){
   if(listo) sub="Todo pagado ✓";
   else sub=`${r.pendientes} de ${r.total} sin pagar${r.usd>0&&!soloUsd?` · + USD ${fmtNum2(r.usd)}`:""}`;
   return mosaicoHTML("🔁","Frecuentes por pagar", listo?"var(--success)":"var(--warning)", val, sub,
-    'data-mosaico="frec-por-pagar"');
+    'data-mosaico="frec-por-pagar"', "f:frec-por-pagar");
 }
 
 // La lista sobre la que se calcula lo que se ve: el mes (o el período) y, en Gastos con una
@@ -1225,14 +1286,14 @@ function renderMovs(){
       }
       if(ahorradoARS>0){
         mosGasto.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(ahorradoARS),
-          gastosTotalARS?Math.round(ahorradoARS/gastosTotalARS*100)+"% del total":""));
+          gastosTotalARS?Math.round(ahorradoARS/gastosTotalARS*100)+"% del total":"", null, "f:ahorrado"));
       }
       // En verde, no en rojo: poner plata en una inversión no es perderla.
       if(suscripcionesARS>0){
-        mosGasto.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(suscripcionesARS),""));
+        mosGasto.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(suscripcionesARS),"", null, "f:invertido"));
       }
       if(suscripcionesUSD>0){
-        mosGasto.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${fmtNum2(suscripcionesUSD)}`,""));
+        mosGasto.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${fmtNum2(suscripcionesUSD)}`,"", null, "f:invertido-usd"));
       }
     }
     mosGasto.push(mosaicoHTML("#","Cantidad","var(--text)",String(todoGastos.length),"movimientos"));
@@ -1387,42 +1448,42 @@ function renderMovs(){
     </div>`;
     const mosTodos=[];
     mosTodos.push(mosaicoHTML("↓","Ingresos","var(--success)",fmtTotal(ingTotal),
-      `${nMovsIngreso} ${nMovsIngreso===1?"movimiento":"movimientos"}`));
-    mosTodos.push(mosaicoHTML("↑","Gastos","var(--danger)",fmtTotal(gasTotal),pctDeIngreso(gasTotal)));
+      `${nMovsIngreso} ${nMovsIngreso===1?"movimiento":"movimientos"}`, null, "tab:Ingreso"));
+    mosTodos.push(mosaicoHTML("↑","Gastos","var(--danger)",fmtTotal(gasTotal),pctDeIngreso(gasTotal), null, "tab:Gasto"));
     const mosFrec=frecPorPagarMosaicoHTML(frecuentesPorPagar(mesMovs));
     if(mosFrec) mosTodos.push(mosFrec);
     if(guardado>0){
-      mosTodos.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(guardado),pctDeIngreso(guardado)));
+      mosTodos.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(guardado),pctDeIngreso(guardado), null, "f:ahorrado"));
     }
     if(rp.retiradoAMano>0){
-      mosTodos.push(mosaicoHTML("💸","Sacado de ahorros","var(--save)",fmtTotal(rp.retiradoAMano),"quedó a mano"));
+      mosTodos.push(mosaicoHTML("💸","Sacado de ahorros","var(--save)",fmtTotal(rp.retiradoAMano),"quedó a mano", null, "f:de-ahorros"));
     }
     if(invertidoUSD>=0.01){
-      mosTodos.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${fmtNum2(invertidoUSD)}`,subInvertidoUSD));
+      mosTodos.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${fmtNum2(invertidoUSD)}`,subInvertidoUSD, null, "f:invertido-usd"));
     }
     if(invertidoARS>0){
-      mosTodos.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(invertidoARS),""));
+      mosTodos.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(invertidoARS),"", null, "f:invertido"));
     }
     if(Math.round(ganInv.ars)!==0){
       const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
-      mosTodos.push(mosaicoHTML("📊","Resultado inv.",cg,(ganInv.ars>=0?"+":"")+fmtTotal(ganInv.ars),""));
+      mosTodos.push(mosaicoHTML("📊","Resultado inv.",cg,(ganInv.ars>=0?"+":"")+fmtTotal(ganInv.ars),"", null, "f:inversiones"));
     }
     if(Math.round(netoInv.ars)!==0){
       const colorNeto=netoInv.ars>=0?"var(--success)":"var(--invest)";
-      mosTodos.push(mosaicoHTML("◈","Neto inversión",colorNeto,(netoInv.ars>0?"+":"")+fmtTotal(netoInv.ars),""));
+      mosTodos.push(mosaicoHTML("◈","Neto inversión",colorNeto,(netoInv.ars>0?"+":"")+fmtTotal(netoInv.ars),"", null, "f:inversiones"));
     }
     if(ingresosUSDTotal>0){
-      mosTodos.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${fmtNum2(ingresosUSDTotal)}`,""));
+      mosTodos.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${fmtNum2(ingresosUSDTotal)}`,"", null, "f:ingresos-usd"));
     }
     if(gastosUSDTotal>0){
-      mosTodos.push(mosaicoHTML("↑","Gastos USD","var(--danger)",`USD ${fmtNum2(gastosUSDTotal)}`,""));
+      mosTodos.push(mosaicoHTML("↑","Gastos USD","var(--danger)",`USD ${fmtNum2(gastosUSDTotal)}`,"", null, "f:gastos-usd"));
     }
     if(Math.abs(netoInv.usd)>=0.01){
       const colorNetoU=netoInv.usd>=0?"var(--success)":"var(--invest)";
-      mosTodos.push(mosaicoHTML("◈","Neto inversión USD",colorNetoU,(netoInv.usd>0?"+":"")+`USD ${fmtNum2(Math.abs(netoInv.usd))}`,""));
+      mosTodos.push(mosaicoHTML("◈","Neto inversión USD",colorNetoU,(netoInv.usd>0?"+":"")+`USD ${fmtNum2(Math.abs(netoInv.usd))}`,"", null, "f:inversiones"));
     }
     if(retirado>0){
-      mosTodos.push(mosaicoHTML("💸","De ahorros","var(--save)",fmtTotal(retirado),""));
+      mosTodos.push(mosaicoHTML("💸","De ahorros","var(--save)",fmtTotal(retirado),"", null, "f:de-ahorros"));
     }
     // Lo que falta cobrar de los gastos compartidos (ver recuperable.js)
     const mosRecup=recuperarMosaicoHTML(pendienteDeRecuperar(mesMovs));
@@ -1431,11 +1492,11 @@ function renderMovs(){
     netosTicker.forEach(t=>{
       if(Math.round(t.ars)!==0){
         const color=t.ars>=0?"var(--success)":"var(--invest)";
-        mosTodos.push(mosaicoHTML("◈",t.ticker,color,(t.ars>0?"+":"")+fmtTotal(t.ars),""));
+        mosTodos.push(mosaicoHTML("◈",t.ticker,color,(t.ars>0?"+":"")+fmtTotal(t.ars),"", null, "f:ticker:"+t.ticker));
       }
       if(Math.abs(t.usd)>=0.01){
         const colorU=t.usd>=0?"var(--success)":"var(--invest)";
-        mosTodos.push(mosaicoHTML("◈",`${t.ticker} USD`,colorU,(t.usd>0?"+":"")+`USD ${fmtNum2(Math.abs(t.usd))}`,""));
+        mosTodos.push(mosaicoHTML("◈",`${t.ticker} USD`,colorU,(t.usd>0?"+":"")+`USD ${fmtNum2(Math.abs(t.usd))}`,"", null, "f:ticker:"+t.ticker));
       }
     });
     html+=mosaicosGridHTML(mosTodos);
@@ -1516,6 +1577,11 @@ function renderMovs(){
   show=show.slice().sort(ordenCronologico);
   // Aplicar búsqueda
   if(searchQuery) show=show.filter(matchSearch);
+  // Foco de un mosaico tocado: la lista se reduce a lo que lo compone (las cifras de arriba no cambian).
+  const foco=focoMosaico(filtroMosaico);
+  if(filtroMosaico && !foco) filtroMosaico="";
+  if(foco) show=show.filter(foco.ok);
+  pintarFocoMosaico(foco, show.length);
   // Filtro por cuenta: los chips se arman con lo de la solapa (antes de filtrar), así se ve entre qué cuentas elegir.
   const antesDeCuenta=show;
   if(filtroCuenta && (filtro==="Todos"||filtro==="Gasto"||filtro==="Ingreso")) show=show.filter(m=>coincideCuenta(m, filtroCuenta));
@@ -1531,7 +1597,8 @@ function renderMovs(){
     const vacio=(icono, titulo, guia, boton)=>`<div class="empty"><div class="empty-icon">${icono}</div><div class="empty-titulo">${titulo}</div>${guia?`<div class="empty-guia">${guia}</div>`:""}${boton||""}</div>`;
     const botonCargar=`<button type="button" class="btn-primary empty-cta" onclick="abrirCarga()">Cargar un movimiento</button>`;
     const boton=(txt,fn)=>`<button type="button" class="btn-primary empty-cta" onclick="${fn}">${txt}</button>`;
-    if(searchQuery) list.innerHTML=vacio("🔍", `Sin resultados para "${escapeHtml(searchQuery)}"`, "Probá con otra palabra: la búsqueda mira nota, categoría, subcategoría y ticker.", boton("Borrar búsqueda","limpiarBusquedaMovs()"));
+    if(foco) list.innerHTML=vacio("✅", foco.vacio||`Sin movimientos de ${escapeHtml(foco.titulo)}`, foco.guia||"No hay movimientos de este tipo con los filtros de ahora.", boton("Ver todos","quitarFocoMosaico()"));
+    else if(searchQuery) list.innerHTML=vacio("🔍", `Sin resultados para "${escapeHtml(searchQuery)}"`, "Probá con otra palabra: la búsqueda mira nota, categoría, subcategoría y ticker.", boton("Borrar búsqueda","limpiarBusquedaMovs()"));
     else if(filtroFecha) list.innerHTML=vacio(`<svg class="mov-icon-svg" style="width:44px;height:44px;margin:0 auto" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`, `Sin movimientos en ${escapeHtml(filtroFecha.label)}`, "No hay nada cargado en esas fechas.", boton("Volver al mes","limpiarFiltroFecha()"));
     else if(!movs.length && !tcs.length) list.innerHTML=vacio("📭", "Todavía no cargaste nada", "Cuando cargues tu primer gasto o ingreso, lo vas a ver acá, ordenado por día.", botonCargar);
     else list.innerHTML=vacio("📭", "Sin movimientos este mes", filtro==="Todos" ? "Nada cargado en este período. Podés cargar uno ahora o mirar otro mes." : "No hay movimientos de este tipo en este mes.", filtro==="Todos" ? botonCargar : boton("Ver todos","setFiltro('Todos')"));
