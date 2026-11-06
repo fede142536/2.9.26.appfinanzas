@@ -412,6 +412,7 @@ function toggleTcFrecPagado(id, ym){
   if(!t.pagos) t.pagos={};
   t.pagos[ym]=!t.pagos[ym];
   save();
+  if(typeof actualizarFilaFrecPagado==="function") actualizarFilaFrecPagado(id, ym, !!t.pagos[ym], true);   // la fila de Movimientos, en el lugar
   pintarFranjaVencimientos();
   if(typeof renderTarjetas==="function" && document.getElementById("page-tc")?.classList.contains("active")) renderTarjetas();
 }
