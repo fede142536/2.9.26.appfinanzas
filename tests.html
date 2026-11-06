@@ -7350,9 +7350,26 @@ test("connectedCallback conecta el badge de pago/impago con toggleFrecPagado", a
   cierto(cuerpoCB.includes("_conectarBadgePago()"), "connectedCallback dejó de conectar el badge de pago/impago: "+cuerpoCB);
   const iBadge=js.indexOf("_conectarBadgePago(){");
   cierto(iBadge>=0, "no se encontró _conectarBadgePago");
-  const cuerpoBadge=js.slice(iBadge, iBadge+300);
+  const cuerpoBadge=js.slice(iBadge, iBadge+520);
   cierto(cuerpoBadge.includes('querySelector(".js-toggle-pago")'), "no busca el badge de pago/impago: "+cuerpoBadge);
   cierto(cuerpoBadge.includes("toggleFrecPagado(this._m.id"), "no llama a toggleFrecPagado con el id del movimiento: "+cuerpoBadge);
+  cierto(cuerpoBadge.includes("toggleTcFrecPagado(this._m.id"), "el frecuente de tarjeta tiene que llamar a toggleTcFrecPagado: "+cuerpoBadge);
+});
+
+test("un gasto frecuente de tarjeta se marca pagado por mes desde la fila de Movimientos, sin tocar los otros meses ni el balance", ()=>{
+  const antes={tcs, movs, save:window.save};
+  try{
+    tcs=[{id:777, desc:"Netflix", tarjeta:"Visa", cat:"Suscripciones", importe:5000, moneda:"ARS", frecuente:true, mesInicio:"2026-09", cuotasTotal:1}]; movs=[];
+    window.save=()=>{};
+    const fila=ym=>getTcMovsEnMes(ym).find(x=>x.id===777);
+    const html0=construirCuerpoTxItem(fila("2026-10")); cierto(html0.includes("js-toggle-pago") && html0.includes("Marcar pagado") && html0.includes('data-ym="2026-10"'), "sin pagar: ofrece marcarlo");
+    toggleTcFrecPagado(777,"2026-10");
+    cierto(fila("2026-10").pagado===true && fila("2026-11").pagado===false, "se marca solo ese mes");
+    const html1=construirCuerpoTxItem(fila("2026-10")); cierto(html1.includes("✓ Pagado") && !html1.includes("Marcar pagado"), "pagado: lo dice y deja deshacer");
+    toggleTcFrecPagado(777,"2026-10"); cierto(fila("2026-10").pagado===false, "se puede deshacer");
+    const cuota=construirCuerpoTxItem({_isTc:true,id:1,tipo:"Tarjeta",desc:"TV",tarjeta:"Visa",cat:"Hogar",importe:100,moneda:"ARS",importeTotal:600,cuotasTotal:6,nCuota:2,frecuente:false,pagado:false,fecha:"2026-10-01"});
+    cierto(!cuota.includes("js-toggle-pago"), "una compra en cuotas no lleva botón de pagado");
+  } finally { tcs=antes.tcs; movs=antes.movs; window.save=antes.save; }
 });
 
 // Bug reportado: en un mes viejo con muchos movimientos (lista cargada por lotes, ver "LAZY

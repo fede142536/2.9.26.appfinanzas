@@ -361,10 +361,10 @@ function toggleFrecPagado(id, ym){
 // si ya lo scrolleó de largo — quedaba "colgado" sin poder seguir cargando (bug reportado).
 // El gasto frecuente aparece como mucho una vez por mes en la lista visible, así que alcanza
 // con buscar la fila que matchea id+mes entre las montadas.
-function actualizarFilaFrecPagado(id, ym, pagado){
+function actualizarFilaFrecPagado(id, ym, pagado, esTc){
   document.querySelectorAll("tx-item").forEach(el=>{
     const m=el._m;
-    if(!m || m.id!==id || String(m.fecha||"").slice(0,7)!==ym) return;
+    if(!m || m.id!==id || !!m._isTc!==!!esTc || String(m.fecha||"").slice(0,7)!==ym) return;
     m.pagado=pagado;
     const content=el.querySelector(".tx-item-content");
     if(content) content.innerHTML=construirCuerpoTxItem(m);
@@ -588,6 +588,12 @@ function construirCuerpoTxItem(m){
       catExtra+=monedaBadge;
       if(m.frecuente){
         sub=subtituloFila([subcatVisible(m.subcat), "🔁 Mensual fijo"]);
+        // Igual que en los gastos frecuentes comunes: un frecuente que pagás a mano cada mes se marca como pagado (por mes) debajo del monto.
+        // Es una ayuda memoria: no cambia el balance ni el resumen de la tarjeta (ver toggleTcFrecPagado).
+        const ymFrec=String(m.fecha||"").slice(0,7);
+        statusBadge = m.pagado
+          ? `<span class="badge badge-success js-toggle-pago" role="button" tabindex="0" aria-label="Pagado. Tocá para deshacerlo" data-ym="${ymFrec}">✓ Pagado</span>`
+          : `<span class="badge badge-danger js-toggle-pago" role="button" tabindex="0" aria-label="Impago. Tocá para marcarlo pagado" data-ym="${ymFrec}">🔁 Marcar pagado</span>`;
       } else {
         const tot=m.moneda==="USD"?`USD ${fmtNum2(m.importeTotal)}`:fmtS(m.importeTotal);
         sub=subtituloFila([subcatVisible(m.subcat), `Cuota ${m.nCuota}/${m.cuotasTotal}`, `${tot} total`]);
@@ -727,7 +733,8 @@ class TxItem extends HTMLElement{
     if(pagoBtn){
       pagoBtn.addEventListener("click", e=>{
         e.stopPropagation();
-        toggleFrecPagado(this._m.id, pagoBtn.dataset.ym);
+        if(this._m._isTc) toggleTcFrecPagado(this._m.id, pagoBtn.dataset.ym);   // frecuente de tarjeta
+        else toggleFrecPagado(this._m.id, pagoBtn.dataset.ym);
       });
     }
   }

@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v236**
+**Versión actual: v237**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 5 de noviembre de 2026
 
+- **v237** · Quitar de la lista las cuentas y tarjetas de fábrica que no usás (y volver a mostrarlas)
 - **v236** · Menores de la revisión (burbuja del balance, menos tipográfico, mes sin año partido, cierre de mes vacío, títulos del editor y de la zona de peligro)
 - **v235** · Editar (renombrar) las cuentas por defecto y las propias, con propagación a los movimientos
 - **v234** · El aviso de cierre de Movimientos nombra y abre el mes actual
