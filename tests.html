@@ -11295,6 +11295,50 @@ test("lo que quitaste de las listas viaja en la copia de seguridad", ()=>{
   finally { guardarCuentasOcultas(a.c); guardarTarjetasOcultas(a.t); }
 });
 
+grupo("Movimientos: mosaicos interactivos");
+
+test("un mosaico con acción es un botón accesible y conserva su class exacta; sin acción sigue igual que siempre", ()=>{
+  const antes=filtroMosaico; filtroMosaico="";
+  try{
+    const con=mosaicoHTML("◈","Invertido","var(--invest)","$1.000","", null, "f:invertido");
+    cierto(con.includes('class="mov-mosaic"') && con.includes('data-accion="f:invertido"') && con.includes('role="button"') && con.includes('tabindex="0"') && con.includes('aria-pressed="false"'), con);
+    cierto(con.includes("Invertido: $1.000. Tocá para ver solo esos movimientos"), "nombre accesible con la cifra");
+    const sin=mosaicoHTML("#","Cantidad","var(--text)","12","movimientos"); cierto(!sin.includes("data-accion") && !sin.includes('role="button"'), "un mosaico sin acción no es botón");
+    filtroMosaico="invertido"; cierto(mosaicoHTML("◈","Invertido","var(--invest)","$1","", null, "f:invertido").includes('aria-pressed="true"'), "el activo lo dice");
+    cierto(frecPorPagarMosaicoHTML({total:3,pendientes:2,ars:100,usd:0}).includes('data-accion="f:frec-por-pagar"'), "Frecuentes por pagar es interactivo");
+  } finally { filtroMosaico=antes; }
+});
+
+test("los focos de los mosaicos eligen exactamente lo que los compone", ()=>{
+  const f=(c,m)=>focoMosaico(c).ok(m);
+  cierto(f("frec-por-pagar",{_isFrecVirtual:true,pagado:false}) && !f("frec-por-pagar",{_isFrecVirtual:true,pagado:true}) && !f("frec-por-pagar",{tipo:"Gasto"}), "frecuentes por pagar: solo los frecuentes sin pagar");
+  cierto(f("invertido",{tipo:"Inversion",subcat:"Compra",importe:10}) && !f("invertido",{tipo:"Inversion",importeUSD:5,subcat:"Compra"}) && f("invertido-usd",{tipo:"Inversion",importeUSD:5,subcat:"Compra"}), "invertido separa pesos de dólares");
+  cierto(f("inversiones",{tipo:"Inversion"}) && !f("inversiones",{tipo:"Gasto"}), "inversiones: todas");
+  cierto(f("ahorrado",{esAhorro:true}) && !f("ahorrado",{}) && f("de-ahorros",{usaAhorro:true}), "ahorros");
+  cierto(f("ingresos-usd",{tipo:"Ingreso",moneda:"USD"}) && !f("ingresos-usd",{tipo:"Ingreso",moneda:"ARS"}) && f("gastos-usd",{_isTc:true,moneda:"USD"}), "dólares");
+  const t=focoMosaico("ticker:BCAHA"); cierto(t.titulo==="BCAHA" && t.ok({tipo:"Inversion",ticker:"BCAHA"}) && !t.ok({tipo:"Inversion",ticker:"BMMA"}) && !t.ok({tipo:"Gasto",ticker:"BCAHA"}), "por ticker");
+  igual(focoMosaico("inexistente"), null); igual(focoMosaico(""), null);
+});
+
+test("tocar 'Frecuentes por pagar' reduce la lista a los frecuentes sin pagar; tocarlo de nuevo, o 'Ver todos', la devuelve", ()=>{
+  const antes={movs, tcs, mes:mesActual, filtro, f:filtroMosaico, fc:filtroCuenta, q:searchQuery, hoy:window.hoyLocal};
+  const caja=["mov-summary","tx-list","mov-foco-mosaico","mov-filtros","mov-tarjeta-filtro","mov-cat-filtro","mov-cuenta-filtro","mov-cuenta-resumen","mov-arrastre","gcal-aviso","mov-presup-resumen","chip-mov-bal","mov-search-count","mes-label","mov-cierre-aviso","mov-anual-aviso","venc-franja"].map(id=>{ let e=document.querySelector("#"+id); const nuevo=!e; if(!e){ e=document.createElement("div"); e.id=id; document.body.appendChild(e); } return {id,e,nuevo}; });
+  try{
+    mesActual="2026-10"; filtro="Todos"; filtroMosaico=""; filtroCuenta=""; searchQuery=""; tcs=[];
+    movs=[{id:1,tipo:"Gasto",cat:"Casa",subcat:"Alquiler",importe:1000,fecha:"2026-10-05",frecuente:true,mesInicio:"2026-10",cuenta:"Cuentas",pagos:{}},
+          {id:2,tipo:"Gasto",cat:"Casa",subcat:"Luz",importe:500,fecha:"2026-10-06",frecuente:true,mesInicio:"2026-10",cuenta:"Cuentas",pagos:{"2026-10":true}},
+          {id:3,tipo:"Gasto",cat:"Comida",subcat:"Super",importe:300,fecha:"2026-10-07",cuenta:"Cuentas"}];
+    aplicarAccionMosaico("f:frec-por-pagar");
+    igual(filtroMosaico,"frec-por-pagar"); const filas=()=>[...document.querySelector("#tx-list").querySelectorAll("tx-item")].map(x=>x._m&&x._m.id);
+    cierto(document.querySelector("#mov-foco-mosaico").innerHTML.includes("Frecuentes por pagar"), "la barra dice qué se muestra");
+    igual(filas().join(","), "1", "solo el frecuente sin pagar");
+    aplicarAccionMosaico("f:frec-por-pagar"); igual(filtroMosaico,""); igual(filas().length, 3, "tocarlo otra vez devuelve todo");
+    aplicarAccionMosaico("f:frec-por-pagar"); quitarFocoMosaico(); igual(filtroMosaico,""); igual(filas().length, 3, "Ver todos devuelve todo");
+    aplicarAccionMosaico("f:frec-por-pagar"); setFiltro("Gasto"); igual(filtroMosaico, "", "cambiar de solapa quita el foco");
+    aplicarAccionMosaico("f:frec-por-pagar"); cambiarMes(1); igual(filtroMosaico, "", "cambiar de mes quita el foco");
+  } finally { movs=antes.movs; tcs=antes.tcs; mesActual=antes.mes; filtro=antes.filtro; filtroMosaico=antes.f; filtroCuenta=antes.fc; searchQuery=antes.q; caja.forEach(c=>{ if(c.nuevo) c.e.remove(); }); }
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
