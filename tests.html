@@ -6127,7 +6127,7 @@ test("desbloquear con huella recupera el PIN y entra por checkPin; si el PIN ya 
     // Una espera por intentos fallidos (o datos incompletos / error al cifrar) NO prueba el PIN: la huella se conserva.
     for(const motivo of ["espera","incompleto","error"]){ lock.style.display="flex"; window.checkPin=async()=>motivo; igual(await desbloquearConHuella(), false); cierto(huellaActiva(), `con "${motivo}" la huella no se borra`); cierto(!huellaPerdida(), "ni se marca como perdida"); }
     lock.style.display="flex"; window.checkPin=async()=>"mal"; /* PIN incorrecto: se probó y no abrió */
-    igual(await desbloquearConHuella(), false); cierto(!huellaActiva(), "si el PIN guardado ya no sirve, se desactiva"); cierto(err.textContent.includes("ya no coincide"), err.textContent); cierto(huellaPerdida(), "y queda anotada para ofrecer reactivarla"); olvidarHuellaPerdida();
+    igual(await desbloquearConHuella(), false); cierto(!huellaActiva(), "si el PIN guardado ya no sirve, se desactiva"); cierto(err.textContent.includes("ya no coincide"), err.textContent); cierto(huellaPerdida(), "y queda anotada para ofrecer reactivarla"); cierto(/ya no abrió/.test((motivoHuellaPerdida()||{}).motivo), "con su motivo para Configuración"); olvidarHuellaPerdida(); olvidarMotivoHuella();
     igual(await desbloquearConHuella(), false, "sin huella activa no hace nada");
   } finally { window.checkPin=antes.check; window.updatePinDisplay=antes.upd; pinBuffer=antes.buf; lock.remove(); err.remove(); }
 }));
