@@ -497,7 +497,7 @@ async function checkPin(){
   if(espera>0){
     err.textContent=`Demasiados intentos. Probá en ${textoEspera(espera)}.`;
     pinBuffer=""; setTimeout(updatePinDisplay, 300); sacudirPin(); iniciarCuentaAtrasPin();
-    return;
+    return "espera";   // (el resultado lo usa la huella: no se probó ningún PIN, así que nada dice que la huella esté mal)
   }
   let ok=false;
   let migracionRecien=false; // true solo si ESTA llamada acaba de migrar un PIN legado a cifrado
@@ -510,7 +510,7 @@ async function checkPin(){
     if(!sobre || !sobre.salt || !sobre.data){
       err.textContent="Los datos cifrados están incompletos. Restaurá un backup desde otra copia de la app.";
       pinBuffer=""; setTimeout(updatePinDisplay, 300);
-      return; // NO resolvemos: la pantalla de bloqueo sigue esperando
+      return "incompleto"; // NO resolvemos: la pantalla de bloqueo sigue esperando
     }
     const abierto=await verificarPin(pinIngresado);
     if(abierto){ encKey=abierto.clave; encCache=abierto.cache; ok=true; }
@@ -537,7 +537,7 @@ async function checkPin(){
         err.textContent=`Error al cifrar: ${e.name||""} ${e.message||e}`;
         pinBuffer="";
         setTimeout(updatePinDisplay, 300);
-        return; // NO resolvemos: la pantalla de bloqueo sigue esperando
+        return "error"; // NO resolvemos: la pantalla de bloqueo sigue esperando
       }
     }
   }
@@ -558,6 +558,8 @@ async function checkPin(){
       showToast("🔒 Tus datos ahora están cifrados y ligados a tu PIN. Te recomendamos descargar un backup desde Configuración por si alguna vez lo olvidás.");
     }
     setTimeout(ofrecerSubirPin, 1800);
+    setTimeout(()=>{ if(typeof ofrecerReactivarHuella==="function") ofrecerReactivarHuella(pinIngresado); }, 2600);   // si la huella se había perdido, se ofrece volver a activarla
+    return "ok";
   } else {
     const f=registrarFalloPin();
     const e=esperaTrasFallos(f.n);
@@ -566,6 +568,7 @@ async function checkPin(){
     setTimeout(updatePinDisplay, 300);
     sacudirPin();
     iniciarCuentaAtrasPin();
+    return "mal";
   }
 }
 
@@ -668,7 +671,7 @@ async function setupPin(){
     await mostrarAlerta(`No se pudo guardar el PIN: ${err.message||err}\n\nTus datos quedaron como estaban.`, "Error");
     return;
   }
-  if(typeof quitarHuella==="function") quitarHuella();   // la huella guardaba el PIN anterior: hay que activarla de nuevo
+  if(typeof quitarHuella==="function"){ if(typeof huellaActiva==="function" && huellaActiva() && typeof marcarHuellaPerdida==="function") marcarHuellaPerdida(); quitarHuella(); }   // la huella guardaba el PIN anterior: hay que activarla de nuevo (se ofrece al próximo desbloqueo)
   showToast("✓ PIN configurado. Se va a pedir al abrir la app.");
   renderPinStatus();
   // Las copias automáticas viejas quedaron en claro o con la clave anterior: se reemplazan.

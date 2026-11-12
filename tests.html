@@ -6124,8 +6124,10 @@ test("desbloquear con huella recupera el PIN y entra por checkPin; si el PIN ya 
   try{
     window.checkPin=async()=>{ pinProbado=pinBuffer; lock.style.display="none"; };
     igual(await desbloquearConHuella(), true); igual(pinProbado, "1234", "prueba el PIN recuperado por el camino normal");
-    lock.style.display="flex"; window.checkPin=async()=>{ /* PIN incorrecto: la pantalla sigue */ };
-    igual(await desbloquearConHuella(), false); cierto(!huellaActiva(), "si el PIN guardado ya no sirve, se desactiva"); cierto(err.textContent.includes("ya no coincide"), err.textContent);
+    // Una espera por intentos fallidos (o datos incompletos / error al cifrar) NO prueba el PIN: la huella se conserva.
+    for(const motivo of ["espera","incompleto","error"]){ lock.style.display="flex"; window.checkPin=async()=>motivo; igual(await desbloquearConHuella(), false); cierto(huellaActiva(), `con "${motivo}" la huella no se borra`); cierto(!huellaPerdida(), "ni se marca como perdida"); }
+    lock.style.display="flex"; window.checkPin=async()=>"mal"; /* PIN incorrecto: se probó y no abrió */
+    igual(await desbloquearConHuella(), false); cierto(!huellaActiva(), "si el PIN guardado ya no sirve, se desactiva"); cierto(err.textContent.includes("ya no coincide"), err.textContent); cierto(huellaPerdida(), "y queda anotada para ofrecer reactivarla"); olvidarHuellaPerdida();
     igual(await desbloquearConHuella(), false, "sin huella activa no hace nada");
   } finally { window.checkPin=antes.check; window.updatePinDisplay=antes.upd; pinBuffer=antes.buf; lock.remove(); err.remove(); }
 }));
@@ -11440,6 +11442,27 @@ test("un ingreso frecuente o sin fondos no ofrece la casilla en el editor", ()=>
   const antes=movs; movs=[];
   try{ cierto(bloqueSaleDeAhorroEditorIngreso({id:1,tipo:"Ingreso",moneda:"ARS",importe:5})==="", "sin fondos con saldo, no se ofrece"); cierto(bloqueSaleDeAhorroEditorIngreso({id:1,tipo:"Gasto"})==="", "solo para ingresos"); }
   finally { movs=antes; }
+});
+
+test("al desbloquear con el PIN, una huella perdida se ofrece reactivar una vez, con el PIN ya tecleado", ()=>conHuellaFalsa({}, async ctx=>{
+  const antesConfirm=window.mostrarConfirm; let preguntas=0, responde=true;
+  window.mostrarConfirm=async()=>{ preguntas++; return responde; };
+  try{
+    igual(huellaActiva(), false); olvidarHuellaPerdida();
+    await ofrecerReactivarHuella("1234"); igual(preguntas,0,"si no se perdió nada, no se ofrece");
+    marcarHuellaPerdida(); responde=false; await ofrecerReactivarHuella("1234"); igual(preguntas,1,"se ofrece"); cierto(!huellaPerdida(), "una sola vez: si dice 'Más tarde' no insiste"); igual(ctx.llamadas.crear,0);
+    marcarHuellaPerdida(); responde=true; ctx.pinTipeado="NO-DEBE-PEDIRLO"; await ofrecerReactivarHuella("1234");
+    cierto(huellaActiva(), "con 'Activar de nuevo' queda activa"); igual(ctx.llamadas.crear,1); cierto(!huellaPerdida(), "y deja de figurar como perdida");
+    marcarHuellaPerdida(); await ofrecerReactivarHuella("1234"); igual(preguntas,2,"con la huella ya activa no vuelve a preguntar"); olvidarHuellaPerdida();
+  } finally { window.mostrarConfirm=antesConfirm; olvidarHuellaPerdida(); }
+}));
+
+test("checkPin avisa qué pasó: 'ok', 'mal', 'espera'; la huella usa ese resultado y no la pantalla", async ()=>{
+  const sp=await (await fetch("js/seguridad-pin.js")).text(), hu=await (await fetch("js/huella.js")).text();
+  const cuerpo=sp.slice(sp.indexOf("async function checkPin()"), sp.indexOf("// ── Pasar de 4 a 6 dígitos ──"));
+  ["return \"espera\"","return \"incompleto\"","return \"error\"","return \"ok\"","return \"mal\""].forEach(t=>cierto(cuerpo.includes(t), "checkPin tiene que devolver "+t));
+  cierto(hu.includes('r==="mal"') && !/if\(lock && lock\.style\.display!=="none"\)\{ quitarHuella/.test(hu), "la huella solo se borra con 'mal'");
+  cierto(sp.includes("ofrecerReactivarHuella(pinIngresado)"), "al desbloquear se ofrece reactivar la huella perdida");
 });
 
 grupo("Aislamiento de los tests");
