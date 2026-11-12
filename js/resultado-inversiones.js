@@ -27,11 +27,11 @@ function ordenDeOperacion(a, b){
   return (a.id||0)-(b.id||0);
 }
 
-// Lo que una inversión te PAGA sin devolverte capital: el rendimiento de un fondo, un cupón, un dividendo. Es ganancia pura desde el primer
-// peso. Antes se trataba como cualquier salida ("primero recuperás capital"): con la suscripción cargada, un rendimiento de $540 se descontaba del
-// capital y la ganancia quedaba en 0 (solo "aparecía" cuando el capital estaba en cero, o sea cuando faltaba cargar la compra).
-// "Rescate", "venta" y "amortización" siguen devolviendo capital primero.
-const esPagoDeInversion=m=>/rendimiento|cup[oó]n|dividendo/.test(normalizarTexto(m && m.subcat || ""));
+// Lo que una inversión te PAGA sin devolverte capital: un cupón o un dividendo. Es ganancia pura desde el primer peso. "Rendimiento" NO entra acá a
+// propósito: en un fondo se suele cargar así un rescate (capital + lo que rindió) y contarlo entero como ganancia infló el balance (un rendimiento
+// de $200.000 en BCAHA sumó $200.000 a octubre). Un rendimiento, igual que un rescate, devuelve capital primero; la ganancia de un fondo sale de
+// la regla de rescate y resuscripción del mismo mes (más abajo).
+const esPagoDeInversion=m=>/cup[oó]n|dividendo/.test(normalizarTexto(m && m.subcat || ""));
 
 // Importe de una operación en cada moneda. Las inversiones en USD guardan el monto en
 // importeUSD y dejan importe en 0 (o al revés), así que cada moneda se sigue por separado:
@@ -107,7 +107,7 @@ function calcularResultadoInv(lista){
         return;
       }
       if(salida && esPagoDeInversion(m)){
-        // Un rendimiento / cupón / dividendo no toca el capital: es ganancia entera (y no cambia cuánto sigue invertido).
+        // Un cupón / dividendo no toca el capital: es ganancia entera (y no cambia cuánto sigue invertido).
         if(conRetiro.has(m.id)) return;
         gan[k]+=monto;
         eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:monto});

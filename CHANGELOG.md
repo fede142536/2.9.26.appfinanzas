@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v246**
+**Versión actual: v247**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 12 de noviembre de 2026
 
+- **v247** · Un fondo rescatado y vuelto a suscribir en el mes suma la diferencia como resultado de inversión (BMMA y BCAHA), aunque quede capital viejo
 - **v246** · La tarjeta Resultado inv. no desaparece cuando da $0 con rescates o rendimientos: sigue visible y explica por qué
 - **v245** · El resultado de inversiones cuenta como ganancia entera los rendimientos, cupones y dividendos (antes se descontaban del capital)
 - **v244** · Configuración muestra por qué se desactivó la huella (motivo y fecha)
