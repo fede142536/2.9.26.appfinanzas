@@ -6535,7 +6535,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 16, "esperaba las 16 casillas conocidas (pago-tc-ahorro, pago-tc-adm-chk, frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
+  igual(cajas.length, 17, "esperaba las 17 casillas conocidas (pago-tc-ahorro, pago-tc-adm-chk, frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, ing-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);
@@ -11387,6 +11387,59 @@ test("un movimiento común editado SIN tildar la opción sigue siendo común", (
   const e=abrirEdicion({id:778,tipo:"Gasto",cat:"Casa",subcat:"Luz",importe:100,moneda:"ARS",importeOrig:null,cuenta:"Cuentas",fecha:"2026-11-02",nota:"",esAhorro:false,usaAhorro:false,traspaso:false,recuperable:0});
   try{ guardarEdit(); cierto(!e.mov.frecuente && !movs[0].frecuente, "no se vuelve frecuente solo"); }
   finally { e.cerrar(); }
+});
+
+grupo("Ingreso que sale de un fondo de ahorro");
+
+const FONDO_PRUEBA=()=>[{id:1,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:500000,moneda:"ARS",importeOrig:null,fecha:"2026-09-01",esAhorro:true,usaAhorro:false,traspaso:false,cuenta:"Cuentas"}];
+
+test("un ingreso que sale de un fondo crea un retiro ligado SIN origenInvId (no se cuenta dos veces) y baja el fondo", ()=>{
+  const lista=FONDO_PRUEBA();
+  const ing={id:50,tipo:"Ingreso",cat:"Dinero extra",subcat:"Otros",importe:120000,moneda:"ARS",importeOrig:null,fecha:"2026-11-10",cuenta:"Balanz",nota:"venta cedears"};
+  const fondo=fondosConSaldo(lista,"ARS")[0]; igual(fondo.saldo,500000);
+  const r=crearRetiroPorIngreso(ing, fondo, 51);
+  igual(r.origenIngresoId,50); igual(r.origenInvId,undefined,"sin origenInvId: no es un retiro a mano de una venta"); cierto(r.usaAhorro && r.traspaso && r.tipo==="Gasto", "retiro traspaso: baja el fondo y no es gasto");
+  igual(r.importe,120000); igual(r.cat,"Fondo de Retiro"); igual(r.subcat,"Cedears"); igual(r.fecha,"2026-11-10");
+  lista.push(ing, r);
+  igual(fondosConSaldo(lista,"ARS")[0].saldo, 380000, "el fondo baja lo cobrado");
+  igual(esRetiroAMano(r), false, "no cuenta de nuevo como plata a mano");
+  const res=resumenDePeriodo(lista.filter(m=>String(m.fecha).startsWith("2026-11")), null);
+  igual(res.ingresos, 120000, "el ingreso suma UNA vez"); igual(res.gastos, 0, "el retiro traspaso no es gasto"); igual(res.retiradoAMano, 0);
+});
+
+test("un ingreso en dólares sale de un fondo en dólares; sincronizar y borrar acompañan al ingreso", ()=>{
+  const lista=[{id:1,tipo:"Gasto",cat:"Fondo USD",subcat:"Cash",importe:0,importeOrig:300,moneda:"USD",fecha:"2026-09-01",esAhorro:true,cuenta:"Cuentas"}];
+  const ing={id:60,tipo:"Ingreso",cat:"Dinero extra",subcat:"Otros",importe:0,importeOrig:100,moneda:"USD",fecha:"2026-11-10",cuenta:"Balanz"};
+  igual(fondosParaIngreso(lista,ing).map(f=>f.cat+f.saldo).join(),"Fondo USD300");
+  const r=crearRetiroPorIngreso(ing, fondosConSaldo(lista,"USD")[0], 61); igual(r.moneda,"USD"); igual(r.importeOrig,100); igual(r.importe,0); lista.push(ing,r);
+  ing.importeOrig=80; ing.fecha="2026-11-12"; igual(sincronizarRetiroDeIngreso(ing,lista),1); igual(r.importeOrig,80); igual(r.fecha,"2026-11-12");
+  igual(fondosConSaldo(lista,"USD")[0].saldo,220);
+});
+
+test("el editor de un ingreso ofrece 'Sale de mis ahorros' y crea, cambia y saca el retiro ligado al guardar", ()=>{
+  const antes={toast:window.showToast, save:window.save};
+  window.showToast=()=>{}; window.save=()=>{};
+  const e=abrirEdicion({id:70,tipo:"Ingreso",cat:"Dinero extra",subcat:"Otros",importe:90000,moneda:"ARS",importeOrig:null,cuenta:"Balanz",fecha:"2026-11-10",nota:"venta"});
+  try{
+    movs=[...FONDO_PRUEBA(), movs[0]];   // el fondo y el ingreso que se está editando
+    openEditModal(70);
+    cierto(document.querySelector("#edit-ing-sale"), "la casilla está en el editor de un ingreso");
+    document.querySelector("#edit-ing-sale").checked=true; guardarEdit();
+    const ret=movs.find(x=>x.origenIngresoId===70); cierto(ret && ret.usaAhorro && ret.importe===90000 && ret.cat==="Fondo de Retiro", "se creó el retiro ligado");
+    igual(fondosConSaldo(movs,"ARS")[0].saldo, 410000, "y el fondo bajó");
+    openEditModal(70); cierto(document.querySelector("#edit-ing-sale").checked, "al volver a abrirlo la casilla sigue tildada");
+    document.querySelector("#edit-importe").value="100000"; guardarEdit();
+    igual(movs.find(x=>x.origenIngresoId===70).importe, 100000, "editar el monto del ingreso actualiza el retiro");
+    openEditModal(70); document.querySelector("#edit-ing-sale").checked=false; guardarEdit();
+    cierto(!movs.some(x=>x.origenIngresoId===70), "destildar saca el retiro"); igual(fondosConSaldo(movs,"ARS")[0].saldo, 500000, "y el fondo vuelve");
+  } finally { e.cerrar(); window.showToast=antes.toast; window.save=antes.save; }
+});
+
+test("un ingreso frecuente o sin fondos no ofrece la casilla en el editor", ()=>{
+  cierto(bloqueSaleDeAhorroEditorIngreso({id:1,tipo:"Ingreso",frecuente:true})==="", "un frecuente no sale de un fondo");
+  const antes=movs; movs=[];
+  try{ cierto(bloqueSaleDeAhorroEditorIngreso({id:1,tipo:"Ingreso",moneda:"ARS",importe:5})==="", "sin fondos con saldo, no se ofrece"); cierto(bloqueSaleDeAhorroEditorIngreso({id:1,tipo:"Gasto"})==="", "solo para ingresos"); }
+  finally { movs=antes; }
 });
 
 grupo("Aislamiento de los tests");

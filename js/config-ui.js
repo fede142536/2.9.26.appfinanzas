@@ -238,6 +238,7 @@ function syncCurrencyPill(selectId){
     b.classList.toggle("active", b.dataset.val===sel.value);
   });
   sincronizarAriaPressed();
+  if(selectId==="inp-moneda" && typeof actualizarSaleDeAhorroIngreso==="function") actualizarSaleDeAhorroIngreso();   // los fondos se ofrecen en la moneda del ingreso
 }
 
 // ═══════════════════════════════════════════
