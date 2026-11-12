@@ -187,6 +187,107 @@ function fondosParaVenta(lista, inv){
   return fondos;
 }
 
+// ═══════════════════════════════════════════
+// INGRESO QUE SALE DE UN FONDO DE AHORRO
+// ═══════════════════════════════════════════
+// Lo cobrado por vender algo que estaba en un fondo (los CEDEARs del Fondo de Retiro) también se puede cargar como INGRESO: la casilla
+// "Sale de mis ahorros" crea el mismo retiro ligado que en una venta (traspaso: baja el fondo sin contar como gasto). La diferencia es que acá el
+// ingreso YA suma a lo que tenés a mano, así que el retiro NO lleva `origenInvId` (si no, esa plata se contaría dos veces en el balance, ver
+// esRetiroAMano): lleva `origenIngresoId`. Si editás o borrás el ingreso, el retiro lo acompaña.
+const monedaDeIngreso=m=>(m && m.moneda==="USD") ? "USD" : "ARS";
+const montoDeIngreso=m=>monedaDeIngreso(m)==="USD" ? (m.importeOrig||0) : (m.importe||0);
+function crearRetiroPorIngreso(ing, fondo, id){
+  const usd=monedaDeIngreso(ing)==="USD", monto=montoDeIngreso(ing);
+  return {id, tipo:"Gasto", importe: usd ? 0 : monto, importeOrig: usd ? monto : null, moneda: usd ? "USD" : "ARS",
+    cat:fondo.cat, subcat:fondo.sub, cuenta:ing.cuenta||"", fecha:ing.fecha, nota: ing.nota || `Retiro ${ing.cat||"del fondo"}`.trim(), tags:[],
+    esAhorro:false, usaAhorro:true, traspaso:true, recuperable:0, origenIngresoId:ing.id};
+}
+// Los fondos entre los que elegir para un ingreso (más el del retiro que ya tiene, aunque su saldo ya no alcance).
+function fondosParaIngreso(lista, ing){
+  const fondos=fondosConSaldo(lista, monedaDeIngreso(ing));
+  const retiro=(lista||[]).find(x=>x.origenIngresoId===ing.id);
+  if(retiro && !fondos.some(f=>f.cat===retiro.cat && f.sub===(retiro.subcat||""))) fondos.push({cat:retiro.cat, sub:retiro.subcat||"", saldo:0});
+  return fondos;
+}
+// Si editás el ingreso (monto, moneda, fecha, cuenta), el retiro ligado se pone igual. Devuelve cuántos tocó.
+function sincronizarRetiroDeIngreso(ing, lista){
+  let n=0;
+  (lista||[]).forEach(x=>{
+    if(x.origenIngresoId!==ing.id) return;
+    const usd=monedaDeIngreso(ing)==="USD", monto=montoDeIngreso(ing);
+    x.moneda=usd ? "USD" : "ARS"; x.importe=usd ? 0 : monto; x.importeOrig=usd ? monto : null;
+    x.fecha=ing.fecha; x.cuenta=ing.cuenta||"";
+    n++;
+  });
+  return n;
+}
+// ── Formulario de Cargar › Ingreso ──
+function actualizarSaleDeAhorroIngreso(){
+  const grupo=document.getElementById("ing-sale-ahorro-group");
+  if(!grupo) return;
+  const chk=document.getElementById("ing-sale-ahorro"), sel=document.getElementById("ing-fondo"), fg=document.getElementById("ing-fondo-group");
+  const moneda=(document.getElementById("inp-moneda")||{}).value==="USD" ? "USD" : "ARS";
+  const fondos=fondosConSaldo(movs, moneda);
+  grupo.style.display=fondos.length ? "" : "none";
+  if(!fondos.length){ if(chk) chk.checked=false; if(fg) fg.style.display="none"; return; }
+  if(fg) fg.style.display=chk && chk.checked ? "" : "none";
+  if(!sel) return;
+  const previo=sel.value;
+  sel.innerHTML=fondos.map(f=>`<option value="${escapeHtml(fondoKey(f))}">${escapeHtml(f.cat.replace(/^Fondo de /i,"")+(f.sub?" › "+f.sub:""))}</option>`).join("");
+  const elegido=fondos.find(f=>fondoKey(f)===previo) || fondoSugerido(movs, fondos, "");
+  if(elegido) sel.value=fondoKey(elegido);
+  mostrarSaldoFondoIngreso(fondos, moneda);
+}
+function mostrarSaldoFondoIngreso(fondos, moneda){
+  const el=document.getElementById("ing-fondo-saldo"), sel=document.getElementById("ing-fondo");
+  if(!el || !sel) return;
+  moneda=moneda || ((document.getElementById("inp-moneda")||{}).value==="USD" ? "USD" : "ARS");
+  fondos=fondos || fondosConSaldo(movs, moneda);
+  const f=fondos.find(x=>fondoKey(x)===sel.value);
+  el.textContent=f ? "Saldo del fondo: "+(moneda==="USD" ? fmtMoneda(f.saldo,"USD") : fmtS(f.saldo)) : "";
+}
+// El fondo elegido en el formulario del ingreso, o null si la casilla no está tildada.
+function fondoElegidoEnIngreso(){
+  const chk=document.getElementById("ing-sale-ahorro"), sel=document.getElementById("ing-fondo");
+  if(!chk || !chk.checked || !sel || !sel.value) return null;
+  const moneda=(document.getElementById("inp-moneda")||{}).value==="USD" ? "USD" : "ARS";
+  return fondosConSaldo(movs, moneda).find(f=>fondoKey(f)===sel.value) || null;
+}
+// ── Editor de un ingreso: la misma casilla ──
+function bloqueSaleDeAhorroEditorIngreso(m){
+  if(!m || m.tipo!=="Ingreso" || m.frecuente) return "";
+  const fondos=fondosParaIngreso(movs, m);
+  if(!fondos.length) return "";
+  const retiro=movs.find(x=>x.origenIngresoId===m.id);
+  const elegido=(retiro && fondos.find(f=>f.cat===retiro.cat && f.sub===(retiro.subcat||""))) || fondoSugerido(movs, fondos, "") || fondos[0];
+  const usd=monedaDeIngreso(m)==="USD";
+  const opciones=fondos.map(f=>`<option value="${escapeHtml(fondoKey(f))}"${fondoKey(f)===fondoKey(elegido)?" selected":""}>${escapeHtml(f.cat+(f.sub?" › "+f.sub:""))} · saldo ${usd?fmtMoneda(f.saldo,"USD"):fmtS(f.saldo)}</option>`).join("");
+  return `<div class="form-group">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
+        <input type="checkbox" id="edit-ing-sale" class="chk-custom" style="--chk:var(--save)" ${retiro?"checked":""} onchange="document.getElementById('edit-ing-fondo-wrap').style.display=this.checked?'':'none'">
+        <span style="color:var(--save);font-weight:500">💸 Sale de mis ahorros (descuenta el fondo)</span>
+      </label>
+      <div id="edit-ing-fondo-wrap" style="margin-top:8px;display:${retiro?"":"none"}">
+        <label class="form-label" for="edit-ing-fondo">¿De qué fondo?</label>
+        <select id="edit-ing-fondo" class="form-select">${opciones}</select>
+      </div>
+    </div>`;
+}
+function aplicarSaleDeAhorroEditorIngreso(m){
+  const chk=document.getElementById("edit-ing-sale");
+  if(!chk) return;
+  const retiro=movs.find(x=>x.origenIngresoId===m.id);
+  if(chk.checked){
+    const sel=document.getElementById("edit-ing-fondo");
+    const f=fondosParaIngreso(movs, m).find(x=>sel && fondoKey(x)===sel.value);
+    if(!f) return;
+    if(retiro){ retiro.cat=f.cat; retiro.subcat=f.sub; }
+    else{ let id=Date.now()+1; while(movs.some(x=>x.id===id)) id++; movs.unshift(crearRetiroPorIngreso(m, f, id)); }
+  } else if(retiro){
+    movs=movs.filter(x=>x!==retiro);
+  }
+}
+
 // ── Pantalla: Configuración › Ventas que salieron de ahorros ──
 const VENTA_IGNORADAS_KEY="fventafondoignoradas";
 const VENTA_NOREPETIDA_KEY="fventanorepetidas";

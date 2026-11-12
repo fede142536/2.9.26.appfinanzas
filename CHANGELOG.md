@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v240**
+**Versión actual: v241**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 6 de noviembre de 2026
 
+- **v241** · Ingresos frecuentes de meses que vienen figuran en Por cobrar, y el editor permite volver frecuente un gasto o ingreso común
 - **v240** · Frecuentes por pagar (solo gastos) separado de Frecuentes por cobrar (ingresos frecuentes)
 - **v239** · Mosaicos de Movimientos interactivos (tocar uno filtra la lista a lo que lo compone)
 - **v238** · Marcar pagado un gasto frecuente de tarjeta desde Movimientos (por mes)

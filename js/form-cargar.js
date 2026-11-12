@@ -445,7 +445,8 @@ function setTipo(t){
   // La card de opciones (ahorro/traspaso/frecuente/recuperable) solo aparece en Gasto
   document.getElementById("opciones-gasto").style.display=(t==="Gasto")?"":"none";
   document.getElementById("opciones-ingreso").style.display=(t==="Ingreso")?"":"none";
-  if(t!=="Ingreso"){ const fi=document.getElementById("inp-frec-ingreso"); if(fi) fi.checked=false; }
+  if(t!=="Ingreso"){ const fi=document.getElementById("inp-frec-ingreso"); if(fi) fi.checked=false; const sa=document.getElementById("ing-sale-ahorro"); if(sa) sa.checked=false; }
+  if(t==="Ingreso" && typeof actualizarSaleDeAhorroIngreso==="function") actualizarSaleDeAhorroIngreso();
   if(t!=="Gasto"){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
@@ -791,9 +792,17 @@ async function guardarSinFreno(){
       if(diaVto!==null) mov.diaVto=diaVto;   // opcional: solo si se cargó, para el aviso de vencimientos
     }
   }
+  // "Sale de mis ahorros" en un ingreso: el cobro de algo que estaba en un fondo también baja ese fondo (ver retiro-por-venta.js).
+  let fondoDeIngreso=null;
+  if(tipo==="Ingreso" && document.getElementById("ing-sale-ahorro")?.checked){
+    if(esFrec){ showToast("Un ingreso frecuente no puede salir de tus ahorros: sacá la marca o el frecuente"); return; }
+    fondoDeIngreso=fondoElegidoEnIngreso();
+    if(!fondoDeIngreso){ showToast("Elegí de qué fondo salió"); return; }
+  }
   movs.unshift(mov);
+  if(fondoDeIngreso){ let idR=mov.id+1; while(movs.some(x=>x.id===idR)) idR++; movs.unshift(crearRetiroPorIngreso(mov, fondoDeIngreso, idR)); }
   save();
-  let msg=esFrec ? "🔁 Ingreso frecuente guardado ✓" : "Ingreso guardado ✓";
+  let msg=esFrec ? "🔁 Ingreso frecuente guardado ✓" : (fondoDeIngreso ? `Ingreso guardado y descontado de ${fondoDeIngreso.cat}${fondoDeIngreso.sub?" › "+fondoDeIngreso.sub:""} ✓` : "Ingreso guardado ✓");
   if(tipo==="Gasto"){
     if(esFrec) msg="🔁 Gasto frecuente guardado ✓";
     else if(document.getElementById("inp-ahorro").checked) msg="Ahorro guardado ✓";
@@ -831,6 +840,8 @@ function resetForm(t){
     document.getElementById("inp-usa-ahorro").checked=false;
     document.getElementById("inp-traspaso").checked=false;
     const fi=document.getElementById("inp-frec-ingreso"); if(fi) fi.checked=false;   // un ingreso no se repite salvo que lo pidas de nuevo
+    const sa=document.getElementById("ing-sale-ahorro"); if(sa) sa.checked=false;   // ni sale de un fondo
+    if(typeof actualizarSaleDeAhorroIngreso==="function") actualizarSaleDeAhorroIngreso();
     ahorroTocado=false;
     document.getElementById("inp-recup").value="";
     const recupSw=document.getElementById("inp-recup-switch");

@@ -307,6 +307,7 @@ function renderEditForm(m){
       <div class="form-group"><label class="form-label" for="edit-nota">Nota</label>
         <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
+      ${m.tipo==="Ingreso" ? bloqueSaleDeAhorroEditorIngreso(m) : ""}
       ${!esFrec && puedeVolverseFrecuente(m)?`
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm)">
@@ -539,6 +540,7 @@ function guardarEdit(){
     }
     m.importeUSD = mepUsdEl ? 0 : Math.round(usd*100)/100;
   }
+  if(m.tipo==="Ingreso"){ aplicarSaleDeAhorroEditorIngreso(m); sincronizarRetiroDeIngreso(m, movs); }   // lo mismo para un ingreso que sale de un fondo
   if(m.tipo==="Inversion"){ aplicarSaleDeAhorroEditor(m); sincronizarRetiroLigado(m, movs); }   // el retiro del fondo que acompaña a una venta se pone igual
   save();
   vibrar([15,50,15]);
