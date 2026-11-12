@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v241**
+**Versión actual: v242**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,10 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 12 de noviembre de 2026
+
+- **v242** · Un ingreso puede salir de un fondo de ahorro (Cargar y editor): crea el retiro ligado y baja el fondo sin duplicar el balance
 
 ## 6 de noviembre de 2026
 

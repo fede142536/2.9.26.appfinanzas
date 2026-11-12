@@ -20,6 +20,24 @@ function leerHuella(){
 }
 const huellaActiva=()=>!!leerHuella();
 function quitarHuella(){ try{ localStorage.removeItem(HUELLA_KEY); }catch(e){ /* sin almacenamiento */ } }
+// Una huella que dejó de servir sin que la apagues vos (cambió el PIN, o el celular cambió la clave de seguridad: pasa, por ejemplo, al agregar una
+// huella nueva o cambiar el bloqueo de pantalla) queda anotada: al próximo desbloqueo con el PIN se ofrece activarla de nuevo en un toque.
+const HUELLA_PERDIDA_KEY="fhuellaperdida";
+function marcarHuellaPerdida(){ try{ localStorage.setItem(HUELLA_PERDIDA_KEY, "1"); }catch(e){ /* sin almacenamiento */ } }
+function olvidarHuellaPerdida(){ try{ localStorage.removeItem(HUELLA_PERDIDA_KEY); }catch(e){ /* sin almacenamiento */ } }
+const huellaPerdida=()=>{ try{ return localStorage.getItem(HUELLA_PERDIDA_KEY)==="1"; }catch(e){ return false; } };
+async function ofrecerReactivarHuella(pin){
+  if(!huellaPerdida() || huellaActiva() || !pin || !pinConfigurado()) return;
+  const abierto=()=>{ const d=document.querySelector("#modal-dialogo"); return !!(d && d.classList.contains("open")); };
+  for(let i=0; i<90 && abierto(); i++) await new Promise(r=>setTimeout(r, 700));   // un diálogo nuevo cancelaría al abierto: se espera
+  if(abierto() || huellaActiva()) return;
+  if(!await huellaDisponible()){ olvidarHuellaPerdida(); return; }
+  olvidarHuellaPerdida();   // se ofrece una sola vez: si decís "Más tarde", la activás cuando quieras desde Configuración
+  if(await mostrarConfirm("La huella o el rostro dejaron de funcionar para abrir la app (puede pasar si cambiaste el PIN o si el celular renovó su clave de seguridad). ¿Querés activarla de nuevo?", {titulo:"👆 Huella o rostro", textoOk:"Activar de nuevo", textoCancelar:"Más tarde"})){
+    await activarHuella(pin);
+    if(typeof renderHuellaStatus==="function") renderHuellaStatus();
+  }
+}
 
 // ¿Se puede usar? Hace falta un autenticador de plataforma (huella o rostro configurados en el celular) y un contexto seguro.
 async function huellaDisponible(){
@@ -60,13 +78,15 @@ async function pedirSecreto(credId, salt){
 }
 
 // Activa la huella. Exige el PIN actual: es lo que se va a guardar cifrado. Devuelve true si quedó activa.
-async function activarHuella(){
+// `pinConocido`: cuando ya se tecleó el PIN (al reactivarla justo después de desbloquear) no se vuelve a pedir.
+async function activarHuella(pinConocido){
   if(!pinConfigurado()){ showToast("Primero activá el PIN"); return false; }
   if(!await huellaDisponible()){
     await mostrarAlerta("Este celular no tiene huella o rostro configurados, o el navegador no permite usarlos acá. Configuralos en los ajustes del celular y volvé a intentar.", "Huella o rostro");
     return false;
   }
-  const pin=await mostrarPrompt("Ingresá tu PIN para activar la huella:", {titulo:"👆 Huella o rostro", ...opcionesPromptPin(), placeholder:pinModo()==="a" ? "Tu código" : `${pinLen()} dígitos`});
+  const pin=typeof pinConocido==="string" && pinConocido ? pinConocido
+    : await mostrarPrompt("Ingresá tu PIN para activar la huella:", {titulo:"👆 Huella o rostro", ...opcionesPromptPin(), placeholder:pinModo()==="a" ? "Tu código" : `${pinLen()} dígitos`});
   if(pin===null) return false;
   if(!await verificarPin(pin)){ showToast("PIN incorrecto"); return false; }
   try{
@@ -93,6 +113,7 @@ async function activarHuella(){
     }
     const envuelto=await envolverPin(pin, secreto);
     localStorage.setItem(HUELLA_KEY, JSON.stringify({cred:bytesToB64(new Uint8Array(cred.rawId)), salt:bytesToB64(salt), ...envuelto}));
+    olvidarHuellaPerdida();
     showToast("👆 Huella activada ✓");
     return true;
   }catch(e){
@@ -102,7 +123,7 @@ async function activarHuella(){
   }
 }
 async function desactivarHuella(){
-  quitarHuella();
+  quitarHuella(); olvidarHuellaPerdida();   // la apagaste vos: no se ofrece reactivarla
   showToast("Huella desactivada");
   renderHuellaStatus();
 }
@@ -118,12 +139,15 @@ async function desbloquearConHuella(){
     const pin=await desenvolverPin(h, secreto);
     pinBuffer=pin;
     updatePinDisplay();
-    await checkPin();
-    const lock=document.getElementById("lock-screen");
-    if(lock && lock.style.display!=="none"){ quitarHuella(); mostrarBotonHuella(); if(err) err.textContent="La huella ya no coincide con tu PIN. Ingresalo y volvé a activarla."; return false; }
-    return true;
+    let r=await checkPin();
+    if(r===undefined){ const lock=document.getElementById("lock-screen"); r=(lock && lock.style.display!=="none") ? "mal" : "ok"; }   // (un checkPin que no avisa: se mira la pantalla)
+    if(r==="ok") return true;
+    // Solo un PIN que se PROBÓ y no abrió la huella lo prueba vencido. Una espera por intentos fallidos, datos incompletos o un error al cifrar no dicen nada
+    // de la huella: antes alcanzaba con que la pantalla siguiera ahí para borrarla, y por eso "se desactivaba sola".
+    if(r==="mal"){ quitarHuella(); marcarHuellaPerdida(); mostrarBotonHuella(); if(err) err.textContent="La huella ya no coincide con tu PIN. Ingresalo y volvé a activarla."; }
+    return false;
   }catch(e){
-    if(e && e.name==="OperationError"){ quitarHuella(); mostrarBotonHuella(); if(err) err.textContent="No se pudo usar la huella. Ingresá tu PIN."; }
+    if(e && e.name==="OperationError"){ quitarHuella(); marcarHuellaPerdida(); mostrarBotonHuella(); if(err) err.textContent="El celular renovó la clave de la huella. Ingresá tu PIN: después te ofrezco activarla de nuevo."; }
     else if(err && !(e && (e.name==="NotAllowedError" || e.name==="AbortError"))) err.textContent="No se pudo usar la huella. Ingresá tu PIN.";
     return false;
   }
