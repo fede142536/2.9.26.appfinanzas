@@ -671,7 +671,7 @@ async function setupPin(){
     await mostrarAlerta(`No se pudo guardar el PIN: ${err.message||err}\n\nTus datos quedaron como estaban.`, "Error");
     return;
   }
-  if(typeof quitarHuella==="function"){ if(typeof huellaActiva==="function" && huellaActiva() && typeof marcarHuellaPerdida==="function") marcarHuellaPerdida(); quitarHuella(); }   // la huella guardaba el PIN anterior: hay que activarla de nuevo (se ofrece al próximo desbloqueo)
+  if(typeof quitarHuella==="function"){ if(typeof huellaActiva==="function" && huellaActiva() && typeof marcarHuellaPerdida==="function") marcarHuellaPerdida("cambiaste el PIN"); quitarHuella(); }   // la huella guardaba el PIN anterior: hay que activarla de nuevo (se ofrece al próximo desbloqueo)
   showToast("✓ PIN configurado. Se va a pedir al abrir la app.");
   renderPinStatus();
   // Las copias automáticas viejas quedaron en claro o con la clave anterior: se reemplazan.
