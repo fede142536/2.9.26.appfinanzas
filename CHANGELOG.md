@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v245**
+**Versión actual: v246**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 12 de noviembre de 2026
 
+- **v246** · La tarjeta Resultado inv. no desaparece cuando da $0 con rescates o rendimientos: sigue visible y explica por qué
 - **v245** · El resultado de inversiones cuenta como ganancia entera los rendimientos, cupones y dividendos (antes se descontaban del capital)
 - **v244** · Configuración muestra por qué se desactivó la huella (motivo y fecha)
 - **v243** · La huella ya no se borra por una espera de intentos fallidos u otro motivo ajeno, y se ofrece reactivarla cuando se pierde

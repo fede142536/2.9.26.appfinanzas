@@ -11491,6 +11491,25 @@ test("el resultado del mes suma los rendimientos de todos los fondos (BCAHA y BM
   igual(gananciaInvDelMes("2026-11", lista).ars, 3237, "2.697 + 540");
 });
 
+test("fondo rescatado y resuscripto en el mes: la diferencia es ganancia aunque quede capital viejo (BMMA y BCAHA)", ()=>{
+  const op=(id,fecha,sub,imp,ticker)=>({id,tipo:"Inversion",cat:"FCI",subcat:"FCI "+sub,ticker,importe:imp,importeUSD:0,fecha});
+  const lista=[op(1,"2026-08-01","Suscripción",300000,"BMMA"), op(2,"2026-08-01","Suscripción",500000,"BCAHA"),
+    op(3,"2026-11-03","Suscripción",100000,"BMMA"), op(4,"2026-11-05","Rescate capital",100540,"BMMA"),
+    op(5,"2026-11-04","Suscripción",300000,"BCAHA"), op(6,"2026-11-06","Rescate capital",302697,"BCAHA")];
+  const r=calcularResultadoInv(lista);
+  igual(r.gananciaPorMes["2026-11"].ars, 3237, "540 + 2.697, como muestran las tarjetas de cada fondo");
+  igual(r.capitalPorTicker.BMMA.ars, 300000, "el capital que ya estaba sigue ahí: el mes se cancela solo"); igual(r.capitalPorTicker.BCAHA.ars, 500000);
+});
+
+test("rescatar mucho y reinvertir poco NO es ganancia: sigue valiendo capital primero; y en acciones no aplica la regla del fondo", ()=>{
+  const op=(id,fecha,sub,imp,ticker,cat)=>({id,tipo:"Inversion",cat:cat||"FCI",subcat:(cat||"FCI")+" "+sub,ticker,importe:imp,importeUSD:0,fecha});
+  const a=calcularResultadoInv([op(1,"2026-08-01","Suscripción",1000000,"BMMA"), op(2,"2026-11-03","Suscripción",100000,"BMMA"), op(3,"2026-11-05","Rescate capital",600000,"BMMA")]);
+  igual((a.gananciaPorMes["2026-11"]||{}).ars||0, 0, "se sacó capital, no hubo ganancia");
+  igual(a.capitalPorTicker.BMMA.ars, 500000);
+  const b=calcularResultadoInv([op(1,"2026-08-01","Compra",1000000,"YPFD","Acciones"), op(2,"2026-11-03","Compra",100000,"YPFD","Acciones"), op(3,"2026-11-05","Venta",105000,"YPFD","Acciones")]);
+  igual((b.gananciaPorMes["2026-11"]||{}).ars||0, 0, "una venta de acciones devuelve capital primero");
+});
+
 test("la tarjeta Resultado inv. no desaparece cuando da $0 pero hubo rescates o rendimientos", async ()=>{
   const src=await (await fetch("js/movimientos.js")).text();
   cierto(src.includes("const hayCobrosInv=mesMovs.some(m=>m.tipo===\"Inversion\"&&isInvSalida(m))"), "se detecta que hubo cobros de inversión en el período");

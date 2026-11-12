@@ -58,6 +58,32 @@ function calcularResultadoInv(lista){
   const eventos=[];
   const caja=(obj,k)=>(obj[k] || (obj[k]={ars:0, usd:0}));
 
+  // RESCATE CON RESUSCRIPCIÓN EN EL MISMO MES. Un fondo se suele rescatar entero (capital + lo que rindió) y volver a suscribir el capital: en el
+  // mes el rescate de capital supera a la suscripción y esa DIFERENCIA es la ganancia (es la cuenta que muestra la tarjeta del ticker). Con la regla
+  // "primero vuelve el capital" esa diferencia se descontaba de capital viejo todavía cargado y la ganancia quedaba en 0. Se reconoce como
+  // ganancia solo cuando la diferencia es chica frente a lo suscripto (hasta RESUSCRIPCION_MAX): rescatar 500.000 y reinvertir 100.000 NO es una
+  // ganancia de 400.000, es sacar capital, y sigue por la regla de siempre. Un rescate con retiro ligado queda afuera (ya suma a lo disponible).
+  // Solo para fondos (suscripción / rescate): en acciones o bonos no hay "volver a suscribir", y una compra y una venta del mismo mes no son el mismo capital.
+  const RESUSCRIPCION_MAX=0.10;
+  const esOpDeFondo=m=>/suscripci|rescate/.test(normalizarTexto(m && m.subcat || ""));
+  const grupos={};
+  inv.forEach(m=>{
+    const ym=String(m.fecha||"").slice(0,7);
+    if(ym.length!==7 || esPagoDeInversion(m) || !esOpDeFondo(m)) return;
+    ["ars","usd"].forEach(k=>{
+      const monto=montoInv(m, k==="usd"?"USD":"ARS");
+      if(!monto) return;
+      const g=grupos[(m.ticker||"Sin ticker")+"|"+ym+"|"+k] || (grupos[(m.ticker||"Sin ticker")+"|"+ym+"|"+k]={sus:0, res:0, ret:false, ids:[]});
+      if(isInvSalida(m)){ g.res+=monto; if(conRetiro.has(m.id)) g.ret=true; } else g.sus+=monto;
+      g.ids.push(m.id);
+    });
+  });
+  const reinvertido=(ticker,ym,k)=>{
+    const g=grupos[ticker+"|"+ym+"|"+k];
+    return g && !g.ret && g.sus>0 && g.res>g.sus && (g.res-g.sus)<=g.sus*RESUSCRIPCION_MAX ? g : null;
+  };
+  const yaContado=new Set();
+
   inv.forEach(m=>{
     const ticker=m.ticker || "Sin ticker";
     const ym=String(m.fecha||"").slice(0,7);
@@ -68,6 +94,18 @@ function calcularResultadoInv(lista){
     ["ars","usd"].forEach(k=>{
       const monto=montoInv(m, k==="usd"?"USD":"ARS");
       if(!monto) return;
+      const rollover=(esPagoDeInversion(m) || !esOpDeFondo(m)) ? null : reinvertido(ticker, ym, k);
+      if(rollover){
+        // La suscripción y el rescate de este mes se cancelan entre sí (la plata solo dio la vuelta); queda la diferencia como ganancia.
+        const clave=ticker+"|"+ym+"|"+k;
+        if(!yaContado.has(clave)){
+          yaContado.add(clave);
+          const dif=rollover.res-rollover.sus;
+          gan[k]+=dif;
+          eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:dif});
+        }
+        return;
+      }
       if(salida && esPagoDeInversion(m)){
         // Un rendimiento / cupón / dividendo no toca el capital: es ganancia entera (y no cambia cuánto sigue invertido).
         if(conRetiro.has(m.id)) return;
