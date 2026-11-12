@@ -1490,9 +1490,14 @@ function renderMovs(){
     if(invertidoARS>0){
       mosTodos.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(invertidoARS),"", null, "f:invertido"));
     }
+    // "Resultado inv." NO desaparece cuando da $0: si en el período hubo rescates, ventas o rendimientos y la cuenta cierra en cero (el
+    // rescate solo devolvió capital), la tarjeta sigue ahí diciendo por qué, en vez de dejar la duda de si se perdió el dato.
+    const hayCobrosInv=mesMovs.some(m=>m.tipo==="Inversion"&&isInvSalida(m));
     if(Math.round(ganInv.ars)!==0){
       const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
       mosTodos.push(mosaicoHTML("📊","Resultado inv.",cg,(ganInv.ars>=0?"+":"")+fmtTotal(ganInv.ars),"", null, "f:inversiones"));
+    } else if(hayCobrosInv){
+      mosTodos.push(mosaicoHTML("📊","Resultado inv.","var(--muted)",fmtTotal(0),"los rescates devolvieron capital", null, "f:inversiones"));
     }
     if(Math.round(netoInv.ars)!==0){
       const colorNeto=netoInv.ars>=0?"var(--success)":"var(--invest)";

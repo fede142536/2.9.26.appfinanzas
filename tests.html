@@ -11491,6 +11491,12 @@ test("el resultado del mes suma los rendimientos de todos los fondos (BCAHA y BM
   igual(gananciaInvDelMes("2026-11", lista).ars, 3237, "2.697 + 540");
 });
 
+test("la tarjeta Resultado inv. no desaparece cuando da $0 pero hubo rescates o rendimientos", async ()=>{
+  const src=await (await fetch("js/movimientos.js")).text();
+  cierto(src.includes("const hayCobrosInv=mesMovs.some(m=>m.tipo===\"Inversion\"&&isInvSalida(m))"), "se detecta que hubo cobros de inversión en el período");
+  cierto(src.includes("los rescates devolvieron capital"), "si el resultado es 0, la tarjeta sigue y explica por qué");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
