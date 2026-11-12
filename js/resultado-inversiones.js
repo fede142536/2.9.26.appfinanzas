@@ -27,6 +27,12 @@ function ordenDeOperacion(a, b){
   return (a.id||0)-(b.id||0);
 }
 
+// Lo que una inversión te PAGA sin devolverte capital: el rendimiento de un fondo, un cupón, un dividendo. Es ganancia pura desde el primer
+// peso. Antes se trataba como cualquier salida ("primero recuperás capital"): con la suscripción cargada, un rendimiento de $540 se descontaba del
+// capital y la ganancia quedaba en 0 (solo "aparecía" cuando el capital estaba en cero, o sea cuando faltaba cargar la compra).
+// "Rescate", "venta" y "amortización" siguen devolviendo capital primero.
+const esPagoDeInversion=m=>/rendimiento|cup[oó]n|dividendo/.test(normalizarTexto(m && m.subcat || ""));
+
 // Importe de una operación en cada moneda. Las inversiones en USD guardan el monto en
 // importeUSD y dejan importe en 0 (o al revés), así que cada moneda se sigue por separado:
 // mezclarlas daría un capital que no existe.
@@ -62,7 +68,12 @@ function calcularResultadoInv(lista){
     ["ars","usd"].forEach(k=>{
       const monto=montoInv(m, k==="usd"?"USD":"ARS");
       if(!monto) return;
-      if(salida){
+      if(salida && esPagoDeInversion(m)){
+        // Un rendimiento / cupón / dividendo no toca el capital: es ganancia entera (y no cambia cuánto sigue invertido).
+        if(conRetiro.has(m.id)) return;
+        gan[k]+=monto;
+        eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:monto});
+      } else if(salida){
         // Primero vuelve tu capital; lo que sobra es ganancia. Si nunca se cargó la compra,
         // el capital es 0 y TODA la venta cuenta como ganancia — se ve raro a propósito, para
         // que se note que falta una operación en vez de esconderlo en un total.

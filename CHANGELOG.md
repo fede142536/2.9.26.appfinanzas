@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v243**
+**Versión actual: v244**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 12 de noviembre de 2026
 
+- **v244** · Configuración muestra por qué se desactivó la huella (motivo y fecha)
 - **v243** · La huella ya no se borra por una espera de intentos fallidos u otro motivo ajeno, y se ofrece reactivarla cuando se pierde
 - **v242** · Un ingreso puede salir de un fondo de ahorro (Cargar y editor): crea el retiro ligado y baja el fondo sin duplicar el balance
 

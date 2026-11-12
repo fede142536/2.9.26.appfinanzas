@@ -11465,6 +11465,32 @@ test("checkPin avisa qué pasó: 'ok', 'mal', 'espera'; la huella usa ese result
   cierto(sp.includes("ofrecerReactivarHuella(pinIngresado)"), "al desbloquear se ofrece reactivar la huella perdida");
 });
 
+grupo("Resultado de inversiones: rendimiento, cupón y dividendo son ganancia entera");
+
+test("un rendimiento de fondo con la suscripción ya cargada cuenta como ganancia y no toca el capital", ()=>{
+  const op=(id,fecha,sub,imp,ticker)=>({id,tipo:"Inversion",cat:"FCI",subcat:"FCI "+sub,ticker:ticker||"BMMA",importe:imp,importeUSD:0,fecha});
+  const r=calcularResultadoInv([op(1,"2026-10-01","Suscripción",100000), op(2,"2026-11-05","Rendimiento",540)]);
+  igual((r.gananciaPorMes["2026-11"]||{}).ars, 540, "el rendimiento es ganancia desde el primer peso");
+  igual(r.capitalPorTicker.BMMA.ars, 100000, "el capital sigue invertido: el rendimiento no lo devuelve");
+  igual((r.flujoPorMes["2026-11"]||{}).ars||0, 0, "y no cuenta como capital que salió");
+  cierto(r.eventos.some(e=>e.ticker==="BMMA" && e.ganancia===540), "queda en los eventos auditables");
+});
+
+test("cupón y dividendo también son ganancia entera; un rescate de capital, una venta y una amortización siguen devolviendo capital primero", ()=>{
+  const base=[{id:1,tipo:"Inversion",cat:"X",subcat:"X Compra",ticker:"T",importe:1000,importeUSD:0,fecha:"2026-09-01"}];
+  const con=(subcat,imp)=>calcularResultadoInv([...base,{id:2,tipo:"Inversion",cat:"X",subcat,ticker:"T",importe:imp,importeUSD:0,fecha:"2026-10-10"}]);
+  igual(con("Bonos USD Cupón",50).gananciaPorMes["2026-10"].ars, 50); igual(con("CEDEARs Dividendo",30).gananciaPorMes["2026-10"].ars, 30);
+  igual(con("FCI Rescate capital",400).gananciaPorMes["2026-10"].ars, 0, "un rescate devuelve capital primero"); igual(con("FCI Rescate capital",400).capitalPorTicker.T.ars, 600);
+  igual(con("CEDEARs Venta",1200).gananciaPorMes["2026-10"].ars, 200, "una venta: capital primero y el resto es ganancia");
+  igual(con("Bonos USD Amortización",300).gananciaPorMes["2026-10"].ars, 0, "una amortización es capital");
+});
+
+test("el resultado del mes suma los rendimientos de todos los fondos (BCAHA y BMMA), con o sin capital cargado", ()=>{
+  const op=(id,fecha,sub,imp,ticker)=>({id,tipo:"Inversion",cat:"FCI",subcat:"FCI "+sub,ticker,importe:imp,importeUSD:0,fecha});
+  const lista=[op(1,"2026-10-01","Suscripción",500000,"BMMA"), op(2,"2026-11-03","Rendimiento",2697,"BCAHA"), op(3,"2026-11-05","Rendimiento",540,"BMMA"), op(4,"2026-11-06","Suscripción",100000,"Frasco")];
+  igual(gananciaInvDelMes("2026-11", lista).ars, 3237, "2.697 + 540");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
