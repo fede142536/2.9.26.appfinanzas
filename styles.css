@@ -2007,3 +2007,7 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .mov-foco{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin:0 16px 10px;padding:6px 8px 6px 14px;border-radius:var(--radius-md);background:var(--accent-light);color:var(--accent);font-size:var(--fs-sm)}
 .mov-foco-txt{min-width:0}
 @media (prefers-reduced-motion:reduce){.mov-mosaic[data-accion]{transition:none}}
+
+/* [Editor de frecuente] Filtros de vista: muestran de a un grupo de campos (Datos / Tarjeta / Fechas / Monto) o todo junto. */
+.edit-vistas{margin:0 0 14px}
+.vista-oculta{display:none!important}

@@ -11508,6 +11508,19 @@ test("la tarjeta Resultado inv. no desaparece cuando da $0 pero hubo rescates o 
   cierto(src.includes("los rescates devolvieron capital"), "si el resultado es 0, la tarjeta sigue y explica por qué");
 });
 
+grupo("Editor de gasto frecuente: filtros de vista");
+
+test("el editor de un frecuente de tarjeta se puede filtrar por Datos, Tarjeta, Fechas y Monto, y guardar lee todo aunque esté oculto", ()=>{
+  const t={id:88001,frecuente:true,desc:"UGR",cat:"Educación",tarjeta:"Mastercard",cuenta:"Galicia",monto:1000,moneda:"ARS",mesInicio:"2026-06",diaVto:8,nota:"n",tarjetas:[],cambios:[]};
+  editTcVista="datos";
+  const h=renderEditTcForm(t);
+  cierto(h.includes('data-vista-btn="tarjeta"') && h.includes('data-vista-btn="monto"') && h.includes('data-vista-btn="todo"'), "hay un filtro por grupo y uno para ver todo");
+  ["edit-tc-desc","edit-tc-cat","edit-tc-cuenta","edit-tc-nota","edit-tc-tarj","edit-tc-inicio","edit-tc-fin","edit-tc-frec-dia","edit-tc-moneda-frec","edit-tc-aum-monto"].forEach(id=>cierto(h.includes('id="'+id+'"'), "el campo "+id+" sigue en el formulario"));
+  cierto(/data-vista="datos" class=""/.test(h) && /data-vista="monto" class="vista-oculta"/.test(h), "al abrir se ve Datos y el resto queda oculto");
+  editTcVista="todo"; cierto(!renderEditTcForm(t).includes("vista-oculta\""), "Todo muestra el formulario completo");
+  editTcVista="datos";
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

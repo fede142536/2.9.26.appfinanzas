@@ -1762,6 +1762,7 @@ function openEditTcModal(id, ym){
   if(!t) return;
   editingTcId=id;
   editingTcYM=/^\d{4}-\d{2}$/.test(ym||"") ? ym : currentYM();
+  editTcVista="datos";
   document.getElementById("edit-form-content").innerHTML=renderEditTcForm(t);
   const tituloEd=document.getElementById("edit-modal-titulo"); if(tituloEd) tituloEd.textContent="Editar compra con tarjeta";
   document.getElementById("modal-edit").classList.add("open");
@@ -1769,6 +1770,26 @@ function openEditTcModal(id, ym){
   // Reemplazo el handler del botón de guardar
   const btnGuardar=document.querySelector("#modal-edit .btn-primary");
   if(btnGuardar) btnGuardar.setAttribute("onclick","guardarEditTc()");
+}
+
+// VISTAS DEL EDITOR DE UN GASTO FRECUENTE. El formulario tiene muchos bloques (datos, tarjeta, fechas, monto) y en el celular obligaba a recorrer una pantalla
+// larguísima para tocar una sola cosa. Los filtros de arriba muestran de a un grupo; "Todo" vuelve a mostrar el formulario completo. Los campos ocultos siguen
+// en la página (solo se esconden), así que "Guardar" lee todo igual, esté o no a la vista.
+const VISTAS_EDIT_TC=[["datos","Datos"],["tarjeta","Tarjeta"],["fechas","Fechas"],["monto","Monto"],["todo","Todo"]];
+let editTcVista="datos";
+const claseVistaEditTc=v=>(editTcVista==="todo"||editTcVista===v)?"":"vista-oculta";
+function vistasEditTcHTML(){
+  return `<div class="seg-filter edit-vistas" role="tablist" aria-label="Qué parte del gasto frecuente editar">${
+    VISTAS_EDIT_TC.map(([k,n])=>`<button type="button" class="seg-btn${editTcVista===k?" active":""}" role="tab" aria-selected="${editTcVista===k}" data-vista-btn="${k}" onclick="setVistaEditTc('${k}')">${n}</button>`).join("")
+  }</div>`;
+}
+function setVistaEditTc(v){
+  if(!VISTAS_EDIT_TC.some(x=>x[0]===v)) return;
+  editTcVista=v;
+  const cont=document.getElementById("edit-form-content");
+  if(!cont) return;
+  cont.querySelectorAll("[data-vista]").forEach(el=>el.classList.toggle("vista-oculta", !(v==="todo"||el.dataset.vista===v)));
+  cont.querySelectorAll("[data-vista-btn]").forEach(b=>{ const on=b.dataset.vistaBtn===v; b.classList.toggle("active",on); b.setAttribute("aria-selected",on?"true":"false"); });
 }
 
 function renderEditTcForm(t){
@@ -1783,10 +1804,29 @@ function renderEditTcForm(t){
     const cambiosTarj=Array.isArray(t.tarjetas)?t.tarjetas.slice().sort((a,b)=>a.desde.localeCompare(b.desde)):[];
     return `
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--warning-light);color:var(--warning);margin-bottom:10px">🔁 GASTO FRECUENTE</div>
+      ${vistasEditTcHTML()}
+      <div data-vista="datos" class="${claseVistaEditTc("datos")}">
       <div class="form-group"><label class="form-label" for="edit-tc-desc">Descripción</label>
         <input type="text" id="edit-tc-desc" class="form-input" value="${escapeHtml(t.desc)}">
       </div>
-      <div class="two-col">
+      <div class="form-group"><label class="form-label" for="edit-tc-cat">Categoría</label>
+        <input type="text" id="edit-tc-cat" class="form-input" value="${escapeHtml(t.cat)}">
+      </div>
+      <div class="form-group"><label class="form-label" for="edit-tc-cuenta">Cuenta</label>
+        <div class="u-row">
+          <select id="edit-tc-cuenta" class="form-select u-flex1">
+            ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
+            ${t.cuenta && !getCuentas().includes(t.cuenta)?`<option selected>${escapeHtml(t.cuenta)}</option>`:""}
+          </select>
+          <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label" for="edit-tc-nota">Nota</label>
+        <textarea id="edit-tc-nota" class="form-textarea">${escapeHtml(t.nota)}</textarea>
+      </div>
+      </div>
+      <div data-vista="tarjeta" class="${claseVistaEditTc("tarjeta")}">
+      <div>
         <div class="form-group"><label class="form-label" for="edit-tc-tarj">Tarjeta</label>
           <div class="u-row-6">
             <select id="edit-tc-tarj" class="form-select u-flex1">
@@ -1795,9 +1835,6 @@ function renderEditTcForm(t){
             </select>
             <button type="button" class="btn-sm" onclick="agregarTarjetaRapida('edit-tc-tarj')" title="Agregar tarjeta nueva">+</button>
           </div>
-        </div>
-        <div class="form-group"><label class="form-label" for="edit-tc-cat">Categoría</label>
-          <input type="text" id="edit-tc-cat" class="form-input" value="${escapeHtml(t.cat)}">
         </div>
       </div>
       <div class="inset" id="edit-tc-tarj-opc">
@@ -1826,6 +1863,8 @@ function renderEditTcForm(t){
             </div>
           `).join("")}
         </div>`:""}
+      </div>
+      <div data-vista="fechas" class="${claseVistaEditTc("fechas")}">
       <div class="two-col">
         <div class="form-group"><label class="form-label" for="edit-tc-inicio">Mes de inicio</label>
           <input type="month" id="edit-tc-inicio" class="form-input" value="${t.mesInicio||''}">
@@ -1834,19 +1873,12 @@ function renderEditTcForm(t){
           <input type="month" id="edit-tc-fin" class="form-input" value="${t.mesFin||''}">
         </div>
       </div>
-      <div class="form-group"><label class="form-label" for="edit-tc-cuenta">Cuenta</label>
-        <div class="u-row">
-          <select id="edit-tc-cuenta" class="form-select u-flex1">
-            ${getCuentas().map(c=>`<option ${t.cuenta===c?'selected':''}>${escapeHtml(c)}</option>`).join("")}
-            ${t.cuenta && !getCuentas().includes(t.cuenta)?`<option selected>${escapeHtml(t.cuenta)}</option>`:""}
-          </select>
-          <button type="button" class="btn-sm" onclick="agregarCuentaRapida('edit-tc-cuenta')" title="Agregar cuenta nueva">+ Cta</button>
-        </div>
-      </div>
       <div class="form-group"><label class="form-label" for="edit-tc-frec-dia">Día de vencimiento (opcional)</label>
         <input type="number" id="edit-tc-frec-dia" class="form-input" value="${diaValido(t.diaVto)||""}" placeholder="Ej: 10" inputmode="numeric" min="1" max="31" step="1">
         <p style="font-size:10px;color:var(--muted);margin-top:4px">Para que la app te avise antes de que venza este gasto.</p>
       </div>
+      </div>
+      <div data-vista="monto" class="${claseVistaEditTc("monto")}">
       <div class="form-group"><label class="form-label" for="edit-tc-moneda-frec">Moneda</label>
         <select id="edit-tc-moneda-frec" class="form-select" onchange="document.getElementById('edit-tc-aum-prefix').textContent=this.value==='USD'?'USD':'$'">
           <option value="ARS" ${(t.moneda||'ARS')==='ARS'?'selected':''}>🇦🇷 Pesos (ARS)</option>
@@ -1880,13 +1912,13 @@ function renderEditTcForm(t){
             </div>
           `).join("")}
         </div>`:""}
+      </div>
+      <div data-vista="fechas" class="${claseVistaEditTc("fechas")}">
       <div style="background:var(--danger-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--danger)">🛑 Dar de baja el gasto frecuente</div>
         <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Configurá un "Mes de fin" para que deje de aparecer desde ese mes en adelante. Los meses anteriores se mantienen en el historial.</p>
         <button type="button" class="btn-sm" style="color:var(--danger);width:100%" onclick="darDeBajaFrec(${t.id})">Dar de baja desde el próximo mes</button>
       </div>
-      <div class="form-group"><label class="form-label" for="edit-tc-nota">Nota</label>
-        <textarea id="edit-tc-nota" class="form-textarea">${escapeHtml(t.nota)}</textarea>
       </div>
     `;
   }
