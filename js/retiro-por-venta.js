@@ -57,7 +57,8 @@ function crearRetiroPorVenta(inv, fondo, id, montoRetiro){
   const monto=(montoRetiro>0) ? montoRetiro : (usd ? inv.importeUSD : inv.importe);
   return {id, tipo:"Gasto", importe: usd ? 0 : monto, importeOrig: usd ? monto : null, moneda: usd ? "USD" : "ARS",
     cat:fondo.cat, subcat:fondo.sub, cuenta:inv.cuenta||"", fecha:inv.fecha, nota: inv.nota || `Venta ${inv.ticker||""}`.trim(), tags:[],
-    esAhorro:false, usaAhorro:true, traspaso:true, recuperable:0, origenInvId:inv.id};
+    esAhorro:false, usaAhorro:true, traspaso:true, recuperable:0, origenInvId:inv.id,
+    ...(inv.ticker ? {ticker:inv.ticker} : {}), ...(inv.cantidad>0 ? {cantidad:inv.cantidad} : {})};
 }
 
 // Si editás la venta (monto, moneda, fecha, cuenta), el retiro ligado se pone igual. Devuelve cuántos tocó.
@@ -68,6 +69,8 @@ function sincronizarRetiroLigado(inv, lista){
     const usd=!!(inv.importeUSD && !inv.importe), monto=montoRetiroDeVenta(inv, lista);
     x.moneda=usd ? "USD" : "ARS"; x.importe=usd ? 0 : monto; x.importeOrig=usd ? monto : null;
     x.fecha=inv.fecha; x.cuenta=inv.cuenta||"";
+    if(inv.ticker) x.ticker=inv.ticker;
+    if(inv.cantidad>0) x.cantidad=inv.cantidad; else delete x.cantidad;
     n++;
   });
   return n;

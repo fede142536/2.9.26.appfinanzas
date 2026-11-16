@@ -11646,6 +11646,39 @@ test("la pantalla Completar cantidades existe y guardar completa solo lo escrito
   cierto(typeof abrirCantidades==="function" && typeof guardarCantidades==="function");
 });
 
+grupo("Ticker y cantidad en los movimientos del fondo de ahorro");
+
+test("el editor de un movimiento del fondo pide ticker y cantidad, y el retiro de una venta los toma de la venta", ()=>{
+  const venta={id:2,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"SPY",importe:100500,importeUSD:0,fecha:"2026-11-12",cantidad:4};
+  const retiro={id:3,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:145464.51,moneda:"ARS",usaAhorro:true,traspaso:true,origenInvId:2,fecha:"2026-11-12",nota:"Retiro Fondo de retiro"};
+  const antes=movs; movs=[venta,retiro];
+  try{
+    const h=renderEditForm(retiro);
+    cierto(h.includes('id="edit-fondo-ticker"') && h.includes('id="edit-fondo-cantidad"'), "los campos están en el editor");
+    cierto(h.includes('value="SPY"') && h.includes('value="4"'), "toma ticker y cantidad de la venta ligada");
+    const gasto=renderEditForm({id:9,tipo:"Gasto",cat:"Comida",subcat:"Súper",importe:10,moneda:"ARS",fecha:"2026-11-12"});
+    cierto(/id="edit-fondo-pos" style="display:none"/.test(gasto), "un gasto común no los muestra");
+  } finally { movs=antes; }
+});
+
+test("al crear el retiro de una venta se copian el ticker y la cantidad, y la conciliación usa lo cargado en el fondo antes que la nota", ()=>{
+  const venta={id:2,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"SPY",importe:600,importeUSD:0,fecha:"2026-11-10",cantidad:4};
+  const r=crearRetiroPorVenta(venta,{cat:"Fondo de Retiro",sub:"Cedears"},3,500);
+  igual(r.ticker,"SPY"); igual(r.cantidad,4);
+  venta.cantidad=5; sincronizarRetiroLigado(venta,[venta,r]); igual(r.cantidad,5, "si cambia la cantidad de la venta, el retiro la acompaña");
+  const dep={id:4,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:100,moneda:"ARS",esAhorro:true,fecha:"2026-11-10",nota:"Spy x 99",ticker:"SPY",cantidad:10};
+  igual(infoDeFondo(dep,["SPY"]).cantidad,10, "manda la cantidad cargada, no la de la nota");
+  igual(infoDeFondo({...dep,ticker:undefined,cantidad:undefined},["SPY"]).cantidad,99, "sin campos, la nota");
+  const compra={id:5,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:100,importeUSD:0,fecha:"2026-11-10"};
+  igual(sugerirCantidad(compra,[compra,dep]), 10, "la compra sin cantidad la sugiere desde el depósito del fondo");
+});
+
+test("Cargar › Gasto tiene ticker y cantidad para el ahorro", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="inp-fondo-ticker"') && html.includes('id="inp-fondo-cantidad"'));
+  cierto(typeof actualizarFondoPos==="function");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

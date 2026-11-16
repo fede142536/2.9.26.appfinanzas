@@ -32,6 +32,11 @@ const difDias=(a,b)=>diasEntre(String(a).slice(0,10), String(b).slice(0,10));   
 
 // "Spy x 28", "MCD X 3", "SPY x 12 para este mes" → {ticker:"SPY", cantidad:28}. Si la nota no empieza así, busca
 // alguno de los tickers conocidos como palabra suelta ("compra de spy"). Sin nada de eso: {ticker:null, cantidad:null}.
+// Lo mismo para un movimiento del fondo: el ticker y la cantidad que se cargaron en sus campos mandan sobre lo que diga la nota.
+function infoDeFondo(m, conocidos){
+  const n=leerTickerYCantidad(m.nota, conocidos);
+  return {ticker: m.ticker ? String(m.ticker).toUpperCase() : n.ticker, cantidad: m.cantidad>0 ? Number(m.cantidad) : n.cantidad};
+}
 function leerTickerYCantidad(nota, conocidos){
   const t=String(nota||"");
   const m=/^\s*([A-Za-z]{1,6})\s*[xX×]\s*(\d+(?:[.,]\d+)?)/.exec(t);
@@ -73,14 +78,14 @@ function conciliarCedears(lista, excluidos){
   // Lo excluido se saca ANTES de emparejar: ni sus inversiones ni sus depósitos del fondo participan.
   const tickerInv=m=>m.ticker ? String(m.ticker).toUpperCase() : leerTickerYCantidad(m.nota, conocidos).ticker;
   const todas=todasLasInv.filter(m=>!excl.has(tickerInv(m)));
-  const fondos=(lista||[]).filter(esFondoCedear).filter(m=>!excl.has(leerTickerYCantidad(m.nota, conocidos).ticker));
+  const fondos=(lista||[]).filter(esFondoCedear).filter(m=>!excl.has(infoDeFondo(m, conocidos).ticker));
   const excluidosOut=[...excl].filter(t=>todasLasInv.some(m=>tickerInv(m)===t)).sort().map(t=>({ticker:t, n:todasLasInv.filter(m=>tickerInv(m)===t).length}));
   const infoInv=new Map(), infoFondo=new Map();
   todas.forEach(m=>{
     const n=leerTickerYCantidad(m.nota, conocidos);
     infoInv.set(m, {ticker:(m.ticker?String(m.ticker).toUpperCase():null)||n.ticker, cantidad:Number.isFinite(Number(m.cantidad))&&m.cantidad ? Number(m.cantidad) : n.cantidad});
   });
-  fondos.forEach(m=>infoFondo.set(m, leerTickerYCantidad(m.nota, conocidos)));
+  fondos.forEach(m=>infoFondo.set(m, infoDeFondo(m, conocidos)));
 
   const out={ok:[], diferencias:[], faltanEnFondo:[], sobranEnFondo:[], duplicados:[], anteriores:[],
              primera:todas.length?String(todas[0].fecha).slice(0,10):null, tickers:[], excluidos:excluidosOut};

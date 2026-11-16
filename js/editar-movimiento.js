@@ -192,6 +192,21 @@ function puedeVolverseFrecuente(m){
   if(m.tipo==="Gasto" && (m.esAhorro || m.usaAhorro || m.traspaso || m.recuperable>0)) return false;
   return true;
 }
+// Ticker y cantidad de un movimiento del fondo de ahorro (la compra o venta que lo acompaña). Se muestran solo mientras el movimiento suma o resta del fondo.
+// Un retiro que nació de una venta toma el ticker y la cantidad de esa venta si todavía no los tenía.
+function fondoPosEditorHTML(m){
+  const inv=m.origenInvId ? movs.find(x=>x.id===m.origenInvId) : null;
+  const tk=m.ticker || (inv && inv.ticker) || "", cant=m.cantidad>0 ? m.cantidad : (inv && inv.cantidad>0 ? inv.cantidad : 0);
+  return `<div id="edit-fondo-pos" style="display:${(m.esAhorro||m.usaAhorro)?"":"none"}">
+    <div class="two-col">
+      <div class="form-group"><label class="form-label" for="edit-fondo-ticker">Ticker (opcional)</label>
+        <input type="text" id="edit-fondo-ticker" class="form-input" placeholder="SPY" autocomplete="off" style="text-transform:uppercase;font-weight:600" value="${escapeHtml(tk)}"></div>
+      <div class="form-group"><label class="form-label" for="edit-fondo-cantidad">Cantidad (opcional)</label>
+        <input type="text" id="edit-fondo-cantidad" class="form-input" inputmode="decimal" placeholder="Ej: 28" autocomplete="off" value="${cant>0?String(cant).replace(".",","):""}"></div>
+    </div>
+    <p class="txt-xs txt-muted" style="margin:0 0 12px">Cuántos nominales compraste o vendiste con este movimiento del fondo.</p>
+  </div>`;
+}
 function renderEditForm(m){
   if(m.tipo==="Gasto"||m.tipo==="Ingreso"){
     const esFrec=(m.tipo==="Gasto" || m.tipo==="Ingreso") && m.frecuente;
@@ -307,6 +322,7 @@ function renderEditForm(m){
       <div class="form-group"><label class="form-label" for="edit-nota">Nota</label>
         <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
+      ${m.tipo==="Gasto" ? fondoPosEditorHTML(m) : ""}
       ${m.tipo==="Ingreso" ? bloqueSaleDeAhorroEditorIngreso(m) : ""}
       ${!esFrec && puedeVolverseFrecuente(m)?`
       <div class="form-group">
@@ -504,6 +520,17 @@ function guardarEdit(){
       // No pueden ser ambos
       if(m.esAhorro && m.usaAhorro) m.usaAhorro=false;
       m.recuperable=parseFloat(document.getElementById("edit-recup").value)||0;
+      // Ticker y cantidad de la compra o venta del fondo. Si el retiro viene de una venta, esa venta también se entera de la cantidad.
+      const tkEl=document.querySelector("#edit-fondo-ticker"), cEl=document.querySelector("#edit-fondo-cantidad");
+      if(tkEl && cEl){
+        if(m.esAhorro || m.usaAhorro){
+          const tk=nombreSeguro(tkEl.value.trim()).toUpperCase(), c=parseFloat(limpiarImporte(cEl.value))||0;
+          if(tk) m.ticker=tk; else delete m.ticker;
+          if(c>0 && c<1e13) m.cantidad=Math.round(c*1e6)/1e6; else delete m.cantidad;
+          const venta=m.origenInvId ? movs.find(x=>x.id===m.origenInvId) : null;
+          if(venta && m.cantidad>0) venta.cantidad=m.cantidad;
+        } else { delete m.ticker; delete m.cantidad; }   // ya no es un movimiento del fondo
+      }
     }
     // Un pago de resumen sigue ligado a su moneda: si se cambia acá, el resumen lo tiene que saber.
     if(m.pagoTarjeta) m.pagoTarjeta.moneda=m.moneda==="USD"?"USD":"ARS";

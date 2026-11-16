@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v252**
+**Versión actual: v253**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 16 de noviembre de 2026
 
+- **v253** · Pantalla para completar de una vez las cantidades de las compras y ventas viejas, con sugerencias desde la nota o el depósito al fondo
 - **v252** · En la hoja de cada instrumento, las operaciones sin cantidad se marcan para completarlas al editarlas
 - **v251** · Posiciones como en el broker: cantidad en cada compra y venta, y en Cartera nominales, precio promedio, valor inicial, rendimiento, días de tenencia y TNA con el precio de hoy
 - **v250** · Valor actual de cada fondo de ahorro (ganancia sin realizar) y la venta con 'Sale de mis ahorros' retira solo el capital: la ganancia cuenta como ganancia
