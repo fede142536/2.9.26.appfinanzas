@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v250**
+**Versión actual: v251**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 16 de noviembre de 2026
 
+- **v251** · Posiciones como en el broker: cantidad en cada compra y venta, y en Cartera nominales, precio promedio, valor inicial, rendimiento, días de tenencia y TNA con el precio de hoy
 - **v250** · Valor actual de cada fondo de ahorro (ganancia sin realizar) y la venta con 'Sale de mis ahorros' retira solo el capital: la ganancia cuenta como ganancia
 
 ## 13 de noviembre de 2026

@@ -11620,6 +11620,14 @@ test("Cargar y el editor de una inversión tienen el campo Cantidad", async ()=>
   cierto(ed.includes('id="edit-cantidad"') && ed.includes('value="28,5"'), "el editor muestra la cantidad guardada");
 });
 
+test("las filas de un instrumento marcan qué operaciones no tienen cantidad (menos cupones y rendimientos)", ()=>{
+  const m={id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:100,fecha:"2026-01-01"};
+  cierto(marcaCantidadFila(m).includes("falta la cantidad"), "una compra sin cantidad avisa");
+  cierto(marcaCantidadFila({...m,cantidad:28}).includes("28 nom."), "con cantidad la muestra");
+  igual(marcaCantidadFila({...m,subcat:"Bonos Cupón"}), "", "un cupón no lleva cantidad");
+  igual(marcaCantidadFila({...m,subcat:"FCI Rendimiento"}), "", "un rendimiento tampoco");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
