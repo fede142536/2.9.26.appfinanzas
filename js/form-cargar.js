@@ -744,6 +744,7 @@ async function guardarSinFreno(){
     const fondoRetiro=fondoElegidoEnFormulario();   // "Sale de mis ahorros": la venta también baja ese fondo
     if(document.getElementById("inv-sale-ahorro")?.checked && !fondoRetiro){showToast("Elegí de qué fondo salió");return;}
     const invId=Date.now();
+    const cantidadInv=parseFloat(limpiarImporte(document.getElementById("inv-cantidad")?.value||""))||0;
     const invMov={id:invId,tipo:"Inversion",
       importe: isUSDInv ? 0 : importeInv,
       importeUSD: isUSDInv ? importeInv : 0,
@@ -752,6 +753,7 @@ async function guardarSinFreno(){
       nota:document.getElementById("inv-nota").value.trim(),
       // Siempre explícito (true o false): así un false no se vuelve a marcar por el texto.
       mep: document.getElementById("inv-mep").checked===true};
+    if(cantidadInv>0 && cantidadInv<1e13) invMov.cantidad=Math.round(cantidadInv*1e6)/1e6;   // opcional: alimenta Cartera (nominales, precio promedio)
     movs.unshift(invMov);
     let retiroVenta=null;
     if(fondoRetiro){ retiroVenta=crearRetiroPorVenta(invMov, fondoRetiro, invId+1, montoRetiroDeVenta(invMov, movs)); movs.unshift(retiroVenta); }
@@ -871,7 +873,7 @@ function resetForm(t){
     // Foco en el importe para cargar el siguiente
     enfocarCampoDeArriba("inp-importe");
   } else if(t==="Inversion"){
-    ["inv-importe","inv-ticker","inv-nota"].forEach(id=>document.getElementById(id).value="");
+    ["inv-importe","inv-ticker","inv-nota","inv-cantidad"].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=""; });
     document.getElementById("inv-moneda").value="ARS";
     syncCurrencyPill("inv-moneda");
     const saleChk=document.getElementById("inv-sale-ahorro"); if(saleChk) saleChk.checked=false;   // cada venta decide de nuevo

@@ -710,6 +710,7 @@ function armarBackup(){
       tarjetasCustom,
       presupuestos,
       valoresFondos,
+      preciosActuales,
       catOrder,
       iconsCustom,
       vencimientosTc: leerVencTc(),
@@ -865,6 +866,8 @@ function aplicarBackup(backup){
   // El valor actual de los fondos viaja en la copia; una copia de antes no lo trae y los fondos quedan sin valor cargado.
   valoresFondos=normalizarValoresFondos(backup.datos.valoresFondos);
   setSensitiveRaw("fvalfondos", JSON.stringify(valoresFondos));
+  preciosActuales=normalizarPreciosActuales(backup.datos.preciosActuales);
+  setSensitiveRaw("fprecios", JSON.stringify(preciosActuales));
   if(backup.datos.iconsCustom && typeof backup.datos.iconsCustom==="object"){
     iconsCustom=backup.datos.iconsCustom;
     setSensitiveRaw("ficons", JSON.stringify(iconsCustom));

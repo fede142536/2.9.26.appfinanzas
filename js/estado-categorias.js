@@ -272,6 +272,8 @@ function saveCatOrder(){ setSensitiveRaw("fcatorder", JSON.stringify(catOrder));
 let presupuestos = {};
 // Lo que vale HOY cada fondo de ahorro (categoría), cargado a mano: { "Fondo de retiro": {ars:600, usd:null, fecha:"2026-11-16"} }. Es informativo: no entra al balance.
 let valoresFondos = {};
+// El último precio por unidad de cada ticker, cargado a mano (lo que ves en el broker): { "SPY": {precio:21080, fecha:"2026-11-13"} }. Informativo: no entra al balance.
+let preciosActuales = {};
 
 // Devuelve los nombres de categoría de `catsObj` en el orden guardado por el usuario.
 // Si no hay orden guardado para ese tipo, devuelve el orden natural del objeto.
@@ -777,7 +779,7 @@ function sanearBackupDatos(datos){
     const n=typeof o[k]==="string" && o[k].trim()!=="" ? Number(o[k]) : NaN; o[k]=isFinite(n) ? n : 0; r.corregidos++; };
   const texto=(o,k)=>{ if(o[k]===undefined || o[k]===null) return; if(typeof o[k]!=="string"){ o[k]=""; r.corregidos++; } else if(o[k].length>MAX_TEXTO_BACKUP){ o[k]=o[k].slice(0,MAX_TEXTO_BACKUP); r.corregidos++; } };
   const etiquetas=o=>{ if(o.tags===undefined) return; if(!Array.isArray(o.tags) || o.tags.some(t=>typeof t!=="string")){ o.tags=Array.isArray(o.tags) ? o.tags.filter(t=>typeof t==="string") : []; r.corregidos++; } };
-  const textos=["nota","desc","nombre","banco","motivo"], nombres=["cat","subcat","cuenta","tarjeta","ticker","tickerOrig","cuentaDestino"], importes=["importe","importeOrig","importeUSD","total","monto"];
+  const textos=["nota","desc","nombre","banco","motivo"], nombres=["cat","subcat","cuenta","tarjeta","ticker","tickerOrig","cuentaDestino"], importes=["importe","importeOrig","importeUSD","total","monto","cantidad"];
 
   datos.movs=lista(datos.movs, m=>typeof m.tipo==="string" && TIPOS_DE_MOVIMIENTO.includes(m.tipo));
   datos.movs.forEach(m=>{ nombres.forEach(k=>nombre(m,k)); textos.forEach(k=>texto(m,k)); importes.forEach(k=>numero(m,k)); etiquetas(m);
@@ -791,6 +793,6 @@ function sanearBackupDatos(datos){
     for(const t of Object.keys(datos.custom)){ const porTipo=clavesSeguras(datos.custom[t]); if(!esObjetoPlano(porTipo)){ datos.custom[t]={}; r.descartados++; continue; }
       for(const c of Object.keys(porTipo)){ if(Array.isArray(porTipo[c])){ const subs=porTipo[c].filter(x=>typeof x==="string"); r.descartados+=porTipo[c].length-subs.length; porTipo[c]=subs.map(x=>{ const n=nombreSeguro(x); if(n!==x) r.renombrados++; return n; }); } else { porTipo[c]=[]; r.corregidos++; } }
       datos.custom[t]=porTipo; } }
-  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas","valoresFondos"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
+  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas","valoresFondos","preciosActuales"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
   return {...r, total:r.descartados+r.renombrados+r.corregidos};
 }

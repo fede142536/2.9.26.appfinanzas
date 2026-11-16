@@ -348,6 +348,9 @@ function renderEditForm(m){
       <div class="form-group"><label class="form-label" for="edit-ticker">Ticker / Fondo</label>
         <input type="text" id="edit-ticker" class="form-input" value="${escapeHtml(m.ticker)}">
       </div>
+      <div class="form-group"><label class="form-label" for="edit-cantidad">Cantidad (opcional)</label>
+        <input type="text" id="edit-cantidad" class="form-input" inputmode="decimal" placeholder="Nominales o cuotapartes" value="${m.cantidad>0?String(m.cantidad).replace(".",","):""}">
+      </div>
       <div class="form-group">
         <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm)">
           <input type="checkbox" id="edit-mep" class="chk-custom" style="--chk:var(--accent)" ${m.mep===true?"checked":""} onchange="onEditMepToggle()">
@@ -512,6 +515,8 @@ function guardarEdit(){
     const usd=parseFloat((mepUsdEl||document.getElementById("edit-usd")).value)||0;
     if(ars<=0&&usd<=0){showToast("Ingresá al menos un importe");return;}
     m.ticker=document.getElementById("edit-ticker").value.trim();
+    const cantEl=document.querySelector("#edit-cantidad");
+    if(cantEl){ const c=parseFloat(limpiarImporte(cantEl.value))||0; if(c>0 && c<1e13) m.cantidad=Math.round(c*1e6)/1e6; else delete m.cantidad; }
     m.importe=Math.round(ars*100)/100;
     const mepChk=document.querySelector("#edit-mep");
     if(mepChk) m.mep=mepChk.checked;
