@@ -1607,6 +1607,40 @@ function quitarPrecioDeTicker(ticker){
   renderInvCartera(); showInstrumentoDetail(ticker);
 }
 
+// ── Completar cantidades de las operaciones viejas (todas juntas) ──
+let cantidadesTicker=null;
+function abrirCantidades(ticker){
+  cantidadesTicker=ticker||null;
+  const ops=operacionesSinCantidad(movs, cantidadesTicker);
+  const cont=document.getElementById("cantidades-contenido");
+  document.getElementById("cantidades-titulo").textContent=cantidadesTicker ? `Cantidades de ${cantidadesTicker}` : "Completar cantidades";
+  if(!ops.length){ cont.innerHTML=`<p class="txt-md txt-muted" style="padding:12px 0">No hay operaciones sin cantidad. ✓</p>`; document.getElementById("modal-cantidades").classList.add("open"); return; }
+  cont.innerHTML=`<p class="txt-xs txt-muted" style="margin:0 0 10px;line-height:1.45">Poné cuántos nominales o cuotapartes fueron en cada compra o venta. Las que dicen <em>sugerida</em> salen de la nota ("Spy x 18") o del depósito al fondo: revisalas antes de guardar. Las que dejés vacías quedan como están.</p>`+
+  ops.map(m=>{
+    const sug=sugerirCantidad(m, movs), usd=m.importeUSD>0&&!(m.importe>0), monto=usd?m.importeUSD:(m.importe||0), venta=isInvSalida(m);
+    return `<div class="cant-fila">
+      <div class="cant-fila-info"><strong>${escapeHtml(m.ticker||"Sin ticker")}</strong> <span class="txt-xs txt-muted">${venta?"Venta":"Compra"} · ${fdyInv(m.fecha)} · ${fmtPosMonto(monto,usd)}</span></div>
+      <div class="cant-fila-campo"><input type="text" inputmode="decimal" id="cant-${m.id}" class="form-input" data-id="${m.id}" placeholder="Cantidad" aria-label="${escapeHtml(`Cantidad de ${m.ticker||""} del ${fdyInv(m.fecha)}`)}" value="${sug?String(sug).replace(".",","):""}">${sug?`<span class="cant-sug">sugerida</span>`:""}</div>
+    </div>`;
+  }).join("");
+  document.getElementById("modal-cantidades").classList.add("open");
+}
+function cerrarCantidades(){ document.getElementById("modal-cantidades").classList.remove("open"); }
+function guardarCantidades(){
+  let n=0;
+  document.querySelectorAll("#cantidades-contenido input[data-id]").forEach(el=>{
+    const v=parseFloat(limpiarImporte(el.value))||0;
+    if(!(v>0) || v>=1e13) return;
+    const m=movs.find(x=>String(x.id)===el.dataset.id);
+    if(m){ m.cantidad=Math.round(v*1e6)/1e6; n++; }
+  });
+  if(!n){ showToast("No completaste ninguna cantidad"); return; }
+  save();
+  cerrarCantidades();
+  showToast(`${n} ${n===1?"cantidad guardada":"cantidades guardadas"} ✓`);
+  renderInv();
+}
+
 function renderInvCartera(){
   const el=document.getElementById("inv-cartera");
   const allInv=movs.filter(m=>m.tipo==="Inversion");
@@ -1643,7 +1677,9 @@ function renderInvCartera(){
   abiertas.forEach(p=>{ const q=posiciones[p.ticker]; if(q && q.valorActual!==null){ const k=q.usd?"usd":"ars"; rendTot[k].ini+=q.valorInicial; rendTot[k].act+=q.valorActual; rendTot[k].n++; } });
   const rendTxt=["ars","usd"].filter(k=>rendTot[k].n).map(k=>{ const d=rendTot[k].act-rendTot[k].ini; return `<strong style="color:${d>=0?"var(--success)":"var(--danger)"}">${d>=0?"+":"-"}${fmtPosMonto(Math.abs(d),k==="usd")}</strong> <span class="inv-pos-meta-i">sobre ${fmtPosMonto(rendTot[k].ini,k==="usd")}</span>`; }).join(" · ");
   const chips=catsAb.length>1 ? `<div class="inv-cart-chips" role="group" aria-label="Filtrar por categoría">`+["todas",...catsAb].map(c=>`<button type="button" class="filter-chip${invCartCat===c?" active":""}" aria-pressed="${invCartCat===c}" onclick="setInvCartCat(${attrJS(c)})">${c==="todas"?"Todas":escapeHtml(c)}</button>`).join("")+`</div>` : "";
-  let html=chips+`<div class="inv-cart-head">
+  const faltan=operacionesSinCantidad(movs).length;
+  const avisoFaltan=faltan ? `<button type="button" class="inv-cerradas-link" onclick="abrirCantidades()">⚠ ${faltan} ${faltan===1?"operación sin cantidad":"operaciones sin cantidad"} · Completar ›</button>` : "";
+  let html=chips+avisoFaltan+`<div class="inv-cart-head">
     <span>${abiertas.length} ${abiertas.length===1?"posición":"posiciones"}</span>
     <span class="inv-cart-tot">${totArs?`<strong>${fmtS(totArs)}</strong>`:""}${totArs&&totUsd?" · ":""}${totUsd?`<strong>${fmtUsdInv(totUsd)}</strong>`:""}</span>
   </div>${rendTxt?`<div class="inv-cart-head" style="padding-top:0"><span>Rendimiento</span><span class="inv-cart-tot">${rendTxt}</span></div>`:""}`;

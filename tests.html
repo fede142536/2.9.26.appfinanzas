@@ -11628,6 +11628,24 @@ test("las filas de un instrumento marcan qué operaciones no tienen cantidad (me
   igual(marcaCantidadFila({...m,subcat:"FCI Rendimiento"}), "", "un rendimiento tampoco");
 });
 
+test("completar cantidades: lista las compras y ventas sin cantidad y sugiere desde la nota o el depósito al fondo", ()=>{
+  const inv=(id,f,sub,imp,extra)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs "+sub,ticker:"SPY",importe:imp,importeUSD:0,fecha:f,...extra});
+  const lista=[inv(1,"2026-05-28","Compra",200000), inv(2,"2026-07-01","Compra",324639,{nota:"Spy x 18"}), inv(3,"2026-09-01","Venta",100000),
+    inv(4,"2026-10-01","Compra",1000,{cantidad:3}), {...inv(5,"2026-03-01","Cupón",50),cat:"Bonos"}, {...inv(6,"2026-02-01","Compra",1000),mep:true},
+    {id:7,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:100500,moneda:"ARS",usaAhorro:true,traspaso:true,fecha:"2026-09-02",nota:"SPY x 4"}];
+  igual(operacionesSinCantidad(lista).map(m=>m.id).join(","), "3,2,1", "sin cupones, MEP ni lo que ya tiene cantidad; la más nueva primero");
+  igual(operacionesSinCantidad(lista,"AL30").length, 0);
+  igual(sugerirCantidad(lista[1],lista), 18, "de la nota de la propia compra");
+  igual(sugerirCantidad(lista[2],lista), 4, "del retiro del fondo que acompaña a la venta");
+  igual(sugerirCantidad(lista[0],lista), null, "sin de dónde sacarla no sugiere nada");
+});
+
+test("la pantalla Completar cantidades existe y guardar completa solo lo escrito", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="modal-cantidades"') && html.includes("guardarCantidades()"), "el modal está en la página");
+  cierto(typeof abrirCantidades==="function" && typeof guardarCantidades==="function");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

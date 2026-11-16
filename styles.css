@@ -2028,3 +2028,10 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .inv-det-pos-celda strong{font-size:14px;overflow-wrap:anywhere}
 .inv-det-precio{margin-top:var(--sp-3)}
 .inv-det-pos-celda .inv-det-lbl{font-size:11px;color:var(--muted)}
+
+/* [Completar cantidades] una fila por operación sin cantidad */
+.cant-fila{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);padding:var(--sp-2) 0;border-bottom:1px solid var(--border)}
+.cant-fila-info{min-width:0;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+.cant-fila-campo{flex:0 0 112px;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.cant-fila-campo .form-input{width:100%;text-align:right}
+.cant-sug{font-size:10px;color:var(--warning);font-weight:600}

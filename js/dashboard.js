@@ -1022,7 +1022,8 @@ function posicionDetalleHTML(ticker, movsTicker){
   const pos=calcularPosiciones(movs, preciosActuales, hoyLocal())[ticker];
   const hayCantidad=movsTicker.some(m=>m.cantidad>0);
   if(!pos || !hayCantidad){
-    return `<p class="txt-xs txt-muted inv-det-pos-hint">Cargá la <strong>cantidad</strong> en tus compras y ventas (tocá cada movimiento y editalo) para ver cuántos tenés, el precio promedio y el rendimiento.</p>`;
+    return `<p class="txt-xs txt-muted inv-det-pos-hint">Cargá la <strong>cantidad</strong> en tus compras y ventas para ver cuántos tenés, el precio promedio y el rendimiento.</p>
+      <button type="button" class="btn-sm" style="width:100%;margin:0 0 var(--sp-3)" onclick="closeInstrumentoDetail();abrirCantidades(${attrJS(ticker)})">Completar cantidades de ${escapeHtml(ticker)}</button>`;
   }
   const usd=pos.usd, m=n=>fmtPosMonto(n,usd), c=(l,v,color)=>`<div class="inv-det-pos-celda"><span class="inv-det-lbl">${l}</span><strong${color?` style="color:${color}"`:""}>${v}</strong></div>`;
   const col=pos.rend===null?"":(pos.rend>=0?"var(--success)":"var(--danger)");
@@ -1034,7 +1035,7 @@ function posicionDetalleHTML(ticker, movsTicker){
       ${pos.valorActual!==null?c("Valor actual",m(pos.valorActual))+c("Rendimiento",`${pos.rend>=0?"+":"-"}${m(Math.abs(pos.rend))}${pos.rendPct!==null?" ("+fmtPctPos(pos.rendPct)+")":""}`,col):""}
       ${pos.cartera>0&&pos.dias?c("Días de tenencia",String(pos.dias)):""}${pos.tna!==null?c("TNA",fmtPctPos(pos.tna),col):""}
     </div>
-    ${pos.sinCantidad>0?`<p class="txt-xs" style="color:var(--warning);margin:6px 0 0">⚠ ${pos.sinCantidad} ${pos.sinCantidad===1?"operación sin cantidad":"operaciones sin cantidad"}: los nominales pueden no cerrar.</p>`:""}
+    ${pos.sinCantidad>0?`<p class="txt-xs" style="color:var(--warning);margin:6px 0 0">⚠ ${pos.sinCantidad} ${pos.sinCantidad===1?"operación sin cantidad":"operaciones sin cantidad"}: los nominales pueden no cerrar. <button type="button" style="background:none;border:none;padding:0;font:inherit;color:var(--accent);text-decoration:underline;cursor:pointer" onclick="closeInstrumentoDetail();abrirCantidades(${attrJS(ticker)})">Completar</button></p>`:""}
     ${pos.cartera>0?`<div class="inv-det-precio">
       <label class="form-label" for="precio-ticker-input">Precio de hoy (por unidad)</label>
       <div class="u-row-6"><input type="text" id="precio-ticker-input" class="form-input u-flex1" inputmode="decimal" placeholder="Lo que ves en tu broker" value="${p?String(p.precio).replace(".",","):""}">
