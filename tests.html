@@ -11680,6 +11680,47 @@ test("Cargar › Gasto tiene ticker y cantidad para el ahorro", async ()=>{
   cierto(typeof actualizarFondoPos==="function");
 });
 
+grupo("Splits y historial de inversiones desde el fondo");
+
+test("un desdoblamiento multiplica los nominales de las compras anteriores a su fecha", ()=>{
+  const op=(id,f,sub,imp,c)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs "+sub,ticker:"SPY",importe:imp,importeUSD:0,fecha:f,cantidad:c});
+  const lista=[op(1,"2026-05-08","Compra",55391.2,1), op(2,"2026-06-03","Compra",76868.18,4), op(3,"2026-06-18","Venta",100000,3)];
+  const sin=calcularPosiciones(lista,{},"2026-11-13").SPY; igual(sin.cartera,2);
+  const con=calcularPosiciones(lista,{},"2026-11-13",{SPY:[{fecha:"2026-06-01",factor:3}]}).SPY;
+  igual(con.comprado,7, "1 viejo ×3 + 4 nuevos"); igual(con.cartera,4); igual(con.vendido,3);
+  const n=normalizarSplits(JSON.parse('{"__proto__":[{"fecha":"2026-01-01","factor":2}],"SPY":[{"fecha":"2026-06-01","factor":3},{"fecha":"mal","factor":2},{"fecha":"2026-07-01","factor":1},{"fecha":"2026-02-01","factor":-4}],"X":"y"}'));
+  igual(Object.keys(n).join(","),"SPY"); igual(n.SPY.length,1); igual(n.SPY[0].factor,3);
+  const antes=splitsInv; splitsInv={SPY:[{fecha:"2026-06-01",factor:3}]};
+  try{ igual(armarBackup().datos.splitsInv.SPY[0].factor,3); } finally { splitsInv=antes; }
+  cierto(ENC_KEYS.includes("fsplits"), "los splits quedan cifrados");
+});
+
+test("los depósitos del fondo sin compra de inversión se detectan y sugieren ticker y cantidad", ()=>{
+  const dep=(id,f,imp,nota,extra)=>({id,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:imp,moneda:"ARS",esAhorro:true,usaAhorro:false,fecha:f,cuenta:"Balanz",nota,...extra});
+  const lista=[dep(1,"2025-06-05",71951.43,"Spy x 2"), dep(2,"2025-10-02",53101.05,""), dep(3,"2026-05-08",55391.2,"Spy x 1"),
+    {id:4,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:55391.2,importeUSD:0,fecha:"2026-05-08"},
+    {...dep(5,"2025-08-01",1000,"Mudanza"),cat:"Mudanza"}];
+  const c=comprasDelFondoSinInversion(lista,"Fondo de Retiro","SPY");
+  igual(c.map(x=>x.mov.id).join(","),"1,2","el depósito que ya tiene su compra no aparece");
+  igual(c[0].ticker,"SPY"); igual(c[0].cantidad,2); igual(c[1].ticker,"SPY","sin nota usa el ticker por defecto"); igual(c[1].cantidad,null);
+  const f=fondosConComprasSinInversion(lista); igual(f.length,1); igual(f[0].cat,"Fondo de Retiro"); igual(f[0].faltan,2); igual(f[0].ticker,"SPY");
+});
+
+test("crear la compra que falta completa el capital: la venta deja de contar de más como ganancia", ()=>{
+  const compraVieja={id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:600000,importeUSD:0,fecha:"2025-06-05"};
+  const compra={id:2,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:100000,importeUSD:0,fecha:"2026-05-08"};
+  const venta={id:3,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"SPY",importe:500000,importeUSD:0,fecha:"2026-06-18"};
+  igual(calcularResultadoInv([compra,venta]).gananciaPorMes["2026-06"].ars, 400000, "sin la compra vieja casi toda la venta parece ganancia");
+  igual(calcularResultadoInv([compraVieja,compra,venta]).gananciaPorMes["2026-06"].ars, 0, "con la compra vieja es devolución de capital");
+});
+
+test("el Excel exporta ticker y cantidad, y las pantallas nuevas existen", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="modal-historial-fondo"') && html.includes("crearInversionesDesdeFondo()"));
+  const src=await (await fetch("js/importar-exportar.js")).text();
+  cierto(src.includes('Cantidad: m.cantidad>0 ? m.cantidad : ""') && src.includes('Ticker: m.ticker||""'), "las hojas Movimientos e Inversiones traen la cantidad");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

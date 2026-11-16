@@ -275,10 +275,23 @@ function normalizarPreciosActuales(o){
   });
   return out;
 }
+// Desdoblamientos: {TICKER:[{fecha, factor}]}. Una operación ANTERIOR a la fecha de un split cuenta sus nominales multiplicados por el factor.
+function normalizarSplits(o){
+  const out={};
+  if(!o || typeof o!=="object" || Array.isArray(o)) return out;
+  Object.keys(o).forEach(t=>{
+    if(t==="__proto__" || !Array.isArray(o[t])) return;
+    const lista=o[t].filter(x=>x && typeof x==="object" && /^\d{4}-\d{2}-\d{2}$/.test(x.fecha||"") && typeof x.factor==="number" && isFinite(x.factor) && x.factor>0 && x.factor!==1 && x.factor<=1000)
+      .map(x=>({fecha:x.fecha, factor:Math.round(x.factor*1e6)/1e6})).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    if(lista.length) out[t]=lista;
+  });
+  return out;
+}
+const factorDeSplit=(splits,ticker,fecha)=>((splits||{})[ticker]||[]).reduce((f,s)=>String(fecha||"").slice(0,10)<s.fecha ? f*s.factor : f, 1);
 const diasEntreFechas=(a,b)=>Math.round((Date.parse(String(b).slice(0,10)+"T00:00:00Z")-Date.parse(String(a).slice(0,10)+"T00:00:00Z"))/86400000);
 // Pura. {TICKER: {ticker, cat, usd, comprado, vendido, cartera, costoUnit, valorInicial, desde, dias, sinCantidad, precio, fechaPrecio, valorActual, rend, rendPct, tna}}.
 // `hoy` ("AAAA-MM-DD") es la fecha hasta la que se cuentan los días de tenencia.
-function calcularPosiciones(lista, precios, hoy){
+function calcularPosiciones(lista, precios, hoy, splits){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion").slice().sort(ordenDeOperacion);
   const por={};
   inv.forEach(m=>{
@@ -290,8 +303,9 @@ function calcularPosiciones(lista, precios, hoy){
     if(salida && esPagoDeInversion(m)) return;                // un cupón o dividendo no mueve nominales
     if(salida && /rendimiento/.test(normalizarTexto(m.subcat||""))) return;
     o.ops++;
-    const c=numeroPositivo(m.cantidad);
-    if(!c){ o.sinCantidad++; return; }
+    const c0=numeroPositivo(m.cantidad);
+    if(!c0){ o.sinCantidad++; return; }
+    const c=c0*factorDeSplit(splits, ticker, m.fecha);   // nominales de antes de un split, en nominales de hoy
     const monto=(m.importeUSD>0 && !(m.importe>0)) ? m.importeUSD : (m.importe||0);
     if(!salida){
       if(o.cartera<=0) o.desde=String(m.fecha||"").slice(0,10);   // la posición empieza de nuevo
@@ -356,4 +370,39 @@ function sugerirCantidad(m, lista){
     const puntaje=dif*100+dias; if(puntaje<mejorP){ mejorP=puntaje; mejor=c; }
   });
   return mejor;
+}
+
+// ═══════════════════════════════════════════
+// HISTORIAL DE INVERSIONES DESDE EL FONDO DE AHORRO
+// ═══════════════════════════════════════════
+// Cuando el fondo de ahorro ES una inversión (por ejemplo un fondo de retiro todo en SPY), cada depósito es una compra. Las compras de antes de empezar a cargar
+// inversiones existen solo como depósitos: la app no sabe cuánto capital hay invertido y "Resultado inv." de las ventas sale inflado. Estas funciones encuentran
+// esos depósitos sin inversión para poder crear la compra que les corresponde (con tu confirmación).
+const FONDO_DIAS=7, FONDO_REL=0.03;   // el mismo criterio que la conciliación: hasta 7 días y 3% de diferencia
+const montoCompraInv=m=>(m.importeUSD>0 && !(m.importe>0)) ? 0 : (m.importe||0);   // solo en pesos: un depósito al fondo es en pesos
+const diasDif=(a,b)=>Math.abs(diasEntreFechas(String(a).slice(0,10), String(b).slice(0,10)));
+// Pura. Los depósitos en pesos de una categoría de ahorro que NO tienen una compra de inversión parecida (mismo mes, monto casi igual), más viejo primero:
+// [{mov, ticker, cantidad}] con ticker y cantidad tomados de los campos del depósito o de su nota ("Spy x 2"). `tickerPorDefecto` cubre los que no dicen cuál es.
+function comprasDelFondoSinInversion(lista, cat, tickerPorDefecto){
+  const invs=(lista||[]).filter(m=>m && m.tipo==="Inversion" && !isInvSalida(m) && montoCompraInv(m)>0);
+  const conocidos=[...new Set((lista||[]).filter(m=>m && m.tipo==="Inversion" && m.ticker).map(m=>String(m.ticker).toUpperCase()))];
+  return (lista||[]).filter(d=>d && d.tipo==="Gasto" && d.esAhorro && d.moneda!=="USD" && (d.cat||"Sin categoría")===cat && (d.importe||0)>0)
+    .filter(d=>!invs.some(i=>diasDif(i.fecha,d.fecha)<=FONDO_DIAS && Math.abs(i.importe-d.importe)/d.importe<=FONDO_REL))
+    .map(d=>{ const info=infoDeFondo(d, conocidos); return {mov:d, ticker:info.ticker||tickerPorDefecto||"", cantidad:info.cantidad||null}; })
+    .sort((a,b)=>String(a.mov.fecha).localeCompare(String(b.mov.fecha)) || (a.mov.id||0)-(b.mov.id||0));
+}
+// Pura. Las categorías de ahorro que se comportan como una inversión (al menos un depósito dice de qué ticker es) y cuántas compras les faltan:
+// [{cat, faltan, ticker}] con el ticker más repetido en sus depósitos.
+function fondosConComprasSinInversion(lista){
+  const cats=[...new Set((lista||[]).filter(d=>d && d.tipo==="Gasto" && d.esAhorro && d.moneda!=="USD").map(d=>d.cat||"Sin categoría"))];
+  const out=[];
+  cats.forEach(cat=>{
+    const conocidos=[...new Set((lista||[]).filter(m=>m && m.tipo==="Inversion" && m.ticker).map(m=>String(m.ticker).toUpperCase()))];
+    const deps=(lista||[]).filter(d=>d && d.tipo==="Gasto" && d.esAhorro && d.moneda!=="USD" && (d.cat||"Sin categoría")===cat);
+    const cuenta={}; deps.forEach(d=>{ const t=infoDeFondo(d,conocidos).ticker; if(t) cuenta[t]=(cuenta[t]||0)+1; });
+    const ticker=Object.entries(cuenta).sort((a,b)=>b[1]-a[1])[0]; if(!ticker) return;
+    const faltan=comprasDelFondoSinInversion(lista, cat, ticker[0]).length;
+    if(faltan) out.push({cat, faltan, ticker:ticker[0]});
+  });
+  return out.sort((a,b)=>b.faltan-a.faltan);
 }

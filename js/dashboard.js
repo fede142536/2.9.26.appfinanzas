@@ -1019,7 +1019,7 @@ function marcaCantidadFila(m){
   return m.cantidad>0 ? ` · ${fmtCantidad(m.cantidad)} nom.` : ` · <span style="color:var(--warning)">falta la cantidad: tocá para completarla</span>`;
 }
 function posicionDetalleHTML(ticker, movsTicker){
-  const pos=calcularPosiciones(movs, preciosActuales, hoyLocal())[ticker];
+  const pos=calcularPosiciones(movs, preciosActuales, hoyLocal(), splitsInv)[ticker];
   const hayCantidad=movsTicker.some(m=>m.cantidad>0);
   if(!pos || !hayCantidad){
     return `<p class="txt-xs txt-muted inv-det-pos-hint">Cargá la <strong>cantidad</strong> en tus compras y ventas para ver cuántos tenés, el precio promedio y el rendimiento.</p>
@@ -1042,7 +1042,40 @@ function posicionDetalleHTML(ticker, movsTicker){
         <button type="button" class="btn-sm" onclick="guardarPrecioDeTicker(${attrJS(ticker)})">Guardar</button>${p?`<button type="button" class="btn-sm" style="color:var(--danger)" onclick="quitarPrecioDeTicker(${attrJS(ticker)})">Quitar</button>`:""}</div>
       ${p&&p.fecha?`<p class="txt-xs txt-muted" style="margin:4px 0 0">Cargado el ${p.fecha.split("-").reverse().join("/")}</p>`:""}
     </div>`:""}
+    ${splitsDetalleHTML(ticker)}
   </div>`;
+}
+// Desdoblamientos (splits) de un ticker: los nominales cargados antes de la fecha se multiplican por el factor (un split 3 a 1 triplica los que tenías).
+function splitsDetalleHTML(ticker){
+  const lista=(splitsInv||{})[ticker]||[];
+  return `<details class="inv-det-split"${lista.length?" open":""}>
+    <summary>Desdoblamiento (split)${lista.length?` · ${lista.length}`:""}</summary>
+    <p class="txt-xs txt-muted" style="margin:6px 0">Si el ticker se desdobló (por ejemplo 3 a 1) y tus compras viejas están en nominales de antes, registrá el factor y la fecha: la cantidad de las anteriores se multiplica.</p>
+    ${lista.map((x,i)=>`<div class="inv-det-split-fila"><span>×${String(x.factor).replace(".",",")} desde el ${x.fecha.split("-").reverse().join("/")}</span><button type="button" class="tx-del" style="color:var(--danger)" aria-label="Quitar este desdoblamiento" onclick="quitarSplit(${attrJS(ticker)},${i})">×</button></div>`).join("")}
+    <div class="u-row-6" style="margin-top:6px">
+      <input type="text" id="split-factor" class="form-input" style="max-width:90px" inputmode="decimal" placeholder="Factor" aria-label="Factor del desdoblamiento, por ejemplo 3">
+      <input type="date" id="split-fecha" class="form-input u-flex1" aria-label="Fecha del desdoblamiento" value="${hoyLocal()}">
+      <button type="button" class="btn-sm" onclick="guardarSplit(${attrJS(ticker)})">Registrar</button>
+    </div>
+  </details>`;
+}
+function guardarSplitsInv(){
+  setSensitiveRaw("fsplits", JSON.stringify(splitsInv));
+  if(typeof marcarDatosSucios==="function") marcarDatosSucios();
+}
+function guardarSplit(ticker){
+  const f=parseFloat(limpiarImporte(document.getElementById("split-factor")?.value||"")), fecha=document.getElementById("split-fecha")?.value||"";
+  if(!(f>0 && f<=1000) || f===1){ showToast("Ingresá un factor válido (por ejemplo 3)"); return; }
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){ showToast("Elegí la fecha del desdoblamiento"); return; }
+  splitsInv=normalizarSplits({...splitsInv, [ticker]:[...((splitsInv||{})[ticker]||[]), {fecha, factor:f}]});
+  guardarSplitsInv(); showToast("Desdoblamiento registrado ✓");
+  renderInvCartera(); showInstrumentoDetail(ticker);
+}
+function quitarSplit(ticker,i){
+  const lista=((splitsInv||{})[ticker]||[]).filter((_,j)=>j!==i);
+  const nuevo={...splitsInv}; if(lista.length) nuevo[ticker]=lista; else delete nuevo[ticker];
+  splitsInv=normalizarSplits(nuevo); guardarSplitsInv(); showToast("Desdoblamiento quitado");
+  renderInvCartera(); showInstrumentoDetail(ticker);
 }
 function showInstrumentoDetail(ticker){
   const movsTicker=movs.filter(m=>m.tipo==="Inversion" && (m.ticker||"Sin ticker")===ticker)
