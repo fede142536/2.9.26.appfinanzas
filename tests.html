@@ -4183,7 +4183,7 @@ test("el backup incluye TODOS los datos del usuario", ()=>{
 });
 
 test("ENC_KEYS cubre todas las claves sensibles conocidas", ()=>{
-  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera"]){
+  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos"]){
     cierto(ENC_KEYS.includes(k), `ENC_KEYS no incluye "${k}": esos datos quedarían sin cifrar`);
   }
 });
@@ -11519,6 +11519,60 @@ test("el editor de un frecuente de tarjeta se puede filtrar por Datos, Tarjeta, 
   cierto(/data-vista="datos" class=""/.test(h) && /data-vista="monto" class="vista-oculta"/.test(h), "al abrir se ve Datos y el resto queda oculto");
   editTcVista="todo"; cierto(!renderEditTcForm(t).includes("vista-oculta\""), "Todo muestra el formulario completo");
   editTcVista="datos";
+});
+
+grupo("Venta con ganancia: del fondo sale solo el capital");
+
+test("una venta en 600 de algo que costó 500 retira 500 del fondo y los 100 restantes son ganancia", ()=>{
+  const compra={id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:500,importeUSD:0,fecha:"2026-09-02"};
+  const venta={id:2,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"SPY",importe:600,importeUSD:0,fecha:"2026-11-10"};
+  igual(montoRetiroDeVenta(venta,[compra,venta]), 500, "sale el capital, no lo cobrado");
+  const retiro=crearRetiroPorVenta(venta,{cat:"Fondo de retiro",sub:"Cedears"},3,montoRetiroDeVenta(venta,[compra,venta]));
+  igual(retiro.importe, 500); cierto(retiro.usaAhorro && retiro.traspaso && retiro.origenInvId===2);
+  igual(calcularResultadoInv([compra,venta,retiro]).gananciaPorMes["2026-11"].ars, 100, "la ganancia cuenta como ganancia");
+  igual(calcularResultadoInv([compra,venta,{...retiro,importe:600}]).gananciaPorMes["2026-11"].ars, 0, "un retiro por toda la venta (lo de antes) no la cuenta dos veces");
+  const sinCompra={...venta,id:9}; igual(montoRetiroDeVenta(sinCompra,[sinCompra]), 600, "sin capital cargado sale el monto entero, como siempre");
+  const sinGanancia={...venta,id:8,importe:300}; igual(montoRetiroDeVenta(sinGanancia,[compra,sinGanancia]), 300, "sin ganancia, sale todo lo cobrado");
+});
+
+test("editar la venta vuelve a calcular el retiro ligado y el total a mano no cambia", ()=>{
+  const compra={id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:500,importeUSD:0,fecha:"2026-09-02"};
+  const venta={id:2,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"SPY",importe:600,importeUSD:0,fecha:"2026-11-10"};
+  const retiro={id:3,tipo:"Gasto",importe:600,moneda:"ARS",usaAhorro:true,traspaso:true,origenInvId:2,fecha:"2026-11-10",cat:"Fondo de retiro"};
+  const lista=[compra,venta,retiro];
+  igual(sincronizarRetiroLigado(venta,lista), 1);
+  igual(retiro.importe, 500, "un retiro viejo por todo el monto pasa a ser solo por el capital");
+  venta.importe=700; sincronizarRetiroLigado(venta,lista);
+  igual(retiro.importe, 500, "si la venta sube, el capital sigue siendo 500");
+  igual(calcularResultadoInv(lista).gananciaPorMes["2026-11"].ars, 200);
+});
+
+grupo("Valor actual de un fondo de ahorro");
+
+test("el valor actual de un fondo muestra la ganancia sin realizar y avisa si quedó viejo o si ya no hay saldo", ()=>{
+  const dep=(id,imp,f)=>({id,tipo:"Gasto",cat:"Fondo de retiro",subcat:"Cedears",importe:imp,moneda:"ARS",esAhorro:true,usaAhorro:false,fecha:f});
+  const lista=[dep(1,500,"2026-09-01")];
+  const vals={"Fondo de retiro":{ars:600,usd:null,fecha:"2026-11-16"}};
+  const x=valuacionDeFondo("Fondo de retiro", saldosPorCategoria(lista), vals);
+  igual(x.ars.aportado,500); igual(x.ars.hoy,600); igual(x.ars.dif,100); igual(x.ars.pct,20); igual(x.desactualizado,false);
+  igual(valuacionDeFondo("Fondo de retiro", saldosPorCategoria([...lista,dep(2,50,"2026-11-20")]), vals).desactualizado, true, "hubo un depósito después de cargar el valor");
+  const vacio={...dep(3,500,"2026-11-17"),esAhorro:false,usaAhorro:true};
+  igual(valuacionDeFondo("Fondo de retiro", saldosPorCategoria([...lista,vacio]), vals), null, "sin saldo no hay ganancia sin realizar");
+  const t=sinRealizarTotal(lista, vals); igual(t.ars,100); cierto(t.hay);
+  igual(sinRealizarTotal(lista,{}).hay,false);
+});
+
+test("normalizarValoresFondos descarta lo inválido y no toca el balance", ()=>{
+  const n=normalizarValoresFondos(JSON.parse('{"__proto__":{"ars":5},"A":{"ars":600,"usd":null,"fecha":"2026-11-16"},"B":{"ars":-1},"C":"x","D":{"ars":"600"},"E":{"usd":10}}'));
+  igual(Object.keys(n).sort().join(","), "A,E");
+  igual(n.A.ars,600); igual(n.E.usd,10); igual(n.E.ars,null);
+  igual(Object.keys(normalizarValoresFondos(null)).length,0);
+});
+
+test("el valor actual viaja en el backup y se cifra con el PIN", ()=>{
+  const antes=valoresFondos; valoresFondos={"Fondo de retiro":{ars:600,usd:null,fecha:"2026-11-16"}};
+  try{ const b=armarBackup(); igual(b.datos.valoresFondos["Fondo de retiro"].ars, 600); } finally { valoresFondos=antes; }
+  cierto(ENC_KEYS.includes("fvalfondos"), "el valor de los fondos queda cifrado");
 });
 
 grupo("Aislamiento de los tests");

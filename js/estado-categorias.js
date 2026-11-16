@@ -270,6 +270,8 @@ function saveCatOrder(){ setSensitiveRaw("fcatorder", JSON.stringify(catOrder));
 // declararla con `let` más abajo, el primer render tiraba ReferenceError por temporal dead
 // zone y cortaba la función entera, dejando la pantalla de Movimientos completamente vacía.
 let presupuestos = {};
+// Lo que vale HOY cada fondo de ahorro (categoría), cargado a mano: { "Fondo de retiro": {ars:600, usd:null, fecha:"2026-11-16"} }. Es informativo: no entra al balance.
+let valoresFondos = {};
 
 // Devuelve los nombres de categoría de `catsObj` en el orden guardado por el usuario.
 // Si no hay orden guardado para ese tipo, devuelve el orden natural del objeto.
@@ -789,6 +791,6 @@ function sanearBackupDatos(datos){
     for(const t of Object.keys(datos.custom)){ const porTipo=clavesSeguras(datos.custom[t]); if(!esObjetoPlano(porTipo)){ datos.custom[t]={}; r.descartados++; continue; }
       for(const c of Object.keys(porTipo)){ if(Array.isArray(porTipo[c])){ const subs=porTipo[c].filter(x=>typeof x==="string"); r.descartados+=porTipo[c].length-subs.length; porTipo[c]=subs.map(x=>{ const n=nombreSeguro(x); if(n!==x) r.renombrados++; return n; }); } else { porTipo[c]=[]; r.corregidos++; } }
       datos.custom[t]=porTipo; } }
-  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
+  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas","valoresFondos"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
   return {...r, total:r.descartados+r.renombrados+r.corregidos};
 }

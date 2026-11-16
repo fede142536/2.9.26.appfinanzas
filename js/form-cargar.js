@@ -753,8 +753,13 @@ async function guardarSinFreno(){
       // Siempre explícito (true o false): así un false no se vuelve a marcar por el texto.
       mep: document.getElementById("inv-mep").checked===true};
     movs.unshift(invMov);
-    if(fondoRetiro) movs.unshift(crearRetiroPorVenta(invMov, fondoRetiro, invId+1));
-    save();vibrar([15,50,15]);showToast(fondoRetiro ? `Venta guardada y descontada de ${fondoRetiro.cat}${fondoRetiro.sub?" › "+fondoRetiro.sub:""} ✓` : "Inversión guardada ✓");
+    let retiroVenta=null;
+    if(fondoRetiro){ retiroVenta=crearRetiroPorVenta(invMov, fondoRetiro, invId+1, montoRetiroDeVenta(invMov, movs)); movs.unshift(retiroVenta); }
+    save();vibrar([15,50,15]);
+    // Si la venta tuvo ganancia, del fondo salió solo el capital: el aviso lo dice para que no parezca que faltan pesos.
+    const gananciaVenta=retiroVenta ? Math.round((importeInv-(isUSDInv?retiroVenta.importeOrig:retiroVenta.importe))*100)/100 : 0;
+    const fmtV=n=>isUSDInv ? fmtMoneda(n,"USD") : fmtS(n);
+    showToast(fondoRetiro ? `Venta guardada y descontada de ${fondoRetiro.cat}${fondoRetiro.sub?" › "+fondoRetiro.sub:""}${gananciaVenta>0 ? ` (${fmtV(importeInv-gananciaVenta)} de capital; ${fmtV(gananciaVenta)} son ganancia)` : ""} ✓` : "Inversión guardada ✓");
     resetForm("Inversion");
     return;
   }

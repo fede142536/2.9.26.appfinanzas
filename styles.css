@@ -2011,3 +2011,7 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 /* [Editor de frecuente] Filtros de vista: muestran de a un grupo de campos (Datos / Tarjeta / Fechas / Monto) o todo junto. */
 .edit-vistas{margin:0 0 14px}
 .vista-oculta{display:none!important}
+
+/* [Valor actual de un fondo] ganancia sin realizar: línea en el ranking y en la franja de saldo de Ahorros */
+.ahorro-rank-hoy{font-size:12px;font-weight:600;margin:6px 0 0}
+.ahorro-saldo-hoy{flex-basis:100%;font-size:12px;font-weight:600;margin-top:6px}

@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 13 de noviembre de 2026
 
+- Changelog: regenerado con el historial completo (el clon recortado había borrado entradas viejas en la v249)
 - **v249** · El editor de un gasto frecuente de tarjeta tiene filtros de vista (Datos, Tarjeta, Fechas, Monto, Todo) para no recorrer un formulario larguísimo
 
 ## 12 de noviembre de 2026
