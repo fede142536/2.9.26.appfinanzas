@@ -24,6 +24,109 @@ function rellenarMesesSinMovimiento(arr){
   return out;
 }
 
+// ═══════════════════════════════════════════
+// VALOR ACTUAL DE UN FONDO (ganancia sin realizar)
+// ═══════════════════════════════════════════
+// El fondo de ahorro cuenta lo que PUSISTE (depósitos menos retiros). Si lo invertiste y hoy vale más, esa diferencia no figura en ningún movimiento hasta que
+// vendés. Acá se carga a mano cuánto vale hoy cada fondo (lo que ves en tu broker) y la app muestra la diferencia como ganancia SIN REALIZAR. Es solo informativo:
+// no toca el balance ni los ingresos; la ganancia cuenta recién cuando cargás la venta (ver resultado-inversiones.js).
+const numeroValido=n=>(typeof n==="number" && isFinite(n) && n>=0 && n<1e13) ? Math.round(n*100)/100 : null;
+function normalizarValoresFondos(o){
+  const out={};
+  if(!o || typeof o!=="object" || Array.isArray(o)) return out;
+  Object.keys(o).forEach(cat=>{
+    const v=o[cat];
+    if(cat==="__proto__" || !v || typeof v!=="object") return;
+    const ars=numeroValido(v.ars), usd=numeroValido(v.usd);
+    if(ars===null && usd===null) return;
+    out[cat]={ars, usd, fecha:/^\d{4}-\d{2}-\d{2}$/.test(v.fecha||"") ? v.fecha : ""};
+  });
+  return out;
+}
+// Pura. Saldo de cada categoría de ahorro por moneda y fecha de su último movimiento: {cat:{ars, usd, ultima}}.
+function saldosPorCategoria(lista){
+  const por={};
+  (lista||[]).forEach(m=>{
+    const dep=esDepositoAhorro(m), ret=esRetiroAhorro(m);
+    if(!dep && !ret) return;
+    const cat=m.cat||"Sin categoría", o=por[cat]||(por[cat]={ars:0, usd:0, ultima:""});
+    const v=m.moneda==="USD" ? (m.importeOrig||0) : (m.importe||0);
+    o[m.moneda==="USD"?"usd":"ars"]+=dep ? v : -v;
+    if((m.fecha||"")>o.ultima) o.ultima=m.fecha||"";
+  });
+  Object.values(por).forEach(o=>{ o.ars=Math.round(o.ars*100)/100; o.usd=Math.round(o.usd*100)/100; });
+  return por;
+}
+// Pura. Lo aportado contra lo que vale hoy, por moneda: {ars:{aportado, hoy, dif, pct}|null, usd:..., fecha, desactualizado}. null si el fondo no tiene valor cargado.
+// `desactualizado`: hubo depósitos o retiros DESPUÉS de la fecha en que se cargó el valor, así que la diferencia puede no ser real.
+function valuacionDeFondo(cat, saldos, vals){
+  const v=(vals||{})[cat], s=(saldos||{})[cat];
+  if(!v) return null;
+  // Un fondo sin saldo (ya lo vendiste y lo sacaste) no tiene ganancia sin realizar: el valor que quedó cargado es de antes.
+  const una=(hoy,aportado)=>(hoy===null || hoy===undefined || !(aportado>0)) ? null : {aportado, hoy, dif:Math.round((hoy-aportado)*100)/100, pct: aportado>0 ? Math.round((hoy-aportado)/aportado*1000)/10 : null};
+  const ars=una(v.ars, s?s.ars:0), usd=una(v.usd, s?s.usd:0);
+  if(!ars && !usd) return null;
+  return {ars, usd, fecha:v.fecha||"", desactualizado: !!(s && v.fecha && s.ultima>v.fecha)};
+}
+// Pura. La suma de lo que vale de más (o de menos) en todos los fondos con valor cargado: {ars, usd, hay}.
+function sinRealizarTotal(lista, vals){
+  const saldos=saldosPorCategoria(lista), out={ars:0, usd:0, hay:false};
+  Object.keys(vals||{}).forEach(cat=>{
+    const x=valuacionDeFondo(cat, saldos, vals);
+    if(!x) return;
+    out.hay=true;
+    if(x.ars) out.ars+=x.ars.dif;
+    if(x.usd) out.usd+=x.usd.dif;
+  });
+  out.ars=Math.round(out.ars*100)/100; out.usd=Math.round(out.usd*100)/100;
+  return out;
+}
+function guardarValoresFondos(){
+  setSensitiveRaw("fvalfondos", JSON.stringify(valoresFondos));
+  if(typeof marcarDatosSucios==="function") marcarDatosSucios();
+}
+// Guarda el valor de hoy de un fondo; con los dos campos vacíos lo quita.
+function guardarValorDeFondo(cat){
+  const leer=id=>{ const el=document.getElementById(id); if(!el || String(el.value).trim()==="") return null; const n=parseFloat(limpiarImporte(el.value)); return numeroValido(n); };
+  const arsEl=document.getElementById("valor-fondo-ars"), usdEl=document.getElementById("valor-fondo-usd");
+  const ars=leer("valor-fondo-ars"), usd=leer("valor-fondo-usd");
+  if((arsEl && String(arsEl.value).trim()!=="" && ars===null) || (usdEl && String(usdEl.value).trim()!=="" && usd===null)){ showToast("Ingresá un valor válido"); return; }
+  if(ars===null && usd===null){ quitarValorDeFondo(cat); return; }
+  valoresFondos[cat]={ars, usd, fecha:hoyLocal()};
+  guardarValoresFondos();
+  showToast("Valor actual guardado ✓");
+  renderAhorro(); showAhorroCatDetail(cat);
+}
+function quitarValorDeFondo(cat){
+  if(!valoresFondos[cat]){ return; }
+  delete valoresFondos[cat];
+  guardarValoresFondos();
+  showToast("Valor actual quitado");
+  renderAhorro(); showAhorroCatDetail(cat);
+}
+const fmtDifFondo=(d,usd)=>(d>=0?"+":"-")+(usd?"USD "+fmtNum2(Math.abs(d)):fmtS(Math.abs(d)));
+// Bloque del detalle de una categoría: el valor cargado (si hay) y los campos para cargarlo o cambiarlo.
+function valorActualFondoHTML(cat, saldoArs, saldoUsd){
+  const x=valuacionDeFondo(cat, saldosPorCategoria(movs), valoresFondos);
+  const v=valoresFondos[cat];
+  if(!x && !(saldoArs>0 || saldoUsd>0)) return "";
+  const linea=(r,usd)=>r ? `<div style="font-size:13px;margin-top:6px">${usd?"USD ":""}Aportado <strong>${usd?fmtNum2(r.aportado):fmtS(r.aportado)}</strong> · hoy <strong>${usd?fmtNum2(r.hoy):fmtS(r.hoy)}</strong>
+      <div style="font-size:16px;font-weight:600;color:${r.dif>=0?"var(--success)":"var(--danger)"}">${fmtDifFondo(r.dif,usd)}${r.pct!==null?` <span style="font-size:12px;font-weight:500">(${r.dif>=0?"+":""}${String(r.pct).replace(".",",")}%)</span>`:""} <span style="font-size:11px;font-weight:500;color:var(--muted)">sin realizar</span></div></div>` : "";
+  const campo=(id,pref,val)=>`<div class="amount-wrap" style="margin-top:6px"><span class="amount-prefix">${pref}</span><input type="number" id="${id}" class="form-input amount-input" inputmode="decimal" step="any" min="0" value="${val===null||val===undefined?"":val}" placeholder="${pref==="$"?"Lo que vale hoy en pesos":"Lo que vale hoy en dólares"}" aria-label="Valor actual ${pref==="$"?"en pesos":"en dólares"}"></div>`;
+  return `<div class="inset" id="ahorrocat-valor">
+    <div class="seccion-label">Valor actual (opcional)</div>
+    ${x?`${linea(x.ars,false)}${linea(x.usd,true)}
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Cargado el ${(x.fecha||"").split("-").reverse().join("/")||"—"}${x.desactualizado?` · <span style="color:var(--warning)">hubo movimientos después: actualizalo</span>`:""}</div>`:""}
+    ${saldoArs>0||(v&&v.ars!==null)?campo("valor-fondo-ars","$",v?v.ars:null):""}
+    ${saldoUsd>0||(v&&v.usd!==null)?campo("valor-fondo-usd","USD",v?v.usd:null):""}
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button type="button" class="btn-sm" style="flex:1" onclick="guardarValorDeFondo(${attrJS(cat)})">Guardar valor</button>
+      ${x?`<button type="button" class="btn-sm" style="color:var(--danger)" onclick="quitarValorDeFondo(${attrJS(cat)})">Quitar</button>`:""}
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px">Poné lo que ves hoy en tu broker. No cambia tu balance: la ganancia cuenta cuando cargás la venta.</p>
+  </div>`;
+}
+
 function renderAhorro(){
   // ── 1. MIS AHORROS ──
   // Sumamos depósitos (esAhorro) y restamos retiros (usaAhorro), agrupados por mes
@@ -126,6 +229,7 @@ function calcularFondoUSD(){
 function renderAhorroSaldo(fondoAcum, fondoUSD){
   const el=document.getElementById("fondo-kpis");
   if(!el) return;
+  const sinReal=sinRealizarTotal(movs, valoresFondos);
   // --n = largo del texto final: el CSS achica la cifra para que entre entera (ver [AAA ahorros]).
   const largo=String(fmtTotal(fondoAcum)).length;
   el.innerHTML=`
@@ -136,7 +240,8 @@ function renderAhorroSaldo(fondoAcum, fondoUSD){
     ${fondoUSD!==0?`<div class="ahorro-saldo-usd">
       <span class="ahorro-saldo-usd-label">Fondo USD</span>
       <span class="ahorro-saldo-usd-val${fondoUSD<0?" neg":""}">USD ${fmtNum2(fondoUSD)}</span>
-    </div>`:""}`;
+    </div>`:""}
+    ${sinReal.hay && (sinReal.ars!==0||sinReal.usd!==0)?`<div class="ahorro-saldo-hoy" style="color:${(sinReal.ars+sinReal.usd)>=0?"var(--success)":"var(--danger)"}">A valor actual: ${sinReal.ars!==0?fmtDifFondo(sinReal.ars,false):""}${sinReal.ars!==0&&sinReal.usd!==0?" · ":""}${sinReal.usd!==0?fmtDifFondo(sinReal.usd,true):""} sin realizar</div>`:""}`;
   animarNumerosDe(el);
 }
 
@@ -408,6 +513,13 @@ function renderAhorroRanking(){
     };
   };
   const escalaArs=escala("ARS"), escalaUsd=escala("USD");
+  const saldosCat=saldosPorCategoria(movs);
+  const valLinea=cat=>{
+    const x=valuacionDeFondo(cat, saldosCat, valoresFondos);
+    if(!x) return "";
+    const r=x.ars||x.usd, usd=!x.ars;
+    return `<div class="ahorro-rank-hoy" style="color:${r.dif>=0?"var(--success)":"var(--danger)"}">Hoy vale ${usd?"USD "+fmtNum2(r.hoy):fmtS(r.hoy)} · ${fmtDifFondo(r.dif,usd)} sin realizar${x.desactualizado?" ⚠":""}</div>`;
+  };
 
   // Sin título propio ("🏆 Ranking por categoría" se saca): el selector de arriba ya dice que
   // estás en "Por categoría", repetirlo acá era decir lo mismo dos veces.
@@ -427,6 +539,7 @@ function renderAhorroRanking(){
         ${it.saldoUsd!==0?`<small style="color:${cUsd}">USD ${fmtNum2(it.saldoUsd)}</small>`:""}
       </div>
       <div class="ahorro-rank-bar"><div class="ahorro-rank-bar-fill" style="width:${Math.round(valor/maxV*100)}%;background:${c}"></div></div>
+      ${valLinea(it.cat)}
       <div class="ahorro-rank-meta">
         <span>${pct}% de ${esUsd?"tus dólares":"tus pesos"} · ${it.count} ${it.count===1?"movimiento":"movimientos"}</span>
         <span>${it.depositadoArs>0?`+${fmtAbbr(it.depositadoArs)}`:""}${it.retiradoArs>0?` -${fmtAbbr(it.retiradoArs)}`:""}</span>
@@ -466,6 +579,7 @@ function showAhorroCatDetail(cat){
     <div style="font-size:12px;color:var(--muted);margin-top:3px">Depositado: <span style="color:var(--save)">USD ${fmtNum2(depositadoUsd)}</span> · Retirado: <span style="color:var(--danger)">USD ${fmtNum2(retiradoUsd)}</span></div>`:""}
     <div style="font-size:12px;color:var(--muted);margin-top:6px">${movsCat.length} ${movsCat.length===1?"movimiento":"movimientos"}</div>
   </div>`;
+  html+=valorActualFondoHTML(cat, saldoArs, saldoUsd);
   html+=movsCat.map(m=>{
     const esRetiro=!!m.usaAhorro;
     const esUSD=m.moneda==="USD";

@@ -43,9 +43,18 @@ function fondoSugerido(lista, fondos, ticker){
 }
 
 // Pura. El retiro del fondo que acompaña a una venta: mismo monto y fecha, es un traspaso (no un gasto) y queda ligado a la venta.
-function crearRetiroPorVenta(inv, fondo, id){
+// Cuánto se saca del fondo por una venta o rescate: el CAPITAL que esa venta devuelve (lo que habías puesto), no todo lo cobrado. Si vendiste en 600 algo
+// que te costó 500, del fondo salen 500 y los 100 restantes son ganancia (suman a tus ingresos y a "Resultado inv."). Sin capital cargado (o si la venta
+// no tiene ganancia) sale el monto entero, como siempre. `lista` debe incluir la venta.
+function montoRetiroDeVenta(inv, lista){
   const usd=!!(inv.importeUSD && !inv.importe);
-  const monto=usd ? inv.importeUSD : inv.importe;
+  const total=usd ? inv.importeUSD : inv.importe;
+  const dev=((calcularResultadoInv(lista).capitalDevueltoPorOp[inv.id]||{})[usd?"usd":"ars"])||0;
+  return (dev>0 && dev<total) ? Math.round(dev*100)/100 : total;
+}
+function crearRetiroPorVenta(inv, fondo, id, montoRetiro){
+  const usd=!!(inv.importeUSD && !inv.importe);
+  const monto=(montoRetiro>0) ? montoRetiro : (usd ? inv.importeUSD : inv.importe);
   return {id, tipo:"Gasto", importe: usd ? 0 : monto, importeOrig: usd ? monto : null, moneda: usd ? "USD" : "ARS",
     cat:fondo.cat, subcat:fondo.sub, cuenta:inv.cuenta||"", fecha:inv.fecha, nota: inv.nota || `Venta ${inv.ticker||""}`.trim(), tags:[],
     esAhorro:false, usaAhorro:true, traspaso:true, recuperable:0, origenInvId:inv.id};
@@ -56,7 +65,7 @@ function sincronizarRetiroLigado(inv, lista){
   let n=0;
   (lista||[]).forEach(x=>{
     if(x.origenInvId!==inv.id) return;
-    const usd=!!(inv.importeUSD && !inv.importe), monto=usd ? inv.importeUSD : inv.importe;
+    const usd=!!(inv.importeUSD && !inv.importe), monto=montoRetiroDeVenta(inv, lista);
     x.moneda=usd ? "USD" : "ARS"; x.importe=usd ? 0 : monto; x.importeOrig=usd ? monto : null;
     x.fecha=inv.fecha; x.cuenta=inv.cuenta||"";
     n++;
@@ -357,7 +366,7 @@ async function vincularVentaConFondo(i){
   if(!v) return false;
   await copiaAntesDeVentasFondo();
   let idNuevo=Date.now(); while(movs.some(x=>x.id===idNuevo)) idNuevo++;
-  const retiro=crearRetiroPorVenta(v.inv, v.fondo, idNuevo);
+  const retiro=crearRetiroPorVenta(v.inv, v.fondo, idNuevo, montoRetiroDeVenta(v.inv, movs));
   movs.unshift(retiro);
   save();
   ofrecerDeshacerCambio(`${v.inv.ticker}: descontado de ${v.fondo.cat}${v.fondo.sub?" › "+v.fondo.sub:""} ✓`, ()=>{ movs=movs.filter(x=>x.id!==retiro.id); renderVentasFondoDetalle(); });
@@ -440,7 +449,7 @@ function aplicarSaleDeAhorroEditor(m){
     const f=fondosParaVenta(movs, m).find(x=>sel && fondoKey(x)===sel.value);
     if(!f) return;
     if(retiro){ retiro.cat=f.cat; retiro.subcat=f.sub; }
-    else{ let id=Date.now()+1; while(movs.some(x=>x.id===id)) id++; movs.unshift(crearRetiroPorVenta(m, f, id)); }
+    else{ let id=Date.now()+1; while(movs.some(x=>x.id===id)) id++; movs.unshift(crearRetiroPorVenta(m, f, id, montoRetiroDeVenta(m, movs))); }
   } else if(retiro){
     movs=movs.filter(x=>x!==retiro);
   }

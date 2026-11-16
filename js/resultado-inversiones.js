@@ -52,6 +52,15 @@ function calcularResultadoInv(lista){
   // Una venta cargada con "Sale de mis ahorros" lleva un retiro del fondo ligado (retiro-por-venta.js) y ESE retiro es el que suma a lo
   // disponible. Si además se contara como ganancia, la misma plata entraría dos veces: de esa venta solo se descuenta el capital.
   const conRetiro=new Set((lista||[]).filter(x=>x && x.origenInvId).map(x=>x.origenInvId));
+  // Cuánto sacó del fondo cada retiro ligado, por moneda. Si el retiro es por TODA la venta (lo de siempre) la ganancia no se cuenta (ya entra por el
+  // retiro); si es solo por el capital, lo que sobra de la venta SÍ es ganancia: el retiro la deja afuera a propósito (ver montoRetiroDeVenta).
+  const retiradoPorVenta={};
+  (lista||[]).forEach(x=>{
+    if(!x || !x.origenInvId) return;
+    const o=retiradoPorVenta[x.origenInvId] || (retiradoPorVenta[x.origenInvId]={ars:0, usd:0});
+    if(x.moneda==="USD") o.usd+=(x.importeOrig||0); else o.ars+=(x.importe||0);
+  });
+  const devuelto={};   // devuelto[id] = {ars, usd}: el capital que cada venta o rescate devolvió
   const capital={};   // capital[ticker] = {ars, usd}
   const ganancia={};  // ganancia[ym]    = {ars, usd}
   const flujo={};     // flujo[ym]       = {ars, usd}
@@ -118,9 +127,15 @@ function calcularResultadoInv(lista){
         const devuelve=Math.min(monto, cap[k]);
         cap[k]-=devuelve;
         flu[k]-=devuelve;
-        if(conRetiro.has(m.id)) return;
-        gan[k]+=monto-devuelve;
-        if(monto-devuelve>0) eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:monto-devuelve});
+        (devuelto[m.id] || (devuelto[m.id]={ars:0, usd:0}))[k]+=devuelve;
+        let ganado=monto-devuelve;
+        if(conRetiro.has(m.id)){
+          // Con retiro por todo el monto no hay ganancia que contar; con retiro solo por el capital, queda la ganancia entera.
+          const retirado=(retiradoPorVenta[m.id]||{})[k]||0;
+          ganado=Math.max(0, Math.min(monto-retirado, monto-devuelve));
+        }
+        gan[k]+=ganado;
+        if(ganado>0) eventos.push({fecha:m.fecha, ticker, moneda:k==="usd"?"USD":"ARS", ganancia:ganado});
       } else {
         cap[k]+=monto;
         flu[k]+=monto;
@@ -137,6 +152,7 @@ function calcularResultadoInv(lista){
     gananciaPorMes: redondear(ganancia),
     capitalPorTicker: redondear(capital),
     flujoPorMes: redondear(flujo),
+    capitalDevueltoPorOp: devuelto,
     eventos
   };
 }
@@ -150,8 +166,9 @@ function firmaDeLista(lista){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion");
   let suma=0;
   inv.forEach(m=>{ suma += (m.id||0) + (m.importe||0) + (m.importeUSD||0); });
-  const ligadas=(lista||[]).filter(m=>m && m.origenInvId).length;   // un retiro ligado cambia el resultado de su venta
-  return inv.length+"|"+suma+"|"+ligadas;
+  const ligadas=(lista||[]).filter(m=>m && m.origenInvId);   // un retiro ligado cambia el resultado de su venta (y su monto, si es solo por el capital)
+  let sumaRet=0; ligadas.forEach(m=>{ sumaRet += (m.importe||0) + (m.importeOrig||0); });
+  return inv.length+"|"+suma+"|"+ligadas.length+"|"+sumaRet;
 }
 function resultadoInv(lista){
   const fuente = lista || (typeof movs!=="undefined" ? movs : []);
