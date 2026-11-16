@@ -320,3 +320,39 @@ function calcularPosiciones(lista, precios, hoy){
   });
   return out;
 }
+
+// Las compras y ventas a las que les falta la cantidad (no cuentan los cupones, dividendos ni rendimientos, ni los dólares MEP ni las cauciones). `ticker` opcional.
+function operacionesSinCantidad(lista, ticker){
+  return (lista||[]).filter(m=>{
+    if(!m || m.tipo!=="Inversion" || m.cantidad>0) return false;
+    if(ticker && (m.ticker||"Sin ticker")!==ticker) return false;
+    if(m.mep===true || m.cat==="MEP" || /cauci/.test(normalizarTexto(m.cat||""))) return false;
+    if(isInvSalida(m) && (esPagoDeInversion(m) || /rendimiento/.test(normalizarTexto(m.subcat||"")))) return false;
+    return true;
+  }).sort((a,b)=>String(b.fecha||"").localeCompare(String(a.fecha||"")) || (b.id||0)-(a.id||0));
+}
+// Pura. Una cantidad que se puede leer de las notas: "Spy x 18", "18 nominales", "x18" en la nota de la propia operación o en la del depósito al fondo de ahorro
+// que la acompaña (mismo ticker en la nota, hasta 7 días de diferencia y 3% de monto). null si no hay de dónde sacarla. Es solo una SUGERENCIA: se confirma antes de guardar.
+function sugerirCantidad(m, lista){
+  const leer=nota=>{
+    const t=String(nota||"");
+    const a=/[xX×]\s*(\d+(?:[.,]\d+)?)/.exec(t) || /(\d+(?:[.,]\d+)?)\s*(?:nominales|nom\.?|cuotapartes|unidades)\b/i.exec(t);
+    const n=a ? Number(a[1].replace(",",".")) : NaN;
+    return n>0 ? n : null;
+  };
+  const propia=leer(m.nota);
+  if(propia) return propia;
+  const tk=normalizarTexto(m.ticker||""), monto=m.importeUSD>0&&!(m.importe>0) ? m.importeUSD : (m.importe||0);
+  if(tk.length<2 || !(monto>0)) return null;
+  let mejor=null, mejorP=Infinity;
+  (lista||[]).forEach(x=>{
+    if(!x || x.tipo!=="Gasto" || !(x.esAhorro||x.usaAhorro) || x.moneda==="USD") return;
+    if(!normalizarTexto(x.nota||"").split(/[^a-z0-9]+/).includes(tk)) return;
+    const dias=Math.abs(Math.round((Date.parse(String(x.fecha).slice(0,10)+"T00:00:00Z")-Date.parse(String(m.fecha).slice(0,10)+"T00:00:00Z"))/86400000));
+    const dif=Math.abs((x.importe||0)-monto)/monto;
+    if(dias>7 || dif>0.03) return;
+    const c=leer(x.nota); if(!c) return;
+    const puntaje=dif*100+dias; if(puntaje<mejorP){ mejorP=puntaje; mejor=c; }
+  });
+  return mejor;
+}
