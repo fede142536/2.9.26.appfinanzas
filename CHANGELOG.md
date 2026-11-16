@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v254**
+**Versión actual: v255**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 16 de noviembre de 2026
 
+- **v255** · Un retiro de venta viejo o cargado a mano conserva el monto entero al editar o unir la venta; solo se recalcula el que nació por el capital
 - **v254** · Los movimientos del fondo de ahorro (depósito o retiro) tienen ticker y cantidad, al cargar y al editar; el retiro de una venta toma los de la venta
 - **v253** · Pantalla para completar de una vez las cantidades de las compras y ventas viejas, con sugerencias desde la nota o el depósito al fondo
 - **v252** · En la hoja de cada instrumento, las operaciones sin cantidad se marcan para completarlas al editarlas

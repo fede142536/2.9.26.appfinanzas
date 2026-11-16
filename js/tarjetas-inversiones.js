@@ -1641,6 +1641,74 @@ function guardarCantidades(){
   renderInv();
 }
 
+// ── Historial de inversiones desde el fondo de ahorro ──
+let historialFondoCat=null;
+function abrirHistorialFondo(cat){
+  const fondos=fondosConComprasSinInversion(movs);
+  const f=fondos.find(x=>x.cat===cat) || fondos[0];
+  const cont=document.getElementById("historial-fondo-contenido");
+  if(!f){ cont.innerHTML=`<p class="txt-md txt-muted" style="padding:12px 0">No hay compras del fondo sin inversión. ✓</p>`; document.getElementById("modal-historial-fondo").classList.add("open"); historialFondoCat=null; return; }
+  historialFondoCat=f.cat;
+  document.getElementById("historial-fondo-titulo").textContent=`Compras de ${f.cat} sin inversión`;
+  const cands=comprasDelFondoSinInversion(movs, f.cat, f.ticker);
+  cont.innerHTML=`<p class="txt-xs txt-muted" style="margin:0 0 10px;line-height:1.45">Estos depósitos de <strong>${escapeHtml(f.cat)}</strong> no tienen su compra en Inversiones. Al crearla, la app conoce todo el capital invertido y el <strong>resultado de tus ventas</strong> se calcula bien. Revisá el ticker y la cantidad (si hubo un desdoblamiento, poné los nominales de ese momento y registrá el split en el ticker). Se crean solo las tildadas.</p>
+  <div id="hist-resumen" class="txt-xs" style="margin:0 0 10px"></div>`+
+  cands.map(c=>{ const m=c.mov, ok=!!(c.ticker && c.cantidad);
+    return `<div class="hist-fila">
+      <label class="hist-chk"><input type="checkbox" class="chk-custom" data-id="${m.id}" ${ok?"checked":""} onchange="resumenHistorialFondo()" aria-label="${escapeHtml(`Crear la compra del ${fdyInv(m.fecha)}`)}"></label>
+      <div class="hist-info"><strong>${fdyInv(m.fecha)}</strong> <span class="txt-xs txt-muted">${fmtS(m.importe)}${m.nota?" · "+escapeHtml(m.nota):""}</span></div>
+      <input type="text" class="form-input hist-tk" data-tk="${m.id}" value="${escapeHtml(c.ticker)}" placeholder="Ticker" aria-label="Ticker" style="text-transform:uppercase" oninput="resumenHistorialFondo()">
+      <input type="text" inputmode="decimal" class="form-input hist-cant" data-cant="${m.id}" value="${c.cantidad?String(c.cantidad).replace(".",","):""}" placeholder="Cant." aria-label="Cantidad" oninput="resumenHistorialFondo()">
+    </div>`; }).join("");
+  document.getElementById("modal-historial-fondo").classList.add("open");
+  resumenHistorialFondo();
+}
+function cerrarHistorialFondo(){ document.getElementById("modal-historial-fondo").classList.remove("open"); }
+// Las compras tildadas con ticker válido, tal como se van a crear.
+function comprasTildadasHistorial(){
+  const out=[];
+  document.querySelectorAll("#historial-fondo-contenido input[data-id]:checked").forEach(chk=>{
+    const id=chk.dataset.id, m=movs.find(x=>String(x.id)===id); if(!m) return;
+    const tk=nombreSeguro((document.querySelector(`[data-tk="${id}"]`)?.value||"").trim()).toUpperCase();
+    const cant=parseFloat(limpiarImporte(document.querySelector(`[data-cant="${id}"]`)?.value||""))||0;
+    if(!tk) return;
+    out.push({mov:m, ticker:tk, cantidad:(cant>0&&cant<1e13)?Math.round(cant*1e6)/1e6:null});
+  });
+  return out;
+}
+function armarInversionDeFondo(c, id){
+  const prev=movs.filter(x=>x.tipo==="Inversion" && String(x.ticker||"").toUpperCase()===c.ticker && x.cat).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)))[0];
+  const cat=prev ? prev.cat : "CEDEARs";
+  const inv={id, tipo:"Inversion", cat, subcat:cat+" Compra", ticker:c.ticker, importe:c.mov.importe, importeUSD:0, fecha:c.mov.fecha, cuenta:c.mov.cuenta||"", nota:"", mep:false};
+  if(c.cantidad) inv.cantidad=c.cantidad;
+  return inv;
+}
+// Muestra qué cambia en "Resultado inv." de cada mes si se crean las compras tildadas.
+function resumenHistorialFondo(){
+  const el=document.getElementById("hist-resumen"); if(!el) return;
+  const tild=comprasTildadasHistorial();
+  if(!tild.length){ el.innerHTML=`<span class="txt-muted">No hay compras tildadas.</span>`; return; }
+  const nuevas=tild.map((c,i)=>armarInversionDeFondo(c, -1-i));
+  const antes=calcularResultadoInv(movs).gananciaPorMes, despues=calcularResultadoInv([...movs,...nuevas]).gananciaPorMes;
+  const cambios=Object.keys({...antes,...despues}).sort().map(ym=>({ym, a:(antes[ym]||{ars:0}).ars, d:(despues[ym]||{ars:0}).ars})).filter(x=>Math.round(x.a)!==Math.round(x.d));
+  const cap=tild.reduce((s,c)=>s+c.mov.importe,0);
+  el.innerHTML=`Se crean <strong>${tild.length}</strong> ${tild.length===1?"compra":"compras"} por <strong>${fmtS(cap)}</strong>.`+
+    (cambios.length ? `<div style="margin-top:6px">Cambia el resultado de inversiones de:${cambios.map(x=>`<div>· ${mesLbl(x.ym)}: ${fmtS(x.a)} → <strong>${fmtS(x.d)}</strong></div>`).join("")}</div>` : `<div class="txt-muted">No cambia el resultado de ningún mes.</div>`);
+}
+async function crearInversionesDesdeFondo(){
+  const tild=comprasTildadasHistorial();
+  if(!tild.length){ showToast("No tildaste ninguna compra"); return; }
+  try{ await guardarCopiaLocal("seguridad"); }catch(e){ console.warn("No se pudo guardar la copia de seguridad previa:", e); }
+  let id=Date.now(); const creadas=[];
+  tild.forEach(c=>{ while(movs.some(x=>x.id===id)||creadas.some(x=>x.id===id)) id++; creadas.push(armarInversionDeFondo(c,id)); id++;
+    c.mov.ticker=c.ticker; if(c.cantidad) c.mov.cantidad=c.cantidad; });   // el depósito también queda con su ticker y cantidad
+  movs.unshift(...creadas);
+  save();
+  cerrarHistorialFondo();
+  ofrecerDeshacerCambio(`${creadas.length} ${creadas.length===1?"compra creada":"compras creadas"} desde el fondo ✓`, ()=>{ const ids=new Set(creadas.map(x=>x.id)); movs=movs.filter(x=>!ids.has(x.id)); invalidarResultadoInv(); renderInv(); });
+  renderInv();
+}
+
 function renderInvCartera(){
   const el=document.getElementById("inv-cartera");
   const allInv=movs.filter(m=>m.tipo==="Inversion");
@@ -1656,7 +1724,7 @@ function renderInvCartera(){
     porTicker[t].usd+=(m.importeUSD||0)*invSigno(m);
     porTicker[t].count++;
   });
-  const posiciones=calcularPosiciones(movs, preciosActuales, hoyLocal());
+  const posiciones=calcularPosiciones(movs, preciosActuales, hoyLocal(), splitsInv);
   const items=Object.values(porTicker).map(p=>({...p, esUsd:p.usd!==0}));
   const todasAbiertas=items.filter(p=>(p.esUsd?p.usd:p.ars)>0);
   // Filtro por categoría (Acciones, CEDEARs, FCI…), como en el broker. Si la categoría elegida ya no existe, vuelve a "Todas".
@@ -1677,9 +1745,11 @@ function renderInvCartera(){
   abiertas.forEach(p=>{ const q=posiciones[p.ticker]; if(q && q.valorActual!==null){ const k=q.usd?"usd":"ars"; rendTot[k].ini+=q.valorInicial; rendTot[k].act+=q.valorActual; rendTot[k].n++; } });
   const rendTxt=["ars","usd"].filter(k=>rendTot[k].n).map(k=>{ const d=rendTot[k].act-rendTot[k].ini; return `<strong style="color:${d>=0?"var(--success)":"var(--danger)"}">${d>=0?"+":"-"}${fmtPosMonto(Math.abs(d),k==="usd")}</strong> <span class="inv-pos-meta-i">sobre ${fmtPosMonto(rendTot[k].ini,k==="usd")}</span>`; }).join(" · ");
   const chips=catsAb.length>1 ? `<div class="inv-cart-chips" role="group" aria-label="Filtrar por categoría">`+["todas",...catsAb].map(c=>`<button type="button" class="filter-chip${invCartCat===c?" active":""}" aria-pressed="${invCartCat===c}" onclick="setInvCartCat(${attrJS(c)})">${c==="todas"?"Todas":escapeHtml(c)}</button>`).join("")+`</div>` : "";
+  const fondosSinInv=fondosConComprasSinInversion(movs);
+  const avisoFondo=fondosSinInv.length ? `<button type="button" class="inv-cerradas-link" onclick="abrirHistorialFondo(${attrJS(fondosSinInv[0].cat)})">⚠ ${fondosSinInv[0].faltan} ${fondosSinInv[0].faltan===1?"compra":"compras"} de ${escapeHtml(fondosSinInv[0].cat)} sin inversión · Revisar ›</button>` : "";
   const faltan=operacionesSinCantidad(movs).length;
   const avisoFaltan=faltan ? `<button type="button" class="inv-cerradas-link" onclick="abrirCantidades()">⚠ ${faltan} ${faltan===1?"operación sin cantidad":"operaciones sin cantidad"} · Completar ›</button>` : "";
-  let html=chips+avisoFaltan+`<div class="inv-cart-head">
+  let html=chips+avisoFondo+avisoFaltan+`<div class="inv-cart-head">
     <span>${abiertas.length} ${abiertas.length===1?"posición":"posiciones"}</span>
     <span class="inv-cart-tot">${totArs?`<strong>${fmtS(totArs)}</strong>`:""}${totArs&&totUsd?" · ":""}${totUsd?`<strong>${fmtUsdInv(totUsd)}</strong>`:""}</span>
   </div>${rendTxt?`<div class="inv-cart-head" style="padding-top:0"><span>Rendimiento</span><span class="inv-cart-tot">${rendTxt}</span></div>`:""}`;

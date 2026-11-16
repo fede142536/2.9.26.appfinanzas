@@ -274,6 +274,8 @@ let presupuestos = {};
 let valoresFondos = {};
 // El último precio por unidad de cada ticker, cargado a mano (lo que ves en el broker): { "SPY": {precio:21080, fecha:"2026-11-13"} }. Informativo: no entra al balance.
 let preciosActuales = {};
+// Desdoblamientos (splits) por ticker: { "SPY": [ {fecha:"2026-06-01", factor:3} ] }. Los nominales cargados ANTES de la fecha se multiplican por el factor en Cartera.
+let splitsInv = {};
 
 // Devuelve los nombres de categoría de `catsObj` en el orden guardado por el usuario.
 // Si no hay orden guardado para ese tipo, devuelve el orden natural del objeto.
@@ -793,6 +795,6 @@ function sanearBackupDatos(datos){
     for(const t of Object.keys(datos.custom)){ const porTipo=clavesSeguras(datos.custom[t]); if(!esObjetoPlano(porTipo)){ datos.custom[t]={}; r.descartados++; continue; }
       for(const c of Object.keys(porTipo)){ if(Array.isArray(porTipo[c])){ const subs=porTipo[c].filter(x=>typeof x==="string"); r.descartados+=porTipo[c].length-subs.length; porTipo[c]=subs.map(x=>{ const n=nombreSeguro(x); if(n!==x) r.renombrados++; return n; }); } else { porTipo[c]=[]; r.corregidos++; } }
       datos.custom[t]=porTipo; } }
-  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas","valoresFondos","preciosActuales"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
+  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas","valoresFondos","preciosActuales","splitsInv"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
   return {...r, total:r.descartados+r.renombrados+r.corregidos};
 }

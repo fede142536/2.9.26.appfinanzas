@@ -482,11 +482,13 @@ function exportarExcel(rangoAbierto){
         Moneda: moneda,
         ARS: importeARS,
         USD: importeUSD,
-        Recuperable: m.recuperable||0
+        Recuperable: m.recuperable||0,
+        Ticker: m.ticker||"",       // los movimientos del fondo de ahorro llevan el ticker y la cantidad de la compra o venta que los acompaña
+        Cantidad: m.cantidad>0 ? m.cantidad : ""
       };
     });
     const ws=XLSX.utils.json_to_sheet(rows);
-    ws["!cols"]=[{wch:12},{wch:9},{wch:18},{wch:22},{wch:22},{wch:28},{wch:14},{wch:8},{wch:13},{wch:11},{wch:12}];
+    ws["!cols"]=[{wch:12},{wch:9},{wch:18},{wch:22},{wch:22},{wch:28},{wch:14},{wch:8},{wch:13},{wch:11},{wch:12},{wch:10},{wch:10}];
     XLSX.utils.book_append_sheet(wb,ws,"Movimientos");
   }
 
@@ -503,11 +505,12 @@ function exportarExcel(rangoAbierto){
         Ticker: m.ticker||"",
         ARS: (m.importe||0)*(salida?-1:1),
         USD: (m.importeUSD||0)*(salida?-1:1),
-        Nota: m.nota||""
+        Nota: m.nota||"",
+        Cantidad: m.cantidad>0 ? m.cantidad : ""
       };
     });
     const ws=XLSX.utils.json_to_sheet(rows);
-    ws["!cols"]=[{wch:12},{wch:8},{wch:24},{wch:18},{wch:10},{wch:13},{wch:11},{wch:28}];
+    ws["!cols"]=[{wch:12},{wch:8},{wch:24},{wch:18},{wch:10},{wch:13},{wch:11},{wch:28},{wch:10}];
     XLSX.utils.book_append_sheet(wb,ws,"Inversiones");
   }
 

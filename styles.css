@@ -2035,3 +2035,15 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .cant-fila-campo{flex:0 0 112px;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
 .cant-fila-campo .form-input{width:100%;text-align:right}
 .cant-sug{font-size:10px;color:var(--warning);font-weight:600}
+
+/* [Splits] desdoblamientos de un ticker, dentro del bloque Posición */
+.inv-det-split{margin-top:var(--sp-3);font-size:13px}
+.inv-det-split summary{cursor:pointer;color:var(--accent);font-weight:600;padding:4px 0}
+.inv-det-split-fila{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)}
+
+/* [Historial desde el fondo] una fila por depósito: tilde, fecha y monto, ticker y cantidad */
+.hist-fila{display:grid;grid-template-columns:auto 1fr 64px 64px;align-items:center;gap:var(--sp-2);padding:var(--sp-2) 0;border-bottom:1px solid var(--border)}
+.hist-info{min-width:0;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+.hist-fila .form-input{padding:8px 6px;text-align:center;min-width:0}
+.hist-chk{display:flex;align-items:center}
+.hist-tk,.hist-cant{font-weight:600}
