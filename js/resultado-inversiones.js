@@ -255,3 +255,68 @@ function netoInvTotal(lista){
     usd: Math.round((acc.usd+p.usd)*100)/100
   }), {ars:0, usd:0});
 }
+
+
+// ═══════════════════════════════════════════
+// POSICIONES: cuántos nominales comprás y vendés de cada ticker
+// ═══════════════════════════════════════════
+// Como en el broker (Mis inversiones): por ticker, la cantidad en cartera, el precio promedio de compra, el valor inicial, y —si cargaste el precio de hoy— el
+// valor actual, el rendimiento, los días de tenencia y la TNA. Usa la cantidad (`cantidad`) de cada compra o venta, y el método del PRECIO PROMEDIO: cada compra
+// promedia el costo; una venta saca nominales al precio promedio de ese momento. Las operaciones sin cantidad no entran (se cuentan en `sinCantidad`).
+// Es una vista de control: no cambia el balance ni "Resultado inv." (que sigue la regla de capital, ver arriba).
+const numeroPositivo=n=>(typeof n==="number" && isFinite(n) && n>0 && n<1e13) ? n : null;
+function normalizarPreciosActuales(o){
+  const out={};
+  if(!o || typeof o!=="object" || Array.isArray(o)) return out;
+  Object.keys(o).forEach(t=>{
+    const v=o[t]; if(t==="__proto__" || !v || typeof v!=="object") return;
+    const precio=numeroPositivo(v.precio); if(precio===null) return;
+    out[t]={precio:Math.round(precio*10000)/10000, fecha:/^\d{4}-\d{2}-\d{2}$/.test(v.fecha||"") ? v.fecha : ""};
+  });
+  return out;
+}
+const diasEntreFechas=(a,b)=>Math.round((Date.parse(String(b).slice(0,10)+"T00:00:00Z")-Date.parse(String(a).slice(0,10)+"T00:00:00Z"))/86400000);
+// Pura. {TICKER: {ticker, cat, usd, comprado, vendido, cartera, costoUnit, valorInicial, desde, dias, sinCantidad, precio, fechaPrecio, valorActual, rend, rendPct, tna}}.
+// `hoy` ("AAAA-MM-DD") es la fecha hasta la que se cuentan los días de tenencia.
+function calcularPosiciones(lista, precios, hoy){
+  const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion").slice().sort(ordenDeOperacion);
+  const por={};
+  inv.forEach(m=>{
+    const ticker=m.ticker || "Sin ticker";
+    const o=por[ticker] || (por[ticker]={ticker, cat:m.cat, usd:false, comprado:0, vendido:0, cartera:0, costo:0, desde:null, sinCantidad:0, ops:0});
+    if(m.cat) o.cat=m.cat;
+    if(m.importeUSD>0 && !(m.importe>0)) o.usd=true;
+    const salida=isInvSalida(m);
+    if(salida && esPagoDeInversion(m)) return;                // un cupón o dividendo no mueve nominales
+    if(salida && /rendimiento/.test(normalizarTexto(m.subcat||""))) return;
+    o.ops++;
+    const c=numeroPositivo(m.cantidad);
+    if(!c){ o.sinCantidad++; return; }
+    const monto=(m.importeUSD>0 && !(m.importe>0)) ? m.importeUSD : (m.importe||0);
+    if(!salida){
+      if(o.cartera<=0) o.desde=String(m.fecha||"").slice(0,10);   // la posición empieza de nuevo
+      o.comprado+=c; o.cartera+=c; o.costo+=monto;
+    } else {
+      const saca=Math.min(c, o.cartera), prom=o.cartera>0 ? o.costo/o.cartera : 0;
+      o.vendido+=c; o.cartera-=saca; o.costo-=saca*prom;
+      if(o.cartera<=1e-9){ o.cartera=0; o.costo=0; o.desde=null; }
+    }
+  });
+  const out={};
+  Object.keys(por).forEach(t=>{
+    const o=por[t];
+    if(o.comprado===0 && o.vendido===0) { out[t]={...o, costoUnit:0, valorInicial:0, dias:null, precio:null, fechaPrecio:"", valorActual:null, rend:null, rendPct:null, tna:null}; delete out[t].costo; return; }
+    const costoUnit=o.cartera>0 ? o.costo/o.cartera : 0;
+    const p=(precios||{})[t], precio=p ? numeroPositivo(p.precio) : null;
+    const valorInicial=Math.round(o.costo*100)/100;
+    const valorActual=(precio && o.cartera>0) ? Math.round(precio*o.cartera*100)/100 : null;
+    const rend=valorActual!==null ? Math.round((valorActual-valorInicial)*100)/100 : null;
+    const rendPct=(rend!==null && valorInicial>0) ? Math.round(rend/valorInicial*10000)/100 : null;
+    const dias=(o.desde && hoy) ? Math.max(1, diasEntreFechas(o.desde, hoy)) : null;
+    const tna=(rendPct!==null && dias) ? Math.round(rendPct*365/dias*100)/100 : null;
+    out[t]={...o, cartera:Math.round(o.cartera*1e6)/1e6, comprado:Math.round(o.comprado*1e6)/1e6, vendido:Math.round(o.vendido*1e6)/1e6,
+      costoUnit:Math.round(costoUnit*100)/100, valorInicial, dias, precio, fechaPrecio:p?p.fecha:"", valorActual, rend, rendPct, tna};
+    delete out[t].costo;
+  });
+  return out;
+}

@@ -4183,7 +4183,7 @@ test("el backup incluye TODOS los datos del usuario", ()=>{
 });
 
 test("ENC_KEYS cubre todas las claves sensibles conocidas", ()=>{
-  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos"]){
+  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos","fprecios"]){
     cierto(ENC_KEYS.includes(k), `ENC_KEYS no incluye "${k}": esos datos quedarían sin cifrar`);
   }
 });
@@ -11573,6 +11573,51 @@ test("el valor actual viaja en el backup y se cifra con el PIN", ()=>{
   const antes=valoresFondos; valoresFondos={"Fondo de retiro":{ars:600,usd:null,fecha:"2026-11-16"}};
   try{ const b=armarBackup(); igual(b.datos.valoresFondos["Fondo de retiro"].ars, 600); } finally { valoresFondos=antes; }
   cierto(ENC_KEYS.includes("fvalfondos"), "el valor de los fondos queda cifrado");
+});
+
+grupo("Posiciones: nominales, precio promedio y rendimiento");
+
+test("la posición calcula como el broker: 28 nominales, precio promedio, valor inicial y actual, rendimiento, días y TNA", ()=>{
+  const op=(id,f,sub,imp,c)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs "+sub,ticker:"SPY",importe:imp,importeUSD:0,fecha:f,cantidad:c});
+  const lista=[op(1,"2026-05-28","Compra",200000,10), op(2,"2026-07-01","Compra",324639,18)];
+  const p=calcularPosiciones(lista,{SPY:{precio:21080,fecha:"2026-11-13"}},"2026-11-13").SPY;
+  igual(p.cartera,28); igual(p.comprado,28); igual(p.vendido,0); igual(p.costoUnit,18737.11); igual(p.valorInicial,524639);
+  igual(p.valorActual,590240); igual(p.rend,65601); igual(p.rendPct,12.5); igual(p.dias,169); igual(Math.round(p.tna),27);
+});
+
+test("una venta saca nominales al precio promedio; vender todo cierra la posición y una compra nueva la reabre", ()=>{
+  const op=(id,f,sub,imp,c)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs "+sub,ticker:"SPY",importe:imp,importeUSD:0,fecha:f,cantidad:c});
+  const base=[op(1,"2026-05-28","Compra",200000,10), op(2,"2026-07-01","Compra",324639,18)];
+  let p=calcularPosiciones([...base,op(3,"2026-09-01","Venta",100000,4)],{},"2026-11-13").SPY;
+  igual(p.cartera,24); igual(p.vendido,4); igual(p.costoUnit,18737.11, "el precio promedio no cambia al vender"); igual(p.valorInicial,449690.57);
+  p=calcularPosiciones([...base,op(3,"2026-09-01","Venta",600000,28)],{},"2026-11-13").SPY;
+  igual(p.cartera,0); igual(p.valorInicial,0); igual(p.dias,null);
+  p=calcularPosiciones([...base,op(3,"2026-09-01","Venta",600000,28),op(4,"2026-10-01","Compra",30000,1)],{},"2026-11-13").SPY;
+  igual(p.cartera,1); igual(p.desde,"2026-10-01", "la tenencia cuenta desde la compra que reabrió la posición");
+});
+
+test("las operaciones sin cantidad no entran a los nominales y se avisan; un cupón o rendimiento no mueve nominales", ()=>{
+  const lista=[{id:1,tipo:"Inversion",cat:"Bonos",subcat:"Bonos Compra",ticker:"AL30",importe:1000,importeUSD:0,fecha:"2026-01-01"},
+    {id:2,tipo:"Inversion",cat:"Bonos",subcat:"Bonos Compra",ticker:"AL30",importe:500,importeUSD:0,fecha:"2026-02-01",cantidad:5},
+    {id:3,tipo:"Inversion",cat:"Bonos",subcat:"Bonos Cupón",ticker:"AL30",importe:50,importeUSD:0,fecha:"2026-03-01"}];
+  const p=calcularPosiciones(lista,{},"2026-04-01").AL30;
+  igual(p.cartera,5); igual(p.sinCantidad,1, "la compra sin cantidad se cuenta aparte; el cupón no");
+  const solo=calcularPosiciones([lista[0]],{},"2026-04-01").AL30; igual(solo.valorActual,null); igual(solo.rend,null);
+});
+
+test("el precio actual se sanea, viaja en el backup y se cifra con el PIN", ()=>{
+  const n=normalizarPreciosActuales(JSON.parse('{"__proto__":{"precio":1},"SPY":{"precio":21080,"fecha":"2026-11-13"},"X":{"precio":-5},"Y":"z","Z":{"precio":"9"}}'));
+  igual(Object.keys(n).join(","),"SPY"); igual(n.SPY.precio,21080);
+  const antes=preciosActuales; preciosActuales={SPY:{precio:21080,fecha:"2026-11-13"}};
+  try{ igual(armarBackup().datos.preciosActuales.SPY.precio,21080); } finally { preciosActuales=antes; }
+  cierto(ENC_KEYS.includes("fprecios"), "los precios quedan cifrados");
+});
+
+test("Cargar y el editor de una inversión tienen el campo Cantidad", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="inv-cantidad"'), "el formulario de Cargar › Inversión pide la cantidad (opcional)");
+  const ed=renderEditForm({id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:100,importeUSD:0,fecha:"2026-01-01",cantidad:28.5});
+  cierto(ed.includes('id="edit-cantidad"') && ed.includes('value="28,5"'), "el editor muestra la cantidad guardada");
 });
 
 grupo("Aislamiento de los tests");

@@ -1010,6 +1010,33 @@ function closeCatDetail(){
 // ── HOJA DE DETALLE DE POSICIÓN (Cartera → tocar un ticker) ──
 // Perspectiva CARTERA (invSigno): "Invertido" es lo que neto tenés puesto, no un balance de
 // cash flow. Reemplaza el viejo modal de detalle (handoff opción 1c, punto 5).
+// Bloque "Posición" de la hoja de un instrumento: nominales comprados, vendidos y en cartera, precio promedio y valor inicial; con el precio de hoy cargado,
+// valor actual, rendimiento, días de tenencia y TNA. Es la misma cuenta que muestra el broker (ver calcularPosiciones).
+function posicionDetalleHTML(ticker, movsTicker){
+  const pos=calcularPosiciones(movs, preciosActuales, hoyLocal())[ticker];
+  const hayCantidad=movsTicker.some(m=>m.cantidad>0);
+  if(!pos || !hayCantidad){
+    return `<p class="txt-xs txt-muted inv-det-pos-hint">Cargá la <strong>cantidad</strong> en tus compras y ventas (tocá cada movimiento y editalo) para ver cuántos tenés, el precio promedio y el rendimiento.</p>`;
+  }
+  const usd=pos.usd, m=n=>fmtPosMonto(n,usd), c=(l,v,color)=>`<div class="inv-det-pos-celda"><span class="inv-det-lbl">${l}</span><strong${color?` style="color:${color}"`:""}>${v}</strong></div>`;
+  const col=pos.rend===null?"":(pos.rend>=0?"var(--success)":"var(--danger)");
+  const p=preciosActuales[ticker];
+  return `<div class="inv-det-pos">
+    <div class="inv-det-pos-grid">
+      ${c("Comprados",fmtCantidad(pos.comprado))}${c("Vendidos",fmtCantidad(pos.vendido))}${c("En cartera",fmtCantidad(pos.cartera))}
+      ${pos.cartera>0?c("Precio prom.",m(pos.costoUnit))+c("Valor inicial",m(pos.valorInicial)):""}
+      ${pos.valorActual!==null?c("Valor actual",m(pos.valorActual))+c("Rendimiento",`${pos.rend>=0?"+":"-"}${m(Math.abs(pos.rend))}${pos.rendPct!==null?" ("+fmtPctPos(pos.rendPct)+")":""}`,col):""}
+      ${pos.cartera>0&&pos.dias?c("Días de tenencia",String(pos.dias)):""}${pos.tna!==null?c("TNA",fmtPctPos(pos.tna),col):""}
+    </div>
+    ${pos.sinCantidad>0?`<p class="txt-xs" style="color:var(--warning);margin:6px 0 0">⚠ ${pos.sinCantidad} ${pos.sinCantidad===1?"operación sin cantidad":"operaciones sin cantidad"}: los nominales pueden no cerrar.</p>`:""}
+    ${pos.cartera>0?`<div class="inv-det-precio">
+      <label class="form-label" for="precio-ticker-input">Precio de hoy (por unidad)</label>
+      <div class="u-row-6"><input type="text" id="precio-ticker-input" class="form-input u-flex1" inputmode="decimal" placeholder="Lo que ves en tu broker" value="${p?String(p.precio).replace(".",","):""}">
+        <button type="button" class="btn-sm" onclick="guardarPrecioDeTicker(${attrJS(ticker)})">Guardar</button>${p?`<button type="button" class="btn-sm" style="color:var(--danger)" onclick="quitarPrecioDeTicker(${attrJS(ticker)})">Quitar</button>`:""}</div>
+      ${p&&p.fecha?`<p class="txt-xs txt-muted" style="margin:4px 0 0">Cargado el ${p.fecha.split("-").reverse().join("/")}</p>`:""}
+    </div>`:""}
+  </div>`;
+}
 function showInstrumentoDetail(ticker){
   const movsTicker=movs.filter(m=>m.tipo==="Inversion" && (m.ticker||"Sin ticker")===ticker)
     .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
@@ -1046,6 +1073,7 @@ function showInstrumentoDetail(ticker){
     <span><span class="inv-det-lbl">Pusiste </span><strong>${sumaTxt(puso)}</strong></span>
     <span><span class="inv-det-lbl">Cobraste </span><strong class="sale">${sumaTxt(cobro)}</strong></span>
   </div>
+  ${posicionDetalleHTML(ticker, movsTicker)}
   <div class="inv-det-lista">`+
   movsTicker.map(m=>{
     const sale=isInvSalida(m);
