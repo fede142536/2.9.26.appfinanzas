@@ -1594,14 +1594,14 @@ function guardarPrecioDeTicker(ticker){
   if(String(el.value).trim()===""){ quitarPrecioDeTicker(ticker); return; }
   const n=parseFloat(limpiarImporte(el.value));
   if(!(n>0) || n>=1e13){ showToast("Ingresá un precio válido"); return; }
-  preciosActuales[ticker]={precio:Math.round(n*10000)/10000, fecha:hoyLocal()};
+  preciosActuales[tickerClave(ticker)]={precio:Math.round(n*10000)/10000, fecha:hoyLocal()};
   guardarPreciosActuales();
   showToast("Precio guardado ✓");
   renderInvCartera(); showInstrumentoDetail(ticker);
 }
 function quitarPrecioDeTicker(ticker){
-  if(!preciosActuales[ticker]) return;
-  delete preciosActuales[ticker];
+  if(!preciosActuales[tickerClave(ticker)]) return;
+  delete preciosActuales[tickerClave(ticker)];
   guardarPreciosActuales();
   showToast("Precio quitado");
   renderInvCartera(); showInstrumentoDetail(ticker);
@@ -1718,8 +1718,8 @@ function renderInvCartera(){
   }
   const porTicker={};
   allInv.forEach(m=>{
-    const t=m.ticker||"Sin ticker";
-    if(!porTicker[t]) porTicker[t]={ticker:t, cat:m.cat, ars:0, usd:0, count:0};
+    const t=tickerClave(m.ticker);
+    if(!porTicker[t]) porTicker[t]={ticker:m.ticker||"Sin ticker", cat:m.cat, ars:0, usd:0, count:0};
     porTicker[t].ars+=(m.importe||0)*invSigno(m);
     porTicker[t].usd+=(m.importeUSD||0)*invSigno(m);
     porTicker[t].count++;
@@ -1742,12 +1742,14 @@ function renderInvCartera(){
 
   // Rendimiento total de las posiciones con precio cargado (pesos y dólares por separado).
   const rendTot={ars:{ini:0,act:0,n:0}, usd:{ini:0,act:0,n:0}};
-  abiertas.forEach(p=>{ const q=posiciones[p.ticker]; if(q && q.valorActual!==null){ const k=q.usd?"usd":"ars"; rendTot[k].ini+=q.valorInicial; rendTot[k].act+=q.valorActual; rendTot[k].n++; } });
+  abiertas.forEach(p=>{ const q=posiciones[tickerClave(p.ticker)]; if(q && q.valorActual!==null){ const k=q.usd?"usd":"ars"; rendTot[k].ini+=q.valorInicial; rendTot[k].act+=q.valorActual; rendTot[k].n++; } });
   const rendTxt=["ars","usd"].filter(k=>rendTot[k].n).map(k=>{ const d=rendTot[k].act-rendTot[k].ini; return `<strong style="color:${d>=0?"var(--success)":"var(--danger)"}">${d>=0?"+":"-"}${fmtPosMonto(Math.abs(d),k==="usd")}</strong> <span class="inv-pos-meta-i">sobre ${fmtPosMonto(rendTot[k].ini,k==="usd")}</span>`; }).join(" · ");
   const chips=catsAb.length>1 ? `<div class="inv-cart-chips" role="group" aria-label="Filtrar por categoría">`+["todas",...catsAb].map(c=>`<button type="button" class="filter-chip${invCartCat===c?" active":""}" aria-pressed="${invCartCat===c}" onclick="setInvCartCat(${attrJS(c)})">${c==="todas"?"Todas":escapeHtml(c)}</button>`).join("")+`</div>` : "";
   const fondosSinInv=fondosConComprasSinInversion(movs);
   const avisoFondo=fondosSinInv.length ? `<button type="button" class="inv-cerradas-link" onclick="abrirHistorialFondo(${attrJS(fondosSinInv[0].cat)})">⚠ ${fondosSinInv[0].faltan} ${fondosSinInv[0].faltan===1?"compra":"compras"} de ${escapeHtml(fondosSinInv[0].cat)} sin inversión · Revisar ›</button>` : "";
-  const faltan=operacionesSinCantidad(movs).length;
+  // El aviso solo cuenta los tickers de los que ya llevás cantidades: pedírselas a todo (fondos, cauciones…) sería ruido.
+  const tickersConCant=new Set(operacionesParaPosiciones(movs).filter(o=>o.cantidad>0).map(o=>tickerClave(o.ticker)));
+  const faltan=operacionesSinCantidad(movs).filter(m=>tickersConCant.has(tickerClave(m.ticker))).length;
   const avisoFaltan=faltan ? `<button type="button" class="inv-cerradas-link" onclick="abrirCantidades()">⚠ ${faltan} ${faltan===1?"operación sin cantidad":"operaciones sin cantidad"} · Completar ›</button>` : "";
   let html=chips+avisoFondo+avisoFaltan+`<div class="inv-cart-head">
     <span>${abiertas.length} ${abiertas.length===1?"posición":"posiciones"}</span>
@@ -1768,7 +1770,7 @@ function renderInvCartera(){
         <div class="inv-pos-col">
           <div class="inv-pos-top"><span class="inv-row-ticker">${escapeHtml(p.ticker)}</span><span class="inv-pos-val">${valTxt}</span></div>
           <div class="inv-pos-bar-row"><div class="inv-pos-track"><div class="inv-pos-fill" style="width:${pct}%"></div></div><span class="inv-pos-share">${share}</span></div>
-          ${posMetaHTML(posiciones[p.ticker])}
+          ${posMetaHTML(posiciones[tickerClave(p.ticker)])}
         </div>
       </div>`;
     }).join("");
@@ -1871,7 +1873,7 @@ function renderInvHistorico(){
   // "Dónde más pusiste": top 3 tickers de la moneda elegida (perspectiva cartera)
   const porTicker={};
   allInv.forEach(m=>{
-    const t=m.ticker||"Sin ticker";
+    const t=tickerClave(m.ticker);
     if(!porTicker[t]) porTicker[t]={ars:0,usd:0};
     porTicker[t].ars+=(m.importe||0)*invSigno(m);
     porTicker[t].usd+=(m.importeUSD||0)*invSigno(m);

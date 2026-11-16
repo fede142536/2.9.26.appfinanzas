@@ -1014,20 +1014,21 @@ function closeCatDetail(){
 // valor actual, rendimiento, días de tenencia y TNA. Es la misma cuenta que muestra el broker (ver calcularPosiciones).
 // En cada fila de la hoja de un instrumento: la cantidad cargada ("28 nom.") o, si falta, un aviso para completarla (se edita tocando la fila).
 // Un cupón, dividendo o rendimiento no lleva cantidad.
-function marcaCantidadFila(m){
+function marcaCantidadFila(m, efectivas){
   if(isInvSalida(m) && (esPagoDeInversion(m) || /rendimiento/.test(normalizarTexto(m.subcat||"")))) return "";
-  return m.cantidad>0 ? ` · ${fmtCantidad(m.cantidad)} nom.` : ` · <span style="color:var(--warning)">falta la cantidad: tocá para completarla</span>`;
+  const c=m.cantidad>0 ? m.cantidad : (efectivas && efectivas.get(m.id));   // la del movimiento del fondo que la acompaña también vale
+  return c>0 ? ` · ${fmtCantidad(c)} nom.${m.cantidad>0?"":" (del fondo)"}` : ` · <span style="color:var(--warning)">falta la cantidad: tocá para completarla</span>`;
 }
 function posicionDetalleHTML(ticker, movsTicker){
-  const pos=calcularPosiciones(movs, preciosActuales, hoyLocal(), splitsInv)[ticker];
-  const hayCantidad=movsTicker.some(m=>m.cantidad>0);
+  const pos=calcularPosiciones(movs, preciosActuales, hoyLocal(), splitsInv)[tickerClave(ticker)];
+  const hayCantidad=!!pos && (pos.comprado>0 || pos.vendido>0);
   if(!pos || !hayCantidad){
     return `<p class="txt-xs txt-muted inv-det-pos-hint">Cargá la <strong>cantidad</strong> en tus compras y ventas para ver cuántos tenés, el precio promedio y el rendimiento.</p>
       <button type="button" class="btn-sm" style="width:100%;margin:0 0 var(--sp-3)" onclick="closeInstrumentoDetail();abrirCantidades(${attrJS(ticker)})">Completar cantidades de ${escapeHtml(ticker)}</button>`;
   }
   const usd=pos.usd, m=n=>fmtPosMonto(n,usd), c=(l,v,color)=>`<div class="inv-det-pos-celda"><span class="inv-det-lbl">${l}</span><strong${color?` style="color:${color}"`:""}>${v}</strong></div>`;
   const col=pos.rend===null?"":(pos.rend>=0?"var(--success)":"var(--danger)");
-  const p=preciosActuales[ticker];
+  const p=preciosActuales[tickerClave(ticker)];
   return `<div class="inv-det-pos">
     <div class="inv-det-pos-grid">
       ${c("Comprados",fmtCantidad(pos.comprado))}${c("Vendidos",fmtCantidad(pos.vendido))}${c("En cartera",fmtCantidad(pos.cartera))}
@@ -1047,7 +1048,7 @@ function posicionDetalleHTML(ticker, movsTicker){
 }
 // Desdoblamientos (splits) de un ticker: los nominales cargados antes de la fecha se multiplican por el factor (un split 3 a 1 triplica los que tenías).
 function splitsDetalleHTML(ticker){
-  const lista=(splitsInv||{})[ticker]||[];
+  const lista=(splitsInv||{})[tickerClave(ticker)]||[];
   return `<details class="inv-det-split"${lista.length?" open":""}>
     <summary>Desdoblamiento (split)${lista.length?` · ${lista.length}`:""}</summary>
     <p class="txt-xs txt-muted" style="margin:6px 0">Si el ticker se desdobló (por ejemplo 3 a 1) y tus compras viejas están en nominales de antes, registrá el factor y la fecha: la cantidad de las anteriores se multiplica.</p>
@@ -1067,18 +1068,18 @@ function guardarSplit(ticker){
   const f=parseFloat(limpiarImporte(document.getElementById("split-factor")?.value||"")), fecha=document.getElementById("split-fecha")?.value||"";
   if(!(f>0 && f<=1000) || f===1){ showToast("Ingresá un factor válido (por ejemplo 3)"); return; }
   if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){ showToast("Elegí la fecha del desdoblamiento"); return; }
-  splitsInv=normalizarSplits({...splitsInv, [ticker]:[...((splitsInv||{})[ticker]||[]), {fecha, factor:f}]});
+  splitsInv=normalizarSplits({...splitsInv, [tickerClave(ticker)]:[...((splitsInv||{})[tickerClave(ticker)]||[]), {fecha, factor:f}]});
   guardarSplitsInv(); showToast("Desdoblamiento registrado ✓");
   renderInvCartera(); showInstrumentoDetail(ticker);
 }
 function quitarSplit(ticker,i){
-  const lista=((splitsInv||{})[ticker]||[]).filter((_,j)=>j!==i);
-  const nuevo={...splitsInv}; if(lista.length) nuevo[ticker]=lista; else delete nuevo[ticker];
+  const k=tickerClave(ticker), lista=((splitsInv||{})[k]||[]).filter((_,j)=>j!==i);
+  const nuevo={...splitsInv}; if(lista.length) nuevo[k]=lista; else delete nuevo[k];
   splitsInv=normalizarSplits(nuevo); guardarSplitsInv(); showToast("Desdoblamiento quitado");
   renderInvCartera(); showInstrumentoDetail(ticker);
 }
 function showInstrumentoDetail(ticker){
-  const movsTicker=movs.filter(m=>m.tipo==="Inversion" && (m.ticker||"Sin ticker")===ticker)
+  const movsTicker=movs.filter(m=>m.tipo==="Inversion" && tickerClave(m.ticker)===tickerClave(ticker))
     .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   const contentEl=document.getElementById("instrumento-detail-content");
   if(!movsTicker.length){
@@ -1086,6 +1087,7 @@ function showInstrumentoDetail(ticker){
     document.getElementById("modal-instrumento-detail").classList.add("open");
     return;
   }
+  const efectivasDetalle=new Map(operacionesParaPosiciones(movs).filter(o=>o.cantidad>0).map(o=>[o.id,o.cantidad]));
   const cat=movsTicker[0].cat, cuenta=movsTicker[0].cuenta;
   let ars=0, usd=0;
   movsTicker.forEach(m=>{ ars+=(m.importe||0)*invSigno(m); usd+=(m.importeUSD||0)*invSigno(m); });
@@ -1122,7 +1124,7 @@ function showInstrumentoDetail(ticker){
       <span class="inv-det-flecha${sale?" sale":""}" aria-hidden="true">${sale?"↓":"↑"}</span>
       <span class="inv-det-fila-mid">
         <span class="inv-det-fila-tit">${escapeHtml(m.subcat||m.cat)}</span>
-        <span class="inv-det-fila-fecha">${fdyInv(m.fecha)}${marcaCantidadFila(m)}</span>
+        <span class="inv-det-fila-fecha">${fdyInv(m.fecha)}${marcaCantidadFila(m, efectivasDetalle)}</span>
       </span>
       <span class="inv-det-fila-monto${sale?" sale":""}">${invMontoTxt(m)}</span>
     </button>`;
@@ -1143,7 +1145,7 @@ function closeInstrumentoDetail(){
 // categoría, ticker y cuenta precargados, y la primera operación de salida (cobro) o de
 // entrada (compra) de esa categoría ya seleccionada en "Operación".
 function irACargarInversion(ticker, modo){
-  const pos=movs.filter(m=>m.tipo==="Inversion" && (m.ticker||"Sin ticker")===ticker);
+  const pos=movs.filter(m=>m.tipo==="Inversion" && tickerClave(m.ticker)===tickerClave(ticker));
   if(!pos.length) return;
   const cat=pos[0].cat, cuenta=pos[0].cuenta;
   const esCobro=modo==="cobro";

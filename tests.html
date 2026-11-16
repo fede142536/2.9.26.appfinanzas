@@ -11634,7 +11634,7 @@ test("completar cantidades: lista las compras y ventas sin cantidad y sugiere de
   const lista=[inv(1,"2026-05-28","Compra",200000), inv(2,"2026-07-01","Compra",324639,{nota:"Spy x 18"}), inv(3,"2026-09-01","Venta",100000),
     inv(4,"2026-10-01","Compra",1000,{cantidad:3}), {...inv(5,"2026-03-01","Cupón",50),cat:"Bonos"}, {...inv(6,"2026-02-01","Compra",1000),mep:true},
     {id:7,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:100500,moneda:"ARS",usaAhorro:true,traspaso:true,fecha:"2026-09-02",nota:"SPY x 4"}];
-  igual(operacionesSinCantidad(lista).map(m=>m.id).join(","), "3,2,1", "sin cupones, MEP ni lo que ya tiene cantidad; la más nueva primero");
+  igual(operacionesSinCantidad(lista).map(m=>m.id).join(","), "2,1", "sin cupones, MEP ni lo que ya tiene cantidad (la venta ya la dice su retiro del fondo); la más nueva primero");
   igual(operacionesSinCantidad(lista,"AL30").length, 0);
   igual(sugerirCantidad(lista[1],lista), 18, "de la nota de la propia compra");
   igual(sugerirCantidad(lista[2],lista), 4, "del retiro del fondo que acompaña a la venta");
@@ -11719,6 +11719,31 @@ test("el Excel exporta ticker y cantidad, y las pantallas nuevas existen", async
   cierto(html.includes('id="modal-historial-fondo"') && html.includes("crearInversionesDesdeFondo()"));
   const src=await (await fetch("js/importar-exportar.js")).text();
   cierto(src.includes('Cantidad: m.cantidad>0 ? m.cantidad : ""') && src.includes('Ticker: m.ticker||""'), "las hojas Movimientos e Inversiones traen la cantidad");
+});
+
+test("la cartera suma lo que dice el fondo: inversiones sin cantidad la toman del movimiento del fondo y las ventas que solo están en el fondo cuentan", ()=>{
+  const dep=(id,f,imp,nota,extra)=>({id,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:imp,moneda:"ARS",esAhorro:true,usaAhorro:false,fecha:f,cuenta:"Balanz",nota,...extra});
+  const ret=(id,f,imp,nota,extra)=>({...dep(id,f,imp,nota,extra),esAhorro:false,usaAhorro:true,traspaso:true});
+  const inv=(id,f,sub,imp)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs "+sub,ticker:"SPY",importe:imp,importeUSD:0,fecha:f});
+  const lista=[dep(1,"2026-04-01",100000,"Spy x 5"),                       // solo en el fondo (de antes de cargar inversiones)
+    inv(2,"2026-05-08","Compra",60000), dep(3,"2026-05-08",60000,"Spy x 3"),   // inversión sin cantidad + su depósito
+    inv(4,"2026-06-18","Venta",50000), ret(5,"2026-06-18",50000,"Spy x 2"),    // venta con su retiro
+    ret(6,"2026-10-22",30000,"Spy x 1")];                                    // venta solo en el fondo
+  const p=calcularPosiciones(lista,{},"2026-11-13").SPY;
+  igual(p.comprado,8); igual(p.vendido,3); igual(p.cartera,5); igual(p.sinCantidad,0, "nada queda sin cantidad");
+  igual(operacionesParaPosiciones(lista).filter(o=>o.desdeFondo).map(o=>o.id).join(","), "1,6", "solo lo que no tiene inversión se suma desde el fondo");
+  igual(operacionesSinCantidad(lista).length, 0, "las inversiones que ya dicen su cantidad en el fondo no se piden de nuevo");
+});
+
+test("SPY, Spy y spy son el mismo ticker: una venta cargada con otra mayúscula no cuenta entera como ganancia", ()=>{
+  const compra={id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:200000,importeUSD:0,fecha:"2026-09-01",cantidad:2};
+  const venta={id:2,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"Spy",importe:104003.22,importeUSD:0,fecha:"2026-10-22",cantidad:1};
+  igual((calcularResultadoInv([compra,venta]).gananciaPorMes["2026-10"]||{}).ars||0, 0, "es devolución de capital, no ganancia");
+  igual(tickerClave("Spy"), "SPY"); igual(tickerClave(""), "SIN TICKER");
+  const p=calcularPosiciones([compra,venta],{},"2026-11-13");
+  igual(Object.keys(p).join(","), "SPY", "una sola posición"); igual(p.SPY.cartera,1); igual(p.SPY.ticker,"SPY");
+  igual(operacionesSinCantidad([{...compra,cantidad:undefined},{...venta,cantidad:undefined}],"SPY").length, 2, "el filtro por ticker tampoco distingue mayúsculas");
+  igual(Object.keys(normalizarPreciosActuales({spy:{precio:5}})).join(","), "SPY");
 });
 
 grupo("Aislamiento de los tests");
