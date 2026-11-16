@@ -450,6 +450,7 @@ function setTipo(t){
   if(t!=="Gasto"){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
+    actualizarFondoPos("inp");
     document.getElementById("inp-traspaso").checked=false;
     const frecEl=document.getElementById("inp-frecuente");
     if(frecEl) frecEl.checked=false;
@@ -788,6 +789,13 @@ async function guardarSinFreno(){
     usaAhorro: tipo==="Gasto" && document.getElementById("inp-usa-ahorro").checked,
     traspaso: tipo==="Gasto" && document.getElementById("inp-traspaso").checked,
     recuperable: tipo==="Gasto" ? (parseFloat(document.getElementById("inp-recup").value)||0) : 0};
+  if(tipo==="Gasto" && (mov.esAhorro || mov.usaAhorro)){
+    // Compra o venta que acompaña a este movimiento del fondo (opcional): alimenta Cartera y la conciliación.
+    const tk=nombreSeguro((document.getElementById("inp-fondo-ticker")?.value||"").trim()).toUpperCase();
+    const cant=parseFloat(limpiarImporte(document.getElementById("inp-fondo-cantidad")?.value||""))||0;
+    if(tk) mov.ticker=tk;
+    if(cant>0 && cant<1e13) mov.cantidad=Math.round(cant*1e6)/1e6;
+  }
   // Si es gasto frecuente, agregamos los flags. El "mesInicio" es el mes de la fecha cargada.
   if(esFrec){
     mov.frecuente=true;
@@ -846,6 +854,7 @@ function resetForm(t){
     document.getElementById("inp-ahorro").checked=false;
     document.getElementById("inp-usa-ahorro").checked=false;
     document.getElementById("inp-traspaso").checked=false;
+    ["inp-fondo-ticker","inp-fondo-cantidad"].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=""; }); actualizarFondoPos("inp");
     const fi=document.getElementById("inp-frec-ingreso"); if(fi) fi.checked=false;   // un ingreso no se repite salvo que lo pidas de nuevo
     const sa=document.getElementById("ing-sale-ahorro"); if(sa) sa.checked=false;   // ni sale de un fondo
     if(typeof actualizarSaleDeAhorroIngreso==="function") actualizarSaleDeAhorroIngreso();

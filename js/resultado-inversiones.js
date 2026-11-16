@@ -347,11 +347,12 @@ function sugerirCantidad(m, lista){
   let mejor=null, mejorP=Infinity;
   (lista||[]).forEach(x=>{
     if(!x || x.tipo!=="Gasto" || !(x.esAhorro||x.usaAhorro) || x.moneda==="USD") return;
-    if(!normalizarTexto(x.nota||"").split(/[^a-z0-9]+/).includes(tk)) return;
+    const tkFondo=x.ticker ? normalizarTexto(x.ticker) : "";
+    if(tkFondo ? tkFondo!==tk : !normalizarTexto(x.nota||"").split(/[^a-z0-9]+/).includes(tk)) return;
     const dias=Math.abs(Math.round((Date.parse(String(x.fecha).slice(0,10)+"T00:00:00Z")-Date.parse(String(m.fecha).slice(0,10)+"T00:00:00Z"))/86400000));
     const dif=Math.abs((x.importe||0)-monto)/monto;
     if(dias>7 || dif>0.03) return;
-    const c=leer(x.nota); if(!c) return;
+    const c=x.cantidad>0 ? Number(x.cantidad) : leer(x.nota); if(!c) return;
     const puntaje=dif*100+dias; if(puntaje<mejorP){ mejorP=puntaje; mejor=c; }
   });
   return mejor;

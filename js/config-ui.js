@@ -138,6 +138,7 @@ function onAhorroToggle(){
     const frec=document.getElementById("inp-frecuente");
     if(frec) frec.checked=false;
   }
+  actualizarFondoPos("inp");
 }
 function onUsaAhorroToggle(){
   ahorroTocado=true;
@@ -146,6 +147,14 @@ function onUsaAhorroToggle(){
     const frec=document.getElementById("inp-frecuente");
     if(frec) frec.checked=false;
   }
+  actualizarFondoPos("inp");
+}
+// El ticker y la cantidad de un movimiento del fondo de ahorro (compra o venta de un CEDEAR, acción o fondo) solo se piden cuando el movimiento
+// suma o resta del fondo: `pref` es "inp" (Cargar) o "edit" (el editor).
+function actualizarFondoPos(pref){
+  const a=document.getElementById(pref==="edit"?"edit-ahorro":"inp-ahorro"), u=document.getElementById(pref==="edit"?"edit-usa-ahorro":"inp-usa-ahorro");
+  const g=document.querySelector(pref==="edit"?"#edit-fondo-pos":"#inp-fondo-pos");
+  if(g) g.style.display=(a&&a.checked)||(u&&u.checked) ? "" : "none";
 }
 // Frecuente es excluyente con ahorro/retiro: si activás frecuente, desmarca ambos
 function onFrecuenteToggle(){
@@ -165,11 +174,13 @@ function onEditAhorroToggle(){
   const a=document.getElementById("edit-ahorro");
   const u=document.getElementById("edit-usa-ahorro");
   if(a&&u&&a.checked) u.checked=false;
+  actualizarFondoPos("edit");
 }
 function onEditUsaAhorroToggle(){
   const a=document.getElementById("edit-ahorro");
   const u=document.getElementById("edit-usa-ahorro");
   if(a&&u&&u.checked) a.checked=false;
+  actualizarFondoPos("edit");
 }
 
 // Atajos de fecha rápidos para los formularios
