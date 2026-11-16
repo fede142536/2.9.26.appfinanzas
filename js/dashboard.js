@@ -1012,6 +1012,12 @@ function closeCatDetail(){
 // cash flow. Reemplaza el viejo modal de detalle (handoff opción 1c, punto 5).
 // Bloque "Posición" de la hoja de un instrumento: nominales comprados, vendidos y en cartera, precio promedio y valor inicial; con el precio de hoy cargado,
 // valor actual, rendimiento, días de tenencia y TNA. Es la misma cuenta que muestra el broker (ver calcularPosiciones).
+// En cada fila de la hoja de un instrumento: la cantidad cargada ("28 nom.") o, si falta, un aviso para completarla (se edita tocando la fila).
+// Un cupón, dividendo o rendimiento no lleva cantidad.
+function marcaCantidadFila(m){
+  if(isInvSalida(m) && (esPagoDeInversion(m) || /rendimiento/.test(normalizarTexto(m.subcat||"")))) return "";
+  return m.cantidad>0 ? ` · ${fmtCantidad(m.cantidad)} nom.` : ` · <span style="color:var(--warning)">falta la cantidad: tocá para completarla</span>`;
+}
 function posicionDetalleHTML(ticker, movsTicker){
   const pos=calcularPosiciones(movs, preciosActuales, hoyLocal())[ticker];
   const hayCantidad=movsTicker.some(m=>m.cantidad>0);
@@ -1082,7 +1088,7 @@ function showInstrumentoDetail(ticker){
       <span class="inv-det-flecha${sale?" sale":""}" aria-hidden="true">${sale?"↓":"↑"}</span>
       <span class="inv-det-fila-mid">
         <span class="inv-det-fila-tit">${escapeHtml(m.subcat||m.cat)}</span>
-        <span class="inv-det-fila-fecha">${fdyInv(m.fecha)}</span>
+        <span class="inv-det-fila-fecha">${fdyInv(m.fecha)}${marcaCantidadFila(m)}</span>
       </span>
       <span class="inv-det-fila-monto${sale?" sale":""}">${invMontoTxt(m)}</span>
     </button>`;
