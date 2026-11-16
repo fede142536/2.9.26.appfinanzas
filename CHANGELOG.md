@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v253**
+**Versión actual: v254**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 16 de noviembre de 2026
 
+- **v254** · Los movimientos del fondo de ahorro (depósito o retiro) tienen ticker y cantidad, al cargar y al editar; el retiro de una venta toma los de la venta
 - **v253** · Pantalla para completar de una vez las cantidades de las compras y ventas viejas, con sugerencias desde la nota o el depósito al fondo
 - **v252** · En la hoja de cada instrumento, las operaciones sin cantidad se marcan para completarlas al editarlas
 - **v251** · Posiciones como en el broker: cantidad en cada compra y venta, y en Cartera nominales, precio promedio, valor inicial, rendimiento, días de tenencia y TNA con el precio de hoy

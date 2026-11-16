@@ -58,6 +58,7 @@ function crearRetiroPorVenta(inv, fondo, id, montoRetiro){
   return {id, tipo:"Gasto", importe: usd ? 0 : monto, importeOrig: usd ? monto : null, moneda: usd ? "USD" : "ARS",
     cat:fondo.cat, subcat:fondo.sub, cuenta:inv.cuenta||"", fecha:inv.fecha, nota: inv.nota || `Venta ${inv.ticker||""}`.trim(), tags:[],
     esAhorro:false, usaAhorro:true, traspaso:true, recuperable:0, origenInvId:inv.id,
+    ...((montoRetiro>0 && montoRetiro<(usd ? inv.importeUSD : inv.importe)) ? {soloCapital:true} : {}),
     ...(inv.ticker ? {ticker:inv.ticker} : {}), ...(inv.cantidad>0 ? {cantidad:inv.cantidad} : {})};
 }
 
@@ -66,7 +67,9 @@ function sincronizarRetiroLigado(inv, lista){
   let n=0;
   (lista||[]).forEach(x=>{
     if(x.origenInvId!==inv.id) return;
-    const usd=!!(inv.importeUSD && !inv.importe), monto=montoRetiroDeVenta(inv, lista);
+    // Solo un retiro que NACIÓ por el capital (soloCapital) se vuelve a calcular con el capital cargado. Uno cargado a mano, o creado antes de que existiera esa regla,
+    // conserva el monto entero de la venta: con un historial incompleto (compras viejas que están solo en el fondo) el capital conocido es menor al real y achicaría mal el retiro.
+    const usd=!!(inv.importeUSD && !inv.importe), monto=x.soloCapital ? montoRetiroDeVenta(inv, lista) : (usd ? inv.importeUSD : inv.importe);
     x.moneda=usd ? "USD" : "ARS"; x.importe=usd ? 0 : monto; x.importeOrig=usd ? monto : null;
     x.fecha=inv.fecha; x.cuenta=inv.cuenta||"";
     if(inv.ticker) x.ticker=inv.ticker;

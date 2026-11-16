@@ -11535,16 +11535,17 @@ test("una venta en 600 de algo que costó 500 retira 500 del fondo y los 100 res
   const sinGanancia={...venta,id:8,importe:300}; igual(montoRetiroDeVenta(sinGanancia,[compra,sinGanancia]), 300, "sin ganancia, sale todo lo cobrado");
 });
 
-test("editar la venta vuelve a calcular el retiro ligado y el total a mano no cambia", ()=>{
+test("editar la venta: un retiro por el capital se recalcula y uno viejo o cargado a mano conserva el monto entero", ()=>{
   const compra={id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:500,importeUSD:0,fecha:"2026-09-02"};
   const venta={id:2,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"SPY",importe:600,importeUSD:0,fecha:"2026-11-10"};
-  const retiro={id:3,tipo:"Gasto",importe:600,moneda:"ARS",usaAhorro:true,traspaso:true,origenInvId:2,fecha:"2026-11-10",cat:"Fondo de retiro"};
-  const lista=[compra,venta,retiro];
-  igual(sincronizarRetiroLigado(venta,lista), 1);
-  igual(retiro.importe, 500, "un retiro viejo por todo el monto pasa a ser solo por el capital");
-  venta.importe=700; sincronizarRetiroLigado(venta,lista);
-  igual(retiro.importe, 500, "si la venta sube, el capital sigue siendo 500");
-  igual(calcularResultadoInv(lista).gananciaPorMes["2026-11"].ars, 200);
+  const viejo={id:3,tipo:"Gasto",importe:600,moneda:"ARS",usaAhorro:true,traspaso:true,origenInvId:2,fecha:"2026-11-10",cat:"Fondo de retiro"};
+  sincronizarRetiroLigado(venta,[compra,venta,viejo]);
+  igual(viejo.importe, 600, "un retiro sin la marca soloCapital no se achica: el capital conocido puede ser menor al real");
+  const nuevo=crearRetiroPorVenta(venta,{cat:"Fondo de retiro",sub:""},4,montoRetiroDeVenta(venta,[compra,venta]));
+  igual(nuevo.importe,500); cierto(nuevo.soloCapital===true, "el retiro por el capital queda marcado");
+  venta.importe=700; sincronizarRetiroLigado(venta,[compra,venta,nuevo]);
+  igual(nuevo.importe,500, "si la venta sube, el capital sigue siendo 500"); igual(calcularResultadoInv([compra,venta,nuevo]).gananciaPorMes["2026-11"].ars, 200);
+  const entero=crearRetiroPorVenta(venta,{cat:"Fondo de retiro",sub:""},5,700); cierto(!entero.soloCapital, "un retiro por todo el monto no lleva la marca");
 });
 
 grupo("Valor actual de un fondo de ahorro");
