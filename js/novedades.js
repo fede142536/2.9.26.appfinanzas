@@ -6,6 +6,7 @@
 // que se ve o se usa; las que solo corrigen algo interno no hace falta anotarlas. Hay un test que pide que la versión actual tenga la suya.
 // Cada entrada: {v: número de versión, titulo, texto, ir: nombre de una de las acciones de NOVEDADES_IR (opcional)}.
 const NOVEDADES=[
+  {v:263, titulo:"Manual de uso", texto:"En Configuración › Ayuda y manual: cómo cargar cada movimiento y preguntas frecuentes, con un buscador y un botón que te lleva a cada pantalla.", ir:"manual"},
   {v:262, titulo:"Novedades al actualizar", texto:"Cada vez que la app se actualiza te cuenta qué hay de nuevo y dónde está. Podés volver a verlas en Configuración › General › Versión de la app."},
   {v:261, titulo:"Revisión de tus inversiones", texto:"Detecta ventas contadas casi enteras como ganancia, compras cargadas dos veces, nominales que no cierran y tickers escritos distinto, con el arreglo de cada uno.", ir:"revision"},
   {v:261, titulo:"La compra del fondo, una sola vez", texto:"Al cargar una compra, «Es de mi fondo de ahorro» crea el depósito al fondo solo (se tilda sola si el ticker ya va a un fondo).", ir:"cargarInversion"},
@@ -27,7 +28,8 @@ const NOVEDADES_IR={
   cartera:()=>{ irAPagina("inv"); setInvVista("cart"); },
   movimientos:()=>irAPagina("mov"),
   ahorros:()=>irAPagina("ahorro"),
-  cargarInversion:()=>{ irAPagina("cargar"); if(typeof setTipo==="function") setTipo("Inversion"); }
+  cargarInversion:()=>{ irAPagina("cargar"); if(typeof setTipo==="function") setTipo("Inversion"); },
+  manual:()=>abrirManual()
 };
 // La versión que está corriendo, del <meta name="enola-version" content="enola-v262"> (el mismo número que el caché del service worker).
 function versionActualApp(){
