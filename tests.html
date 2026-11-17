@@ -4174,7 +4174,7 @@ test("el backup incluye TODOS los datos del usuario", ()=>{
 });
 
 test("ENC_KEYS cubre todas las claves sensibles conocidas", ()=>{
-  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos","fprecios"]){
+  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos","fprecios","fsplits","fsaldoscta"]){
     cierto(ENC_KEYS.includes(k), `ENC_KEYS no incluye "${k}": esos datos quedarían sin cifrar`);
   }
 });
@@ -11974,6 +11974,68 @@ test("la barra marca la pantalla actual, y «Más» cuando estás en una de las 
     actualizarTabbar("cargar"); igual(on(),"cargar");
   } finally { bar.remove(); }
   cierto(esCampoDeTexto({tagName:"INPUT",type:"text"}) && !esCampoDeTexto({tagName:"INPUT",type:"checkbox"}) && esCampoDeTexto({tagName:"TEXTAREA"}), "solo los campos de texto esconden la barra");
+});
+
+grupo("Saldo real de una cuenta");
+
+test("cada movimiento mueve la plata de la cuenta como corresponde", ()=>{
+  const g=(extra)=>({tipo:"Gasto",importe:100,moneda:"ARS",cuenta:"Galicia",...extra});
+  igual(flujoDeCuenta({tipo:"Ingreso",importe:100,moneda:"ARS",cuenta:"Galicia"},"Galicia"),100);
+  igual(flujoDeCuenta(g({}),"Galicia"),-100, "un gasto resta");
+  igual(flujoDeCuenta(g({esAhorro:true}),"Galicia"),-100, "mandar al fondo saca plata de la cuenta");
+  igual(flujoDeCuenta(g({usaAhorro:true,traspaso:true}),"Galicia"),100, "sacar del fondo a la cuenta suma");
+  igual(flujoDeCuenta(g({usaAhorro:true}),"Galicia"),0, "pagar algo con plata del fondo no toca la cuenta");
+  igual(flujoDeCuenta(g({traspaso:true,cuentaDestino:"MP"}),"Galicia"),-100); igual(flujoDeCuenta(g({traspaso:true,cuentaDestino:"MP"}),"MP"),100, "el traspaso llega a la otra cuenta");
+  igual(flujoDeCuenta(g({moneda:"USD",importe:0,importeOrig:5}),"Galicia"),0, "los dólares van aparte");
+  igual(flujoDeCuenta({tipo:"Inversion",importe:100,cuenta:"Galicia"},"Galicia"),0);
+  igual(flujoDeCuenta(g({}),"Otra"),0);
+});
+
+test("el saldo según la app parte del saldo real y suma solo lo posterior", ()=>{
+  const ancla={saldo:250000, fecha:"2026-11-10", ts:5000};
+  const lista=[
+    {id:4000,tipo:"Gasto",importe:1000,moneda:"ARS",cuenta:"Galicia",fecha:"2026-11-10"},     // mismo día, cargado ANTES del saldo: ya estaba incluido
+    {id:6000,tipo:"Gasto",importe:2000,moneda:"ARS",cuenta:"Galicia",fecha:"2026-11-10"},     // mismo día, después
+    {id:7000,tipo:"Ingreso",importe:50000,moneda:"ARS",cuenta:"Galicia",fecha:"2026-11-15"},
+    {id:8000,tipo:"Gasto",importe:9999,moneda:"ARS",cuenta:"Galicia",fecha:"2026-11-05"},     // anterior
+    {id:9000,tipo:"Gasto",importe:7777,moneda:"ARS",cuenta:"Galicia",fecha:"2026-12-01"}];    // futuro
+  const r=saldoCuentaSegunApp(lista,"Galicia",ancla,"2026-11-17");
+  igual(r.saldo, 298000, "250.000 − 2.000 + 50.000"); igual(r.movimientos,2);
+  igual(saldoCuentaSegunApp(lista,"Galicia",null,"2026-11-17"), null, "sin saldo real no hay saldo");
+  const n=normalizarSaldosCuentas(JSON.parse('{"__proto__":{"saldo":1,"fecha":"2026-01-01"},"Galicia":{"saldo":-1500.504,"fecha":"2026-11-17","ts":3},"X":{"saldo":"1","fecha":"2026-11-17"},"Y":{"saldo":1,"fecha":"mal"}}'));
+  igual(Object.keys(n).join(","),"Galicia"); igual(n.Galicia.saldo,-1500.5, "un saldo negativo (descubierto) vale");
+  const antes=saldosCuentas; saldosCuentas={Galicia:{saldo:1,fecha:"2026-11-17",ts:1}};
+  try{ igual(armarBackup().datos.saldosCuentas.Galicia.saldo,1); } finally { saldosCuentas=antes; }
+});
+
+test("ajustar registra la diferencia como gasto de ajuste y deja el saldo nuevo como punto de partida", ()=>{
+  const antes=movs, antesS=saldosCuentas;
+  const fns=["save","renderDashCuentas","showCuentaDetail","ofrecerDeshacerCambio"], orig=fns.map(f=>window[f]); fns.forEach(f=>{ window[f]=()=>{}; });
+  const inp=document.createElement("input"); inp.id="saldo-real-input"; document.body.appendChild(inp);
+  try{
+    const hoy=hoyLocal();
+    movs=[{id:1,tipo:"Ingreso",importe:100000,moneda:"ARS",cuenta:"Galicia",fecha:hoy}];
+    saldosCuentas={Galicia:{saldo:50000, fecha:"2020-01-01", ts:0}};
+    igual(saldoActualDeCuenta("Galicia").saldo, 150000);
+    inp.value="147.000"; guardarSaldoReal("Galicia", true);
+    const aj=movs.find(m=>m.ajusteSaldo);
+    cierto(!!aj, "se registró el ajuste"); igual(aj.tipo,"Gasto"); igual(aj.importe,3000); igual(aj.cuenta,"Galicia"); igual(aj.cat,"Ajustes");
+    igual(saldosCuentas.Galicia.saldo,147000); igual(saldoActualDeCuenta("Galicia").saldo,147000, "el ajuste no se cuenta dos veces");
+    inp.value="150.000"; guardarSaldoReal("Galicia", false);
+    igual(movs.filter(m=>m.ajusteSaldo).length,1, "solo corregir no carga ningún movimiento"); igual(saldoActualDeCuenta("Galicia").saldo,150000);
+    igual(leerSaldoEscrito("-1.500,50"),-1500.5); igual(leerSaldoEscrito(""),null);
+  } finally { inp.remove(); movs=antes; saldosCuentas=antesS; fns.forEach((f,i)=>{ window[f]=orig[i]; }); }
+});
+
+test("una cuenta con saldo real se ve en Saldo por cuenta aunque este año no tenga movimientos", ()=>{
+  const antes=movs, antesS=saldosCuentas, el=document.createElement("div"); el.id="dash-cuentas"; document.body.appendChild(el);
+  const orig=window.renderDashUSD; window.renderDashUSD=()=>{};
+  try{
+    movs=[]; saldosCuentas={"Caja de ahorro":{saldo:12345, fecha:"2020-01-01", ts:0}};
+    renderDashCuentas();
+    cierto(el.textContent.includes("Caja de ahorro"), "aparece la cuenta"); cierto(el.textContent.includes("12.345"), "con su saldo de hoy");
+    igual(typeof irASaldoPorCuenta, "function"); igual(typeof NOVEDADES_IR.saldoCuenta, "function"); igual(typeof MANUAL_IR.saldoCuenta, "function");
+  } finally { el.remove(); movs=antes; saldosCuentas=antesS; window.renderDashUSD=orig; }
 });
 
 grupo("Aislamiento de los tests");

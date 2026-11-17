@@ -41,6 +41,12 @@ function openDashYearCompleto(anio){
   document.getElementById("dash-year-full").style.display="block";
   renderDashYearCompleto();
 }
+// Lleva directo a la lista "Saldo por cuenta" (está en el año completo): la usan el manual y las novedades.
+function irASaldoPorCuenta(){
+  showPage("dash", document.querySelector('.nav-btn[onclick*="\'dash\'"]'));
+  openDashYearCompleto(new Date().getFullYear());
+  setTimeout(()=>{ const c=document.getElementById("dash-cuentas"); if(c && c.closest(".card")) c.closest(".card").scrollIntoView({behavior:"smooth", block:"start"}); }, 250);
+}
 function closeDashYearCompleto(){
   document.getElementById("dash-year-full").style.display="none";
   document.getElementById("dash-resumen").style.display="block";
@@ -637,7 +643,7 @@ function renderDashCuentas(){
     const ym=String(dashYear)+"-"+mm;
     movsAnio.push(...getMesMov(ym));
   });
-  if(!movsAnio.length){
+  if(!movsAnio.length && !Object.keys(saldosCuentas).length){
     el.innerHTML=`<p class="txt-md txt-muted">Sin movimientos en ${dashYear}.</p>`;
     return;
   }
@@ -648,14 +654,16 @@ function renderDashCuentas(){
     const c=m.cuenta||"Sin cuenta";
     (listaPorCuenta[c]=listaPorCuenta[c]||[]).push(m);
   });
+  // Una cuenta con saldo real cargado se sigue viendo aunque este año no tenga movimientos.
+  Object.keys(saldosCuentas).forEach(c=>{ if(!listaPorCuenta[c]) listaPorCuenta[c]=[]; });
   // La cuenta de cada una es la de resumenDePeriodo(), la misma del Balance de Movimientos. El
   // resultado de inversión no se asigna a una cuenta (es del conjunto), por eso va en cero.
   const cuentas=Object.entries(listaPorCuenta)
     .map(([c,lista])=>{
       const rp=resumenDePeriodo(lista, {ars:0});
-      return {cuenta:c, ing:rp.ingresos, gas:rp.gastos, aho:rp.ahorrado, balance:rp.disponible, count:lista.length};
+      return {cuenta:c, ing:rp.ingresos, gas:rp.gastos, aho:rp.ahorrado, balance:rp.disponible, count:lista.length, saldoHoy:saldoActualDeCuenta(c)};
     })
-    .filter(c=>c.count>0)
+    .filter(c=>c.count>0 || c.saldoHoy)
     .sort((a,b)=>Math.abs(b.balance)-Math.abs(a.balance));
   if(!cuentas.length){
     el.innerHTML=`<p class="txt-md txt-muted">Sin movimientos con cuenta asignada.</p>`;
@@ -668,8 +676,11 @@ function renderDashCuentas(){
     return `<div role="button" tabindex="0" class="cuenta-fila" onclick="showCuentaDetail(${cuentaEsc})">
       <div class="cuenta-top">
         <div class="cuenta-nom">💳 ${escapeHtml(c.cuenta)}</div>
-        <div class="cuenta-saldo" style="color:${balColor}">${sign}${fmtS(c.balance)}</div>
+        ${c.saldoHoy
+          ? `<div class="cuenta-saldo" style="color:${c.saldoHoy.saldo>=0?"var(--text)":"var(--danger)"}">${fmtSaldo(c.saldoHoy.saldo)}</div>`
+          : `<div class="cuenta-saldo" style="color:${balColor}">${sign}${fmtS(c.balance)}</div>`}
       </div>
+      <div class="cuenta-hoy">${c.saldoHoy ? `Saldo de hoy · movido en ${dashYear}: <span style="color:${balColor}">${sign}${fmtS(c.balance)}</span>` : `Movido en ${dashYear} · <span class="txt-muted">tocá para cargar el saldo real</span>`}</div>
       <div class="cuenta-det">
         Ingresos: <span style="color:var(--success)">${fmtAbbr(c.ing)}</span>
         · Gastos: <span style="color:var(--danger)">${fmtAbbr(c.gas)}</span>${c.aho>0?` · Ahorrado: <span style="color:var(--save)">${fmtAbbr(c.aho)}</span>`:""}
@@ -1186,12 +1197,105 @@ function getMovsCuentaEnAnio(cuentaNombre, year){
   return res;
 }
 
+// ── Saldo real de una cuenta y ajuste al del banco ──
+// Movimientos desde el mes `desdeYM` hasta hoy, con los frecuentes expandidos igual que en el resto de la app.
+function movsDesdeMes(desdeYM){
+  const out=[], hasta=currentYM();
+  let [y,m]=String(desdeYM).split("-").map(Number);
+  for(let i=0;i<240;i++){
+    const ym=`${y}-${String(m).padStart(2,"0")}`;
+    if(ym>hasta) break;
+    out.push(...getMesMov(ym));
+    m++; if(m>12){ m=1; y++; }
+  }
+  return out;
+}
+// {saldo, movimientos, ancla} con el saldo que la app calcula hoy para la cuenta, o null si nunca cargaste su saldo real.
+function saldoActualDeCuenta(cuenta){
+  const ancla=(saldosCuentas||{})[cuenta];
+  if(!ancla) return null;
+  const r=saldoCuentaSegunApp(movsDesdeMes(ancla.fecha.slice(0,7)), cuenta, ancla, hoyLocal());
+  return r ? {...r, ancla} : null;
+}
+const leerSaldoEscrito=v=>{ const t=String(v||"").trim(); if(!t) return null; const neg=/^[-−]/.test(t); const n=parseFloat(limpiarImporte(t.replace(/^[-−]\s*/,""))); return isFinite(n) ? (neg?-n:n) : null; };
+const fmtSaldo=n=>(n<0?"−":"")+fmtS(Math.abs(n));
+function saldoRealCuentaHTML(cuenta){
+  const act=saldoActualDeCuenta(cuenta);
+  const fecha=f=>String(f||"").split("-").reverse().join("/");
+  return `<div class="inset saldo-real" id="saldo-real-bloque">
+    <div class="seccion-label">Saldo de hoy</div>
+    ${act ? `<div class="saldo-real-val">${fmtSaldo(act.saldo)}</div>
+      <p class="txt-xs txt-muted" style="margin:2px 0 10px">Según la app: tu saldo real del ${fecha(act.ancla.fecha)} (${fmtSaldo(act.ancla.saldo)}) más ${act.movimientos} ${act.movimientos===1?"movimiento":"movimientos"} de esta cuenta.</p>`
+      : `<p class="txt-sm" style="margin:2px 0 10px">Cargá cuánto tenés hoy en <strong>${escapeHtml(cuenta)}</strong> (lo que dice el banco). Desde ahí la app sigue el saldo con tus movimientos y, cuando no coincida, lo ajustás.</p>`}
+    <label class="form-label" for="saldo-real-input">${act?"¿Cuánto dice el banco hoy?":"Saldo de hoy"}</label>
+    <div class="amount-wrap"><span class="amount-prefix">$</span><input type="text" id="saldo-real-input" class="form-input amount-input" inputmode="decimal" autocomplete="off" placeholder="${act?String(act.saldo).replace(".",","):"0"}" oninput="previsualizarSaldoReal(${attrJS(cuenta)})"></div>
+    <div id="saldo-real-dif" class="txt-xs" style="margin-top:6px"></div>
+    <div class="saldo-real-acc">
+      ${act ? `<button type="button" class="btn-sm" id="saldo-real-registrar" onclick="guardarSaldoReal(${attrJS(cuenta)},true)" disabled>Registrar la diferencia</button>
+        <button type="button" class="btn-sm" onclick="guardarSaldoReal(${attrJS(cuenta)},false)">Solo corregir el saldo</button>`
+      : `<button type="button" class="btn-sm" onclick="guardarSaldoReal(${attrJS(cuenta)},false)">Guardar saldo de hoy</button>`}
+    </div>
+    ${act ? `<p class="txt-xs txt-muted" style="margin:8px 0 0;line-height:1.45"><strong>Registrar la diferencia</strong> la carga como un gasto o ingreso de ajuste (por ejemplo, una comisión o un gasto que olvidaste), así el balance del mes también cierra. <strong>Solo corregir</strong> cambia el saldo sin tocar el balance, para cuando la diferencia es porque la app no lleva algo de esta cuenta.</p>
+      <button type="button" class="nov-todas" onclick="quitarSaldoReal(${attrJS(cuenta)})">Dejar de seguir el saldo de esta cuenta</button>` : ""}
+  </div>`;
+}
+function previsualizarSaldoReal(cuenta){
+  const el=document.getElementById("saldo-real-dif"), btn=document.getElementById("saldo-real-registrar");
+  const real=leerSaldoEscrito(document.getElementById("saldo-real-input")?.value);
+  const act=saldoActualDeCuenta(cuenta);
+  if(!el) return;
+  if(real===null || !act){ el.textContent=""; if(btn) btn.disabled=true; return; }
+  const dif=Math.round((real-act.saldo)*100)/100;
+  if(btn) btn.disabled=Math.abs(dif)<0.01;
+  el.innerHTML=Math.abs(dif)<0.01 ? `<span style="color:var(--success)">✓ Coincide con la app.</span>`
+    : `Diferencia: <strong style="color:${dif<0?"var(--danger)":"var(--success)"}">${dif<0?"−":"+"}${fmtS(Math.abs(dif))}</strong> · ${dif<0?"hay menos plata de la que la app cree (falta cargar un gasto o una comisión)":"hay más plata de la que la app cree (falta cargar un ingreso o un reintegro)"}`;
+}
+// Guarda el saldo real de hoy. Con `registrar`, la diferencia contra lo que calcula la app se carga como un movimiento de ajuste. Se puede deshacer.
+function guardarSaldoReal(cuenta, registrar){
+  const real=leerSaldoEscrito(document.getElementById("saldo-real-input")?.value);
+  if(real===null){ showToast("Escribí el saldo que dice el banco"); return; }
+  const anterior=(saldosCuentas||{})[cuenta] ? {...saldosCuentas[cuenta]} : null;
+  const act=saldoActualDeCuenta(cuenta);
+  const hoy=hoyLocal();
+  let ajuste=null;
+  if(registrar && act){
+    const dif=Math.round((real-act.saldo)*100)/100;
+    if(Math.abs(dif)>=0.01){
+      let id=Date.now(); while(movs.some(x=>x.id===id)) id++;
+      ajuste={id, tipo:dif<0?"Gasto":"Ingreso", cat:"Ajustes", subcat:"Ajuste de saldo", importe:Math.abs(dif), moneda:"ARS", importeOrig:null,
+        cuenta, fecha:hoy, nota:"Ajuste al saldo del banco", tags:[], esAhorro:false, usaAhorro:false, traspaso:false, recuperable:0, ajusteSaldo:true};
+      movs.unshift(ajuste);
+    }
+  }
+  saldosCuentas={...saldosCuentas, [cuenta]:{saldo:Math.round(real*100)/100, fecha:hoy, ts:Math.max(Date.now(), ajuste?ajuste.id:0)+1}};
+  setSensitiveRaw("fsaldoscta", JSON.stringify(saldosCuentas));
+  save();
+  const revertir=()=>{ if(ajuste) movs=movs.filter(x=>x!==ajuste); const n={...saldosCuentas}; if(anterior) n[cuenta]=anterior; else delete n[cuenta]; saldosCuentas=n; setSensitiveRaw("fsaldoscta", JSON.stringify(saldosCuentas)); };
+  ofrecerDeshacerCambio(ajuste ? `Saldo ajustado: ${ajuste.tipo==="Gasto"?"gasto":"ingreso"} de ${fmtS(ajuste.importe)} registrado ✓` : "Saldo de hoy guardado ✓", ()=>{ revertir(); if(ajuste) repintarAnioSiVisible(); showCuentaDetail(cuenta); });
+  // Un ajuste es un movimiento más: cambia categorías, gráfico y balance, no solo la lista de cuentas.
+  if(ajuste){ if(typeof refrescarVistas==="function") refrescarVistas(); repintarAnioSiVisible(); }
+  else if(typeof renderDashCuentas==="function") renderDashCuentas();
+  showCuentaDetail(cuenta);
+}
+function repintarAnioSiVisible(){
+  const v=document.getElementById("dash-year-full");
+  if(v && v.style.display==="block" && typeof renderDashYear==="function"){ try{ renderDashYear(); }catch(e){ /* sin gráfico no se corta el guardado */ } }
+}
+function quitarSaldoReal(cuenta){
+  if(!(saldosCuentas||{})[cuenta]) return;
+  const anterior={...saldosCuentas[cuenta]};
+  const n={...saldosCuentas}; delete n[cuenta]; saldosCuentas=n;
+  setSensitiveRaw("fsaldoscta", JSON.stringify(saldosCuentas)); if(typeof marcarDatosSucios==="function") marcarDatosSucios();
+  ofrecerDeshacerCambio("Ya no se sigue el saldo de "+cuenta, ()=>{ saldosCuentas={...saldosCuentas, [cuenta]:anterior}; setSensitiveRaw("fsaldoscta", JSON.stringify(saldosCuentas)); showCuentaDetail(cuenta); });
+  if(typeof renderDashCuentas==="function") renderDashCuentas();
+  showCuentaDetail(cuenta);
+}
 function showCuentaDetail(cuentaNombre){
   const movsCuenta=getMovsCuentaEnAnio(cuentaNombre, dashYear)
     .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
   document.getElementById("cuenta-detail-title").textContent=`💳 ${cuentaNombre} · ${dashYear}`;
   if(!movsCuenta.length){
-    document.getElementById("cuenta-detail-content").innerHTML=`<p class="txt-md txt-muted">Sin movimientos para esta cuenta en ${dashYear}.</p>`;
+    document.getElementById("cuenta-detail-content").innerHTML=saldoRealCuentaHTML(cuentaNombre)+`<p class="txt-md txt-muted">Sin movimientos para esta cuenta en ${dashYear}.</p>`;
     document.getElementById("modal-cuenta-detail").classList.add("open");
     return;
   }
@@ -1201,8 +1305,8 @@ function showCuentaDetail(cuentaNombre){
   const rp=resumenDePeriodo(movsCuenta, {ars:0});
   const ing=rp.ingresos, gas=rp.gastos, aho=rp.ahorrado, balance=rp.disponible;
   const balColor=balance>=0?"var(--success)":"var(--danger)";
-  let html=`<div class="inset">
-    <div class="seccion-label">Balance ${dashYear}</div>
+  let html=saldoRealCuentaHTML(cuentaNombre)+`<div class="inset">
+    <div class="seccion-label">Movido en ${dashYear}</div>
     <div style="font-size:20px;font-weight:600;color:${balColor};margin-top:3px">${fmtSignoGrande(balance)}</div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px">Ingresos: <span style="color:var(--success)">${fmtS(ing)}</span> · Gastos: <span style="color:var(--danger)">${fmtS(gas)}</span>${aho>0?` · Ahorrado: <span style="color:var(--save)">${fmtS(aho)}</span>`:""} · ${movsCuenta.length} ${movsCuenta.length===1?"movimiento":"movimientos"}</div>
   </div>`;

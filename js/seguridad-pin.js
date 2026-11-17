@@ -9,7 +9,7 @@
 // mientras todo ya estaba cargado en JS. Si el usuario NUNCA activó un PIN, isEncActive()
 // da false siempre y getSensitiveRaw/setSensitiveRaw se comportan exactamente igual que
 // localStorage.getItem/setItem de toda la vida: cero cambio de comportamiento ni overhead.
-const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos","fprecios","fsplits"];
+const ENC_KEYS = ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos","fprecios","fsplits","fsaldoscta"];
 // Costo de derivar la clave desde el PIN. Los sobres viejos (v2) no lo guardaban: eran 150.000. Los nuevos (v3) lo guardan en `it`, así se puede
 // subir más adelante sin romper los datos ya guardados. Un PIN de 6 dígitos son solo 1.000.000 de combinaciones: lo que lo cuida, si alguien se
 // lleva el archivo, es que cada intento cueste (1.000.000 de vueltas de PBKDF2), no el PIN en sí.
@@ -182,7 +182,7 @@ document.addEventListener("visibilitychange", ()=>{
 const NOMBRE_CLAVE_DATOS={
   fmovs3:"tus movimientos", ftcs3:"tus tarjetas", fcustom3:"tus categorías personalizadas",
   fmetas:"tus metas de ahorro", fpapelera:"tu papelera", fimphist3:"tu historial de importaciones",
-  fcatorder:"el orden de tus categorías", fpresup:"tus presupuestos", fvalfondos:"el valor actual de tus fondos", fprecios:"los precios de tus inversiones", fsplits:"tus desdoblamientos (splits)",
+  fcatorder:"el orden de tus categorías", fpresup:"tus presupuestos", fvalfondos:"el valor actual de tus fondos", fprecios:"los precios de tus inversiones", fsplits:"tus desdoblamientos (splits)", fsaldoscta:"el saldo real de tus cuentas",
   fcuentas:"tus cuentas", ftarjetas:"tus tarjetas guardadas", ficons:"tus íconos personalizados"
 };
 
@@ -246,6 +246,7 @@ function loadSensitiveIntoMemory(){
   valoresFondos = normalizarValoresFondos(leerJSONSeguro("fvalfondos","{}","object"));
   preciosActuales = normalizarPreciosActuales(leerJSONSeguro("fprecios","{}","object"));
   splitsInv = normalizarSplits(leerJSONSeguro("fsplits","{}","object"));
+  saldosCuentas = normalizarSaldosCuentas(leerJSONSeguro("fsaldoscta","{}","object"));
   cuentasCustom = leerJSONSeguro("fcuentas","[]","array");
   tarjetasCustom = leerJSONSeguro("ftarjetas","[]","array");
   iconsCustom = leerJSONSeguro("ficons","{}","object");

@@ -6,6 +6,7 @@
 // que se ve o se usa; las que solo corrigen algo interno no hace falta anotarlas. Hay un test que pide que la versión actual tenga la suya.
 // Cada entrada: {v: número de versión, titulo, texto, ir: nombre de una de las acciones de NOVEDADES_IR (opcional)}.
 const NOVEDADES=[
+  {v:266, titulo:"Ajustar el saldo de una cuenta", texto:"En Dashboard › Ver el año completo › Saldo por cuenta, tocá una cuenta y cargá lo que dice el banco: la app sigue el saldo y, si no coincide, registra la diferencia como ajuste.", ir:"saldoCuenta"},
   {v:265, titulo:"Nueva barra de abajo", texto:"Movimientos, Tarjetas e Inversiones a un toque, el + del medio para cargar y «Más» para el resto (Dashboard, Ahorros, Cerrar el mes, Configuración, Ayuda…). Reemplaza al menú ☰."},
   {v:264, titulo:"Secciones de a una", texto:"En Configuración y en el manual, al abrir una sección se cierra la que estaba abierta: la pantalla queda corta y ordenada."},
   {v:263, titulo:"Manual de uso", texto:"En Configuración › Ayuda y manual: cómo cargar cada movimiento y preguntas frecuentes, con un buscador y un botón que te lleva a cada pantalla.", ir:"manual"},
@@ -31,7 +32,9 @@ const NOVEDADES_IR={
   movimientos:()=>irAPagina("mov"),
   ahorros:()=>irAPagina("ahorro"),
   cargarInversion:()=>{ irAPagina("cargar"); if(typeof setTipo==="function") setTipo("Inversion"); },
-  manual:()=>abrirManual()
+  manual:()=>abrirManual(),
+  dashboard:()=>irAPagina("dash"),
+  saldoCuenta:()=>irASaldoPorCuenta()
 };
 // La versión que está corriendo, del <meta name="enola-version" content="enola-v262"> (el mismo número que el caché del service worker).
 function versionActualApp(){
