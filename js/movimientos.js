@@ -962,7 +962,7 @@ const FOCOS_MOSAICO={
 function focoMosaico(clave){
   if(!clave) return null;
   if(FOCOS_MOSAICO[clave]) return FOCOS_MOSAICO[clave];
-  if(clave.startsWith("ticker:")){ const t=clave.slice(7); return {titulo:t, ok:m=>m.tipo==="Inversion" && m.ticker===t}; }
+  if(clave.startsWith("ticker:")){ const t=clave.slice(7); return {titulo:t, ok:m=>m.tipo==="Inversion" && tickerClave(m.ticker)===tickerClave(t)}; }
   return null;
 }
 function mosaicoActivo(accion){
@@ -971,6 +971,7 @@ function mosaicoActivo(accion){
 }
 function aplicarAccionMosaico(accion){
   if(accion.startsWith("tab:")){ setFiltro(accion.slice(4)); return; }
+  if(accion==="abrir:inversiones"){ abrirInvPeriodo(); return; }
   if(!accion.startsWith("f:")) return;
   const clave=accion.slice(2);
   filtroMosaico = filtroMosaico===clave ? "" : clave;
@@ -993,6 +994,52 @@ document.addEventListener("click", e=>{
   const t=e.target && e.target.closest ? e.target.closest("#mov-summary [data-accion]") : null;
   if(t) aplicarAccionMosaico(t.getAttribute("data-accion"));
 });
+
+// ═══════════════════════════════════════════
+// HOJA "INVERSIONES" DEL PERÍODO: cada instrumento y cómo rindió
+// ═══════════════════════════════════════════
+let invPeriodoSnap=null;   // {lista, desde, hasta, etiqueta} del último resumen pintado
+function abrirInvPeriodo(){
+  const snap=invPeriodoSnap; if(!snap) return;
+  const filas=rendimientoPorInstrumento(snap.lista, snap.desde, snap.hasta, resultadoInv().eventos, calcularPosiciones(movs, preciosActuales, hoyLocal(), splitsInv));
+  const signo=n=>(n>0?"+":n<0?"−":"");
+  const money=(n,usd)=>usd ? "USD "+fmtNum2(Math.abs(n)) : fmtTotal(Math.abs(n));
+  const color=n=>n>0?"var(--success)":n<0?"var(--danger)":"var(--muted)";
+  const tot={resARS:0,resUSD:0,pusoARS:0,pusoUSD:0,cobroARS:0,cobroUSD:0};
+  filas.forEach(f=>Object.keys(tot).forEach(k=>tot[k]+=f[k]));
+  const stat=(lbl,val,col)=>`<div class="invp-stat"><span class="invp-lbl">${lbl}</span><strong${col?` style="color:${col}"`:""}>${val}</strong></div>`;
+  const resTxt=(ars,usd)=>[Math.round(ars)!==0?signo(ars)+fmtTotal(Math.abs(ars)):"", Math.abs(usd)>=0.01?signo(usd)+"USD "+fmtNum2(Math.abs(usd)):""].filter(Boolean).join(" · ") || "$0";
+  let html=`<div class="invp-resumen">
+    ${stat("Resultado",resTxt(tot.resARS,tot.resUSD),color(tot.resARS||tot.resUSD))}
+    ${tot.pusoARS||tot.pusoUSD?stat("Pusiste",[tot.pusoARS?fmtTotal(tot.pusoARS):"",tot.pusoUSD?"USD "+fmtNum2(tot.pusoUSD):""].filter(Boolean).join(" · ")):""}
+    ${tot.cobroARS||tot.cobroUSD?stat("Cobraste",[tot.cobroARS?fmtTotal(tot.cobroARS):"",tot.cobroUSD?"USD "+fmtNum2(tot.cobroUSD):""].filter(Boolean).join(" · ")):""}
+  </div>`;
+  html+=filas.map(f=>{
+    const res=f.usd ? f.resUSD : f.resARS, neto=f.usd ? f.netoUSD : f.netoARS;
+    const puso=f.usd ? f.pusoUSD : f.pusoARS, cobro=f.usd ? f.cobroUSD : f.cobroARS;
+    const hayRes=Math.abs(res)>=0.01;
+    const hoy=f.pos && f.pos.valorActual!==null
+      ? `<div class="invp-hoy">En cartera: ${fmtCantidad(f.pos.cartera)} nom. · hoy ${money(f.pos.valorActual,f.pos.usd)} · <strong style="color:${color(f.pos.rend)}">${signo(f.pos.rend)}${money(f.pos.rend,f.pos.usd)}${f.pos.rendPct!==null?" ("+fmtPctPos(f.pos.rendPct)+")":""}</strong> sin realizar</div>`
+      : (f.pos ? `<div class="invp-hoy txt-muted">En cartera: ${fmtCantidad(f.pos.cartera)} nom. · cargá el precio de hoy en Inversiones › Cartera para ver cuánto rinde</div>` : "");
+    return `<button type="button" class="invp-fila" onclick="verInstrumentoDelPeriodo(${attrJS(f.ticker)})" aria-label="${escapeHtml(`${f.ticker}: ${hayRes?"resultado "+signo(res)+money(res,f.usd):"sin resultado"}. Tocá para ver sus movimientos`)}">
+      <span class="invp-cab"><span class="invp-nom">${escapeHtml(f.ticker)}<small>${escapeHtml(f.cat)}</small></span>
+        <strong class="invp-res" style="color:${color(res)}">${hayRes?signo(res)+money(res,f.usd):"—"}</strong></span>
+      <span class="invp-det">${puso?"Pusiste "+money(puso,f.usd):""}${puso&&cobro?" · ":""}${cobro?"Cobraste "+money(cobro,f.usd):""}${neto?` · Neto ${signo(neto)}${money(neto,f.usd)}`:""}${hayRes?"":" · sin ventas ni rescates con resultado"}</span>
+      ${hoy}
+    </button>`;
+  }).join("");
+  document.getElementById("inv-periodo-titulo").textContent=`Inversiones ${snap.etiqueta}`;
+  document.getElementById("inv-periodo-contenido").innerHTML=html;
+  document.getElementById("modal-inv-periodo").classList.add("open");
+}
+function cerrarInvPeriodo(){ document.getElementById("modal-inv-periodo").classList.remove("open"); }
+// Desde la hoja: filtra la lista de Movimientos a los movimientos de ese instrumento.
+function verInstrumentoDelPeriodo(ticker){
+  cerrarInvPeriodo();
+  filtroMosaico="";
+  aplicarAccionMosaico("f:ticker:"+ticker);
+}
+function verTodasLasInversiones(){ cerrarInvPeriodo(); filtroMosaico=""; aplicarAccionMosaico("f:inversiones"); }
 
 // ═══════════════════════════════════════════
 // RESUMEN: número + mosaicos (handoff Movimientos, opción 3b)
@@ -1114,9 +1161,12 @@ function actualizarFrecPorPagar(){
 // impar, el último ocupa las dos columnas en vez de quedar solo en la primera (ver handoff).
 function mosaicosGridHTML(mosaicos){
   if(!mosaicos.length) return "";
-  const items=mosaicos.slice();
-  if(items.length%2===1){
-    items[items.length-1]=items[items.length-1].replace('class="mov-mosaic"','class="mov-mosaic mov-mosaic-wide"');
+  // Un mosaico con data-ancho="2" (la card Inversiones, con más para decir) ocupa las dos columnas; la paridad se cuenta solo entre los angostos.
+  const items=mosaicos.map(h=>h.includes('data-ancho="2"') ? h.replace('class="mov-mosaic"','class="mov-mosaic mov-mosaic-wide"') : h);
+  const angostos=items.map((h,i)=>({h,i})).filter(x=>!x.h.includes("mov-mosaic-wide"));
+  if(angostos.length%2===1){
+    const u=angostos[angostos.length-1].i;
+    items[u]=items[u].replace('class="mov-mosaic"','class="mov-mosaic mov-mosaic-wide"');
   }
   return `<div class="mov-mosaic-grid">${items.join("")}</div>`;
 }
@@ -1484,24 +1534,27 @@ function renderMovs(){
     if(rp.retiradoAMano>0){
       mosTodos.push(mosaicoHTML("💸","Sacado de ahorros","var(--save)",fmtTotal(rp.retiradoAMano),"quedó a mano", null, "f:de-ahorros"));
     }
-    if(invertidoUSD>=0.01){
-      mosTodos.push(mosaicoHTML("◈","Invertido USD","var(--invest)",`USD ${fmtNum2(invertidoUSD)}`,subInvertidoUSD, null, "f:invertido-usd"));
-    }
-    if(invertidoARS>0){
-      mosTodos.push(mosaicoHTML("◈","Invertido","var(--invest)",fmtTotal(invertidoARS),"", null, "f:invertido"));
-    }
-    // "Resultado inv." NO desaparece cuando da $0: si en el período hubo rescates, ventas o rendimientos y la cuenta cierra en cero (el
-    // rescate solo devolvió capital), la tarjeta sigue ahí diciendo por qué, en vez de dejar la duda de si se perdió el dato.
+    // Todo lo de inversiones va en UNA card (antes eran cinco o seis sueltas: invertido, resultado, neto y una por ticker). Al tocarla se abre el detalle de cada
+    // instrumento: cuánto pusiste, cuánto cobraste y cómo rindió (ver abrirInvPeriodo). Los filtros por ticker de la lista siguen en esa hoja.
     const hayCobrosInv=mesMovs.some(m=>m.tipo==="Inversion"&&isInvSalida(m));
-    if(Math.round(ganInv.ars)!==0){
-      const cg=ganInv.ars>=0?"var(--success)":"var(--danger)";
-      mosTodos.push(mosaicoHTML("📊","Resultado inv.",cg,(ganInv.ars>=0?"+":"")+fmtTotal(ganInv.ars),"", null, "f:inversiones"));
-    } else if(hayCobrosInv){
-      mosTodos.push(mosaicoHTML("📊","Resultado inv.","var(--muted)",fmtTotal(0),"los rescates devolvieron capital", null, "f:inversiones"));
-    }
-    if(Math.round(netoInv.ars)!==0){
-      const colorNeto=netoInv.ars>=0?"var(--success)":"var(--invest)";
-      mosTodos.push(mosaicoHTML("◈","Neto inversión",colorNeto,(netoInv.ars>0?"+":"")+fmtTotal(netoInv.ars),"", null, "f:inversiones"));
+    const hayInvPeriodo=mesMovs.some(m=>m.tipo==="Inversion");
+    invPeriodoSnap={lista:mesMovs, desde:filtroFecha?String(filtroFecha.desde).slice(0,7):mesActual, hasta:filtroFecha?String(filtroFecha.hasta).slice(0,7):mesActual,
+      etiqueta:filtroFecha?"del período":"de "+mesLbl(mesActual)};
+    if(hayInvPeriodo){
+      const signo=n=>(n>0?"+":n<0?"−":"");
+      const colorRes=Math.round(ganInv.ars)>0?"var(--success)":Math.round(ganInv.ars)<0?"var(--danger)":"var(--muted)";
+      const partesSub=[];
+      if(invertidoARS>0) partesSub.push(`Invertido ${fmtTotal(invertidoARS)}`);
+      if(invertidoUSD>=0.01) partesSub.push(`Invertido USD ${fmtNum2(invertidoUSD)}`);
+      if(Math.round(netoInv.ars)!==0) partesSub.push(`Neto ${signo(netoInv.ars)}${fmtTotal(Math.abs(netoInv.ars))}`);
+      if(Math.abs(netoInv.usd)>=0.01) partesSub.push(`Neto USD ${signo(netoInv.usd)}${fmtNum2(Math.abs(netoInv.usd))}`);
+      // El resultado es lo importante; si todavía no hubo ventas ni rescates, la cifra grande es lo invertido.
+      const hayResultado=Math.round(ganInv.ars)!==0 || Math.abs(ganInv.usd||0)>=0.01 || hayCobrosInv;
+      const valor=hayResultado
+        ? `<span style="color:${colorRes}">${signo(Math.round(ganInv.ars))}${fmtTotal(Math.abs(ganInv.ars))}</span>`
+        : fmtTotal(invertidoARS||0);
+      const sub=(hayResultado ? "Resultado · " : "")+partesSub.join(" · ");
+      mosTodos.push(mosaicoHTML("📊","Inversiones","var(--invest)",valor,sub, 'data-ancho="2"', "abrir:inversiones"));
     }
     if(ingresosUSDTotal>0){
       mosTodos.push(mosaicoHTML("↓","Ingresos USD","var(--success)",`USD ${fmtNum2(ingresosUSDTotal)}`,"", null, "f:ingresos-usd"));
@@ -1509,27 +1562,12 @@ function renderMovs(){
     if(gastosUSDTotal>0){
       mosTodos.push(mosaicoHTML("↑","Gastos USD","var(--danger)",`USD ${fmtNum2(gastosUSDTotal)}`,"", null, "f:gastos-usd"));
     }
-    if(Math.abs(netoInv.usd)>=0.01){
-      const colorNetoU=netoInv.usd>=0?"var(--success)":"var(--invest)";
-      mosTodos.push(mosaicoHTML("◈","Neto inversión USD",colorNetoU,(netoInv.usd>0?"+":"")+`USD ${fmtNum2(Math.abs(netoInv.usd))}`,"", null, "f:inversiones"));
-    }
     if(retirado>0){
       mosTodos.push(mosaicoHTML("💸","De ahorros","var(--save)",fmtTotal(retirado),"", null, "f:de-ahorros"));
     }
     // Lo que falta cobrar de los gastos compartidos (ver recuperable.js)
     const mosRecup=recuperarMosaicoHTML(pendienteDeRecuperar(mesMovs));
     if(mosRecup) mosTodos.push(mosRecup);
-    // Los mosaicos por ticker van al final, ya ordenados de mayor a menor por el módulo.
-    netosTicker.forEach(t=>{
-      if(Math.round(t.ars)!==0){
-        const color=t.ars>=0?"var(--success)":"var(--invest)";
-        mosTodos.push(mosaicoHTML("◈",t.ticker,color,(t.ars>0?"+":"")+fmtTotal(t.ars),"", null, "f:ticker:"+t.ticker));
-      }
-      if(Math.abs(t.usd)>=0.01){
-        const colorU=t.usd>=0?"var(--success)":"var(--invest)";
-        mosTodos.push(mosaicoHTML("◈",`${t.ticker} USD`,colorU,(t.usd>0?"+":"")+`USD ${fmtNum2(Math.abs(t.usd))}`,"", null, "f:ticker:"+t.ticker));
-      }
-    });
     html+=mosaicosGridHTML(mosTodos);
     document.getElementById("mov-summary").innerHTML=html;
     // [AAA movimientos] El balance "cuenta" hasta su valor solo cuando cambia de período o de cifra: antes volvía a contar desde $0

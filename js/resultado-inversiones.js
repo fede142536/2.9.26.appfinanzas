@@ -441,3 +441,33 @@ function fondosConComprasSinInversion(lista){
   });
   return out.sort((a,b)=>b.faltan-a.faltan);
 }
+
+// ═══════════════════════════════════════════
+// RENDIMIENTO POR INSTRUMENTO EN UN PERÍODO (la card "Inversiones" de Movimientos)
+// ═══════════════════════════════════════════
+// Pura. Por cada ticker con movimientos en `lista` (los del período): cuánto pusiste, cuánto cobraste, el neto de caja y el RESULTADO (la ganancia o pérdida
+// reconocida en el período, de `eventos`: ver calcularResultadoInv). Con `posiciones` (calcularPosiciones) suma lo que sigue en cartera y, si cargaste el precio de
+// hoy, su rendimiento sin realizar. Ordenado: primero los de mayor resultado (en valor absoluto), después los de mayor movimiento.
+function rendimientoPorInstrumento(lista, desdeYM, hastaYM, eventos, posiciones){
+  const por={};
+  const caja=(m)=>{ const k=tickerClave(m.ticker); return por[k] || (por[k]={clave:k, ticker:m.ticker||"Sin ticker", cat:m.cat||"", usd:false, pusoARS:0, pusoUSD:0, cobroARS:0, cobroUSD:0, resARS:0, resUSD:0, n:0}); };
+  (lista||[]).filter(m=>m && m.tipo==="Inversion").forEach(m=>{
+    const o=caja(m), ars=m.moneda==="USD" ? 0 : (m.importe||0), usd=m.importeUSD||0;
+    if(isInvSalida(m)){ o.cobroARS+=ars; o.cobroUSD+=usd; } else { o.pusoARS+=ars; o.pusoUSD+=usd; }
+    if(usd>0) o.usd=true;
+    o.n++;
+  });
+  (eventos||[]).forEach(e=>{
+    const ym=String(e.fecha||"").slice(0,7);
+    if(ym<desdeYM || ym>hastaYM || !por[e.ticker]) return;
+    if(e.moneda==="USD") por[e.ticker].resUSD+=e.ganancia; else por[e.ticker].resARS+=e.ganancia;
+  });
+  const r2=n=>Math.round(n*100)/100;
+  return Object.values(por).map(o=>{
+    const pos=(posiciones||{})[o.clave] || null;
+    const usd=o.usd && !(o.pusoARS||o.cobroARS);
+    return {...o, usd, pusoARS:r2(o.pusoARS), pusoUSD:r2(o.pusoUSD), cobroARS:r2(o.cobroARS), cobroUSD:r2(o.cobroUSD), resARS:r2(o.resARS), resUSD:r2(o.resUSD),
+      netoARS:r2(o.cobroARS-o.pusoARS), netoUSD:r2(o.cobroUSD-o.pusoUSD),
+      pos: (pos && pos.cartera>0) ? {cartera:pos.cartera, valorActual:pos.valorActual, rend:pos.rend, rendPct:pos.rendPct, usd:pos.usd} : null};
+  }).sort((a,b)=>(Math.abs(b.resARS)+Math.abs(b.resUSD)*1000)-(Math.abs(a.resARS)+Math.abs(a.resUSD)*1000) || (b.pusoARS+b.cobroARS+(b.pusoUSD+b.cobroUSD)*1000)-(a.pusoARS+a.cobroARS+(a.pusoUSD+a.cobroUSD)*1000));
+}
