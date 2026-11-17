@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v264**
+**Versión actual: v265**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 17 de noviembre de 2026
 
+- **v265** · Barra de navegación abajo (Movimientos, Tarjetas, Cargar, Inversiones y Más) en lugar del menú ☰
 - **v264** · En Configuración y en el manual, abrir una sección cierra la que estaba abierta
 - **v263** · Manual de uso en Configuración › Ayuda y manual: cómo cargar cada movimiento y preguntas frecuentes, con buscador y botón para ir a cada pantalla
 - **v262** · Al abrir una versión nueva, la app muestra qué hay de nuevo y dónde está (y se puede volver a ver desde Configuración)

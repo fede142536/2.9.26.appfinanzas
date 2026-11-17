@@ -2136,3 +2136,10 @@ body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(sa
 .mas-item span{font-size:21px;width:28px;text-align:center}
 .mas-item.on{color:var(--accent);font-weight:700}
 @media (prefers-reduced-motion:reduce){.tabbar{transition:none}}
+
+/* [Saldo real de una cuenta] */
+.saldo-real{margin-bottom:var(--sp-3)}
+.saldo-real-val{font-size:24px;font-weight:700;margin-top:2px}
+.saldo-real-acc{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.saldo-real-acc .btn-sm{flex:1;min-width:140px}
+.cuenta-hoy{font-size:12px;color:var(--text);margin:2px 0 2px}

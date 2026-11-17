@@ -48,6 +48,7 @@ const MANUAL=[
   ]},
   {id:"tarjetas", icono:"💳", titulo:"Tarjetas, Dashboard y cierre", preguntas:[
     {p:"¿Qué muestra la pantalla Tarjetas?", r:"El resumen de cada tarjeta en el mes (cuotas y gastos fijos), los vencimientos y cuánto va por tarjeta. Con **Pagar resumen** registrás el pago del resumen.", ir:"tarjetas"},
+    {p:"La app dice un saldo distinto al de mi banco, ¿cómo lo ajusto?", pasos:["Andá a **Dashboard** › Ver el año completo › **Saldo por cuenta** y tocá la cuenta.","La primera vez, cargá cuánto tenés hoy (lo que dice el banco): desde ahí la app sigue el saldo con tus movimientos.","Cuando no coincida, escribí el saldo del banco: la app te muestra la diferencia.","**Registrar la diferencia** la carga como un gasto o ingreso de ajuste (una comisión, un gasto olvidado). **Solo corregir** cambia el saldo sin tocar el balance."], ir:"saldoCuenta"},
     {p:"¿Qué tengo en el Dashboard?", r:"**Resumen** del mes con avisos («Para tener en cuenta»), ingresos y gastos, gastos por categoría y saldo por cuenta; y **Año completo** para ver los doce meses.", ir:"dashboard"},
     {p:"¿Qué es «Cerrar el mes»?", r:"Un repaso guiado del mes (en **Más**, en la barra de abajo) con lo que quedó pendiente: gastos fijos y resúmenes de tarjeta sin marcar como pagados, ingresos por cobrar, movimientos sin cuenta y vencimientos. Lo resolvés desde ahí antes de pasar al mes siguiente."},
     {p:"¿Puedo ponerme un presupuesto por categoría?", r:"Sí, en Configuración › **Cuentas, tarjetas y categorías** › Presupuestos. En Movimientos, solapa **Gastos**, ves cuánto llevás gastado de cada presupuesto en el mes."}
@@ -76,6 +77,7 @@ const MANUAL_IR={
   cargarCambio:()=>{ irAPagina("cargar"); if(typeof setTipo==="function") setTipo("Cambio"); },
   tarjetas:()=>irAPagina("tc"),
   dashboard:()=>irAPagina("dash"),
+  saldoCuenta:()=>irASaldoPorCuenta(),
   importar:()=>irAPagina("import"),
   novedades:()=>verTodasLasNovedades()
 };

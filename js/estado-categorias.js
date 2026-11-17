@@ -276,6 +276,8 @@ let valoresFondos = {};
 let preciosActuales = {};
 // Desdoblamientos (splits) por ticker: { "SPY": [ {fecha:"2026-06-01", factor:3} ] }. Los nominales cargados ANTES de la fecha se multiplican por el factor en Cartera.
 let splitsInv = {};
+// El saldo REAL de cada cuenta que cargaste a mano (lo que dice el banco), como punto de partida: { "Galicia": {saldo:250000, fecha:"2026-11-17", ts:1794...} }.
+let saldosCuentas = {};
 
 // Devuelve los nombres de categoría de `catsObj` en el orden guardado por el usuario.
 // Si no hay orden guardado para ese tipo, devuelve el orden natural del objeto.
@@ -633,6 +635,55 @@ function resumenDePeriodo(lista, ganInv){
   return {ingresos, gastos, ahorrado, retiradoAMano, balanceCaja:r2(ingresos-gastos), disponible:r2(ingresos-gastos-ahorrado+retiradoAMano)};
 }
 
+// ═══════════════════════════════════════════
+// SALDO DE UNA CUENTA (para ajustarlo al del banco)
+// ═══════════════════════════════════════════
+// La app no sabe cuánta plata hay en una cuenta: sabe lo que entra y sale. Por eso se parte de un saldo REAL que cargás vos (lo que dice el banco hoy) y
+// desde ahí se suman los movimientos de esa cuenta, en pesos. Si después el banco dice otra cosa, la diferencia es algo que no está cargado (una comisión,
+// un gasto olvidado, intereses) y se puede registrar como ajuste, o solo corregir el saldo.
+function normalizarSaldosCuentas(o){
+  const out={};
+  if(!o || typeof o!=="object" || Array.isArray(o)) return out;
+  Object.keys(o).forEach(c=>{
+    const v=o[c]; if(c==="__proto__" || !v || typeof v!=="object") return;
+    const saldo=(typeof v.saldo==="number" && isFinite(v.saldo) && Math.abs(v.saldo)<1e13) ? Math.round(v.saldo*100)/100 : null;
+    if(saldo===null || !/^\d{4}-\d{2}-\d{2}$/.test(v.fecha||"")) return;
+    out[c]={saldo, fecha:v.fecha, ts:(typeof v.ts==="number" && isFinite(v.ts)) ? v.ts : 0};
+  });
+  return out;
+}
+// Pura. Cuánto mueve un movimiento la plata de `cuenta` (en pesos; los dólares van aparte):
+//   ingreso +; gasto, pago de tarjeta, depósito al fondo o traspaso a otra cuenta −; sacar del fondo a la cuenta (traspaso) +;
+//   pagar algo con plata del fondo no la toca; un traspaso que llega desde otra cuenta (cuentaDestino) +. Las inversiones no se siguen acá.
+function flujoDeCuenta(m, cuenta){
+  if(!m || m.moneda==="USD" || m.tipo==="Inversion") return 0;
+  const monto=m.importe||0;
+  if(m.cuenta===cuenta){
+    if(m.tipo==="Ingreso") return monto;
+    if(m.tipo==="Gasto"){
+      if(esRetiroAhorro(m)) return esTraspaso(m) ? monto : 0;
+      return -monto;
+    }
+    return 0;
+  }
+  if(m.tipo==="Gasto" && esTraspaso(m) && !esRetiroAhorro(m) && m.cuentaDestino===cuenta) return monto;
+  return 0;
+}
+// Pura. El saldo que la app calcula para `cuenta`: el saldo real cargado (`ancla`) más todo lo que pasó DESPUÉS en esa cuenta y hasta `hoy`.
+// "Después" = fecha posterior, o la misma fecha pero cargado después del saldo (id/ts mayor). `lista` = los movimientos ya expandidos por mes.
+function saldoCuentaSegunApp(lista, cuenta, ancla, hoy){
+  if(!ancla) return null;
+  let saldo=ancla.saldo, n=0;
+  (lista||[]).forEach(m=>{
+    const f=String(m && m.fecha || "").slice(0,10);
+    if(!f || f>hoy) return;
+    if(f<ancla.fecha || (f===ancla.fecha && (m.id||0)<=(ancla.ts||0))) return;
+    const d=flujoDeCuenta(m, cuenta);
+    if(d){ saldo+=d; n++; }
+  });
+  return {saldo:Math.round(saldo*100)/100, movimientos:n};
+}
+
 // ── SEGURIDAD ──
 // Devuelve un valor listo para usar como ARGUMENTO dentro de un onclick="...".
 // Hay DOS contextos anidados y hay que respetar los dos: el atributo HTML (delimitado por
@@ -795,6 +846,6 @@ function sanearBackupDatos(datos){
     for(const t of Object.keys(datos.custom)){ const porTipo=clavesSeguras(datos.custom[t]); if(!esObjetoPlano(porTipo)){ datos.custom[t]={}; r.descartados++; continue; }
       for(const c of Object.keys(porTipo)){ if(Array.isArray(porTipo[c])){ const subs=porTipo[c].filter(x=>typeof x==="string"); r.descartados+=porTipo[c].length-subs.length; porTipo[c]=subs.map(x=>{ const n=nombreSeguro(x); if(n!==x) r.renombrados++; return n; }); } else { porTipo[c]=[]; r.corregidos++; } }
       datos.custom[t]=porTipo; } }
-  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas","valoresFondos","preciosActuales","splitsInv"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
+  ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas","valoresFondos","preciosActuales","splitsInv","saldosCuentas"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
   return {...r, total:r.descartados+r.renombrados+r.corregidos};
 }
