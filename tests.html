@@ -11747,6 +11747,19 @@ test("rendimientoPorInstrumento: resultado del período, neto, cartera y mayúsc
   igual(f.find(x=>x.clave==="QQQ").pusoARS,100); igual(f.find(x=>x.clave==="QQQ").pos.valorActual, null, "QQQ está en cartera pero sin precio cargado: no se inventa un rendimiento");
 });
 
+test("el detalle de Inversiones se puede ver de todo el año: el resultado del año es la suma de los meses", ()=>{
+  const op=(id,f,sub,imp,t)=>({id,tipo:"Inversion",cat:"FCI",subcat:"FCI "+sub,ticker:t,importe:imp,importeUSD:0,fecha:f});
+  const lista=[op(1,"2025-12-01","Suscripción",1000,"BMMA"), op(2,"2026-03-05","Rescate capital",1100,"BMMA"), op(3,"2026-04-01","Suscripción",500,"BCAHA"), op(4,"2026-09-09","Rescate capital",520,"BCAHA")];
+  const ev=calcularResultadoInv(lista).eventos;
+  const anio=lista.filter(m=>m.fecha.startsWith("2026"));
+  const f=rendimientoPorInstrumento(anio,"2026-01","2026-12",ev,{});
+  igual(f.find(x=>x.clave==="BMMA").resARS,100, "la venta de marzo cuenta contra lo suscripto en 2025");
+  igual(f.find(x=>x.clave==="BCAHA").resARS,20);
+  igual(Math.round(f.reduce((s,x)=>s+x.resARS,0)), Math.round(["01","02","03","04","05","06","07","08","09","10","11","12"].reduce((s,m)=>s+((calcularResultadoInv(lista).gananciaPorMes["2026-"+m]||{}).ars||0),0)), "el total del año es la suma de los 12 meses");
+  igual(rendimientoPorInstrumento(anio,"2026-03","2026-03",ev,{}).find(x=>x.clave==="BCAHA").resARS,0,"en marzo BCAHA todavía no tuvo resultado");
+  cierto(typeof setInvPeriodoVista==="function" && typeof pintarInvPeriodo==="function");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

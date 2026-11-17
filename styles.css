@@ -2062,3 +2062,6 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .invp-hoy{color:var(--text)}
 
 .mov-mosaic-grid{grid-auto-flow:dense}
+
+.invp-vistas{margin:0 0 var(--sp-3)}
+.invp-fila-info{cursor:default}
