@@ -401,42 +401,31 @@ test("◈ Invertido suma el total puesto en el mercado este mes, todos los activ
   cierto(txt.includes("1.200.000"), "no aparece el total invertido: "+txt);
 });
 
-test("◈ Neto inversión suma el flujo de todos los tickers, sin reemplazar los chips por ticker", ()=>{
-  // 100.000 (BCAHA) − 300.000 (YPF) = −200.000, mismo número que netoInvTotal().
-  // El resumen de "Todos" ya no es una grilla de .chip ni una leyenda: los ítems extra (USD,
-  // por ticker, etc.) son mosaicos (.mov-mosaic) debajo del número grande (handoff "número +
-  // mosaicos").
+test("◈ La card Inversiones agrupa invertido, resultado y neto, y se abre con el detalle de cada ticker", ()=>{
+  // 100.000 (BCAHA) − 300.000 (YPF) = −200.000, mismo número que netoInvTotal(). Las cards sueltas (Invertido, Resultado inv., Neto inversión y una por ticker)
+  // son UNA sola; cada instrumento se ve en la hoja que abre (rendimientoPorInstrumento).
   const dom=document.createElement("div");
   document.body.appendChild(dom);
   try{
     dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
     const chips=[...dom.querySelectorAll(".mov-mosaic")].map(c=>c.innerHTML);
-    const neto=chips.find(c=>c.includes("Neto inversión"));
-    cierto(!!neto, "falta el ítem de neto de inversión: "+chips.join(" | "));
-    cierto(/200\.000/.test(neto.replace(/<[^>]*>/g,"")), "el neto no muestra 200.000: "+neto);
-    cierto(neto.includes("--invest"), "neto negativo: sigue siendo tu plata puesta, no un gasto perdido: "+neto);
-    cierto(chips.some(c=>c.includes("BCAHA")) && chips.some(c=>c.includes("YPF")),
-      "los ítems por ticker no pueden desaparecer, este es un resumen ADEMÁS de esos: "+chips.join(" | "));
+    const inv=chips.filter(c=>c.includes("Inversiones"));
+    igual(inv.length, 1, "una sola card de inversiones: "+chips.join(" | "));
+    const txt=inv[0].replace(/<[^>]*>/g,"");
+    cierto(/200\.000/.test(txt) && txt.includes("Neto"), "el neto de 200.000 va en la card: "+txt);
+    cierto(/1\.200\.000/.test(txt) && txt.includes("Invertido"), "lo invertido va en la card: "+txt);
+    igual(dom.querySelectorAll('.mov-mosaic[data-accion="abrir:inversiones"]').length, 1, "al tocarla abre el detalle");
+    cierto(!chips.some(c=>c.includes("Neto inversión") || c.includes('mov-mosaic-name" style="color:var(--invest)">Invertido<')), "ya no quedan cards sueltas de invertido ni de neto");
+    cierto(!chips.some(c=>/>BCAHA</.test(c) || />YPF</.test(c)), "ni una card por ticker");
   } finally { dom.remove(); }
 });
 
-test("hay un chip por cada ticker operado en el mes", ()=>{
-  const txt=chipsDeMovs(MES_INV, "Todos", "", "2026-08");
-  cierto(txt.includes("BCAHA"), "falta el chip de BCAHA: " + txt);
-  cierto(txt.includes("YPF"), "falta el chip de YPF: " + txt);
-});
-
-test("el neto positivo lleva signo + y el negativo no es rojo de gasto", ()=>{
-  const dom=document.createElement("div");
-  document.body.appendChild(dom);
-  try{
-    dom.innerHTML=chipsDeMovsHTML(MES_INV, "Todos", "", "2026-08");
-    const chips=[...dom.querySelectorAll(".mov-mosaic")].map(c=>c.innerHTML);
-    const bcaha=chips.find(c=>c.includes("BCAHA")), ypf=chips.find(c=>c.includes("YPF"));
-    cierto(/\+\$?1?00\.000/.test(bcaha.replace(/<[^>]*>/g,"")), "el neto positivo va con signo +: " + bcaha);
-    cierto(ypf.includes("--invest"), "poner plata en una inversión no es perderla: no va en rojo de gasto. " + ypf);
-    cierto(bcaha.includes("--success"), "el neto positivo va en verde: " + bcaha);
-  } finally { dom.remove(); }
+test("el detalle de Inversiones lista cada ticker operado con lo que puso, cobró y su neto", ()=>{
+  const filas=rendimientoPorInstrumento(MES_INV, "2026-08", "2026-08", resultadoInv(MES_INV).eventos, {});
+  const bcaha=filas.find(f=>f.ticker==="BCAHA"), ypf=filas.find(f=>f.ticker.includes("YPF"));
+  cierto(!!bcaha && !!ypf, "falta un ticker en el detalle: "+JSON.stringify(filas.map(f=>f.ticker)));
+  igual(bcaha.netoARS, 100000, "el neto positivo es lo que sacaste de más"); igual(ypf.netoARS, -300000, "poner plata en una inversión es un neto negativo (no un gasto)");
+  igual(bcaha.pusoARS+ypf.pusoARS>0, true);
 });
 
 test("Balance = Ingresos − Gastos, con el resultado de inversión adentro de los dos (no el flujo de caja)", async ()=>{
@@ -11505,7 +11494,7 @@ test("rescatar mucho y reinvertir poco NO es ganancia: sigue valiendo capital pr
 test("la tarjeta Resultado inv. no desaparece cuando da $0 pero hubo rescates o rendimientos", async ()=>{
   const src=await (await fetch("js/movimientos.js")).text();
   cierto(src.includes("const hayCobrosInv=mesMovs.some(m=>m.tipo===\"Inversion\"&&isInvSalida(m))"), "se detecta que hubo cobros de inversión en el período");
-  cierto(src.includes("los rescates devolvieron capital"), "si el resultado es 0, la tarjeta sigue y explica por qué");
+  cierto(src.includes("const hayResultado=") && src.includes("|| hayCobrosInv"), "si el resultado es 0 pero hubo cobros, la card igual muestra Resultado");
 });
 
 grupo("Editor de gasto frecuente: filtros de vista");
@@ -11744,6 +11733,18 @@ test("SPY, Spy y spy son el mismo ticker: una venta cargada con otra mayúscula 
   igual(Object.keys(p).join(","), "SPY", "una sola posición"); igual(p.SPY.cartera,1); igual(p.SPY.ticker,"SPY");
   igual(operacionesSinCantidad([{...compra,cantidad:undefined},{...venta,cantidad:undefined}],"SPY").length, 2, "el filtro por ticker tampoco distingue mayúsculas");
   igual(Object.keys(normalizarPreciosActuales({spy:{precio:5}})).join(","), "SPY");
+});
+
+test("rendimientoPorInstrumento: resultado del período, neto, cartera y mayúsculas", ()=>{
+  const op=(id,f,sub,imp,t,c)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs "+sub,ticker:t,importe:imp,importeUSD:0,fecha:f,cantidad:c});
+  const todo=[op(1,"2026-05-28","Compra",500,"SPY",2), op(2,"2026-11-10","Venta",300,"Spy",1), op(3,"2026-11-11","Compra",100,"QQQ",1)];
+  const ev=calcularResultadoInv(todo).eventos, pos=calcularPosiciones(todo,{SPY:{precio:600,fecha:"2026-11-16"}},"2026-11-16");
+  const mes=todo.filter(m=>m.fecha.startsWith("2026-11"));
+  const f=rendimientoPorInstrumento(mes,"2026-11","2026-11",ev,pos);
+  igual(f.length,2,"SPY y Spy son un solo instrumento"); const spy=f.find(x=>x.clave==="SPY");
+  igual(spy.cobroARS,300); igual(spy.pusoARS,0); igual(spy.netoARS,300); igual(spy.resARS,0, "la venta devolvió capital");
+  igual(spy.pos.cartera,1); igual(spy.pos.valorActual,600); igual(spy.pos.rend, 350, "600 hoy contra 250 de costo");
+  igual(f.find(x=>x.clave==="QQQ").pusoARS,100); igual(f.find(x=>x.clave==="QQQ").pos.valorActual, null, "QQQ está en cartera pero sin precio cargado: no se inventa un rendimiento");
 });
 
 grupo("Aislamiento de los tests");

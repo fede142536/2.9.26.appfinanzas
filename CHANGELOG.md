@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v256**
+**Versión actual: v257**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 16 de noviembre de 2026
 
+- **v257** · Los tickers no distinguen mayúsculas (una venta cargada como 'Spy' ya no cuenta entera como ganancia) y la cartera suma las cantidades que se llevan en el fondo de ahorro
 - **v256** · Desdoblamientos (splits) por ticker, crear las compras que faltan desde los depósitos del fondo de ahorro (con vista previa del efecto) y el Excel exporta ticker y cantidad
 - **v255** · Un retiro de venta viejo o cargado a mano conserva el monto entero al editar o unir la venta; solo se recalcula el que nació por el capital
 - **v254** · Los movimientos del fondo de ahorro (depósito o retiro) tienen ticker y cantidad, al cargar y al editar; el retiro de una venta toma los de la venta
