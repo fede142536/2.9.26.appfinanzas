@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v257**
+**Versión actual: v258**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,10 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 17 de noviembre de 2026
+
+- **v258** · Una sola card Inversiones en Movimientos (invertido, resultado y neto) que abre el detalle de cada instrumento: lo que puso, cobró, su resultado y cómo rinde la cartera
 
 ## 16 de noviembre de 2026
 

@@ -998,10 +998,22 @@ document.addEventListener("click", e=>{
 // ═══════════════════════════════════════════
 // HOJA "INVERSIONES" DEL PERÍODO: cada instrumento y cómo rindió
 // ═══════════════════════════════════════════
-let invPeriodoSnap=null;   // {lista, desde, hasta, etiqueta} del último resumen pintado
+let invPeriodoSnap=null;   // {lista, desde, hasta, etiqueta, anio} del último resumen pintado
+let invPeriodoVista="mes";   // "mes" (el período que estabas mirando) o "anio" (todo el año de ese período)
 function abrirInvPeriodo(){
+  if(!invPeriodoSnap) return;
+  invPeriodoVista="mes";
+  pintarInvPeriodo();
+  document.getElementById("modal-inv-periodo").classList.add("open");
+}
+function setInvPeriodoVista(v){ if(v!=="mes" && v!=="anio") return; invPeriodoVista=v; pintarInvPeriodo(); }
+function pintarInvPeriodo(){
   const snap=invPeriodoSnap; if(!snap) return;
-  const filas=rendimientoPorInstrumento(snap.lista, snap.desde, snap.hasta, resultadoInv().eventos, calcularPosiciones(movs, preciosActuales, hoyLocal(), splitsInv));
+  const anio=invPeriodoVista==="anio";
+  // Todo el año: las inversiones de enero a diciembre de ese año (el resultado mira toda la historia, así que una venta de marzo cuenta contra lo comprado en 2025).
+  const lista=anio ? movs.filter(m=>m && m.tipo==="Inversion" && String(m.fecha||"").slice(0,4)===snap.anio) : snap.lista;
+  const desde=anio ? snap.anio+"-01" : snap.desde, hasta=anio ? snap.anio+"-12" : snap.hasta;
+  const filas=rendimientoPorInstrumento(lista, desde, hasta, resultadoInv().eventos, calcularPosiciones(movs, preciosActuales, hoyLocal(), splitsInv));
   const signo=n=>(n>0?"+":n<0?"−":"");
   const money=(n,usd)=>usd ? "USD "+fmtNum2(Math.abs(n)) : fmtTotal(Math.abs(n));
   const color=n=>n>0?"var(--success)":n<0?"var(--danger)":"var(--muted)";
@@ -1009,28 +1021,36 @@ function abrirInvPeriodo(){
   filas.forEach(f=>Object.keys(tot).forEach(k=>tot[k]+=f[k]));
   const stat=(lbl,val,col)=>`<div class="invp-stat"><span class="invp-lbl">${lbl}</span><strong${col?` style="color:${col}"`:""}>${val}</strong></div>`;
   const resTxt=(ars,usd)=>[Math.round(ars)!==0?signo(ars)+fmtTotal(Math.abs(ars)):"", Math.abs(usd)>=0.01?signo(usd)+"USD "+fmtNum2(Math.abs(usd)):""].filter(Boolean).join(" · ") || "$0";
-  let html=`<div class="invp-resumen">
+  let html=`<div class="seg-filter invp-vistas" role="tablist" aria-label="Período del detalle">
+    <button type="button" class="seg-btn${anio?"":" active"}" role="tab" aria-selected="${!anio}" onclick="setInvPeriodoVista('mes')">${snap.etiqueta.startsWith("de ")?"Este mes":"Este período"}</button>
+    <button type="button" class="seg-btn${anio?" active":""}" role="tab" aria-selected="${anio}" onclick="setInvPeriodoVista('anio')">Todo ${snap.anio}</button>
+  </div>
+  <div class="invp-resumen">
     ${stat("Resultado",resTxt(tot.resARS,tot.resUSD),color(tot.resARS||tot.resUSD))}
     ${tot.pusoARS||tot.pusoUSD?stat("Pusiste",[tot.pusoARS?fmtTotal(tot.pusoARS):"",tot.pusoUSD?"USD "+fmtNum2(tot.pusoUSD):""].filter(Boolean).join(" · ")):""}
     ${tot.cobroARS||tot.cobroUSD?stat("Cobraste",[tot.cobroARS?fmtTotal(tot.cobroARS):"",tot.cobroUSD?"USD "+fmtNum2(tot.cobroUSD):""].filter(Boolean).join(" · ")):""}
   </div>`;
+  if(!filas.length) html+=`<p class="txt-md txt-muted" style="padding:12px 0">No hay inversiones ${anio?"en "+snap.anio:snap.etiqueta}.</p>`;
   html+=filas.map(f=>{
     const res=f.usd ? f.resUSD : f.resARS, neto=f.usd ? f.netoUSD : f.netoARS;
     const puso=f.usd ? f.pusoUSD : f.pusoARS, cobro=f.usd ? f.cobroUSD : f.cobroARS;
     const hayRes=Math.abs(res)>=0.01;
     const hoy=f.pos && f.pos.valorActual!==null
-      ? `<div class="invp-hoy">En cartera: ${fmtCantidad(f.pos.cartera)} nom. · hoy ${money(f.pos.valorActual,f.pos.usd)} · <strong style="color:${color(f.pos.rend)}">${signo(f.pos.rend)}${money(f.pos.rend,f.pos.usd)}${f.pos.rendPct!==null?" ("+fmtPctPos(f.pos.rendPct)+")":""}</strong> sin realizar</div>`
-      : (f.pos ? `<div class="invp-hoy txt-muted">En cartera: ${fmtCantidad(f.pos.cartera)} nom. · cargá el precio de hoy en Inversiones › Cartera para ver cuánto rinde</div>` : "");
-    return `<button type="button" class="invp-fila" onclick="verInstrumentoDelPeriodo(${attrJS(f.ticker)})" aria-label="${escapeHtml(`${f.ticker}: ${hayRes?"resultado "+signo(res)+money(res,f.usd):"sin resultado"}. Tocá para ver sus movimientos`)}">
+      ? `<span class="invp-hoy">En cartera: ${fmtCantidad(f.pos.cartera)} nom. · hoy ${money(f.pos.valorActual,f.pos.usd)} · <strong style="color:${color(f.pos.rend)}">${signo(f.pos.rend)}${money(f.pos.rend,f.pos.usd)}${f.pos.rendPct!==null?" ("+fmtPctPos(f.pos.rendPct)+")":""}</strong> sin realizar</span>`
+      : (f.pos ? `<span class="invp-hoy txt-muted">En cartera: ${fmtCantidad(f.pos.cartera)} nom. · cargá el precio de hoy en Inversiones › Cartera para ver cuánto rinde</span>` : "");
+    // En la vista del año la fila no filtra la lista (que sigue siendo del mes que estás mirando): solo informa.
+    const abre=anio ? "" : ` onclick="verInstrumentoDelPeriodo(${attrJS(f.ticker)})"`;
+    const etiq=escapeHtml(`${f.ticker}: ${hayRes?"resultado "+signo(res)+money(res,f.usd):"sin resultado"}${anio?"":". Tocá para ver sus movimientos"}`);
+    return `<${anio?"div":"button type=\"button\""} class="invp-fila${anio?" invp-fila-info":""}"${abre} aria-label="${etiq}">
       <span class="invp-cab"><span class="invp-nom">${escapeHtml(f.ticker)}<small>${escapeHtml(f.cat)}</small></span>
         <strong class="invp-res" style="color:${color(res)}">${hayRes?signo(res)+money(res,f.usd):"—"}</strong></span>
       <span class="invp-det">${puso?"Pusiste "+money(puso,f.usd):""}${puso&&cobro?" · ":""}${cobro?"Cobraste "+money(cobro,f.usd):""}${neto?` · Neto ${signo(neto)}${money(neto,f.usd)}`:""}${hayRes?"":" · sin ventas ni rescates con resultado"}</span>
       ${hoy}
-    </button>`;
+    </${anio?"div":"button"}>`;
   }).join("");
-  document.getElementById("inv-periodo-titulo").textContent=`Inversiones ${snap.etiqueta}`;
+  document.getElementById("inv-periodo-titulo").textContent=anio ? `Inversiones de ${snap.anio}` : `Inversiones ${snap.etiqueta}`;
   document.getElementById("inv-periodo-contenido").innerHTML=html;
-  document.getElementById("modal-inv-periodo").classList.add("open");
+  const ver=document.getElementById("inv-periodo-ver"); if(ver) ver.style.display=anio ? "none" : "";
 }
 function cerrarInvPeriodo(){ document.getElementById("modal-inv-periodo").classList.remove("open"); }
 // Desde la hoja: filtra la lista de Movimientos a los movimientos de ese instrumento.
@@ -1539,7 +1559,7 @@ function renderMovs(){
     const hayCobrosInv=mesMovs.some(m=>m.tipo==="Inversion"&&isInvSalida(m));
     const hayInvPeriodo=mesMovs.some(m=>m.tipo==="Inversion");
     invPeriodoSnap={lista:mesMovs, desde:filtroFecha?String(filtroFecha.desde).slice(0,7):mesActual, hasta:filtroFecha?String(filtroFecha.hasta).slice(0,7):mesActual,
-      etiqueta:filtroFecha?"del período":"de "+mesLbl(mesActual)};
+      etiqueta:filtroFecha?"del período":"de "+mesLbl(mesActual), anio:String(filtroFecha?filtroFecha.desde:mesActual).slice(0,4)};
     if(hayInvPeriodo){
       const signo=n=>(n>0?"+":n<0?"−":"");
       const colorRes=Math.round(ganInv.ars)>0?"var(--success)":Math.round(ganInv.ars)<0?"var(--danger)":"var(--muted)";
