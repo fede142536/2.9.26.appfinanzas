@@ -97,6 +97,7 @@
 <script src="js/cierre-mes.js"></script>
 <script src="js/huella.js"></script>
 <script src="js/novedades.js"></script>
+<script src="js/manual.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
@@ -8480,18 +8481,18 @@ async function configHTML(){
   return html.slice(a, html.indexOf('<button id="hamburger-btn"', a));
 }
 
-test("la configuración está en 5 secciones plegables, cerradas al empezar", async ()=>{
+test("la configuración está en 6 secciones plegables (Ayuda y manual primero), cerradas al empezar", async ()=>{
   const cfg=await configHTML();
   const secciones=[...cfg.matchAll(/<details class="cfg-seccion" id="([\w-]+)"([^>]*)>/g)];
-  igual(secciones.map(m=>m[1]).join(","), "cfg-sec-general,cfg-sec-copias,cfg-sec-organizar,cfg-sec-exportar,cfg-sec-peligro");
+  igual(secciones.map(m=>m[1]).join(","), "cfg-sec-ayuda,cfg-sec-general,cfg-sec-copias,cfg-sec-organizar,cfg-sec-exportar,cfg-sec-peligro");
   secciones.forEach(m=>cierto(!/\bopen\b/.test(m[2]), `${m[1]} no debería venir abierta`));
-  igual((cfg.match(/<summary>/g)||[]).length, 5);
+  igual((cfg.match(/<summary>/g)||[]).length, 6);
 });
 
 test("ninguna tarjeta de Configuración se perdió ni quedó fuera de una sección", async ()=>{
   const cfg=await configHTML();
   TARJETAS_CONFIG.forEach(t=>cierto(cfg.includes(t), "falta la tarjeta: "+t));
-  igual((cfg.match(/<div class="card"/g)||[]).length, 19, "tienen que ser 19 tarjetas (16 + movimientos sin cuenta + ventas de ahorros + papelera)");
+  igual((cfg.match(/<div class="card"/g)||[]).length, 20, "tienen que ser 20 tarjetas (16 + movimientos sin cuenta + ventas de ahorros + papelera + el manual)");
   // toda tarjeta está adentro de alguna sección: antes del primer <details> no hay ninguna
   cierto(!cfg.slice(0, cfg.indexOf('<details class="cfg-seccion"')).includes('<div class="card"'), "quedó una tarjeta suelta antes de las secciones");
   // el contenido sigue bien cerrado: tantas aperturas como cierres
@@ -11902,6 +11903,36 @@ test("la versión que se publica tiene su novedad, y cada «Ver» lleva a una pa
   cierto(html.includes('src="js/novedades.js') && html.includes('id="modal-novedades"') && html.includes("verTodasLasNovedades()"));
   cierto((await (await fetch("sw.js")).text()).includes("./js/novedades.js"), "el service worker tiene que guardar novedades.js");
   cierto((await (await fetch("js/main.js")).text()).includes("avisarNovedades("), "el arranque muestra las novedades");
+});
+
+grupo("Manual de uso");
+
+test("el manual cubre cómo cargar cada tipo de movimiento y cada «Ir ahí» lleva a una pantalla que existe", ()=>{
+  const preguntas=MANUAL.flatMap(s=>s.preguntas);
+  cierto(preguntas.length>=40, "el manual tiene al menos 40 preguntas: "+preguntas.length);
+  const texto=normalizarTexto(preguntas.map(q=>q.p+" "+(q.r||"")+" "+(q.pasos||[]).join(" ")).join(" "));
+  ["gasto","ingreso","cuotas","suscripcion","dolares","ahorro","traspaso","recuperable","carga rapida","repetir","inversion","venta","split","cantidad","revision","valor actual","meta","pin","huella","copia","papelera","novedades","forzar actualizacion","presupuesto","cerrar el mes"]
+    .forEach(t=>cierto(texto.includes(t), "el manual no habla de «"+t+"»"));
+  preguntas.forEach(q=>{ cierto(!!q.p && (!!q.r || (q.pasos||[]).length>0), "cada pregunta tiene respuesta: "+q.p); if(q.ir) cierto(typeof MANUAL_IR[q.ir]==="function", "no existe la acción «"+q.ir+"» de: "+q.p); });
+  igual(new Set(MANUAL.map(s=>s.id)).size, MANUAL.length, "los temas tienen id distinto");
+});
+
+test("el buscador del manual encuentra por palabras, sin importar tildes ni mayúsculas", ()=>{
+  const r=buscarEnManual("DOLARES");
+  cierto(r.some(s=>s.preguntas.some(q=>/dólares/.test(q.p))), "«dolares» encuentra la pregunta de dólares");
+  igual(buscarEnManual("").reduce((n,s)=>n+s.preguntas.length,0), MANUAL.flatMap(s=>s.preguntas).length, "sin texto muestra todo");
+  igual(buscarEnManual("palabraquenoexiste").length, 0);
+  const cuotas=buscarEnManual("tarjeta cuotas").flatMap(s=>s.preguntas); cierto(cuotas.length>=1 && cuotas.every(q=>normalizarTexto(q.p+q.r+(q.pasos||[]).join(" ")).includes("cuotas")), "todas las palabras tienen que estar");
+  cierto(manualTexto("**hola** <b>").includes("<strong>hola</strong>") && manualTexto("<b>").includes("&lt;b&gt;"), "la negrita funciona y el resto se escapa");
+});
+
+test("el manual está en Configuración, primero, y la novedad lleva ahí", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const iAyuda=html.indexOf('id="cfg-sec-ayuda"'), iGeneral=html.indexOf('id="cfg-sec-general"');
+  cierto(iAyuda>0 && iAyuda<iGeneral, "Ayuda y manual es la primera sección de Configuración");
+  cierto(html.includes('id="manual-buscar"') && html.includes('src="js/manual.js'));
+  cierto((await (await fetch("sw.js")).text()).includes("./js/manual.js"));
+  cierto(NOVEDADES.some(n=>n.ir==="manual") && typeof NOVEDADES_IR.manual==="function");
 });
 
 grupo("Aislamiento de los tests");

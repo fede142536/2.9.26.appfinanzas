@@ -2081,3 +2081,16 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .nov-v{font-size:11px;color:var(--muted);flex-shrink:0}
 .nov-txt{font-size:13px;color:var(--muted);margin:4px 0 8px;line-height:1.45}
 .nov-todas{background:none;border:none;color:var(--accent);font:inherit;font-size:13px;padding:var(--sp-3) 0;cursor:pointer;min-height:var(--tap)}
+
+/* [Manual] temas plegables con sus preguntas */
+.manual{margin-top:var(--sp-3)}
+.man-sec{border-top:1px solid var(--border)}
+.man-sec>summary{cursor:pointer;font-weight:600;padding:var(--sp-3) 0;min-height:var(--tap);display:flex;align-items:center;gap:8px}
+.man-n{margin-left:auto;font-size:11px;color:var(--muted);font-weight:500}
+.man-q{margin:0 0 var(--sp-2) var(--sp-2)}
+.man-q>summary{cursor:pointer;font-size:14px;padding:6px 0;color:var(--text);line-height:1.4}
+.man-r{font-size:13px;color:var(--muted);line-height:1.5;padding:0 0 var(--sp-2) var(--sp-3)}
+.man-r p{margin:0 0 6px}
+.man-r ol{margin:0 0 8px;padding-left:18px}
+.man-r li{margin:2px 0}
+.man-r strong{color:var(--text)}
