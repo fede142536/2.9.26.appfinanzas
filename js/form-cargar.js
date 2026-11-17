@@ -736,7 +736,7 @@ async function guardarSinFreno(){
   if(tipo==="Inversion"){
     const importeInv=parseFloat(limpiarImporte(document.getElementById("inv-importe").value))||0;
     const isUSDInv=document.getElementById("inv-moneda").value==="USD";
-    const ticker=nombreSeguro(document.getElementById("inv-ticker").value.trim());
+    const ticker=tickerParaGuardar(nombreSeguro(document.getElementById("inv-ticker").value.trim()), movs);
     if(importeInv<=0){showToast("Ingresá un importe válido");return;}
     if(!ticker){showToast("Ingresá el ticker o fondo");return;}
     const cat=document.getElementById("inv-cat").value;
@@ -758,10 +758,14 @@ async function guardarSinFreno(){
     movs.unshift(invMov);
     let retiroVenta=null;
     if(fondoRetiro){ retiroVenta=crearRetiroPorVenta(invMov, fondoRetiro, invId+1, montoRetiroDeVenta(invMov, movs)); movs.unshift(retiroVenta); }
+    // Una compra que es de un fondo de ahorro crea su depósito ligado: un solo registro en vez de dos (ver retiro-por-venta.js).
+    const fondoCompra=!isInvSalida(invMov) ? fondoDeCompraEnFormulario() : null;
+    if(fondoCompra) movs.unshift(crearDepositoPorCompra(invMov, fondoCompra, invId+2));
     save();vibrar([15,50,15]);
     // Si la venta tuvo ganancia, del fondo salió solo el capital: el aviso lo dice para que no parezca que faltan pesos.
     const gananciaVenta=retiroVenta ? Math.round((importeInv-(isUSDInv?retiroVenta.importeOrig:retiroVenta.importe))*100)/100 : 0;
     const fmtV=n=>isUSDInv ? fmtMoneda(n,"USD") : fmtS(n);
+    if(fondoCompra && !fondoRetiro) showToast(`Compra guardada y sumada a ${fondoCompra.cat}${fondoCompra.sub?" › "+fondoCompra.sub:""} ✓`); else
     showToast(fondoRetiro ? `Venta guardada y descontada de ${fondoRetiro.cat}${fondoRetiro.sub?" › "+fondoRetiro.sub:""}${gananciaVenta>0 ? ` (${fmtV(importeInv-gananciaVenta)} de capital; ${fmtV(gananciaVenta)} son ganancia)` : ""} ✓` : "Inversión guardada ✓");
     resetForm("Inversion");
     return;
@@ -886,6 +890,7 @@ function resetForm(t){
     document.getElementById("inv-moneda").value="ARS";
     syncCurrencyPill("inv-moneda");
     const saleChk=document.getElementById("inv-sale-ahorro"); if(saleChk) saleChk.checked=false;   // cada venta decide de nuevo
+    if(typeof fondoCompraTocado!=="undefined") fondoCompraTocado=false;   // y cada compra vuelve a sugerir su fondo
     toggleInvMoneda();
     document.getElementById("inv-fecha").value=iso;
     refrescarFechaUI("inv-fecha");

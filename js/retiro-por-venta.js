@@ -73,7 +73,8 @@ function sincronizarRetiroLigado(inv, lista){
     x.moneda=usd ? "USD" : "ARS"; x.importe=usd ? 0 : monto; x.importeOrig=usd ? monto : null;
     x.fecha=inv.fecha; x.cuenta=inv.cuenta||"";
     if(inv.ticker) x.ticker=inv.ticker;
-    if(inv.cantidad>0) x.cantidad=inv.cantidad; else delete x.cantidad;
+    // La cantidad viaja de la inversión al movimiento del fondo; si la inversión no la tiene y el movimiento sí, se queda con esa (no se pierde).
+    if(inv.cantidad>0) x.cantidad=inv.cantidad; else if(x.cantidad>0) inv.cantidad=x.cantidad;
     n++;
   });
   return n;
@@ -100,6 +101,9 @@ function actualizarSaleDeAhorro(){
   if(elegido) sel.value=fondoKey(elegido);
   mostrarSaldoFondo(fondos, moneda);
 }
+// actualizarSaleDeAhorro se llama al cambiar operación, ticker o moneda: la casilla de la compra se actualiza con ella.
+const _actualizarSaleDeAhorroBase=actualizarSaleDeAhorro;
+actualizarSaleDeAhorro=function(){ _actualizarSaleDeAhorroBase(); if(typeof actualizarFondoDeCompra==="function") actualizarFondoDeCompra(false); };
 function mostrarSaldoFondo(fondos, moneda){
   const el=document.getElementById("inv-fondo-saldo"), sel=document.getElementById("inv-fondo");
   if(!el || !sel) return;
@@ -458,5 +462,134 @@ function aplicarSaleDeAhorroEditor(m){
     else{ let id=Date.now()+1; while(movs.some(x=>x.id===id)) id++; movs.unshift(crearRetiroPorVenta(m, f, id, montoRetiroDeVenta(m, movs))); }
   } else if(retiro){
     movs=movs.filter(x=>x!==retiro);
+  }
+}
+
+// ═══════════════════════════════════════════
+// COMPRA QUE ES DE UN FONDO DE AHORRO: un solo registro
+// ═══════════════════════════════════════════
+// Si el fondo de ahorro es una inversión (el Fondo de Retiro es SPY), cada compra se cargaba dos veces: la inversión y el depósito al fondo, a mano y a veces con
+// montos distintos. Con la casilla "Es de mi fondo de ahorro", la compra crea su depósito LIGADO (origenInvId): mismo monto, fecha, cuenta, ticker y cantidad. Si
+// editás la compra el depósito la acompaña (sincronizarRetiroLigado), y si la borrás se va con ella. No cambia el balance: es el mismo depósito que antes cargabas aparte.
+
+// Pura. Los fondos de ahorro (categoría › subcategoría) que alguna vez recibieron un depósito en esa moneda, el más usado primero: [{cat, sub, n}].
+function fondosParaCompra(lista, moneda){
+  const mon=moneda==="USD" ? "USD" : "ARS", por={};
+  (lista||[]).forEach(m=>{
+    if(!esDepositoAhorro(m) || (m.moneda==="USD" ? "USD" : "ARS")!==mon) return;
+    const k=(m.cat||"Sin categoría")+"\u0001"+(m.subcat||"");
+    (por[k]=por[k]||{cat:m.cat||"Sin categoría", sub:m.subcat||"", n:0}).n++;
+  });
+  return Object.values(por).sort((a,b)=>b.n-a.n);
+}
+// Pura. El fondo al que ya fueron otras compras de ese ticker (por el ticker o la nota de sus depósitos), o null: así la casilla se tilda sola para SPY.
+function fondoHabitualDelTicker(lista, ticker, moneda){
+  const t=tickerClave(ticker);
+  if(!ticker || t==="SIN TICKER") return null;
+  const cuenta={};
+  (lista||[]).forEach(m=>{
+    if(!esDepositoAhorro(m) || (m.moneda==="USD" ? "USD" : "ARS")!==(moneda==="USD" ? "USD" : "ARS")) return;
+    const deNota=normalizarTexto(m.nota||"").split(/[^a-z0-9]+/).includes(normalizarTexto(ticker));
+    if(!(m.ticker && tickerClave(m.ticker)===t) && !deNota) return;
+    const k=(m.cat||"Sin categoría")+"\u0001"+(m.subcat||"");
+    (cuenta[k]=cuenta[k]||{cat:m.cat||"Sin categoría", sub:m.subcat||"", n:0}).n++;
+  });
+  return Object.values(cuenta).sort((a,b)=>b.n-a.n)[0] || null;
+}
+// Pura. El depósito ligado a una compra.
+function crearDepositoPorCompra(inv, fondo, id){
+  const usd=!!(inv.importeUSD && !inv.importe), monto=usd ? inv.importeUSD : inv.importe;
+  return {id, tipo:"Gasto", importe: usd ? 0 : monto, importeOrig: usd ? monto : null, moneda: usd ? "USD" : "ARS",
+    cat:fondo.cat, subcat:fondo.sub, cuenta:inv.cuenta||"", fecha:inv.fecha, nota:inv.nota||"", tags:[],
+    esAhorro:true, usaAhorro:false, traspaso:false, recuperable:0, origenInvId:inv.id,
+    ...(inv.ticker ? {ticker:String(inv.ticker).trim().toUpperCase()} : {}), ...(inv.cantidad>0 ? {cantidad:inv.cantidad} : {})};
+}
+// ── Formulario de Cargar › Inversión: la casilla de la compra ──
+// `porUsuario`: el cambio lo hizo la persona (tildó o destildó); si no, la casilla se tilda sola cuando el ticker ya tiene un fondo habitual.
+let fondoCompraTocado=false;
+function actualizarFondoDeCompra(porUsuario){
+  const grupo=document.getElementById("inv-fondo-compra-group"); if(!grupo) return;
+  const chk=document.getElementById("inv-fondo-compra"), sel=document.getElementById("inv-fondo-compra-sel"), selG=document.getElementById("inv-fondo-compra-sel-group");
+  const sub=document.getElementById("inv-subcat"), esVenta=sub && (esOperacionDeVenta(sub.value) || /rescate|venta|amortiz|cup[oó]n|dividendo|rendimiento|tomada/i.test(sub.value||""));
+  const moneda=(document.getElementById("inv-moneda")||{}).value==="USD" ? "USD" : "ARS";
+  const fondos=esVenta ? [] : fondosParaCompra(movs, moneda);
+  grupo.style.display=fondos.length ? "" : "none";
+  if(!fondos.length){ if(chk) chk.checked=false; if(selG) selG.style.display="none"; return; }
+  if(porUsuario) fondoCompraTocado=true;
+  const ticker=(document.getElementById("inv-ticker")||{}).value||"";
+  const habitual=fondoHabitualDelTicker(movs, ticker, moneda);
+  if(!fondoCompraTocado && chk) chk.checked=!!habitual;
+  const previo=sel ? sel.value : "";
+  if(sel){
+    sel.innerHTML=fondos.map(f=>`<option value="${escapeHtml(fondoKey(f))}">${escapeHtml(f.cat+(f.sub?" › "+f.sub:""))}</option>`).join("");
+    const elegido=(habitual && fondos.find(f=>fondoKey(f)===fondoKey(habitual))) || fondos.find(f=>fondoKey(f)===previo) || fondos[0];
+    if(elegido) sel.value=fondoKey(elegido);
+  }
+  if(selG) selG.style.display=chk && chk.checked ? "" : "none";
+  const subEl=document.getElementById("inv-fondo-compra-sub");
+  if(subEl) subEl.textContent=habitual && chk && chk.checked ? `${tickerClave(ticker)} va a ${habitual.cat}${habitual.sub?" › "+habitual.sub:""}: se suma solo` : "Suma al fondo la misma plata: un solo registro";
+}
+function fondoDeCompraEnFormulario(){
+  const chk=document.getElementById("inv-fondo-compra"), sel=document.getElementById("inv-fondo-compra-sel");
+  const grupo=document.getElementById("inv-fondo-compra-group");
+  if(!chk || !chk.checked || !sel || !sel.value || (grupo && grupo.style.display==="none")) return null;
+  const moneda=(document.getElementById("inv-moneda")||{}).value==="USD" ? "USD" : "ARS";
+  return fondosParaCompra(movs, moneda).find(f=>fondoKey(f)===sel.value) || null;
+}
+// ── Editor de una compra: la misma casilla ──
+function bloqueFondoCompraEditor(m){
+  if(!m || m.tipo!=="Inversion" || isInvSalida(m)) return "";
+  const usd=!!(m.importeUSD>0 && !(m.importe>0));
+  const fondos=fondosParaCompra(movs, usd?"USD":"ARS");
+  const dep=movs.find(x=>x.origenInvId===m.id && esDepositoAhorro(x));
+  if(dep && !fondos.some(f=>f.cat===dep.cat && f.sub===(dep.subcat||""))) fondos.push({cat:dep.cat, sub:dep.subcat||"", n:0});
+  if(!fondos.length) return "";
+  const elegido=(dep && fondos.find(f=>f.cat===dep.cat && f.sub===(dep.subcat||""))) || fondoHabitualDelTicker(movs, m.ticker, usd?"USD":"ARS") || fondos[0];
+  // Una compra vieja que ya tiene su depósito cargado aparte: la casilla lo VINCULA (no crea otro, que sería contarlo dos veces).
+  const suelto=dep ? null : depositoSueltoDeCompra(m);
+  if(suelto) return `<div class="form-group" id="edit-inv-fondo-compra-wrap">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
+        <input type="checkbox" id="edit-inv-fondo-compra" class="chk-custom" style="--chk:var(--save)" data-vincular="${suelto.id}">
+        <span style="color:var(--save);font-weight:500">🔗 Vincular con su depósito del ${String(suelto.fecha||"").split("-").reverse().join("/")} en ${escapeHtml(suelto.cat+(suelto.subcat?" › "+suelto.subcat:""))} (${fmtS(suelto.importe)})</span>
+      </label>
+      <p class="txt-xs txt-muted" style="margin:6px 0 0">Vinculado, el depósito toma el monto, la fecha y la cantidad de esta compra, y se borra con ella.</p>
+    </div>`;
+  return `<div class="form-group" id="edit-inv-fondo-compra-wrap">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--save-light);border-radius:var(--radius-sm)">
+        <input type="checkbox" id="edit-inv-fondo-compra" class="chk-custom" style="--chk:var(--save)" ${dep?"checked":""} onchange="document.getElementById('edit-inv-fondo-compra-sel-wrap').style.display=this.checked?'':'none'">
+        <span style="color:var(--save);font-weight:500">🏦 Es de mi fondo de ahorro (suma al fondo)</span>
+      </label>
+      <div id="edit-inv-fondo-compra-sel-wrap" style="margin-top:8px;display:${dep?"":"none"}">
+        <label class="form-label" for="edit-inv-fondo-compra-sel">¿A qué fondo?</label>
+        <select id="edit-inv-fondo-compra-sel" class="form-select">${fondos.map(f=>`<option value="${escapeHtml(fondoKey(f))}"${elegido && fondoKey(f)===fondoKey(elegido)?" selected":""}>${escapeHtml(f.cat+(f.sub?" › "+f.sub:""))}</option>`).join("")}</select>
+      </div>
+      ${dep?`<p class="txt-xs txt-muted" style="margin:6px 0 0">El depósito al fondo se actualiza solo con el monto, la fecha y la cantidad de esta compra.</p>`:""}
+    </div>`;
+}
+// Al guardar el editor de una compra: crea, cambia o saca el depósito ligado según la casilla. El monto y la fecha los pone sincronizarRetiroLigado().
+// El depósito al fondo que acompaña a una compra pero no está vinculado (cargado aparte), o null.
+function depositoSueltoDeCompra(m){
+  const par=emparejarFondoInversion(movs).pares.find(p=>p.inv.id===m.id && !p.ligado && !p.f.venta);
+  return par ? par.f.m : null;
+}
+function aplicarFondoCompraEditor(m){
+  const chk=document.querySelector("#edit-inv-fondo-compra");
+  if(!chk || isInvSalida(m)) return;
+  if(chk.dataset.vincular){
+    const d=movs.find(x=>String(x.id)===chk.dataset.vincular);
+    if(chk.checked && d){ d.origenInvId=m.id; if(m.ticker) d.ticker=String(m.ticker).trim().toUpperCase(); }
+    return;
+  }
+  const dep=movs.find(x=>x.origenInvId===m.id && esDepositoAhorro(x));
+  if(chk.checked){
+    const sel=document.querySelector("#edit-inv-fondo-compra-sel");
+    const usd=!!(m.importeUSD>0 && !(m.importe>0));
+    const fondos=fondosParaCompra(movs, usd?"USD":"ARS");
+    if(dep && !fondos.some(f=>f.cat===dep.cat && f.sub===(dep.subcat||""))) fondos.push({cat:dep.cat, sub:dep.subcat||""});
+    const f=fondos.find(x=>sel && fondoKey(x)===sel.value); if(!f) return;
+    if(dep){ dep.cat=f.cat; dep.subcat=f.sub; }
+    else{ let id=Date.now()+1; while(movs.some(x=>x.id===id)) id++; movs.unshift(crearDepositoPorCompra(m, f, id)); }
+  } else if(dep){
+    movs=movs.filter(x=>x!==dep);
   }
 }

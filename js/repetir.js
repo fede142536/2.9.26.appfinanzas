@@ -16,7 +16,7 @@ function datosParaRepetir(m, hoyISO){
   if(m.frecuente || m._isFrecVirtual) return {motivo:"Los gastos frecuentes ya se repiten solos cada mes"};
   if(typeof esPataDeCambio==="function" && esPataDeCambio(m)) return {motivo:"Un cambio de moneda se carga de nuevo desde la pestaña Cambio"};
   if(m.pagoTarjeta) return {motivo:"El pago de un resumen se carga desde Tarjetas"};
-  if(m.origenInvId) return {motivo:"Este retiro se crea junto con la venta: repetí la venta"};
+  if(m.origenInvId) return {motivo:"Este movimiento del fondo se crea junto con su inversión: repetí la inversión"};
   if(m.devolucionDeId) return {motivo:"Un cobro se registra con el botón “Cobrar” del gasto"};
   const base={nota:m.nota||"", cat:m.cat||"", subcat:m.subcat||"", cuenta:m.cuenta||"", fecha:hoyISO};
   if(m.tipo==="Inversion"){

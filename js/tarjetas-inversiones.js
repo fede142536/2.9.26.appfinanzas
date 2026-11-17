@@ -1641,6 +1641,86 @@ function guardarCantidades(){
   renderInv();
 }
 
+// ═══════════════════════════════════════════
+// REVISIÓN DE DATOS DE INVERSIONES (pantalla)
+// ═══════════════════════════════════════════
+// Cada problema que encuentra revisionInversiones() con su explicación y su arreglo. "Está bien así" lo saca de la lista (se recuerda por clave).
+const REVISION_OK_KEY="frevinvok";
+const revisionIgnorados=()=>new Set(leerJSONSeguro(REVISION_OK_KEY, "[]", "array"));
+function revisionEstaBien(clave){
+  guardarJSONSeguro(REVISION_OK_KEY, [...new Set([...revisionIgnorados(), clave])]);
+  pintarRevisionInversiones(); renderInv();
+}
+function abrirRevisionInversiones(){
+  pintarRevisionInversiones();
+  document.getElementById("modal-revision-inv").classList.add("open");
+}
+function cerrarRevisionInversiones(){ document.getElementById("modal-revision-inv").classList.remove("open"); }
+function pintarRevisionInversiones(){
+  const cont=document.getElementById("revision-inv-contenido"); if(!cont) return;
+  const probs=revisionInversiones(movs, revisionIgnorados());
+  const m$=(n,mon)=>mon==="USD" ? fmtMoneda(n,"USD") : fmtS(n);
+  const ok=c=>`<button type="button" class="btn-sm" onclick="revisionEstaBien(${attrJS(c)})">Está bien así</button>`;
+  if(!probs.length){ cont.innerHTML=`<div class="empty" style="padding:24px 8px"><div class="empty-icon">✅</div>No encontré nada para revisar: tus inversiones cierran.</div>`; return; }
+  cont.innerHTML=`<p class="txt-xs txt-muted" style="margin:0 0 10px;line-height:1.45">Cosas que pueden estar haciendo que tus números de inversiones no sean reales. Arreglalas o marcá "Está bien así" si son correctas.</p>`+
+  probs.map(p=>{
+    if(p.tipo==="venta-sin-capital") return `<div class="rev-item rev-alta">
+      <div class="rev-tit">⚠ Venta de ${escapeHtml(p.ticker)} del ${fdyInv(p.fecha)} contada casi entera como ganancia</div>
+      <div class="rev-det">Cobraste ${m$(p.monto,p.moneda)} y la app solo conoce ${m$(p.capital,p.moneda)} de capital, así que suma <strong>${m$(p.ganancia,p.moneda)} de ganancia</strong> a ese mes. Casi siempre falta cargar la compra (o compras) de antes.</div>
+      <div class="rev-acc"><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();irACargarInversion(${attrJS(p.ticker)},'compra')">Cargar la compra</button><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();showInstrumentoDetail(${attrJS(p.ticker)})">Ver ${escapeHtml(p.ticker)}</button>${ok(p.clave)}</div></div>`;
+    if(p.tipo==="fondo-sin-inversion") return `<div class="rev-item">
+      <div class="rev-tit">🏦 ${p.faltan} ${p.faltan===1?"depósito":"depósitos"} de ${escapeHtml(p.cat)} sin su compra en Inversiones</div>
+      <div class="rev-det">Sin la compra, la app no sabe cuánto capital hay invertido en ${escapeHtml(p.ticker)} y el resultado de tus ventas sale inflado.</div>
+      <div class="rev-acc"><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();abrirHistorialFondo(${attrJS(p.cat)})">Crear las compras</button>${ok(p.clave)}</div></div>`;
+    if(p.tipo==="sin-vincular") return `<div class="rev-item">
+      <div class="rev-tit">🔗 ${p.pares.length} ${p.pares.length===1?"compra cargada":"compras cargadas"} dos veces (inversión y depósito al fondo), sin vincular</div>
+      <div class="rev-det">Vinculadas, al editar o borrar la compra el depósito la acompaña.${p.distintos.length?` <strong>${p.distintos.length} ${p.distintos.length===1?"tiene":"tienen"} montos distintos</strong>; el depósito se iguala al de la inversión:`:""}</div>
+      ${p.distintos.length?`<div class="rev-lista">${p.distintos.map(d=>`<div>${fdyInv(d.fecha)} ${escapeHtml(d.ticker)}: depósito ${fmtS(d.deposito)} → <strong>${fmtS(d.inversion)}</strong></div>`).join("")}</div>`:""}
+      <div class="rev-acc"><button type="button" class="btn-sm" onclick="revisionVincular()">Vincular${p.distintos.length?" e igualar":""}</button>${ok(p.clave)}</div></div>`;
+    if(p.tipo==="nominales") return `<div class="rev-item">
+      <div class="rev-tit">📉 Vendiste ${fmtCantidad(p.deMas)} ${escapeHtml(p.ticker)} más de los que la app sabe que tenías</div>
+      <div class="rev-det">Falta una compra, una cantidad o un desdoblamiento (split): en la hoja del ticker podés registrarlo.</div>
+      <div class="rev-acc"><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();showInstrumentoDetail(${attrJS(p.ticker)})">Ver ${escapeHtml(p.ticker)}</button><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();abrirCantidades(${attrJS(p.ticker)})">Completar cantidades</button>${ok(p.clave)}</div></div>`;
+    if(p.tipo==="variantes") return `<div class="rev-item">
+      <div class="rev-tit">🔤 El ticker ${escapeHtml(p.ticker)} está escrito de ${p.formas.length} formas: ${p.formas.map(f=>"«"+escapeHtml(f)+"»").join(", ")}</div>
+      <div class="rev-det">La app ya las cuenta como el mismo; unificarlas deja las listas prolijas.</div>
+      <div class="rev-acc"><button type="button" class="btn-sm" onclick="revisionUnificar(${attrJS(p.ticker)},${attrJS(p.sugerida)})">Unificar como «${escapeHtml(p.sugerida)}»</button>${ok(p.clave)}</div></div>`;
+    if(p.tipo==="sin-cantidad") return `<div class="rev-item">
+      <div class="rev-tit">🔢 ${p.n} ${p.n===1?"operación":"operaciones"} sin cantidad</div>
+      <div class="rev-det">Son de tickers en los que ya llevás nominales: sin ellas la posición no cierra.</div>
+      <div class="rev-acc"><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();abrirCantidades()">Completar</button>${ok(p.clave)}</div></div>`;
+    return "";
+  }).join("");
+}
+// Vincula cada compra con su depósito al fondo (origenInvId) e iguala el monto del depósito al de la inversión. Se puede deshacer.
+function revisionVincular(){
+  const p=revisionInversiones(movs, revisionIgnorados()).find(x=>x.tipo==="sin-vincular"); if(!p) return;
+  const tocados=p.pares.map(x=>movs.find(m=>m.id===x.fondoId)).filter(Boolean);
+  const invsTocadas=p.pares.map(x=>movs.find(m=>m.id===x.invId)).filter(Boolean);
+  const r1=capturarCampos(tocados, ["origenInvId","importe","ticker","cantidad"]), r2=capturarCampos(invsTocadas, ["cantidad"]);
+  const revertir=()=>{ r1(); r2(); };
+  p.pares.forEach(x=>{
+    const f=movs.find(m=>m.id===x.fondoId), inv=movs.find(m=>m.id===x.invId); if(!f || !inv) return;
+    f.origenInvId=inv.id;
+    f.importe=inv.importe||f.importe;
+    if(inv.ticker) f.ticker=String(inv.ticker).trim().toUpperCase();
+    if(inv.cantidad>0) f.cantidad=inv.cantidad; else if(f.cantidad>0) inv.cantidad=f.cantidad;
+  });
+  save();
+  ofrecerDeshacerCambio(`${p.pares.length} ${p.pares.length===1?"compra vinculada":"compras vinculadas"} con su depósito ✓`, ()=>{ revertir(); pintarRevisionInversiones(); renderInv(); });
+  pintarRevisionInversiones(); renderInv();
+}
+// Escribe igual todas las variantes de un ticker (en inversiones y en los movimientos del fondo). Se puede deshacer.
+function revisionUnificar(clave, forma){
+  const tocados=movs.filter(m=>m.ticker && tickerClave(m.ticker)===clave && m.ticker!==forma);
+  if(!tocados.length) return;
+  const revertir=capturarCampos(tocados, ["ticker"]);
+  tocados.forEach(m=>{ m.ticker=forma; });
+  save();
+  ofrecerDeshacerCambio(`${tocados.length} ${tocados.length===1?"movimiento":"movimientos"} con el ticker «${forma}» ✓`, ()=>{ revertir(); pintarRevisionInversiones(); renderInv(); });
+  pintarRevisionInversiones(); renderInv();
+}
+
 // ── Historial de inversiones desde el fondo de ahorro ──
 let historialFondoCat=null;
 function abrirHistorialFondo(cat){
@@ -1745,13 +1825,10 @@ function renderInvCartera(){
   abiertas.forEach(p=>{ const q=posiciones[tickerClave(p.ticker)]; if(q && q.valorActual!==null){ const k=q.usd?"usd":"ars"; rendTot[k].ini+=q.valorInicial; rendTot[k].act+=q.valorActual; rendTot[k].n++; } });
   const rendTxt=["ars","usd"].filter(k=>rendTot[k].n).map(k=>{ const d=rendTot[k].act-rendTot[k].ini; return `<strong style="color:${d>=0?"var(--success)":"var(--danger)"}">${d>=0?"+":"-"}${fmtPosMonto(Math.abs(d),k==="usd")}</strong> <span class="inv-pos-meta-i">sobre ${fmtPosMonto(rendTot[k].ini,k==="usd")}</span>`; }).join(" · ");
   const chips=catsAb.length>1 ? `<div class="inv-cart-chips" role="group" aria-label="Filtrar por categoría">`+["todas",...catsAb].map(c=>`<button type="button" class="filter-chip${invCartCat===c?" active":""}" aria-pressed="${invCartCat===c}" onclick="setInvCartCat(${attrJS(c)})">${c==="todas"?"Todas":escapeHtml(c)}</button>`).join("")+`</div>` : "";
-  const fondosSinInv=fondosConComprasSinInversion(movs);
-  const avisoFondo=fondosSinInv.length ? `<button type="button" class="inv-cerradas-link" onclick="abrirHistorialFondo(${attrJS(fondosSinInv[0].cat)})">⚠ ${fondosSinInv[0].faltan} ${fondosSinInv[0].faltan===1?"compra":"compras"} de ${escapeHtml(fondosSinInv[0].cat)} sin inversión · Revisar ›</button>` : "";
-  // El aviso solo cuenta los tickers de los que ya llevás cantidades: pedírselas a todo (fondos, cauciones…) sería ruido.
-  const tickersConCant=new Set(operacionesParaPosiciones(movs).filter(o=>o.cantidad>0).map(o=>tickerClave(o.ticker)));
-  const faltan=operacionesSinCantidad(movs).filter(m=>tickersConCant.has(tickerClave(m.ticker))).length;
-  const avisoFaltan=faltan ? `<button type="button" class="inv-cerradas-link" onclick="abrirCantidades()">⚠ ${faltan} ${faltan===1?"operación sin cantidad":"operaciones sin cantidad"} · Completar ›</button>` : "";
-  let html=chips+avisoFondo+avisoFaltan+`<div class="inv-cart-head">
+  // Un solo aviso para todo lo que hay que revisar (antes eran uno por tipo de problema): se abre la revisión con cada cosa y su arreglo.
+  const nRev=revisionInversiones(movs, revisionIgnorados()).length;
+  const avisoRevision=nRev ? `<button type="button" class="inv-cerradas-link" onclick="abrirRevisionInversiones()">🔎 ${nRev} ${nRev===1?"cosa para revisar":"cosas para revisar"} en tus inversiones · Revisar ›</button>` : "";
+  let html=chips+avisoRevision+`<div class="inv-cart-head">
     <span>${abiertas.length} ${abiertas.length===1?"posición":"posiciones"}</span>
     <span class="inv-cart-tot">${totArs?`<strong>${fmtS(totArs)}</strong>`:""}${totArs&&totUsd?" · ":""}${totUsd?`<strong>${fmtUsdInv(totUsd)}</strong>`:""}</span>
   </div>${rendTxt?`<div class="inv-cart-head" style="padding-top:0"><span>Rendimiento</span><span class="inv-cart-tot">${rendTxt}</span></div>`:""}`;
