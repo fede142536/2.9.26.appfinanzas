@@ -11760,6 +11760,49 @@ test("el detalle de Inversiones se puede ver de todo el año: el resultado del a
   cierto(typeof setInvPeriodoVista==="function" && typeof pintarInvPeriodo==="function");
 });
 
+grupo("Editor por partes: Datos · Fecha y cuenta · Opciones · Todo");
+
+test("el editor de cada tipo de movimiento se ve por partes, con sus propios grupos", ()=>{
+  const antes=movs, tcsAntes=tcs; movs=[]; tcs=[];
+  const tabsDe=h=>[...h.matchAll(/data-evista-btn="(\w+)"/g)].map(x=>x[1]).join(",");
+  const visible=(h,id)=>{ const d=document.createElement("div"); d.innerHTML=h; const e=d.querySelector("#"+id); const b=e&&e.closest("[data-evista]"); return !!e && (!b || !b.classList.contains("vista-oculta")); };
+  editVista="datos";
+  try{
+    const gasto=renderEditForm({id:1,tipo:"Gasto",cat:"Comida",subcat:"Súper",importe:100,moneda:"ARS",fecha:"2026-11-10",cuenta:"Efectivo",nota:"x"});
+    igual(tabsDe(gasto),"datos,cuando,opciones,todo");
+    cierto(visible(gasto,"edit-importe") && visible(gasto,"edit-cat") && visible(gasto,"edit-nota"), "abre en Datos");
+    cierto(!visible(gasto,"edit-fecha") && !visible(gasto,"edit-cuenta") && !visible(gasto,"edit-ahorro"), "la fecha, la cuenta y las opciones esperan su pestaña");
+    const ing=renderEditForm({id:2,tipo:"Ingreso",cat:"Sueldo",subcat:"Sueldo",importe:100,moneda:"ARS",fecha:"2026-11-10",cuenta:"Galicia",nota:""});
+    igual(tabsDe(ing),"datos,cuando,opciones,todo", "un ingreso puede volverse frecuente: tiene Opciones");
+    const inv=renderEditForm({id:3,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:100,importeUSD:0,fecha:"2026-11-05",cuenta:"Balanz",nota:""});
+    igual(tabsDe(inv),"datos,cuando,todo", "una compra no tiene opciones: la pestaña no aparece");
+    cierto(visible(inv,"edit-ticker") && visible(inv,"edit-cantidad") && !visible(inv,"edit-fecha"));
+    const frec=renderEditForm({id:4,tipo:"Gasto",cat:"Casa",subcat:"Alquiler",importe:100,moneda:"ARS",fecha:"2026-06-01",cuenta:"Galicia",nota:"",frecuente:true,mesInicio:"2026-06",cambios:[{desde:"2026-09",monto:120}]});
+    igual(tabsDe(frec),"datos,monto,fechas,todo"); cierto(visible(frec,"edit-cat") && !visible(frec,"edit-importe") && !visible(frec,"edit-frec-inicio"));
+    const cuotas=renderEditTcForm({id:21,desc:"Heladera",tarjeta:"Visa",cat:"Hogar",moneda:"ARS",total:600,cuotasTotal:6,mesInicio:"2026-11",cuenta:"Galicia",nota:""});
+    igual(tabsDe(cuotas),"datos,monto,todo"); cierto(visible(cuotas,"edit-tc-desc") && !visible(cuotas,"edit-tc-total"));
+    editVista="todo";
+    cierto(visible(renderEditForm({id:1,tipo:"Gasto",cat:"Comida",subcat:"Súper",importe:100,moneda:"ARS",fecha:"2026-11-10",cuenta:"Efectivo",nota:"x"}),"edit-fecha"), "Todo muestra el formulario completo");
+    cierto(!renderEditTcForm({id:5,desc:"UGR",tarjeta:"Visa",cat:"Edu",frecuente:true,moneda:"ARS",monto:1,mesInicio:"2026-06",cuenta:"Galicia",nota:""}).includes("data-evista-btn"), "el frecuente de tarjeta conserva su barra propia");
+  } finally { editVista="datos"; movs=antes; tcs=tcsAntes; }
+});
+
+test("guardar desde otra pestaña lee todos los campos, y un campo inválido lleva a su pestaña", ()=>{
+  const m={id:9001,tipo:"Gasto",cat:"Comida",subcat:"Supermercado",importe:100,moneda:"ARS",importeOrig:null,fecha:"2026-11-10",cuenta:"Efectivo",nota:"vieja",tags:[],esAhorro:false,usaAhorro:false,traspaso:false,recuperable:0};
+  const antes=movs, idAntes=editingId; movs=[m]; editVista="datos"; editingId=9001;
+  const cont=document.createElement("div"); cont.id="edit-form-content"; document.body.appendChild(cont);
+  try{
+    cont.innerHTML=renderEditForm(m); populateEditCatSelect("Gasto","Comida","Supermercado");
+    const imp=()=>cont.querySelector("#edit-importe"), oculto=()=>imp().closest("[data-evista]").classList.contains("vista-oculta");
+    cierto(!oculto(), "abre en Datos");
+    setVistaEdit("cuando"); cierto(oculto(), "el importe queda oculto en Fecha y cuenta");
+    imp().value="0"; irAlCampoEdit("edit-importe"); cierto(!oculto(), "un campo inválido lleva a su pestaña");
+    setVistaEdit("cuando"); imp().value="250"; cont.querySelector("#edit-nota").value="nueva";
+    guardarEdit();
+    igual(m.importe,250, "se guarda el importe aunque estuviera oculto"); igual(m.nota,"nueva");
+  } finally { cont.remove(); movs=antes; editingId=idAntes; editVista="datos"; }
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
