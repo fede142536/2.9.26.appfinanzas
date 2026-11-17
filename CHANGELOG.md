@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v263**
+**Versión actual: v264**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 17 de noviembre de 2026
 
+- **v264** · En Configuración y en el manual, abrir una sección cierra la que estaba abierta
 - **v263** · Manual de uso en Configuración › Ayuda y manual: cómo cargar cada movimiento y preguntas frecuentes, con buscador y botón para ir a cada pantalla
 - **v262** · Al abrir una versión nueva, la app muestra qué hay de nuevo y dónde está (y se puede volver a ver desde Configuración)
 - **v261** · Revisión de datos de inversiones (ventas contadas como ganancia, compras sin vincular, nominales, variantes) y la compra de un fondo de ahorro crea su depósito ligado: un solo registro

@@ -747,3 +747,9 @@ document.addEventListener("click", e=>{
   // Al cerrarse la de arriba, la recién abierta sube: se la deja a la vista.
   requestAnimationFrame(()=>{ const r=d.getBoundingClientRect(); if(r.top<0 || r.top>window.innerHeight*0.6) d.scrollIntoView({block:"start", behavior:(typeof prefiereMenosMovimiento==="function" && prefiereMenosMovimiento()) ? "auto" : "smooth"}); });
 }, true);
+
+// ── La barra de abajo se esconde mientras escribís ──
+// Con el teclado abierto, la barra fija subiría con él y taparía el campo o el botón Guardar. Se oculta al enfocar un campo de texto y vuelve al salir.
+const esCampoDeTexto=el=>!!el && (el.tagName==="TEXTAREA" || el.tagName==="SELECT" || (el.tagName==="INPUT" && !/^(checkbox|radio|button|submit|range|color|file)$/i.test(el.type||"")));
+document.addEventListener("focusin", e=>{ if(esCampoDeTexto(e.target)) document.body.classList.add("escribiendo"); });
+document.addEventListener("focusout", ()=>{ setTimeout(()=>{ if(!esCampoDeTexto(document.activeElement)) document.body.classList.remove("escribiendo"); }, 120); });

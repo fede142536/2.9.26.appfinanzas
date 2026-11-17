@@ -11949,6 +11949,33 @@ test("al abrir una sección de Configuración o del manual se cierra la que esta
   } finally { d.remove(); }
 });
 
+grupo("Barra de navegación de abajo");
+
+test("la barra de abajo tiene Movimientos, Tarjetas, Cargar, Inversiones y Más, y Más lleva al resto", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  igual([...html.matchAll(/class="tab[^"]*" data-tab="(\w+)"/g)].map(m=>m[1]).join(","), "mov,tc,cargar,inv,mas");
+  igual([...html.matchAll(/data-mas="(\w+)"/g)].map(m=>m[1]).join(","), "dash,ahorro,cierre,import,config,ayuda,novedades", "en Más está todo lo que antes tenía el menú ☰ (y la ayuda)");
+  cierto(/<body class="con-tabbar">/.test(html));
+  const css=await (await fetch("styles.css")).text();
+  cierto(css.includes("body.con-tabbar #fab-cargar,body.con-tabbar #hamburger-btn{display:none!important}"), "el botón flotante y el ☰ se esconden");
+  cierto(css.includes("body.con-tabbar .save-bar{bottom:calc(var(--tabbar-h)"), "el Guardar de Cargar queda arriba de la barra");
+  cierto(css.includes("body.con-tabbar.escribiendo .tabbar"), "la barra se va mientras escribís");
+});
+
+test("la barra marca la pantalla actual, y «Más» cuando estás en una de las de adentro", ()=>{
+  const bar=document.createElement("nav"); bar.id="tabbar";
+  bar.innerHTML=["mov","tc","cargar","inv","mas"].map(t=>`<button class="tab" data-tab="${t}"></button>`).join("");
+  document.body.appendChild(bar);
+  try{
+    const on=()=>[...bar.querySelectorAll(".tab.on")].map(t=>t.dataset.tab).join(",");
+    actualizarTabbar("tc"); igual(on(),"tc"); cierto(bar.querySelector('[data-tab="tc"]').getAttribute("aria-current")==="page");
+    actualizarTabbar("config"); igual(on(),"mas", "Configuración está en Más");
+    actualizarTabbar("dash"); igual(on(),"mas");
+    actualizarTabbar("cargar"); igual(on(),"cargar");
+  } finally { bar.remove(); }
+  cierto(esCampoDeTexto({tagName:"INPUT",type:"text"}) && !esCampoDeTexto({tagName:"INPUT",type:"checkbox"}) && esCampoDeTexto({tagName:"TEXTAREA"}), "solo los campos de texto esconden la barra");
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{
