@@ -6,6 +6,7 @@
 // que se ve o se usa; las que solo corrigen algo interno no hace falta anotarlas. Hay un test que pide que la versión actual tenga la suya.
 // Cada entrada: {v: número de versión, titulo, texto, ir: nombre de una de las acciones de NOVEDADES_IR (opcional)}.
 const NOVEDADES=[
+  {v:265, titulo:"Nueva barra de abajo", texto:"Movimientos, Tarjetas e Inversiones a un toque, el + del medio para cargar y «Más» para el resto (Dashboard, Ahorros, Cerrar el mes, Configuración, Ayuda…). Reemplaza al menú ☰."},
   {v:264, titulo:"Secciones de a una", texto:"En Configuración y en el manual, al abrir una sección se cierra la que estaba abierta: la pantalla queda corta y ordenada."},
   {v:263, titulo:"Manual de uso", texto:"En Configuración › Ayuda y manual: cómo cargar cada movimiento y preguntas frecuentes, con un buscador y un botón que te lleva a cada pantalla.", ir:"manual"},
   {v:262, titulo:"Novedades al actualizar", texto:"Cada vez que la app se actualiza te cuenta qué hay de nuevo y dónde está. Podés volver a verlas en Configuración › General › Versión de la app."},

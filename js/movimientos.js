@@ -52,6 +52,32 @@ function animarEntradaDeCards(pageEl){
   });
 }
 
+// ── Barra de navegación de abajo ──
+// Movimientos, Tarjetas e Inversiones a un toque; el + del medio abre Cargar; "Más" abre una hoja con el resto. La pantalla actual se marca en la barra
+// (y "Más" cuando estás en una de las que están ahí adentro).
+const TABS_DIRECTAS=["mov","tc","inv","cargar"];
+function actualizarTabbar(id){
+  const bar=document.getElementById("tabbar"); if(!bar) return;
+  const activa=TABS_DIRECTAS.includes(id) ? id : "mas";
+  bar.querySelectorAll(".tab").forEach(t=>{ const on=t.dataset.tab===activa; t.classList.toggle("on",on); if(on) t.setAttribute("aria-current","page"); else t.removeAttribute("aria-current"); });
+  // Un punto en Inversiones si la revisión encontró algo para mirar.
+  const punto=document.getElementById("tab-inv-punto");
+  if(punto) try{ punto.hidden=!(typeof revisionInversiones==="function" && revisionInversiones(movs, typeof revisionIgnorados==="function" ? revisionIgnorados() : []).length); }catch(e){ punto.hidden=true; }
+}
+function irATab(id){ showPage(id, document.querySelector('.nav-btn[onclick*="\''+id+'\'"]')); }
+function abrirMas(){
+  const actual=(document.querySelector(".page.active")||{}).id||"";
+  document.querySelectorAll("#mas-lista .mas-item").forEach(b=>{ const on="page-"+b.dataset.mas===actual; b.classList.toggle("on",on); if(on) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  document.getElementById("modal-mas").classList.add("open");
+}
+function cerrarMas(){ document.getElementById("modal-mas").classList.remove("open"); }
+function irDesdeMas(destino){
+  cerrarMas();
+  if(destino==="cierre"){ if(typeof abrirCierreMes==="function") abrirCierreMes(); return; }
+  if(destino==="ayuda"){ if(typeof abrirManual==="function") abrirManual(); return; }
+  if(destino==="novedades"){ if(typeof verTodasLasNovedades==="function") verTodasLasNovedades(); return; }
+  irATab(destino);
+}
 function showPage(id,btn){
   // Anotar dónde queda la pestaña que estás dejando, antes de ocultarla.
   const saliendo=document.querySelector(".page.active");
@@ -65,6 +91,7 @@ function showPage(id,btn){
   // ítem) y se anuncia como página actual.
   const navActivo=btn || document.querySelector('.nav-btn[onclick*="\''+id+'\'"]');
   if(navActivo){ navActivo.classList.add("active"); navActivo.setAttribute("aria-current","page"); }
+  actualizarTabbar(id);
   // El FAB abre directo a Cargar — no tiene sentido mostrarlo ESTANDO ya en Cargar.
   // Se chequea que exista antes de tocarlo: si faltara, un TypeError acá cortaría toda la
   // función y la pantalla quedaría a medio renderizar.

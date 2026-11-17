@@ -5,13 +5,13 @@
 // (opcional) un botón que lleva a esa pantalla (MANUAL_IR). **así** se ve en negrita. Si cambia dónde está algo en la app, se corrige ACÁ.
 const MANUAL=[
   {id:"inicio", icono:"🚀", titulo:"Primeros pasos", preguntas:[
-    {p:"¿Cómo me muevo por la app?", r:"Con el menú **☰** (arriba a la izquierda): Movimientos, Tarjetas, Inversiones, Dashboard, Ahorros, Importar, Cerrar el mes y Configuración. El botón **+** de abajo a la derecha abre **Cargar** desde cualquier pantalla. En Movimientos, Tarjetas e Inversiones, las flechas **‹ ›** de arriba cambian de mes."},
+    {p:"¿Cómo me muevo por la app?", r:"Con la **barra de abajo**: **Movimientos**, **Tarjetas** e **Inversiones** a un toque, el botón del medio (**+**) para cargar un movimiento, y **Más** para el resto: Dashboard, Ahorros, Cerrar el mes, Importar, Configuración, Ayuda y Novedades. En Movimientos, Tarjetas e Inversiones, las flechas **‹ ›** de arriba cambian de mes. Si Inversiones tiene un punto naranja, la revisión encontró algo para mirar."},
     {p:"¿Dónde quedan guardados mis datos?", r:"En tu celular: la app no los manda a ningún servidor. Por eso conviene tener copias de seguridad (ver «Seguridad y copias»). Si activás el PIN, además quedan cifrados."},
     {p:"¿Qué es el «Balance del mes»?", r:"Es lo que te quedó disponible: **ingresos − gastos − lo que mandaste a ahorro**, más lo que sacaste de tus ahorros y quedó a mano. Las inversiones no se restan como gasto: del balance solo cuenta su **resultado** (ganancia o pérdida)."},
     {p:"¿Qué son las tarjetas de colores de Movimientos?", r:"Cada una resume una parte del mes (Ingresos, Gastos, Ahorrado, Frecuentes por pagar, Inversiones…). **Tocala** y la lista de abajo muestra solo esos movimientos; «Ver todos» vuelve a la lista completa. La de Inversiones abre el detalle de cada instrumento."}
   ]},
   {id:"cargar", icono:"✏️", titulo:"Cargar movimientos", preguntas:[
-    {p:"¿Cómo cargo un gasto?", pasos:["Tocá **+** y elegí **↑ Gasto**.","Escribí el importe (ARS o USD).","Elegí categoría, subcategoría y cuenta.","Elegí la fecha (Hoy, Ayer, -2d, -7d o el calendario) y, si querés, una nota.","Tocá **Guardar gasto**."], ir:"cargarGasto"},
+    {p:"¿Cómo cargo un gasto?", pasos:["Tocá el **+** del medio de la barra de abajo y elegí **↑ Gasto**.","Escribí el importe (ARS o USD).","Elegí categoría, subcategoría y cuenta.","Elegí la fecha (Hoy, Ayer, -2d, -7d o el calendario) y, si querés, una nota.","Tocá **Guardar gasto**."], ir:"cargarGasto"},
     {p:"¿Cómo cargo un ingreso (por ejemplo, el sueldo)?", r:"Igual que un gasto pero con **↓ Ingreso**. Si se repite todos los meses, tildá **Ingreso frecuente**: cada mes aparece en «Por cobrar» y lo marcás cobrado.", ir:"cargarIngreso"},
     {p:"¿Cómo cargo un gasto que se repite todos los meses (alquiler, servicios)?", r:"Cargalo como gasto y tildá **Gasto frecuente**; podés poner el día en que vence. Desde ese mes aparece solo en cada mes, en «Frecuentes por pagar», y lo marcás **pagado** tocando la etiqueta de la fila. Si sube de precio, editalo y usá **Registrar aumento** (pestaña Monto)."},
     {p:"¿Cómo cargo una compra con tarjeta en cuotas?", pasos:["Tocá **+** y elegí **▣ Tarj.**","Poné el importe total, la descripción, la tarjeta, la categoría y la cuenta.","Elegí las cuotas totales y el mes de la 1ª cuota.","Guardá: la app reparte cada cuota en su mes."], ir:"cargarTarjeta"},
@@ -49,7 +49,7 @@ const MANUAL=[
   {id:"tarjetas", icono:"💳", titulo:"Tarjetas, Dashboard y cierre", preguntas:[
     {p:"¿Qué muestra la pantalla Tarjetas?", r:"El resumen de cada tarjeta en el mes (cuotas y gastos fijos), los vencimientos y cuánto va por tarjeta. Con **Pagar resumen** registrás el pago del resumen.", ir:"tarjetas"},
     {p:"¿Qué tengo en el Dashboard?", r:"**Resumen** del mes con avisos («Para tener en cuenta»), ingresos y gastos, gastos por categoría y saldo por cuenta; y **Año completo** para ver los doce meses.", ir:"dashboard"},
-    {p:"¿Qué es «Cerrar el mes»?", r:"Un repaso guiado del mes (en el menú ☰) con lo que quedó pendiente: gastos fijos y resúmenes de tarjeta sin marcar como pagados, ingresos por cobrar, movimientos sin cuenta y vencimientos. Lo resolvés desde ahí antes de pasar al mes siguiente."},
+    {p:"¿Qué es «Cerrar el mes»?", r:"Un repaso guiado del mes (en **Más**, en la barra de abajo) con lo que quedó pendiente: gastos fijos y resúmenes de tarjeta sin marcar como pagados, ingresos por cobrar, movimientos sin cuenta y vencimientos. Lo resolvés desde ahí antes de pasar al mes siguiente."},
     {p:"¿Puedo ponerme un presupuesto por categoría?", r:"Sí, en Configuración › **Cuentas, tarjetas y categorías** › Presupuestos. En Movimientos, solapa **Gastos**, ves cuánto llevás gastado de cada presupuesto en el mes."}
   ]},
   {id:"seguridad", icono:"🔐", titulo:"Seguridad y copias", preguntas:[

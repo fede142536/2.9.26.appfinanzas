@@ -2097,3 +2097,42 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 
 /* Al abrir una sección y cerrarse la anterior, queda a la vista debajo de la barra de arriba. */
 .cfg-seccion,.man-sec,.man-q{scroll-margin-top:72px}
+
+/* ═══ Barra de navegación de abajo (reemplaza al menú ☰) ═══ */
+body.con-tabbar{--tabbar-h:62px}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:150;display:grid;grid-template-columns:repeat(5,1fr);align-items:end;
+  background:var(--surface-glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--border);
+  padding:4px 4px calc(6px + env(safe-area-inset-bottom,0px));min-height:var(--tabbar-h);transition:transform var(--dur-2,.2s) ease}
+.tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;background:none;border:none;color:var(--muted);
+  font:inherit;font-size:10.5px;font-weight:600;padding:6px 0 2px;min-height:var(--tap,44px);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.tab-i{font-size:21px;line-height:1}
+.tab-t{white-space:nowrap}
+.tab.on{color:var(--accent)}
+.tab.on::after{content:"";position:absolute;bottom:-3px;width:18px;height:3px;border-radius:2px;background:var(--accent)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:12px}
+.tab-cargar{justify-content:center}
+.tab-cargar-btn{position:relative;width:52px;height:52px;border-radius:50%;margin-top:-22px;background:var(--surface) url('fab-perro.jpg') center/cover;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);border:3px solid var(--accent);display:block}
+.tab-cargar-mas{position:absolute;right:-4px;bottom:-4px;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--bg);font-size:18px;font-weight:700;
+  line-height:21px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.tab-cargar:active .tab-cargar-btn{transform:scale(.94)}
+.tab-cargar.on::after{display:none}
+.tab-punto{position:absolute;top:6px;left:calc(50% + 9px);width:8px;height:8px;border-radius:50%;background:var(--warning);box-shadow:0 0 0 2px var(--surface)}
+.tab-punto[hidden]{display:none}
+/* Lo que antes abría el ☰ o hacía de botón flotante ya está en la barra: se esconde (el ☰ de las barras de arriba conserva su lugar para no correr el título). */
+body.con-tabbar #fab-cargar,body.con-tabbar #hamburger-btn{display:none!important}
+body.con-tabbar .mov-icon-btn[onclick="toggleSideMenu()"]{visibility:hidden}
+body.con-tabbar .header{padding-left:16px}
+/* El contenido termina por encima de la barra, y el botón Guardar de Cargar queda pegado arriba de ella. */
+body.con-tabbar .page{padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px))}
+body.con-tabbar .save-bar{bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px));padding-bottom:12px}
+/* Escribiendo (teclado abierto): la barra se va y el Guardar vuelve al borde. */
+body.con-tabbar.escribiendo .tabbar{transform:translateY(110%)}
+body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+/* Hoja "Más" */
+.mas-lista{display:flex;flex-direction:column;padding-bottom:calc(var(--sp-3) + env(safe-area-inset-bottom,0px))}
+.mas-item{display:flex;align-items:center;gap:14px;padding:14px 8px;border:none;border-bottom:1px solid var(--border);background:none;color:var(--text);font:inherit;font-size:16px;text-align:left;cursor:pointer;min-height:var(--tap,44px)}
+.mas-item:last-child{border-bottom:none}
+.mas-item span{font-size:21px;width:28px;text-align:center}
+.mas-item.on{color:var(--accent);font-weight:700}
+@media (prefers-reduced-motion:reduce){.tabbar{transition:none}}
