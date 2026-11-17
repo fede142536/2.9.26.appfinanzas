@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v260**
+**Versión actual: v261**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,7 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 17 de noviembre de 2026
 
+- **v261** · Revisión de datos de inversiones (ventas contadas como ganancia, compras sin vincular, nominales, variantes) y la compra de un fondo de ahorro crea su depósito ligado: un solo registro
 - **v260** · Todos los editores (gasto o ingreso común, frecuente, inversión y compra en cuotas) se ven por partes, con los grupos propios de cada tipo
 - **v259** · El detalle de Inversiones se puede ver de todo el año, con el resultado de cada instrumento acumulado
 - **v258** · Una sola card Inversiones en Movimientos (invertido, resultado y neto) que abre el detalle de cada instrumento: lo que puso, cobró, su resultado y cómo rinde la cartera

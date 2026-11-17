@@ -96,6 +96,7 @@
 <script src="js/informe-periodo.js"></script>
 <script src="js/cierre-mes.js"></script>
 <script src="js/huella.js"></script>
+<script src="js/novedades.js"></script>
 <script src="js/cuentas-sugeridas.js"></script>
 <script src="js/graficos-interactivos.js"></script>
 <script src="js/importar-exportar.js"></script>
@@ -11878,6 +11879,29 @@ test("Cargar y el editor tienen la casilla de la compra del fondo", async ()=>{
   const html=await (await fetch("index.html")).text();
   cierto(html.includes('id="inv-fondo-compra"') && html.includes('id="modal-revision-inv"'));
   cierto(typeof aplicarFondoCompraEditor==="function" && typeof bloqueFondoCompraEditor==="function" && typeof abrirRevisionInversiones==="function");
+});
+
+grupo("Novedades al actualizar");
+
+test("las novedades pendientes son las de versiones posteriores a la última vista, las más nuevas primero y como mucho 4", ()=>{
+  const L=[{v:10,titulo:"a",texto:""},{v:11,titulo:"b",texto:""},{v:12,titulo:"c",texto:""},{v:12,titulo:"d",texto:""},{v:13,titulo:"e",texto:""},{v:14,titulo:"f",texto:""}];
+  igual(novedadesPendientes(12,14,L).map(n=>n.titulo).join(","),"f,e", "solo lo posterior a la 12");
+  igual(novedadesPendientes(9,14,L).length,4, "como mucho NOVEDADES_MAX");
+  igual(novedadesPendientes(9,14,L)[0].titulo,"f", "la más nueva primero");
+  igual(novedadesPendientes(0,12,L).map(n=>n.titulo).join(","),"c,d", "la primera vez: solo las de la versión actual");
+  igual(novedadesPendientes(14,14,L).length,0, "si ya la viste no hay nada");
+  igual(novedadesPendientes(12,11,L).length,0, "volver a una versión vieja no muestra nada");
+});
+
+test("la versión que se publica tiene su novedad, y cada «Ver» lleva a una pantalla que existe", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const v=parseInt((html.match(/name="enola-version" content="enola-v(\d+)"/)||[])[1],10);
+  cierto(v>0, "no encontré la versión en index.html");
+  cierto(NOVEDADES.some(n=>n.v===v), `la v${v} no tiene su entrada en NOVEDADES (novedades.js): contá en dos líneas qué cambió`);
+  NOVEDADES.forEach(n=>{ cierto(!!n.titulo && !!n.texto, "cada novedad tiene título y texto"); if(n.ir) cierto(typeof NOVEDADES_IR[n.ir]==="function", "la acción "+n.ir+" no existe"); });
+  cierto(html.includes('src="js/novedades.js') && html.includes('id="modal-novedades"') && html.includes("verTodasLasNovedades()"));
+  cierto((await (await fetch("sw.js")).text()).includes("./js/novedades.js"), "el service worker tiene que guardar novedades.js");
+  cierto((await (await fetch("js/main.js")).text()).includes("avisarNovedades("), "el arranque muestra las novedades");
 });
 
 grupo("Aislamiento de los tests");
