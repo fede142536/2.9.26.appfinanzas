@@ -34,6 +34,15 @@ function ordenDeOperacion(a, b){
 // "SPY", "Spy" y "spy" son el mismo ticker: la clave con la que se agrupa todo es siempre en mayúsculas. Antes cada variante era un ticker aparte: una venta cargada como
 // "Spy" no encontraba el capital de "SPY" y se contaba entera como ganancia.
 const tickerClave=t=>String(t||"Sin ticker").trim().toUpperCase() || "SIN TICKER";
+// Cómo se GUARDA un ticker que se escribe a mano: igual que los que ya existen con esa clave (la forma más usada), y si es nuevo, en mayúsculas — que es como lo
+// muestra el campo. Antes se guardaba tal como se tipeó ("spy") aunque la pantalla dijera "SPY", y así aparecían variantes del mismo ticker.
+function tickerParaGuardar(t, lista){
+  const raw=String(t||"").trim(); if(!raw) return "";
+  const k=tickerClave(raw), formas={};
+  (lista||[]).forEach(m=>{ if(m && m.tipo==="Inversion" && m.ticker && tickerClave(m.ticker)===k){ const f=String(m.ticker).trim(); formas[f]=(formas[f]||0)+1; } });
+  const mejor=Object.entries(formas).sort((a,b)=>(b[1]-a[1]) || ((b[0]===b[0].toUpperCase())-(a[0]===a[0].toUpperCase())))[0];
+  return mejor ? mejor[0] : raw.toUpperCase();
+}
 const esPagoDeInversion=m=>/cup[oó]n|dividendo/.test(normalizarTexto(m && m.subcat || ""));
 
 // Importe de una operación en cada moneda. Las inversiones en USD guardan el monto en
@@ -95,6 +104,7 @@ function calcularResultadoInv(lista){
     return g && !g.ret && g.sus>0 && g.res>g.sus && (g.res-g.sus)<=g.sus*RESUSCRIPCION_MAX ? g : null;
   };
   const yaContado=new Set();
+  const reinvertidas=new Set();   // ids de las operaciones que entraron por la regla de rescate + resuscripción (no devuelven capital)
 
   inv.forEach(m=>{
     const ticker=tickerClave(m.ticker);
@@ -108,6 +118,7 @@ function calcularResultadoInv(lista){
       if(!monto) return;
       const rollover=(esPagoDeInversion(m) || !esOpDeFondo(m)) ? null : reinvertido(ticker, ym, k);
       if(rollover){
+        reinvertidas.add(m.id);
         // La suscripción y el rescate de este mes se cancelan entre sí (la plata solo dio la vuelta); queda la diferencia como ganancia.
         const clave=ticker+"|"+ym+"|"+k;
         if(!yaContado.has(clave)){
@@ -156,6 +167,7 @@ function calcularResultadoInv(lista){
     capitalPorTicker: redondear(capital),
     flujoPorMes: redondear(flujo),
     capitalDevueltoPorOp: devuelto,
+    reinvertidas,
     eventos
   };
 }
@@ -298,30 +310,46 @@ const diasEntreFechas=(a,b)=>Math.round((Date.parse(String(b).slice(0,10)+"T00:0
 // Pura. Las operaciones con las que se cuentan los nominales: las inversiones MÁS los movimientos del fondo de ahorro que no tienen inversión (la compra o venta que
 // solo cargaste como depósito o retiro del fondo), siempre que digan ticker y cantidad. Una inversión sin cantidad toma la del movimiento del fondo que la acompaña
 // (mismo sentido, hasta 7 días y 3% de monto, o el retiro ligado a la venta). Así se puede llevar la cantidad en el fondo sin duplicarla en Inversiones.
-function operacionesParaPosiciones(lista){
+// Pura. Empareja cada inversión (compra o venta) con el movimiento del fondo de ahorro que la acompaña: el depósito de una compra, el retiro de una venta. Primero
+// el que está LIGADO (origenInvId); si no, el más parecido del mismo sentido, hasta 7 días y 3% de monto, y del mismo ticker cuando los dos lo dicen.
+// Devuelve {pares:[{inv, f, ligado}], fondo:[{m, info, venta, usada}]}. Solo movimientos del fondo en pesos (o en dólares si están ligados).
+function emparejarFondoInversion(lista){
   const invs=(lista||[]).filter(m=>m && m.tipo==="Inversion");
   const conocidos=[...new Set(invs.filter(m=>m.ticker).map(m=>String(m.ticker).toUpperCase()))];
-  const fondo=(lista||[]).filter(m=>m && m.tipo==="Gasto" && (m.esAhorro||m.usaAhorro) && m.moneda!=="USD" && (m.importe||0)>0)
+  const fondo=(lista||[]).filter(m=>m && m.tipo==="Gasto" && (m.esAhorro||m.usaAhorro) && (m.moneda!=="USD" ? (m.importe||0)>0 : !!m.origenInvId))
     .map(m=>({m, info:infoDeFondo(m,conocidos), venta:!!m.usaAhorro && !m.esAhorro, usada:false}));
   const montoOp=i=>(i.importeUSD>0 && !(i.importe>0)) ? 0 : (i.importe||0);
-  const out=invs.map(i=>{
-    if(esPagoDeInversion(i) || (isInvSalida(i) && /rendimiento/.test(normalizarTexto(i.subcat||"")))) return i;
+  const pares=[];
+  // Los ligados primero, así una inversión parecida no se queda con el depósito de otra.
+  invs.forEach(i=>{ const f=fondo.find(x=>!x.usada && x.m.origenInvId===i.id); if(f){ f.usada=true; pares.push({inv:i, f, ligado:true}); } });
+  const conPar=new Set(pares.map(p=>p.inv.id));
+  invs.forEach(i=>{
+    if(conPar.has(i.id) || esPagoDeInversion(i) || (isInvSalida(i) && /rendimiento/.test(normalizarTexto(i.subcat||"")))) return;
     const venta=isInvSalida(i), monto=montoOp(i), tk=String(i.ticker||"").toUpperCase();
+    if(!(monto>0)) return;
     let mejor=null, mejorP=Infinity;
     fondo.forEach(f=>{
-      if(f.usada || f.venta!==venta) return;
-      const ligado=f.m.origenInvId===i.id;
-      if(!ligado){
-        if(!(monto>0) || diasDif(f.m.fecha,i.fecha)>FONDO_DIAS || Math.abs(f.m.importe-monto)/monto>FONDO_REL) return;
-        if(f.info.ticker && tk && f.info.ticker!==tk) return;
-      }
-      const p=ligado ? -1 : Math.abs(f.m.importe-monto)/monto*100+diasDif(f.m.fecha,i.fecha);
+      if(f.usada || f.venta!==venta || f.m.moneda==="USD" || f.m.origenInvId) return;
+      if(diasDif(f.m.fecha,i.fecha)>FONDO_DIAS || Math.abs(f.m.importe-monto)/monto>FONDO_REL) return;
+      if(f.info.ticker && tk && f.info.ticker!==tk) return;
+      const p=Math.abs(f.m.importe-monto)/monto*100+diasDif(f.m.fecha,i.fecha);
       if(p<mejorP){ mejorP=p; mejor=f; }
     });
-    if(mejor) mejor.usada=true;
-    return (i.cantidad>0 || !mejor || !(mejor.info.cantidad>0)) ? i : {...i, cantidad:mejor.info.cantidad};
+    if(mejor){ mejor.usada=true; pares.push({inv:i, f:mejor, ligado:false}); }
   });
-  fondo.filter(f=>!f.usada && f.info.ticker && f.info.cantidad>0).forEach(f=>out.push({id:f.m.id, tipo:"Inversion", cat:"CEDEARs", subcat:f.venta?"CEDEARs Venta":"CEDEARs Compra",
+  return {pares, fondo};
+}
+// Pura. Las operaciones con las que se cuentan los nominales: las inversiones MÁS los movimientos del fondo de ahorro que no tienen inversión (la compra o venta que
+// solo cargaste como depósito o retiro del fondo), siempre que digan ticker y cantidad. Una inversión sin cantidad toma la del movimiento del fondo que la acompaña.
+// Así se puede llevar la cantidad en el fondo sin duplicarla en Inversiones.
+function operacionesParaPosiciones(lista){
+  const {pares, fondo}=emparejarFondoInversion(lista);
+  const parDe=new Map(pares.map(p=>[p.inv.id, p.f]));
+  const out=(lista||[]).filter(m=>m && m.tipo==="Inversion").map(i=>{
+    const f=parDe.get(i.id);
+    return (i.cantidad>0 || !f || !(f.info.cantidad>0)) ? i : {...i, cantidad:f.info.cantidad};
+  });
+  fondo.filter(f=>!f.usada && f.m.moneda!=="USD" && f.info.ticker && f.info.cantidad>0).forEach(f=>out.push({id:f.m.id, tipo:"Inversion", cat:"CEDEARs", subcat:f.venta?"CEDEARs Venta":"CEDEARs Compra",
     ticker:f.info.ticker, importe:f.m.importe, importeUSD:0, fecha:f.m.fecha, cantidad:f.info.cantidad, desdeFondo:true}));
   return out;
 }
@@ -346,6 +374,7 @@ function calcularPosiciones(lista, precios, hoy, splits){
       o.comprado+=c; o.cartera+=c; o.costo+=monto;
     } else {
       const saca=Math.min(c, o.cartera), prom=o.cartera>0 ? o.costo/o.cartera : 0;
+      if(c>saca+1e-9) o.deMas=(o.deMas||0)+(c-saca);   // vendiste más de lo que la app sabe que tenías: falta una compra, una cantidad o un split
       o.vendido+=c; o.cartera-=saca; o.costo-=saca*prom;
       if(o.cartera<=1e-9){ o.cartera=0; o.costo=0; o.desde=null; }
     }
@@ -363,7 +392,7 @@ function calcularPosiciones(lista, precios, hoy, splits){
     const dias=(o.desde && hoy) ? Math.max(1, diasEntreFechas(o.desde, hoy)) : null;
     const tna=(rendPct!==null && dias) ? Math.round(rendPct*365/dias*100)/100 : null;
     out[t]={...o, cartera:Math.round(o.cartera*1e6)/1e6, comprado:Math.round(o.comprado*1e6)/1e6, vendido:Math.round(o.vendido*1e6)/1e6,
-      costoUnit:Math.round(costoUnit*100)/100, valorInicial, dias, precio, fechaPrecio:p?p.fecha:"", valorActual, rend, rendPct, tna};
+      costoUnit:Math.round(costoUnit*100)/100, valorInicial, dias, precio, fechaPrecio:p?p.fecha:"", valorActual, rend, rendPct, tna, vendidoDeMas:Math.round((o.deMas||0)*1e6)/1e6};
     delete out[t].costo;
   });
   return out;
@@ -470,4 +499,60 @@ function rendimientoPorInstrumento(lista, desdeYM, hastaYM, eventos, posiciones)
       netoARS:r2(o.cobroARS-o.pusoARS), netoUSD:r2(o.cobroUSD-o.pusoUSD),
       pos: (pos && pos.cartera>0) ? {cartera:pos.cartera, valorActual:pos.valorActual, rend:pos.rend, rendPct:pos.rendPct, usd:pos.usd} : null};
   }).sort((a,b)=>(Math.abs(b.resARS)+Math.abs(b.resUSD)*1000)-(Math.abs(a.resARS)+Math.abs(a.resUSD)*1000) || (b.pusoARS+b.cobroARS+(b.pusoUSD+b.cobroUSD)*1000)-(a.pusoARS+a.cobroARS+(a.pusoUSD+a.cobroUSD)*1000));
+}
+
+// ═══════════════════════════════════════════
+// REVISIÓN DE DATOS DE INVERSIONES
+// ═══════════════════════════════════════════
+// Busca lo que hace que los números de inversiones mientan sin que se note. Lo que más pesa: una venta que la app cuenta casi entera como GANANCIA porque no
+// tiene cargada la compra que la respalda (así se inflaron junio, octubre y septiembre). Cada problema dice qué es y cómo se arregla (ver tarjetas-inversiones.js).
+const REVISION_MIN_GANANCIA={ars:1000, usd:10};
+// Pura. [{tipo, clave, ...}] con `clave` estable para poder marcar uno como "está bien" (`ignorados`, un Set de claves).
+function revisionInversiones(lista, ignorados){
+  const ign=ignorados instanceof Set ? ignorados : new Set(ignorados||[]);
+  const out=[];
+  const r=calcularResultadoInv(lista);
+  const conRetiro=new Set((lista||[]).filter(x=>x && x.origenInvId).map(x=>x.origenInvId));
+  const invs=(lista||[]).filter(m=>m && m.tipo==="Inversion");
+
+  // 1. Ventas o rescates que devolvieron menos de la mitad en capital: el resto se contó como ganancia.
+  invs.forEach(m=>{
+    // Una operación MEP es un cambio de pesos a dólares (o al revés), no una venta con ganancia: no se revisa acá.
+    if(!isInvSalida(m) || esPagoDeInversion(m) || r.reinvertidas.has(m.id) || conRetiro.has(m.id) || m.mep===true || m.cat==="MEP") return;
+    const usd=m.importeUSD>0 && !(m.importe>0), k=usd?"usd":"ars", monto=usd ? m.importeUSD : (m.importe||0);
+    const dev=((r.capitalDevueltoPorOp[m.id]||{})[k])||0, ganancia=monto-dev;
+    if(!(monto>0) || dev>=monto*0.5 || ganancia<REVISION_MIN_GANANCIA[k]) return;
+    const clave="venta:"+m.id;
+    if(!ign.has(clave)) out.push({tipo:"venta-sin-capital", clave, id:m.id, ticker:m.ticker||"Sin ticker", fecha:m.fecha, moneda:usd?"USD":"ARS", monto, capital:Math.round(dev*100)/100, ganancia:Math.round(ganancia*100)/100});
+  });
+
+  // Las más grandes primero (en pesos antes que en dólares): son las que más mueven el balance.
+  out.sort((a,b)=>(a.moneda===b.moneda ? b.ganancia-a.ganancia : (a.moneda==="ARS"?-1:1)));
+
+  // 2. Depósitos de un fondo que es una inversión, sin su compra cargada.
+  fondosConComprasSinInversion(lista).forEach(f=>{ const clave="fondo:"+f.cat; if(!ign.has(clave)) out.push({tipo:"fondo-sin-inversion", clave, cat:f.cat, faltan:f.faltan, ticker:f.ticker}); });
+
+  // 3. Compras con su depósito al fondo cargado aparte (sin vincular), y las que además tienen montos distintos.
+  const {pares}=emparejarFondoInversion(lista);
+  const sueltos=pares.filter(p=>!p.ligado && !p.f.venta && !isInvSalida(p.inv)).map(p=>({invId:p.inv.id, fondoId:p.f.m.id, fecha:p.inv.fecha, ticker:p.inv.ticker||"",
+    inversion:p.inv.importe||0, deposito:p.f.m.importe||0, dif:Math.round(((p.f.m.importe||0)-(p.inv.importe||0))*100)/100}));
+  if(sueltos.length && !ign.has("vincular")) out.push({tipo:"sin-vincular", clave:"vincular", pares:sueltos, distintos:sueltos.filter(x=>Math.abs(x.dif)>=0.01)});
+
+  // 4. Vendiste más nominales de los que la app sabe que tenías.
+  const pos=calcularPosiciones(lista, {}, "", typeof splitsInv!=="undefined" ? splitsInv : {});
+  Object.values(pos).forEach(p=>{ if(p.vendidoDeMas>0){ const clave="nominales:"+tickerClave(p.ticker); if(!ign.has(clave)) out.push({tipo:"nominales", clave, ticker:p.ticker, deMas:p.vendidoDeMas}); } });
+
+  // 5. Un mismo ticker escrito de distintas formas ("SPY" y "Spy").
+  const formas={};
+  invs.forEach(m=>{ const raw=String(m.ticker||"").trim(); if(!raw) return; const k=tickerClave(raw); (formas[k]=formas[k]||{})[raw]=(formas[k][raw]||0)+1; });
+  Object.entries(formas).forEach(([k,f])=>{ const lista2=Object.keys(f); if(lista2.length<2) return; const clave="variantes:"+k;
+    const mejor=lista2.sort((a,b)=>(f[b]-f[a]) || ((b===b.toUpperCase())-(a===a.toUpperCase())))[0];
+    if(!ign.has(clave)) out.push({tipo:"variantes", clave, ticker:k, formas:lista2, sugerida:mejor}); });
+
+  // 6. Operaciones sin cantidad, solo de los tickers de los que ya llevás cantidades.
+  const conCant=new Set(operacionesParaPosiciones(lista).filter(o=>o.cantidad>0).map(o=>tickerClave(o.ticker)));
+  const sinCant=operacionesSinCantidad(lista).filter(m=>conCant.has(tickerClave(m.ticker)));
+  if(sinCant.length && !ign.has("sin-cantidad")) out.push({tipo:"sin-cantidad", clave:"sin-cantidad", n:sinCant.length});
+
+  return out;
 }

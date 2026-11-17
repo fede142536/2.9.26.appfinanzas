@@ -1752,7 +1752,7 @@ async function borrarMov(id, btn){
   // Una venta cargada con "Sale de mis ahorros" lleva un retiro del fondo ligado: se van juntos para no dejar el fondo descuadrado.
   const ligados=movs.some(x=>x.origenInvId===id || x.origenIngresoId===id);
   const conDevolucion=movs.some(x=>x.devolucionDeId===id);   // el ingreso de "Cobrar" de un gasto recuperable se va con su gasto
-  eliminarConDeshacer("mov", x=>x.id===id || x.origenInvId===id || x.origenIngresoId===id || x.devolucionDeId===id, ligados ? "Eliminado junto con su retiro del fondo" : conDevolucion ? "Gasto eliminado junto con su devolución" : "Movimiento eliminado");
+  eliminarConDeshacer("mov", x=>x.id===id || x.origenInvId===id || x.origenIngresoId===id || x.devolucionDeId===id, ligados ? "Eliminado junto con su movimiento del fondo" : conDevolucion ? "Gasto eliminado junto con su devolución" : "Movimiento eliminado");
   renderMovs();
 }
 async function confirmarBorrarTc(id){

@@ -197,8 +197,9 @@ function puedeVolverseFrecuente(m){
 // Un retiro que nació de una venta toma el ticker y la cantidad de esa venta si todavía no los tenía.
 function fondoPosEditorHTML(m){
   const inv=m.origenInvId ? movs.find(x=>x.id===m.origenInvId) : null;
+  const avisoLigado=inv ? `<p class="txt-xs" id="edit-fondo-ligado" style="margin:0 0 10px;padding:8px 10px;background:var(--invest-light);border-radius:var(--radius-sm)">🔗 Va junto con la ${isInvSalida(inv)?"venta":"compra"} de ${escapeHtml(inv.ticker||"")} del ${String(inv.fecha||"").split("-").reverse().join("/")}: el monto, la fecha y la cantidad se toman de ahí. Para cambiarlos, editá la inversión.</p>` : "";
   const tk=m.ticker || (inv && inv.ticker) || "", cant=m.cantidad>0 ? m.cantidad : (inv && inv.cantidad>0 ? inv.cantidad : 0);
-  return `<div id="edit-fondo-pos" style="display:${(m.esAhorro||m.usaAhorro)?"":"none"}">
+  return `${avisoLigado}<div id="edit-fondo-pos" style="display:${(m.esAhorro||m.usaAhorro)?"":"none"}">
     <div class="two-col">
       <div class="form-group"><label class="form-label" for="edit-fondo-ticker">Ticker (opcional)</label>
         <input type="text" id="edit-fondo-ticker" class="form-input" placeholder="SPY" autocomplete="off" style="text-transform:uppercase;font-weight:600" value="${escapeHtml(tk)}"></div>
@@ -418,6 +419,7 @@ function renderEditFormBase(m){
         </div>
       </div>
       ${bloqueSaleDeAhorroEditor(m)}
+      ${bloqueFondoCompraEditor(m)}
       <div class="form-group"><label class="form-label" for="edit-nota">Nota</label>
         <textarea id="edit-nota" class="form-textarea">${escapeHtml(m.nota)}</textarea>
       </div>
@@ -434,11 +436,11 @@ function renderEditFormBase(m){
 // ocultos siguen en la página: Guardar lee todo, esté o no a la vista. Se arma sobre el HTML ya generado: cada bloque se asigna a un grupo por los id que contiene.
 const EDIT_LAYOUTS={
   normal:{tabs:[["datos","Datos"],["cuando","Fecha y cuenta"],["opciones","Opciones"],["todo","Todo"]],
-    reglas:{datos:["edit-importe","edit-moneda","edit-cat","edit-subcat","edit-nota"], cuando:["edit-fecha","edit-cuenta"], opciones:["edit-ahorro","edit-hacer-frec","edit-fondo-pos","edit-ing-sale","edit-recup"]}},
+    reglas:{datos:["edit-fondo-ligado","edit-importe","edit-moneda","edit-cat","edit-subcat","edit-nota"], cuando:["edit-fecha","edit-cuenta"], opciones:["edit-ahorro","edit-hacer-frec","edit-fondo-pos","edit-ing-sale","edit-recup"]}},
   frec:{tabs:[["datos","Datos"],["monto","Monto"],["fechas","Fechas"],["todo","Todo"]],
     reglas:{datos:["edit-cat","edit-subcat","edit-cuenta","edit-nota"], monto:["edit-importe","edit-moneda-frec","edit-frec-vigente","edit-frec-aum-mes","edit-frec-hist"], fechas:["edit-frec-inicio","edit-frec-fin","edit-frec-dia","edit-frec-baja"]}},
   inv:{tabs:[["datos","Datos"],["cuando","Fecha y cuenta"],["opciones","Opciones"],["todo","Todo"]],
-    reglas:{datos:["edit-ticker","edit-cantidad","edit-mep","edit-ars","edit-usd","edit-mep-usd","edit-nota"], cuando:["edit-fecha","edit-cuenta"], opciones:["edit-inv-sale"]}},
+    reglas:{datos:["edit-ticker","edit-cantidad","edit-mep","edit-ars","edit-usd","edit-mep-usd","edit-nota"], cuando:["edit-fecha","edit-cuenta"], opciones:["edit-inv-sale","edit-inv-fondo-compra"]}},
   cuotas:{tabs:[["datos","Datos"],["monto","Monto y cuotas"],["todo","Todo"]],
     reglas:{datos:["edit-tc-desc","edit-tc-tarj","edit-tc-cat","edit-tc-cuenta","edit-tc-nota"], monto:["edit-tc-moneda","edit-tc-total","edit-tc-cuotas","edit-tc-inicio"]}}
 };
@@ -603,7 +605,7 @@ function guardarEdit(){
     const ars=parseFloat(document.getElementById("edit-ars").value)||0;
     const usd=parseFloat((mepUsdEl||document.getElementById("edit-usd")).value)||0;
     if(ars<=0&&usd<=0){ irAlCampoEdit(mepUsdEl?"edit-mep-usd":"edit-ars"); showToast("Ingresá al menos un importe");return;}
-    m.ticker=document.getElementById("edit-ticker").value.trim();
+    m.ticker=tickerParaGuardar(document.getElementById("edit-ticker").value.trim(), movs.filter(x=>x!==m));
     const cantEl=document.querySelector("#edit-cantidad");
     if(cantEl){ const c=parseFloat(limpiarImporte(cantEl.value))||0; if(c>0 && c<1e13) m.cantidad=Math.round(c*1e6)/1e6; else delete m.cantidad; }
     m.importe=Math.round(ars*100)/100;
@@ -635,7 +637,7 @@ function guardarEdit(){
     m.importeUSD = mepUsdEl ? 0 : Math.round(usd*100)/100;
   }
   if(m.tipo==="Ingreso"){ aplicarSaleDeAhorroEditorIngreso(m); sincronizarRetiroDeIngreso(m, movs); }   // lo mismo para un ingreso que sale de un fondo
-  if(m.tipo==="Inversion"){ aplicarSaleDeAhorroEditor(m); sincronizarRetiroLigado(m, movs); }   // el retiro del fondo que acompaña a una venta se pone igual
+  if(m.tipo==="Inversion"){ aplicarSaleDeAhorroEditor(m); aplicarFondoCompraEditor(m); sincronizarRetiroLigado(m, movs); }   // el retiro del fondo que acompaña a una venta se pone igual
   save();
   vibrar([15,50,15]);
   closeEditModal();

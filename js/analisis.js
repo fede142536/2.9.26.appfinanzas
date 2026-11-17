@@ -454,6 +454,16 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
   const ventasFondo=typeof alertaDeVentasSinRetiro==="function" ? alertaDeVentasSinRetiro(lista) : null;
   if(ventasFondo) out.push(ventasFondo);
 
+  // ── Inversiones con datos que inflan (o achican) los resultados ──
+  const revInv=typeof revisionInversiones==="function" ? revisionInversiones(lista, typeof revisionIgnorados==="function" ? revisionIgnorados() : []) : [];
+  if(revInv.length){
+    const ventas=revInv.filter(p=>p.tipo==="venta-sin-capital");
+    out.push({nivel:ventas.length?"warn":"info", icono:"🔎",
+      titulo:`${revInv.length} ${revInv.length===1?"cosa para revisar":"cosas para revisar"} en tus inversiones`,
+      detalle: ventas.length ? `${ventas.length} ${ventas.length===1?"venta se cuenta":"ventas se cuentan"} casi entera como ganancia: falta la compra que la respalda.` : "Datos que no cierran entre tus inversiones y tu fondo de ahorro.",
+      accion:{texto:"Revisar", fn:"abrirRevisionInversiones"}});
+  }
+
   // ── Registros a los que les falta un dato ──
   // Va al final pero se cuela primero si existe: un número que no se puede calcular ensucia
   // todas las demás cuentas, así que arreglarlo es más urgente que cualquier otro aviso.

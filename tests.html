@@ -6526,7 +6526,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 17, "esperaba las 17 casillas conocidas (pago-tc-ahorro, pago-tc-adm-chk, frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, ing-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
+  igual(cajas.length, 18, "esperaba las 18 casillas conocidas (pago-tc-ahorro, pago-tc-adm-chk, frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, inv-fondo-compra, ing-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);
@@ -9754,7 +9754,7 @@ test("venta de ahorro: borrar la venta se lleva el retiro ligado, y deshacer vue
   try{
     const btn=document.createElement("button"); btn.dataset.confirm="1";
     await borrarMov(100, btn);
-    igual(movs.map(m=>m.id), [5], "se fueron los dos"); cierto(toast.textContent.includes("junto con su retiro"), toast.textContent);
+    igual(movs.map(m=>m.id), [5], "se fueron los dos"); cierto(toast.textContent.includes("junto con su movimiento del fondo"), toast.textContent);
     toast.querySelector(".toast-accion").click();
     igual(movs.map(m=>m.id).sort((a,b)=>a-b), [5,100,101], "deshacer los devuelve");
   } finally { window.renderMovs=antesRender; }
@@ -10336,7 +10336,7 @@ test("repetir: una inversión conserva ticker y operación (sin el prefijo de la
 test("repetir: lo que no tiene sentido repetir explica por qué", ()=>{
   cierto(datosParaRepetir({id:1, tipo:"Gasto", frecuente:true, importe:1}, HOY_R).motivo.includes("frecuentes"));
   cierto(datosParaRepetir({id:2, tipo:"Gasto", importe:1, pagoTarjeta:{ym:"2026-10"}}, HOY_R).motivo.includes("resumen"));
-  cierto(datosParaRepetir({id:3, tipo:"Gasto", importe:1, origenInvId:9}, HOY_R).motivo.includes("venta"));
+  cierto(datosParaRepetir({id:3, tipo:"Gasto", importe:1, origenInvId:9}, HOY_R).motivo.includes("inversión"));
   cierto(datosParaRepetir({id:4, tipo:"Ingreso", importe:1, devolucionDeId:9}, HOY_R).motivo.includes("Cobrar"));
   cierto(datosParaRepetir({id:5, tipo:"Gasto", importe:1, cambioId:"c1", cambioPata:"sale"}, HOY_R).motivo.includes("Cambio"));
   cierto(datosParaRepetir({desc:"Netflix", frecuente:true, total:6, cuotasTotal:1, _isTc:true}, HOY_R).motivo.includes("frecuentes"));
@@ -11801,6 +11801,83 @@ test("guardar desde otra pestaña lee todos los campos, y un campo inválido lle
     guardarEdit();
     igual(m.importe,250, "se guarda el importe aunque estuviera oculto"); igual(m.nota,"nueva");
   } finally { cont.remove(); movs=antes; editingId=idAntes; editVista="datos"; }
+});
+
+grupo("Revisión de datos de inversiones");
+
+test("la revisión encuentra la venta contada casi entera como ganancia, y no molesta con MEP, retiros ligados ni rescates resuscriptos", ()=>{
+  const op=(id,f,sub,imp,t,extra)=>({id,tipo:"Inversion",cat:"Acciones",subcat:"Acciones "+sub,ticker:t,importe:imp,importeUSD:0,fecha:f,...extra});
+  const lista=[op(1,"2026-08-04","Compra",97000,"YPFD"), op(2,"2026-09-10","Venta",1057000,"YPFD"),
+    op(3,"2026-08-01","Compra",1000,"AL30",{mep:true}), op(4,"2026-08-02","Venta",50000,"AL30",{mep:true}),
+    op(5,"2026-08-01","Venta",50000,"XLK"), {id:6,tipo:"Gasto",importe:50000,moneda:"ARS",usaAhorro:true,traspaso:true,origenInvId:5,fecha:"2026-08-01"},
+    {id:7,tipo:"Inversion",cat:"FCI",subcat:"FCI Suscripción",ticker:"BMMA",importe:100000,importeUSD:0,fecha:"2026-11-03"},{id:8,tipo:"Inversion",cat:"FCI",subcat:"FCI Rescate capital",ticker:"BMMA",importe:100540,importeUSD:0,fecha:"2026-11-05"}];
+  const r=revisionInversiones(lista,[]);
+  const ventas=r.filter(x=>x.tipo==="venta-sin-capital");
+  igual(ventas.map(v=>v.ticker).join(","),"YPFD", "solo YPFD: la MEP, la venta con retiro ligado y el rescate resuscripto no se marcan");
+  igual(Math.round(ventas[0].ganancia), 960000); igual(ventas[0].capital, 97000);
+  igual(revisionInversiones(lista,["venta:2"]).filter(x=>x.tipo==="venta-sin-capital").length, 0, "«Está bien así» la saca de la lista");
+});
+
+test("la revisión encuentra compras cargadas dos veces sin vincular, montos distintos, nominales de más, variantes y cantidades faltantes", ()=>{
+  const inv=(id,f,sub,imp,t,c)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs "+sub,ticker:t,importe:imp,importeUSD:0,fecha:f,...(c?{cantidad:c}:{})});
+  const dep=(id,f,imp,nota)=>({id,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:imp,moneda:"ARS",esAhorro:true,usaAhorro:false,fecha:f,nota});
+  const lista=[inv(1,"2025-08-12","Compra",42642.09,"SPY",1), dep(2,"2025-08-12",42591.75,"Spy x 1"),
+    inv(3,"2025-09-03","Compra",44127.26,"SPY",1), dep(4,"2025-09-03",44127.26,"Spy x 1"),
+    inv(5,"2026-06-18","Venta",50000,"Spy",3), inv(6,"2026-07-01","Compra",20000,"SPY")];
+  const r=revisionInversiones(lista,[]);
+  const sv=r.find(x=>x.tipo==="sin-vincular"); igual(sv.pares.length,2); igual(sv.distintos.length,1); igual(sv.distintos[0].dif,-50.34);
+  igual(r.find(x=>x.tipo==="nominales").deMas,1, "vendiste 3 teniendo 2");
+  const v=r.find(x=>x.tipo==="variantes"); igual(v.sugerida,"SPY"); igual(v.formas.length,2);
+  igual(r.find(x=>x.tipo==="sin-cantidad").n,1, "la compra del 1/7 no dice cuántos");
+});
+
+test("vincular y unificar desde la revisión se pueden deshacer y no cambian el saldo del fondo", ()=>{
+  const inv={id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:42642.09,importeUSD:0,fecha:"2025-08-12",cantidad:1};
+  const dep={id:2,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:42591.75,moneda:"ARS",esAhorro:true,usaAhorro:false,fecha:"2025-08-12",nota:""};
+  const otra={id:3,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Venta",ticker:"Spy",importe:1,importeUSD:0,fecha:"2025-09-01"};
+  const antes=movs; movs=[inv,dep,otra];
+  const fns=["save","renderInv","ofrecerDeshacerCambio","pintarRevisionInversiones"], orig=fns.map(f=>window[f]);
+  fns.forEach(f=>{ window[f]=()=>{}; });   // sin dibujar gráficos ni guardar de verdad
+  try{
+    revisionVincular();
+    igual(dep.origenInvId,1); igual(dep.importe,42642.09, "el depósito se iguala a la inversión"); igual(dep.ticker,"SPY"); igual(dep.cantidad,1);
+    igual(revisionInversiones(movs,[]).filter(x=>x.tipo==="sin-vincular").length,0);
+    igual(calcularResultadoInv(movs).gananciaPorMes["2025-09"]?.ars||0, 0, "vincular un depósito a una compra no cambia ningún resultado");
+    revisionUnificar("SPY","SPY"); igual(otra.ticker,"SPY");
+  } finally { movs=antes; fns.forEach((f,i)=>{ window[f]=orig[i]; }); }
+});
+
+grupo("Compra que es de un fondo de ahorro: un solo registro");
+
+test("la compra crea su depósito ligado y el fondo habitual del ticker se sugiere solo", ()=>{
+  const dep=(id,f,imp,nota,extra)=>({id,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:imp,moneda:"ARS",esAhorro:true,usaAhorro:false,fecha:f,nota,...extra});
+  const lista=[dep(1,"2025-06-05",71951,"Spy x 2"), dep(2,"2025-07-02",77137,"",{ticker:"SPY"}), {...dep(3,"2025-07-03",1000,"vacaciones"),cat:"Mudanza",subcat:""}];
+  igual(fondosParaCompra(lista,"ARS").map(f=>f.cat).join(","),"Fondo de Retiro,Mudanza", "el más usado primero");
+  const h=fondoHabitualDelTicker(lista,"spy","ARS"); igual(h.cat,"Fondo de Retiro"); igual(h.sub,"Cedears");
+  igual(fondoHabitualDelTicker(lista,"QQQ","ARS"), null, "un ticker que nunca fue al fondo no se tilda solo");
+  const inv={id:10,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"spy",importe:21000,importeUSD:0,fecha:"2026-11-17",cuenta:"Balanz",cantidad:1};
+  const d=crearDepositoPorCompra(inv,h,11);
+  cierto(d.esAhorro && !d.usaAhorro && d.origenInvId===10); igual(d.importe,21000); igual(d.ticker,"SPY"); igual(d.cantidad,1); igual(d.fecha,"2026-11-17");
+  inv.importe=22000; inv.cantidad=2; sincronizarRetiroLigado(inv,[inv,d]); igual(d.importe,22000, "editar la compra mueve el depósito"); igual(d.cantidad,2);
+  cierto(esDepositoAhorro(d) && !esRetiroAMano(d), "es un depósito al fondo como cualquier otro");
+  igual(operacionesParaPosiciones([inv,d]).length,1, "el depósito ligado no se cuenta otra vez en la cartera");
+});
+
+test("el ticker se guarda como los que ya existen, y si es nuevo en mayúsculas (como lo muestra el campo)", ()=>{
+  const l=[{tipo:"Inversion",ticker:"SPY"},{tipo:"Inversion",ticker:"SPY"},{tipo:"Inversion",ticker:"Spy"},{tipo:"Inversion",ticker:"Frasco"}];
+  igual(tickerParaGuardar("spy",l),"SPY"); igual(tickerParaGuardar("frasco",l),"Frasco"); igual(tickerParaGuardar("qqq ",l),"QQQ"); igual(tickerParaGuardar("",l),"");
+});
+
+test("vincular no pierde la cantidad: si solo la tenía el depósito, pasa a la inversión", ()=>{
+  const inv={id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:78680.16,importeUSD:0,fecha:"2026-07-14"};
+  const dep={id:2,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"Cedears",importe:78680.16,moneda:"ARS",esAhorro:true,fecha:"2026-07-14",ticker:"SPY",cantidad:4,origenInvId:1};
+  sincronizarRetiroLigado(inv,[inv,dep]); igual(dep.cantidad,4); igual(inv.cantidad,4);
+});
+
+test("Cargar y el editor tienen la casilla de la compra del fondo", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  cierto(html.includes('id="inv-fondo-compra"') && html.includes('id="modal-revision-inv"'));
+  cierto(typeof aplicarFondoCompraEditor==="function" && typeof bloqueFondoCompraEditor==="function" && typeof abrirRevisionInversiones==="function");
 });
 
 grupo("Aislamiento de los tests");
