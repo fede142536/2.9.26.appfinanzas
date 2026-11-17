@@ -726,3 +726,24 @@ function mostrarPrompt(mensaje, opts){
   return _dialogoAbrir(Object.assign({tipo:"prompt", mensaje}, opts||{}));
 }
 
+
+// ── Secciones plegables de a una (Configuración y el manual) ──
+// Al abrir una sección, la que estaba abierta en el mismo grupo se cierra: antes quedaban todas abiertas y la pantalla se volvía una lista larguísima. Se actúa
+// sobre el TOQUE del usuario (click en el <summary>, que también llega con Enter/Espacio), no sobre el evento toggle: el buscador del manual abre varias a la vez
+// a propósito y eso no tiene que cerrar nada.
+const GRUPOS_PLEGABLES_EXCLUSIVOS=[".cfg-seccion",".man-sec",".man-q"];
+function cerrarHermanosDetails(d){
+  const sel=GRUPOS_PLEGABLES_EXCLUSIVOS.find(s=>d.matches && d.matches(s));
+  if(!sel || !d.parentElement) return 0;
+  let n=0;
+  [...d.parentElement.children].forEach(x=>{ if(x!==d && x.matches(sel) && x.open){ x.open=false; n++; } });
+  return n;
+}
+document.addEventListener("click", e=>{
+  const sum=e.target && e.target.closest ? e.target.closest("summary") : null;
+  const d=sum && sum.parentElement;
+  if(!d || d.tagName!=="DETAILS" || d.open) return;   // solo cuando se ABRE
+  if(!cerrarHermanosDetails(d)) return;
+  // Al cerrarse la de arriba, la recién abierta sube: se la deja a la vista.
+  requestAnimationFrame(()=>{ const r=d.getBoundingClientRect(); if(r.top<0 || r.top>window.innerHeight*0.6) d.scrollIntoView({block:"start", behavior:(typeof prefiereMenosMovimiento==="function" && prefiereMenosMovimiento()) ? "auto" : "smooth"}); });
+}, true);

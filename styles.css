@@ -2094,3 +2094,6 @@ body:has(.modal-overlay.open),body:has(#side-menu.open){overflow:hidden}
 .man-r ol{margin:0 0 8px;padding-left:18px}
 .man-r li{margin:2px 0}
 .man-r strong{color:var(--text)}
+
+/* Al abrir una sección y cerrarse la anterior, queda a la vista debajo de la barra de arriba. */
+.cfg-seccion,.man-sec,.man-q{scroll-margin-top:72px}
