@@ -111,7 +111,7 @@ function irDesdeManual(clave){ try{ MANUAL_IR[clave](); }catch(e){ console.warn(
 // Abre Configuración con el manual desplegado y el buscador listo.
 function abrirManual(){
   irAPagina("config");
-  const sec=document.getElementById("cfg-sec-ayuda"); if(sec) sec.open=true;
+  const sec=document.getElementById("cfg-sec-ayuda"); if(sec && !sec.open){ cerrarHermanosDetails(sec); sec.open=true; }
   renderManual(document.getElementById("manual-buscar")?.value||"");
   setTimeout(()=>{ if(sec && sec.scrollIntoView) sec.scrollIntoView({block:"start"}); }, 50);
 }

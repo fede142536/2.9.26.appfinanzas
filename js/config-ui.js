@@ -1071,16 +1071,17 @@ function guardarSeccionesConfig(){
 }
 // Deja abiertas las secciones que estaban abiertas la última vez (al principio, todas cerradas).
 function initSeccionesConfig(){
-  const abiertas=new Set(leerSeccionesConfigAbiertas());
+  // De a una: si quedaron varias guardadas (de antes de esta regla), se abre solo la primera.
+  const primera=leerSeccionesConfigAbiertas()[0];
   document.querySelectorAll("#page-config details.cfg-seccion").forEach(d=>{
-    d.open=abiertas.has(d.id);
+    d.open=d.id===primera;
     if(!d._cfgListo){ d._cfgListo=true; d.addEventListener("toggle", guardarSeccionesConfig); }
   });
 }
 // Abre una sección (para llevar al usuario a algo que está adentro de una cerrada).
 function abrirSeccionConfig(id){
   const d=document.getElementById(id);
-  if(d && !d.open){ d.open=true; guardarSeccionesConfig(); }
+  if(d && !d.open){ cerrarHermanosDetails(d); d.open=true; guardarSeccionesConfig(); }
 }
 
 // ── Vencimientos: ajuste de anticipación y envío al calendario ──

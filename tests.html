@@ -8525,7 +8525,7 @@ test("las secciones recuerdan cuáles quedaron abiertas", ()=>{
     initSeccionesConfig();
     igual([...page.querySelectorAll("details")].filter(d=>d.open).map(d=>d.id).join(","), "s2", "no recordó la abierta");
     abrirSeccionConfig("s3");
-    igual(JSON.parse(localStorage.getItem("fcfgabiertas")).sort().join(","), "s2,s3");
+    igual(JSON.parse(localStorage.getItem("fcfgabiertas")).sort().join(","), "s3", "de a una: abrir s3 cierra s2");
     localStorage.setItem("fcfgabiertas", "basura{");
     igual(leerSeccionesConfigAbiertas().length, 0, "un valor roto no tiene que romper nada");
     initSeccionesConfig();     // no tira error
@@ -11933,6 +11933,20 @@ test("el manual está en Configuración, primero, y la novedad lleva ahí", asyn
   cierto(html.includes('id="manual-buscar"') && html.includes('src="js/manual.js'));
   cierto((await (await fetch("sw.js")).text()).includes("./js/manual.js"));
   cierto(NOVEDADES.some(n=>n.ir==="manual") && typeof NOVEDADES_IR.manual==="function");
+});
+
+test("al abrir una sección de Configuración o del manual se cierra la que estaba abierta (y buscar no cierra nada)", ()=>{
+  const d=document.createElement("div");
+  d.innerHTML=`<details class="cfg-seccion" open><summary>a</summary></details><details class="cfg-seccion"><summary>b</summary></details><details class="otra" open><summary>c</summary></details>`;
+  document.body.appendChild(d);
+  try{
+    const [a,b,c]=d.children;
+    igual(cerrarHermanosDetails(b),1); igual(a.open,false, "se cierra la otra sección"); igual(c.open,true, "lo que no es del grupo no se toca");
+    a.open=true; b.querySelector("summary").click();
+    igual(a.open,false, "tocar para abrir también la cierra");
+    const m=document.createElement("div"); m.id="manual-contenido"; document.body.appendChild(m);
+    try{ renderManual("tarjeta"); cierto(m.querySelectorAll(".man-sec[open]").length>1, "el buscador abre varios temas a la vez"); } finally { m.remove(); }
+  } finally { d.remove(); }
 });
 
 grupo("Aislamiento de los tests");
