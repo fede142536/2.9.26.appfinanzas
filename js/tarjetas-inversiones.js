@@ -1927,7 +1927,7 @@ function openEditTcModal(id, ym){
   if(!t) return;
   editingTcId=id;
   editingTcYM=/^\d{4}-\d{2}$/.test(ym||"") ? ym : currentYM();
-  editTcVista="datos";
+  editTcVista="datos"; editVista="datos";
   document.getElementById("edit-form-content").innerHTML=renderEditTcForm(t);
   const tituloEd=document.getElementById("edit-modal-titulo"); if(tituloEd) tituloEd.textContent="Editar compra con tarjeta";
   document.getElementById("modal-edit").classList.add("open");
@@ -1957,7 +1957,7 @@ function setVistaEditTc(v){
   cont.querySelectorAll("[data-vista-btn]").forEach(b=>{ const on=b.dataset.vistaBtn===v; b.classList.toggle("active",on); b.setAttribute("aria-selected",on?"true":"false"); });
 }
 
-function renderEditTcForm(t){
+function renderEditTcFormBase(t){
   const hoyYM=currentYM();
   if(t.frecuente){
     const montoActual=getMontoEnMes(t,hoyYM);
@@ -2141,6 +2141,10 @@ function renderEditTcForm(t){
   `;
 }
 
+// El formulario de una compra en cuotas se ve por partes (Datos · Monto y cuotas · Todo); el del gasto frecuente ya trae su propia barra (ver renderEditTcFormBase).
+function renderEditTcForm(t){
+  return t.frecuente ? renderEditTcFormBase(t) : conVistasEdicion(renderEditTcFormBase(t), "cuotas");
+}
 // Al elegir otro mes en "Tarjeta desde el mes", el selector muestra la tarjeta que regía en ese mes.
 function onEditTcTarjMes(){
   const t=tcs.find(x=>x.id===editingTcId);
@@ -2220,7 +2224,7 @@ function guardarEditTc(){
   const t=tcs.find(x=>x.id===editingTcId);
   if(!t){closeEditModal();return;}
   const desc=document.getElementById("edit-tc-desc").value.trim();
-  if(!desc){showToast("La descripción no puede estar vacía");return;}
+  if(!desc){ irAlCampoEdit("edit-tc-desc"); showToast("La descripción no puede estar vacía");return;}
   t.desc=desc;
   const tarjetaElegida=document.getElementById("edit-tc-tarj").value.trim();
   if(t.frecuente){

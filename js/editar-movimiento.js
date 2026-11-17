@@ -11,6 +11,7 @@ function openEditModal(id){
   if(esPataDeCambio(m)) return openEditCambioModal(m.cambioId);
   editingId=id;
   { const tituloEd=document.getElementById("edit-modal-titulo"); if(tituloEd) tituloEd.textContent="Editar movimiento"; }   // el editor de compras con tarjeta lo cambia: se repone
+  editVista="datos";
   document.getElementById("edit-form-content").innerHTML=renderEditForm(m);
   document.getElementById("modal-edit").classList.add("open");
   const rep=document.getElementById("edit-repetir"); if(rep) rep.style.display = (m.frecuente || m.pagoTarjeta || m.origenInvId || m.devolucionDeId) ? "none" : "";   // lo que no se puede repetir no ofrece el botón
@@ -207,7 +208,7 @@ function fondoPosEditorHTML(m){
     <p class="txt-xs txt-muted" style="margin:0 0 12px">Cuántos nominales compraste o vendiste con este movimiento del fondo.</p>
   </div>`;
 }
-function renderEditForm(m){
+function renderEditFormBase(m){
   if(m.tipo==="Gasto"||m.tipo==="Ingreso"){
     const esFrec=(m.tipo==="Gasto" || m.tipo==="Ingreso") && m.frecuente;
     const esIngFrec=esFrec && m.tipo==="Ingreso";
@@ -217,7 +218,7 @@ function renderEditForm(m){
     return `
       <div style="display:inline-block;font-size:10px;font-weight:600;padding:3px 9px;border-radius:10px;background:${m.tipo==="Gasto"?"var(--danger-light)":"var(--success-light)"};color:${m.tipo==="Gasto"?"var(--danger)":"var(--success)"};margin-bottom:10px">${esFrec?(esIngFrec?"🔁 INGRESO FRECUENTE":"🔁 GASTO FRECUENTE"):m.tipo.toUpperCase()}</div>
       ${esFrec?`
-        <div class="inset">
+        <div class="inset" id="edit-frec-vigente">
           <div class="seccion-label mb-6">Monto vigente este mes</div>
           <div style="font-size:18px;font-weight:600;color:${esIngFrec?"var(--success)":"var(--danger)"}">${fmtMoneda(montoVigente, m.moneda)}</div>
         </div>
@@ -295,6 +296,7 @@ function renderEditForm(m){
           </div>
         </div>
         ${cambios.length?`
+          <div id="edit-frec-hist">
           <div class="seccion-label mb-6">Historial de aumentos</div>
           <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px">
             ${cambios.sort((a,b)=>a.desde.localeCompare(b.desde)).map((c,i)=>`
@@ -303,8 +305,8 @@ function renderEditForm(m){
                 <button class="tx-del" style="color:var(--danger)" onclick="borrarCambioFrec(${i})" title="Eliminar este aumento">×</button>
               </div>
             `).join("")}
-          </div>`:""}
-        <div style="background:var(--danger-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+          </div></div>`:""}
+        <div id="edit-frec-baja" style="background:var(--danger-light);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--danger)">🛑 Dar de baja</div>
           <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Deja de aparecer desde el próximo mes. Los meses anteriores quedan en el historial.</p>
           <button type="button" class="btn-sm" style="color:var(--danger);width:100%" onclick="darDeBajaFrecGasto(${m.id})">Dar de baja desde ${mesLbl(mesActual)}</button>
@@ -423,6 +425,66 @@ function renderEditForm(m){
   }
   return `<p style="color:var(--muted)">Tipo de movimiento no editable.</p>`;
 }
+
+// ═══════════════════════════════════════════
+// VISTAS DEL EDITOR (Datos · Fecha · Opciones · Todo…)
+// ═══════════════════════════════════════════
+// Todos los editores (gasto o ingreso común, frecuente, inversión, compra en cuotas) se ven por partes, igual que el del gasto frecuente de tarjeta: arriba una
+// barra con los grupos y abajo solo los campos del grupo elegido; "Todo" muestra el formulario entero. Cada tipo tiene sus propios grupos (EDIT_LAYOUTS), y los campos
+// ocultos siguen en la página: Guardar lee todo, esté o no a la vista. Se arma sobre el HTML ya generado: cada bloque se asigna a un grupo por los id que contiene.
+const EDIT_LAYOUTS={
+  normal:{tabs:[["datos","Datos"],["cuando","Fecha y cuenta"],["opciones","Opciones"],["todo","Todo"]],
+    reglas:{datos:["edit-importe","edit-moneda","edit-cat","edit-subcat","edit-nota"], cuando:["edit-fecha","edit-cuenta"], opciones:["edit-ahorro","edit-hacer-frec","edit-fondo-pos","edit-ing-sale","edit-recup"]}},
+  frec:{tabs:[["datos","Datos"],["monto","Monto"],["fechas","Fechas"],["todo","Todo"]],
+    reglas:{datos:["edit-cat","edit-subcat","edit-cuenta","edit-nota"], monto:["edit-importe","edit-moneda-frec","edit-frec-vigente","edit-frec-aum-mes","edit-frec-hist"], fechas:["edit-frec-inicio","edit-frec-fin","edit-frec-dia","edit-frec-baja"]}},
+  inv:{tabs:[["datos","Datos"],["cuando","Fecha y cuenta"],["opciones","Opciones"],["todo","Todo"]],
+    reglas:{datos:["edit-ticker","edit-cantidad","edit-mep","edit-ars","edit-usd","edit-mep-usd","edit-nota"], cuando:["edit-fecha","edit-cuenta"], opciones:["edit-inv-sale"]}},
+  cuotas:{tabs:[["datos","Datos"],["monto","Monto y cuotas"],["todo","Todo"]],
+    reglas:{datos:["edit-tc-desc","edit-tc-tarj","edit-tc-cat","edit-tc-cuenta","edit-tc-nota"], monto:["edit-tc-moneda","edit-tc-total","edit-tc-cuotas","edit-tc-inicio"]}}
+};
+let editVista="datos";
+let editLayoutActual=null;
+// HTML del formulario con la barra de vistas y los bloques marcados (data-evista). Los grupos sin ningún campo (por ejemplo "Opciones" de un ingreso sin fondos) no
+// aparecen en la barra. Sin layout (o si el HTML ya trae su propia barra), no toca nada.
+function conVistasEdicion(html, clave){
+  const L=EDIT_LAYOUTS[clave];
+  if(!L || html.includes("edit-vistas")) return html;
+  const t=document.createElement("template");
+  t.innerHTML=html;
+  const hijos=[...t.content.children], usados={};
+  hijos.forEach(h=>{
+    for(const v of Object.keys(L.reglas)){
+      if(L.reglas[v].some(id=>h.id===id || h.querySelector("#"+id))){ h.dataset.evista=v; usados[v]=(usados[v]||0)+1; break; }
+    }
+  });
+  const tabs=L.tabs.filter(([k])=>k==="todo" || usados[k]);
+  const actual=tabs.some(([k])=>k===editVista) ? editVista : "datos";
+  hijos.forEach(h=>{ if(h.dataset.evista) h.classList.toggle("vista-oculta", !(actual==="todo" || h.dataset.evista===actual)); });
+  const barra=document.createElement("div");
+  barra.className="seg-filter edit-vistas"; barra.setAttribute("role","tablist"); barra.setAttribute("aria-label","Qué parte editar");
+  barra.innerHTML=tabs.map(([k,n])=>`<button type="button" class="seg-btn${actual===k?" active":""}" role="tab" aria-selected="${actual===k}" data-evista-btn="${k}" onclick="setVistaEdit('${k}')">${n}</button>`).join("");
+  if(hijos.length>1) hijos[0].after(barra); else t.content.prepend(barra);   // después de la etiqueta del tipo
+  editLayoutActual=clave;
+  return t.innerHTML;
+}
+function setVistaEdit(v){
+  editVista=v;
+  const cont=document.getElementById("edit-form-content"); if(!cont) return;
+  cont.querySelectorAll("[data-evista]").forEach(el=>el.classList.toggle("vista-oculta", !(v==="todo" || el.dataset.evista===v)));
+  cont.querySelectorAll("[data-evista-btn]").forEach(b=>{ const on=b.dataset.evistaBtn===v; b.classList.toggle("active",on); b.setAttribute("aria-selected",on?"true":"false"); });
+}
+// Si Guardar se frena por un campo inválido que está en otro grupo, se pasa a ese grupo para que se vea qué corregir.
+function irAlCampoEdit(id){
+  const cont=document.getElementById("edit-form-content"); if(!cont) return;
+  const el=cont.querySelector("#"+id); if(!el) return;
+  const bloque=el.closest("[data-evista]");
+  if(bloque && bloque.classList.contains("vista-oculta")) setVistaEdit(bloque.dataset.evista);
+  if(el.focus) el.focus();
+}
+function renderEditForm(m){
+  const clave=(m.tipo==="Gasto"||m.tipo==="Ingreso") ? (m.frecuente?"frec":"normal") : (m.tipo==="Inversion" ? "inv" : null);
+  return conVistasEdicion(renderEditFormBase(m), clave);
+}
 function populateEditCatSelect(tipoMov,currentCat,currentSubcat){
   const cats=getCats(tipoMov);
   const keys=ordenarCats(tipoMov, cats);
@@ -454,7 +516,7 @@ function guardarEdit(){
   if(!m){closeEditModal();return;}
   if(m.tipo==="Gasto"||m.tipo==="Ingreso"){
     const imp=parseFloat(document.getElementById("edit-importe").value)||0;
-    if(imp<=0){showToast("Ingresá un importe válido");return;}
+    if(imp<=0){ irAlCampoEdit("edit-importe"); showToast("Ingresá un importe válido");return;}
     // Se guarda en importe (ARS) o importeOrig (USD) según la moneda elegida — para un
     // movimiento frecuente y para uno normal por igual. Antes esto SOLO pasaba si era
     // frecuente: un Gasto o Ingreso en USD normal no tenía selector de moneda, así que
@@ -540,7 +602,7 @@ function guardarEdit(){
     const mepUsdEl=document.querySelector("#edit-mep-usd");
     const ars=parseFloat(document.getElementById("edit-ars").value)||0;
     const usd=parseFloat((mepUsdEl||document.getElementById("edit-usd")).value)||0;
-    if(ars<=0&&usd<=0){showToast("Ingresá al menos un importe");return;}
+    if(ars<=0&&usd<=0){ irAlCampoEdit(mepUsdEl?"edit-mep-usd":"edit-ars"); showToast("Ingresá al menos un importe");return;}
     m.ticker=document.getElementById("edit-ticker").value.trim();
     const cantEl=document.querySelector("#edit-cantidad");
     if(cantEl){ const c=parseFloat(limpiarImporte(cantEl.value))||0; if(c>0 && c<1e13) m.cantidad=Math.round(c*1e6)/1e6; else delete m.cantidad; }
