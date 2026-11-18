@@ -12235,6 +12235,45 @@ test("el dólar por defecto es el de tu último cambio", ()=>{
   igual(dolarDelUltimoCambio([]), null);
 });
 
+grupo("Filtros de Cuentas, tarjetas y categorías");
+
+test("los chips muestran de a un grupo de tarjetas y se recuerdan", async ()=>{
+  const html=await (await fetch("index.html")).text();
+  const sec=html.slice(html.indexOf('id="cfg-sec-organizar"'), html.indexOf('id="cfg-sec-exportar"'));
+  const grupos=[...sec.matchAll(/<div class="card"[^>]*data-cfg-grupo="(\w+)"/g)].map(m=>m[1]);
+  igual(grupos.length, (sec.match(/<div class="card"/g)||[]).length, "toda tarjeta de la sección tiene su grupo");
+  ["cuentas","tarjetas","categorias","reglas","presupuestos","inflacion"].forEach(g=>cierto(grupos.includes(g), "falta el grupo "+g));
+  const antes=localStorage.getItem("fcfgfiltro");
+  const cuerpo=document.createElement("div"); cuerpo.id="cfg-organizar-cuerpo"; const chips=document.createElement("div"); chips.id="cfg-organizar-filtro";
+  document.body.append(cuerpo, chips);
+  try{
+    localStorage.removeItem("fcfgfiltro"); renderFiltroOrganizar();
+    igual(cuerpo.dataset.filtro,"cuentas", "arranca en Cuentas");
+    setFiltroOrganizar("reglas");
+    igual(cuerpo.dataset.filtro,"reglas"); igual(localStorage.getItem("fcfgfiltro"),"reglas");
+    cierto(chips.querySelector('button.on').textContent.includes("Reglas"));
+    setFiltroOrganizar("cualquiera"); igual(cuerpo.dataset.filtro,"reglas", "un filtro que no existe no cambia nada");
+  } finally { cuerpo.remove(); chips.remove(); if(antes===null) localStorage.removeItem("fcfgfiltro"); else localStorage.setItem("fcfgfiltro",antes); }
+});
+
+test("las categorías se ven de a un tipo y el buscador mira todas", ()=>{
+  const ids=["cat-manager","cat-tipos","cat-buscar"];
+  const els=ids.map(id=>{ const e=document.createElement(id==="cat-buscar"?"input":"div"); e.id=id; document.body.appendChild(e); return e; });
+  const antes=localStorage.getItem("fcattipo");
+  try{
+    setCatTipo("Ingreso");
+    const man=els[0];
+    const gasto=Object.keys(getCats("Gasto")).find(c=>!getCats("Ingreso")[c]);
+    const ing=Object.keys(getCats("Ingreso"))[0];
+    cierto(man.textContent.includes(ing), "se ve una categoría de ingresos");
+    cierto(!man.textContent.includes(gasto), "no se ven las de gastos");
+    els[2].value=gasto.toUpperCase(); renderCatManager();
+    cierto(man.textContent.includes(gasto), "buscando aparece aunque sea de otro tipo");
+    els[2].value="zzzz-nada"; renderCatManager();
+    cierto(man.textContent.includes("Ninguna categoría"), "sin resultados lo dice");
+  } finally { els.forEach(e=>e.remove()); if(antes===null) localStorage.removeItem("fcattipo"); else localStorage.setItem("fcattipo",antes); }
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

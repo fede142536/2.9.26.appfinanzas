@@ -407,14 +407,68 @@ function guardarNuevaCat(){
     }
   }
 }
+// ── Filtros de la sección "Cuentas, tarjetas y categorías" ──
+// La sección junta siete tarjetas largas (la de categorías sola ocupa varias pantallas). Los chips de arriba muestran de a un grupo
+// (o "Todo"); la elección se recuerda. Es una preferencia de vista: localStorage llano.
+const CFG_FILTRO_KEY="fcfgfiltro";
+const CFG_FILTROS=[
+  {id:"cuentas", txt:"💳 Cuentas", n:()=>getCuentas().length},
+  {id:"tarjetas", txt:"🪪 Tarjetas", n:()=>typeof getTarjetas==="function" ? getTarjetas().length : null},
+  {id:"categorias", txt:"🏷 Categorías", n:()=>["Gasto","Ingreso","Inversion","Tarjeta"].reduce((s,t)=>s+Object.keys(getCats(t)).length,0)},
+  {id:"reglas", txt:"⚡ Reglas", n:()=>typeof reglasCat!=="undefined" ? reglasCat.length : null},
+  {id:"presupuestos", txt:"📊 Presupuestos", n:()=>Object.keys(presupuestos||{}).length},
+  {id:"inflacion", txt:"📈 Inflación", n:()=>null},
+  {id:"todo", txt:"Todo", n:()=>null}
+];
+function filtroOrganizarActual(){
+  const v=localStorage.getItem(CFG_FILTRO_KEY);
+  return CFG_FILTROS.some(f=>f.id===v) ? v : "cuentas";
+}
+function renderFiltroOrganizar(){
+  const cuerpo=document.getElementById("cfg-organizar-cuerpo"), el=document.getElementById("cfg-organizar-filtro");
+  if(!cuerpo || !el) return;
+  const actual=filtroOrganizarActual();
+  cuerpo.dataset.filtro=actual;
+  el.innerHTML=CFG_FILTROS.map(f=>{
+    let n=null; try{ n=f.n(); }catch(e){ n=null; }
+    const on=f.id===actual;
+    return `<button type="button" class="${on?"on":""}" aria-pressed="${on}" onclick="setFiltroOrganizar('${f.id}')">${f.txt}${n!==null?`<span class="n">${n}</span>`:""}</button>`;
+  }).join("");
+}
+function setFiltroOrganizar(id){
+  if(!CFG_FILTROS.some(f=>f.id===id)) return;
+  guardarPreferencia(CFG_FILTRO_KEY, id);
+  renderFiltroOrganizar();
+}
+
+// ── Categorías: de a un tipo, con buscador ──
+const CAT_TIPO_KEY="fcattipo";
+const CAT_TIPOS=[{t:"Gasto", txt:"Gastos"},{t:"Ingreso", txt:"Ingresos"},{t:"Inversion", txt:"Inversiones"},{t:"Tarjeta", txt:"Tarjeta"}];
+function catTipoActual(){ const v=localStorage.getItem(CAT_TIPO_KEY); return CAT_TIPOS.some(x=>x.t===v) ? v : "Gasto"; }
+function setCatTipo(t){ guardarPreferencia(CAT_TIPO_KEY, t); renderCatManager(); }
+
 function renderCatManager(){
   const el=document.getElementById("cat-manager");let html="";
-  ["Gasto","Ingreso","Inversion","Tarjeta"].forEach(t=>{
+  const tipoAct=catTipoActual();
+  const buscarEl=document.getElementById("cat-buscar");
+  const q=typeof normalizarTexto==="function" ? normalizarTexto(buscarEl ? buscarEl.value : "") : "";
+  const tiposEl=document.getElementById("cat-tipos");
+  if(tiposEl) tiposEl.innerHTML=CAT_TIPOS.map(x=>{
+    const on=!q && x.t===tipoAct, n=Object.keys(getCats(x.t)).length;
+    return `<button type="button" class="${on?"on":""}" aria-pressed="${on}" onclick="setCatTipo('${x.t}')">${x.txt}<span class="n">${n}</span></button>`;
+  }).join("");
+  // Buscando, se mira en todos los tipos (con su título); si no, solo el tipo elegido.
+  const tipos=q ? CAT_TIPOS.map(x=>x.t) : [tipoAct];
+  const coincide=(cat, subs)=>!q || normalizarTexto(cat).includes(q) || subs.some(s=>normalizarTexto(s).includes(q));
+  tipos.forEach(t=>{
     const cats=getCats(t);
     if(!Object.keys(cats).length) return;
-    html+=`<p class="seccion-label txt-medium mt-14 mb-6">${t}</p>`;
     const nombresOrdenados=ordenarCats(t, cats);
+    const visibles=nombresOrdenados.filter(c=>coincide(c, cats[c]||[]));
+    if(!visibles.length) return;
+    if(q) html+=`<p class="seccion-label txt-medium mt-14 mb-6">${(CAT_TIPOS.find(x=>x.t===t)||{}).txt||t}</p>`;
     nombresOrdenados.forEach((cat,idx)=>{
+      if(!visibles.includes(cat)) return;
       const subs=cats[cat];
       const esDefault=DEFAULT_CATS[t]&&DEFAULT_CATS[t][cat];
       const catEsc=attrJS(cat);
@@ -443,7 +497,8 @@ function renderCatManager(){
       </div>`;
     });
   });
-  if(!html)html=`<p style="font-size:13px;color:var(--muted);padding:8px 0">Sin categorías</p>`;
+  if(typeof renderFiltroOrganizar==="function") renderFiltroOrganizar();   // los números de los chips
+  if(!html) html=q ? `<p class="cat-sin-res">Ninguna categoría ni subcategoría dice «${escapeHtml(buscarEl.value.trim())}».</p>` : `<p style="font-size:13px;color:var(--muted);padding:8px 0">Sin categorías</p>`;
   el.innerHTML=html;
 }
 

@@ -2195,3 +2195,20 @@ body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(sa
 .pat-tag{font-size:11px;color:var(--muted);background:var(--bg);border-radius:8px;padding:1px 6px;margin-left:4px;white-space:nowrap}
 .pat-nota{font-size:12px;color:var(--muted);line-height:1.45;margin:4px 0 8px}
 .pat-nota a{color:var(--accent)}
+
+/* ── Filtros de Configuración › Cuentas, tarjetas y categorías ── */
+.cfg-filtro{display:flex;flex-wrap:wrap;gap:8px;padding:2px 2px 12px}
+.cfg-filtro button,.cat-tipos button{flex:0 0 auto;padding:7px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}
+.cfg-filtro button.on,.cat-tipos button.on{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
+.cfg-filtro .n,.cat-tipos .n{font-weight:500;color:var(--muted);margin-left:4px}
+.cfg-filtro button.on .n,.cat-tipos button.on .n{color:var(--accent)}
+#cfg-organizar-cuerpo:not([data-filtro="todo"]) .card[data-cfg-grupo]{display:none!important}
+#cfg-organizar-cuerpo[data-filtro="cuentas"] .card[data-cfg-grupo="cuentas"]:not([style*="none"]),
+#cfg-organizar-cuerpo[data-filtro="tarjetas"] .card[data-cfg-grupo="tarjetas"]:not([style*="none"]),
+#cfg-organizar-cuerpo[data-filtro="categorias"] .card[data-cfg-grupo="categorias"]:not([style*="none"]),
+#cfg-organizar-cuerpo[data-filtro="reglas"] .card[data-cfg-grupo="reglas"]:not([style*="none"]),
+#cfg-organizar-cuerpo[data-filtro="presupuestos"] .card[data-cfg-grupo="presupuestos"]:not([style*="none"]),
+#cfg-organizar-cuerpo[data-filtro="inflacion"] .card[data-cfg-grupo="inflacion"]:not([style*="none"]){display:block!important}
+.cat-tipos{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.cat-buscar{margin-bottom:6px}
+.cat-sin-res{font-size:13px;color:var(--muted);padding:10px 0}
