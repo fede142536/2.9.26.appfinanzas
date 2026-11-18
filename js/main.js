@@ -134,6 +134,7 @@ async function bootApp(){
   setTimeout(copiaAutomaticaSiToca, 2500);
   setTimeout(programarSyncCalendario, 3500);   // si hay un permiso vigente de Google, se ponen al día los vencimientos
   setTimeout(()=>avisarNovedades(0), 4200);   // qué hay de nuevo en esta versión (después de los otros avisos, sin taparlos)
+  setTimeout(()=>{ if(typeof actualizarInflacionSola==="function") actualizarInflacionSola().catch(()=>{}); }, 6000);   // la serie de inflación, si le falta el mes pasado
 }
 bootApp();
 

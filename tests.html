@@ -12275,6 +12275,58 @@ test("las categorías van en un desplegable por tipo y el buscador abre los que 
   } finally { els.forEach(e=>e.remove()); catTipoAbierto=antes; }
 });
 
+grupo("Inflación: se actualiza sola");
+
+// Una respuesta de ArgentinaDatos falsa con meses desde `desde` hasta `hasta`.
+function apiInflacionFalsa(desde, hasta){
+  const filas=[]; for(let ym=desde; ym<=hasta; ym=addMonths(ym,1)) filas.push({fecha:ym+"-28", valor:2});
+  let llamadas=0;
+  const fn=async()=>{ llamadas++; return {ok:true, status:200, json:async()=>filas}; };
+  return {fn, llamadas:()=>llamadas};
+}
+async function conInflacionLimpia(fn){
+  const a=localStorage.getItem("finflacion"), b=localStorage.getItem("finflacionauto");
+  localStorage.removeItem("finflacion"); localStorage.removeItem("finflacionauto");
+  const toast=window.showToast, ren=window.renderInflacion; window.showToast=()=>{}; window.renderInflacion=()=>{};
+  try{ return await fn(); }
+  finally { window.showToast=toast; window.renderInflacion=ren;
+    if(a===null) localStorage.removeItem("finflacion"); else localStorage.setItem("finflacion",a);
+    if(b===null) localStorage.removeItem("finflacionauto"); else localStorage.setItem("finflacionauto",b); }
+}
+
+test("sin serie, al abrir la baja sola; al día no vuelve a pedir nada", async ()=>{
+  await conInflacionLimpia(async ()=>{
+    const api=apiInflacionFalsa("2024-01","2026-10");
+    igual(await actualizarInflacionSola(api.fn, "2026-11-18"), "actualizada");
+    igual(leerSerieInflacion().hasta, "2026-10");
+    igual(await actualizarInflacionSola(api.fn, "2026-11-25"), "al-dia");
+    igual(api.llamadas(), 1, "con el mes pasado cargado no se consulta");
+  });
+});
+
+test("si todavía no se publicó el mes, reintenta cada 3 días sin pisar lo que había", async ()=>{
+  await conInflacionLimpia(async ()=>{
+    guardarSerieInflacion(Object.fromEntries(Array.from({length:20},(_, i)=>[addMonths("2025-02",i),1.5])).valueOf(), "manual");   // hasta 2026-09
+    igual(leerSerieInflacion().hasta, "2026-09");
+    const vieja=apiInflacionFalsa("2024-01","2026-09");
+    igual(await actualizarInflacionSola(vieja.fn, "2026-11-10"), "sin-novedad");
+    igual(await actualizarInflacionSola(vieja.fn, "2026-11-11"), "esperando", "al día siguiente no insiste");
+    igual(vieja.llamadas(), 1);
+    const nueva=apiInflacionFalsa("2024-01","2026-10");
+    igual(await actualizarInflacionSola(nueva.fn, "2026-11-13"), "actualizada", "a los 3 días vuelve a probar");
+    const g=leerSerieInflacion(); igual(g.hasta,"2026-10"); igual(g.tabla["2026-09"],2, "lo bajado manda donde se pisa");
+  });
+});
+
+test("la serie guardada se encuentra aunque el PIN esté activo", ()=>{
+  sinSerieGuardada(()=>{
+    guardarSerieInflacion({"2026-01":2,"2026-02":2}, "manual");
+    const orig=window.isEncActive; window.isEncActive=()=>true;
+    try{ cierto(!!leerSerieInflacion(), "con el PIN activo antes no la encontraba"); }
+    finally { window.isEncActive=orig; }
+  });
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

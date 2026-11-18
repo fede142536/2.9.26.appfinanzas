@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v271**
+**Versión actual: v272**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,13 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 18 de noviembre de 2026
 
+- **v272** · Cuentas, tarjetas y categorías con bloques desplegables
+  Reemplaza los chips de filtro por desplegables con flecha, con la misma forma
+  que las secciones de Configuración: Cuentas, Nombres de tarjetas, Categorías,
+  Reglas, Presupuestos e Inflación, de a uno abiertos y con un resumen de cuánto
+  hay adentro. Las categorías se despliegan por tipo (también de a uno, y el
+  abierto se mantiene al repintar); el buscador abre solo los tipos con
+  coincidencias.
 - **v271** · Filtros en Configuración › Cuentas, tarjetas y categorías
   Chips arriba de la sección para ver de a un grupo (Cuentas, Tarjetas,
   Categorías, Reglas, Presupuestos, Inflación o Todo), con la cantidad de cada uno
