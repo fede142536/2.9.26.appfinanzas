@@ -102,6 +102,9 @@ function irAReglas(){
   setTimeout(()=>{ const c=document.getElementById("reglas-card"); if(c) c.scrollIntoView({behavior:"smooth", block:"start"}); }, 250);
 }
 
+// Las reglas que se aplican: ninguna si las ocultaste en Funciones de la app.
+function reglasVigentes(){ return (typeof funcionActiva!=="function" || funcionActiva("reglas")) ? reglasCat : []; }
+
 function guardarReglas(){
   reglasCat=normalizarReglas(reglasCat);
   setSensitiveRaw("freglas", JSON.stringify(reglasCat));

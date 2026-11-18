@@ -731,7 +731,7 @@ function mostrarPrompt(mensaje, opts){
 // Al abrir una sección, la que estaba abierta en el mismo grupo se cierra: antes quedaban todas abiertas y la pantalla se volvía una lista larguísima. Se actúa
 // sobre el TOQUE del usuario (click en el <summary>, que también llega con Enter/Espacio), no sobre el evento toggle: el buscador del manual abre varias a la vez
 // a propósito y eso no tiene que cerrar nada.
-const GRUPOS_PLEGABLES_EXCLUSIVOS=[".cfg-seccion",".man-sec",".man-q",".cfg-sub",".cat-tipo"];
+const GRUPOS_PLEGABLES_EXCLUSIVOS=[".cfg-seccion",".man-sec",".man-q",".cfg-sub",".cat-tipo",".fun-grupo"];
 function cerrarHermanosDetails(d){
   const sel=GRUPOS_PLEGABLES_EXCLUSIVOS.find(s=>d.matches && d.matches(s));
   if(!sel || !d.parentElement) return 0;

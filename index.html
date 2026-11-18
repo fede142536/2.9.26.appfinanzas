@@ -14,7 +14,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v274">
+<meta name="enola-version" content="enola-v275">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <!-- Color de la barra del sistema = color de fondo de la app (claro #f7f6f2 / oscuro #000). Los dos primeros siguen al sistema; applyTheme() (config-ui.js)
@@ -39,9 +39,9 @@
 <!-- Chart.js y SheetJS viven en js/vendor (versiones fijas, ver js/vendor/LEEME.md): la app no baja código de ningún CDN.
      defer es IMPORTANTE, no cosmético: el HTML se parsea sin esperar estos archivos, así la pantalla nunca queda en blanco por una carga lenta
      (los gráficos y el Excel se protegen solos si todavía no están; ver renderChartMensualBI y handleXlsx). -->
-<script defer src="js/vendor/xlsx.full.min.js?v=274"></script>
-<script defer src="js/vendor/chart.umd.js?v=274"></script>
-<link rel="stylesheet" href="styles.css?v=274">
+<script defer src="js/vendor/xlsx.full.min.js?v=275"></script>
+<script defer src="js/vendor/chart.umd.js?v=275"></script>
+<link rel="stylesheet" href="styles.css?v=275">
 </head>
 <body class="con-tabbar">
 <!-- Pantalla de arranque [AAA navegacion]: hasta que el script de la app dibuja Movimientos (main.js la retira), la
@@ -652,7 +652,7 @@
   </div>
   <div id="alertas-frecuentes" style="padding:0 16px"></div>
   <!-- Carga rápida: una frase y la app rellena el formulario de abajo (no guarda nada) -->
-  <div class="card carga-rapida">
+  <div class="card carga-rapida" data-funcion="cargarapida">
     <label class="form-label" for="carga-rapida">⚡ Carga rápida</label>
     <div class="u-row">
       <input type="text" id="carga-rapida" class="form-input u-flex1" placeholder="Ej: nafta 15000 visa ayer" autocomplete="off" autocapitalize="off" aria-describedby="carga-rapida-res" onkeydown="if(event.key==='Enter'){event.preventDefault();cargaRapida();}">
@@ -1060,9 +1060,9 @@
     <input type="search" id="mov-search" aria-label="Buscar movimientos" placeholder="Buscar por nota, categoría, ticker…" oninput="onSearchMovs()">
     <div id="mov-search-count" class="mov-search-count" role="status"></div>
   </div>
-  <div id="mov-cierre-aviso" role="status" style="display:none"></div>
+  <div id="mov-cierre-aviso" data-funcion="cierre" role="status" style="display:none"></div>
   <div id="mov-anual-aviso" data-funcion="anual" role="status" style="display:none"></div>
-  <div id="mov-repetidos-aviso" role="status" style="display:none"></div>
+  <div id="mov-repetidos-aviso" data-funcion="repetidos" role="status" style="display:none"></div>
   <div class="seg-filter" id="mov-filtros"></div>
   <div class="mov-summary" id="mov-summary"></div>
   <div id="mov-tarjeta-filtro" class="mov-chips" style="display:none"></div>
@@ -1071,7 +1071,7 @@
   <div id="mov-cuenta-resumen" class="cuenta-resumen" style="display:none"></div>
   <div id="mov-arrastre" class="info-line" style="display:none"></div>
   <div id="gcal-aviso" class="venc-wrap" role="status" style="display:none"></div>
-  <div id="mov-presup-resumen" style="padding:0 16px 8px;display:none"></div>
+  <div id="mov-presup-resumen" data-funcion="presupuestos" style="padding:0 16px 8px;display:none"></div>
   <div id="mov-foco-mosaico" style="display:none"></div>
   <div class="tx-list" id="tx-list"></div>
 </div>
@@ -1153,7 +1153,7 @@
       <span class="dash-headline-frase" id="dash-headline"></span>
       <span class="dash-headline-sub" id="dash-headline-sub"></span>
     </div>
-    <div id="dash-patrimonio" class="dash-patrimonio"></div>
+    <div id="dash-patrimonio" class="dash-patrimonio" data-funcion="patrimonio"></div>
     <div class="dash-insights" id="dash-insights-lista"></div>
   </div>
 
@@ -1201,7 +1201,7 @@
       <div class="card-title">Saldo por cuenta</div>
       <div id="dash-cuentas"></div>
     </div>
-    <div class="card" id="dash-usd-card" style="display:none">
+    <div class="card" id="dash-usd-card" data-funcion="usd" style="display:none">
       <div class="card-title">💵 Flujo USD del año</div>
       <div id="dash-usd"></div>
     </div>
@@ -1524,7 +1524,7 @@
         </ol>
       </details>
   </div>
-  <div class="card">
+  <div class="card" data-funcion="vencimientos">
     <div class="card-title">🗓 Vencimientos</div>
     <p class="txt-sm txt-muted mb-10">La app te avisa de lo que vence (gastos frecuentes y tarjetas) arriba en Movimientos y en el Dashboard, mientras la abrís. Con Google conectado (tarjeta de arriba) además queda en tu calendario y te avisa con la app cerrada.</p>
     <div class="form-group"><label class="form-label" for="venc-aviso-sel">Avisarme</label>
@@ -1584,7 +1584,7 @@
       </div>
     </details>
   </div>
-  <div class="card cfg-sub-card" id="reglas-card">
+  <div class="card cfg-sub-card" id="reglas-card" data-funcion="reglas">
     <details class="cfg-sub" id="cfg-sub-reglas">
       <summary class="cfg-sub-sum"><span class="cfg-sec-ico">⚡</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Reglas automáticas</span><span class="cfg-sec-sub" id="cfg-sub-n-reglas">Categoría sola según la nota</span></span></summary>
       <div class="cfg-sub-cuerpo">
@@ -1594,7 +1594,7 @@
       </div>
     </details>
   </div>
-  <div class="card cfg-sub-card">
+  <div class="card cfg-sub-card" data-funcion="presupuestos">
     <details class="cfg-sub" id="cfg-sub-presupuestos">
       <summary class="cfg-sub-sum"><span class="cfg-sec-ico">📊</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Presupuestos mensuales</span><span class="cfg-sec-sub" id="cfg-sub-n-presupuestos">Topes por categoría</span></span></summary>
       <div class="cfg-sub-cuerpo">
@@ -1604,7 +1604,7 @@
       </div>
     </details>
   </div>
-  <div class="card cfg-sub-card">
+  <div class="card cfg-sub-card" data-funcion="inflacion">
     <details class="cfg-sub" id="cfg-sub-inflacion">
       <summary class="cfg-sub-sum"><span class="cfg-sec-ico">📈</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Inflación</span><span class="cfg-sec-sub" id="cfg-sub-n-inflacion">Para comparar en plata de hoy</span></span></summary>
       <div class="cfg-sub-cuerpo">
@@ -1711,7 +1711,7 @@
     <div class="mas-lista" id="mas-lista">
       <button type="button" class="mas-item" data-mas="dash" onclick="irDesdeMas('dash')"><span aria-hidden="true">📊</span>Dashboard</button>
       <button type="button" class="mas-item" data-mas="ahorro" onclick="irDesdeMas('ahorro')"><span aria-hidden="true">🏦</span>Ahorros</button>
-      <button type="button" class="mas-item" data-mas="cierre" onclick="irDesdeMas('cierre')"><span aria-hidden="true">🗓️</span>Cerrar el mes</button>
+      <button type="button" class="mas-item" data-mas="cierre" data-funcion="cierre" onclick="irDesdeMas('cierre')"><span aria-hidden="true">🗓️</span>Cerrar el mes</button>
       <button type="button" class="mas-item" data-mas="import" onclick="irDesdeMas('import')"><span aria-hidden="true">📥</span>Importar</button>
       <button type="button" class="mas-item" data-mas="config" onclick="irDesdeMas('config')"><span aria-hidden="true">⚙️</span>Configuración</button>
       <button type="button" class="mas-item" data-mas="ayuda" onclick="irDesdeMas('ayuda')"><span aria-hidden="true">📖</span>Ayuda y manual</button>
@@ -1721,50 +1721,50 @@
 </div>
 <button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento"></button>
 
-<script src="js/estado-categorias.js?v=274"></script>
-<script src="js/resultado-inversiones.js?v=274"></script>
-<script src="js/render-comun.js?v=274"></script>
-<script src="js/form-cargar.js?v=274"></script>
-<script src="js/movimientos.js?v=274"></script>
-<script src="js/editar-movimiento.js?v=274"></script>
-<script src="js/tarjetas-inversiones.js?v=274"></script>
-<script src="js/analisis.js?v=274"></script>
-<script src="js/reglas.js?v=274"></script>
-<script src="js/repetidos.js?v=274"></script>
-<script src="js/fin-de-mes.js?v=274"></script>
-<script src="js/patrimonio.js?v=274"></script>
-<script src="js/cambio-moneda.js?v=274"></script>
-<script src="js/traspasos.js?v=274"></script>
-<script src="js/dashboard.js?v=274"></script>
-<script src="js/inflacion.js?v=274"></script>
-<script src="js/ahorros.js?v=274"></script>
-<script src="js/conciliacion.js?v=274"></script>
-<script src="js/papelera.js?v=274"></script>
-<script src="js/carga-rapida.js?v=274"></script>
-<script src="js/atajos.js?v=274"></script>
-<script src="js/aumentos.js?v=274"></script>
-<script src="js/retiro-por-venta.js?v=274"></script>
-<script src="js/selector-mes.js?v=274"></script>
-<script src="js/decimales.js?v=274"></script>
-<script src="js/recuperable.js?v=274"></script>
-<script src="js/resumen-anual.js?v=274"></script>
-<script src="js/repetir.js?v=274"></script>
-<script src="js/informe-periodo.js?v=274"></script>
-<script src="js/cierre-mes.js?v=274"></script>
-<script src="js/huella.js?v=274"></script>
-<script src="js/cuentas-sugeridas.js?v=274"></script>
-<script src="js/graficos-interactivos.js?v=274"></script>
-<script src="js/importar-exportar.js?v=274"></script>
-<script src="js/cuentas-tarjetas-categorias.js?v=274"></script>
-<script src="js/config-ui.js?v=274"></script>
-<script src="js/calendario-google.js?v=274"></script>
-<script src="js/backup-drive.js?v=274"></script>
-<script src="js/presupuestos.js?v=274"></script>
-<script src="js/seguridad-pin.js?v=274"></script>
-<script src="js/novedades.js?v=274"></script>
-<script src="js/manual.js?v=274"></script>
-<script src="js/funciones.js?v=274"></script>
-<script src="js/main.js?v=274"></script>
+<script src="js/estado-categorias.js?v=275"></script>
+<script src="js/resultado-inversiones.js?v=275"></script>
+<script src="js/render-comun.js?v=275"></script>
+<script src="js/form-cargar.js?v=275"></script>
+<script src="js/movimientos.js?v=275"></script>
+<script src="js/editar-movimiento.js?v=275"></script>
+<script src="js/tarjetas-inversiones.js?v=275"></script>
+<script src="js/analisis.js?v=275"></script>
+<script src="js/reglas.js?v=275"></script>
+<script src="js/repetidos.js?v=275"></script>
+<script src="js/fin-de-mes.js?v=275"></script>
+<script src="js/patrimonio.js?v=275"></script>
+<script src="js/cambio-moneda.js?v=275"></script>
+<script src="js/traspasos.js?v=275"></script>
+<script src="js/dashboard.js?v=275"></script>
+<script src="js/inflacion.js?v=275"></script>
+<script src="js/ahorros.js?v=275"></script>
+<script src="js/conciliacion.js?v=275"></script>
+<script src="js/papelera.js?v=275"></script>
+<script src="js/carga-rapida.js?v=275"></script>
+<script src="js/atajos.js?v=275"></script>
+<script src="js/aumentos.js?v=275"></script>
+<script src="js/retiro-por-venta.js?v=275"></script>
+<script src="js/selector-mes.js?v=275"></script>
+<script src="js/decimales.js?v=275"></script>
+<script src="js/recuperable.js?v=275"></script>
+<script src="js/resumen-anual.js?v=275"></script>
+<script src="js/repetir.js?v=275"></script>
+<script src="js/informe-periodo.js?v=275"></script>
+<script src="js/cierre-mes.js?v=275"></script>
+<script src="js/huella.js?v=275"></script>
+<script src="js/cuentas-sugeridas.js?v=275"></script>
+<script src="js/graficos-interactivos.js?v=275"></script>
+<script src="js/importar-exportar.js?v=275"></script>
+<script src="js/cuentas-tarjetas-categorias.js?v=275"></script>
+<script src="js/config-ui.js?v=275"></script>
+<script src="js/calendario-google.js?v=275"></script>
+<script src="js/backup-drive.js?v=275"></script>
+<script src="js/presupuestos.js?v=275"></script>
+<script src="js/seguridad-pin.js?v=275"></script>
+<script src="js/novedades.js?v=275"></script>
+<script src="js/manual.js?v=275"></script>
+<script src="js/funciones.js?v=275"></script>
+<script src="js/main.js?v=275"></script>
 
 <script>
 // ═══════════════════════════════════════════

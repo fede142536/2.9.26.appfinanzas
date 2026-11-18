@@ -322,7 +322,7 @@ function handleXlsx(input){
         return;
       }
       // Lo que viene sin categoría toma la de tus reglas automáticas (js/reglas.js).
-      const conRegla=typeof aplicarReglasAImportados==="function" ? aplicarReglasAImportados(parsed, reglasCat) : 0;
+      const conRegla=typeof aplicarReglasAImportados==="function" ? aplicarReglasAImportados(parsed, reglasVigentes()) : 0;
       setXlsxStatus(`✓ ${parsed.length} movimientos detectados${conRegla?` · ${conRegla} categorizados por tus reglas`:""}`,"var(--success)");
       openImportPreview(parsed,`Excel: ${file.name}`);
     }catch(err){

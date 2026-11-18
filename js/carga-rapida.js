@@ -332,7 +332,7 @@ const CR_RECIENTE_DIAS=150;
 function sugerirParaCargaRapida(texto, tipo){
   const corte=crSumarDias(currentYMD(), -CR_RECIENTE_DIAS);
   const recientes=(movs||[]).filter(m=>String(m.fecha||"")>=corte);
-  return (typeof reglaParaNota==="function" ? reglaParaNota(texto, tipo, reglasCat) : null) || sugerirPorNotaExacta(texto, tipo, recientes) || sugerirPorPalabras(texto, tipo, recientes) || sugerirPorReglas(texto, tipo) || sugerirCategoriaPara(texto, tipo, movs);
+  return (typeof reglaParaNota==="function" ? reglaParaNota(texto, tipo, reglasVigentes()) : null) || sugerirPorNotaExacta(texto, tipo, recientes) || sugerirPorPalabras(texto, tipo, recientes) || sugerirPorReglas(texto, tipo) || sugerirCategoriaPara(texto, tipo, movs);
 }
 function contextoCargaRapida(){
   return {hoy:currentYMD(), cuentas:getCuentas(), tarjetas:getTarjetas(), tickers:tickersConocidos(movs), sugerir:sugerirParaCargaRapida, cats:tp=>getCats(tp)};

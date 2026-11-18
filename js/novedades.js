@@ -6,6 +6,7 @@
 // que se ve o se usa; las que solo corrigen algo interno no hace falta anotarlas. Hay un test que pide que la versión actual tenga la suya.
 // Cada entrada: {v: número de versión, titulo, texto, ir: nombre de una de las acciones de NOVEDADES_IR (opcional)}.
 const NOVEDADES=[
+  {v:275, titulo:"Más cosas para ocultar", texto:"En Funciones de la app ahora también podés ocultar la carga rápida, las reglas, fin de mes, presupuestos, vencimientos, cerrar el mes, tu patrimonio, los dólares del año, los avisos de gastos que se repiten, las novedades y la inflación. Están agrupadas por pantalla.", ir:"funciones"},
   {v:274, titulo:"Una app más simple", texto:"En Configuración › General › Funciones de la app ocultás lo que no usás (y lo volvés a mostrar cuando quieras). La revisión de inversiones junta todo en un lugar, Importar agrupa las herramientas en «Reparar datos» y Movimientos muestra menos tarjetas.", ir:"funciones"},
   {v:273, titulo:"La inflación se actualiza sola", texto:"Cuando el INDEC publica un mes nuevo, la app lo baja sola al abrirse. Además se arregló que, con el PIN activo, la serie se guardaba pero no se encontraba.", ir:"inflacion"},
   {v:272, titulo:"Cuentas, tarjetas y categorías, desplegables", texto:"Cada bloque (Cuentas, Tarjetas, Categorías, Reglas, Presupuestos, Inflación) se abre con su flecha, de a uno, como las demás secciones. Las categorías se despliegan por tipo y tienen buscador.", ir:"organizar"},
