@@ -2164,3 +2164,11 @@ body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(sa
 .rep-acc{display:flex;gap:8px;margin-top:8px}
 .rep-acc .btn-sm{flex:1}
 .rep-si{border-color:var(--accent);color:var(--accent)}
+
+/* ── ¿Llego a fin de mes? ── */
+.fdm-total{border-radius:var(--radius-sm);padding:14px 14px 12px;margin-bottom:8px}
+.fdm-total-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.fdm-total-val{font-size:30px;font-weight:700;margin:2px 0 4px}
+.fdm-fila{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:14px}
+.fdm-monto{font-weight:600;white-space:nowrap}
+.fdm-nota{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}

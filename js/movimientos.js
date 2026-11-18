@@ -999,6 +999,7 @@ function mosaicoActivo(accion){
 function aplicarAccionMosaico(accion){
   if(accion.startsWith("tab:")){ setFiltro(accion.slice(4)); return; }
   if(accion==="abrir:inversiones"){ abrirInvPeriodo(); return; }
+  if(accion==="abrir:findemes"){ abrirFinDeMes(); return; }
   if(!accion.startsWith("f:")) return;
   const clave=accion.slice(2);
   filtroMosaico = filtroMosaico===clave ? "" : clave;
@@ -1576,6 +1577,8 @@ function renderMovs(){
     const mosFrec=frecPorPagarMosaicoHTML(frecuentesPorPagar(mesMovs));
     if(mosFrec) mosTodos.push(mosFrec);
     if(!filtroFecha){ const mosCobrar=frecPorCobrarMosaicoHTML(frecuentesPorCobrar(mesActual)); if(mosCobrar) mosTodos.push(mosCobrar); }
+    // ¿Llego a fin de mes? Solo en el mes en curso (ver fin-de-mes.js).
+    if(!filtroFecha && mesActual===currentYM() && typeof finDeMesMosaicoHTML==="function"){ const mosFdm=finDeMesMosaicoHTML(); if(mosFdm) mosTodos.splice(2,0,mosFdm); }
     if(guardado>0){
       mosTodos.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(guardado),pctDeIngreso(guardado), null, "f:ahorrado"));
     }

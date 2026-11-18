@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v267**
+**Versión actual: v268**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,13 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 18 de noviembre de 2026
 
+- **v268** · Gastos que se repiten → pasarlos a frecuente
+  Detecta los gastos que cargás a mano una vez por mes (Netflix, el gimnasio) y que
+  no son frecuentes, y ofrece volverlos frecuentes de un toque: al guardar el gasto
+  (aviso con «Hacerlo frecuente»), arriba de Movimientos, en «Para tener en cuenta»
+  y en la hoja «Gastos que se repiten». «No es fijo» lo saca de las sugerencias.
+  El aviso de guardado ahora se muestra después de limpiar el formulario, para que
+  la sugerencia de cuenta no lo pise.
 - **v267** · Reglas automáticas de categoría
   «Si la nota dice X → categoría/subcategoría (y cuenta)». Las reglas mandan sobre
   el historial y los comercios conocidos, se aplican solas en Cargar, en la carga
