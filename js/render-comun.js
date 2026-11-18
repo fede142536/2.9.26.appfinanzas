@@ -731,12 +731,14 @@ function mostrarPrompt(mensaje, opts){
 // Al abrir una sección, la que estaba abierta en el mismo grupo se cierra: antes quedaban todas abiertas y la pantalla se volvía una lista larguísima. Se actúa
 // sobre el TOQUE del usuario (click en el <summary>, que también llega con Enter/Espacio), no sobre el evento toggle: el buscador del manual abre varias a la vez
 // a propósito y eso no tiene que cerrar nada.
-const GRUPOS_PLEGABLES_EXCLUSIVOS=[".cfg-seccion",".man-sec",".man-q"];
+const GRUPOS_PLEGABLES_EXCLUSIVOS=[".cfg-seccion",".man-sec",".man-q",".cfg-sub",".cat-tipo"];
 function cerrarHermanosDetails(d){
   const sel=GRUPOS_PLEGABLES_EXCLUSIVOS.find(s=>d.matches && d.matches(s));
   if(!sel || !d.parentElement) return 0;
   let n=0;
-  [...d.parentElement.children].forEach(x=>{ if(x!==d && x.matches(sel) && x.open){ x.open=false; n++; } });
+  // Los bloques de una sección de Configuración van cada uno en su tarjeta: sus "hermanos" son los de la misma sección.
+  const hermanos=sel===".cfg-sub" && d.closest(".cfg-cuerpo") ? [...d.closest(".cfg-cuerpo").querySelectorAll(".cfg-sub")] : [...d.parentElement.children];
+  hermanos.forEach(x=>{ if(x!==d && x.matches(sel) && x.open){ x.open=false; n++; } });
   return n;
 }
 document.addEventListener("click", e=>{

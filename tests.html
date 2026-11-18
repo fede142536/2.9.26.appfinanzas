@@ -8475,9 +8475,9 @@ test("Config trae la copia en Drive con su switch, el botón de restaurar y el p
 grupo("Configuración plegable");
 
 // Las 16 tarjetas que había antes de agrupar: ninguna puede haberse perdido ni duplicado.
-const TARJETAS_CONFIG=["📈 Inflación","🎨 Apariencia","🔐 Seguridad","📲 Versión de la app","💳 Cuentas","💳 Nombres de tarjetas",
+const TARJETAS_CONFIG=["cfg-sub-inflacion","🎨 Apariencia","🔐 Seguridad","📲 Versión de la app","cfg-sub-cuentas","cfg-sub-tarjetas",
   "💾 Copia de seguridad (archivo)","🕑 Copias automáticas en este celular","☁️ Google: calendario y copia en Drive","🗓 Vencimientos",
-  "📊 Exportar para BI","Exportar a Excel","Tus datos","Zona de peligro","Presupuestos mensuales","Categorías personalizadas"];
+  "📊 Exportar para BI","Exportar a Excel","Tus datos","Zona de peligro","Presupuestos mensuales","cfg-sub-categorias","cfg-sub-reglas"];
 
 async function configHTML(){
   const html=await (await fetch("index.html")).text();
@@ -8496,7 +8496,7 @@ test("la configuración está en 6 secciones plegables (Ayuda y manual primero),
 test("ninguna tarjeta de Configuración se perdió ni quedó fuera de una sección", async ()=>{
   const cfg=await configHTML();
   TARJETAS_CONFIG.forEach(t=>cierto(cfg.includes(t), "falta la tarjeta: "+t));
-  igual((cfg.match(/<div class="card"/g)||[]).length, 21, "tienen que ser 21 tarjetas (16 + movimientos sin cuenta + ventas de ahorros + papelera + el manual + reglas)");
+  igual((cfg.match(/<div class="card[ "]/g)||[]).length, 21, "tienen que ser 21 tarjetas (16 + movimientos sin cuenta + ventas de ahorros + papelera + el manual + reglas)");
   // toda tarjeta está adentro de alguna sección: antes del primer <details> no hay ninguna
   cierto(!cfg.slice(0, cfg.indexOf('<details class="cfg-seccion"')).includes('<div class="card"'), "quedó una tarjeta suelta antes de las secciones");
   // el contenido sigue bien cerrado: tantas aperturas como cierres
@@ -8508,7 +8508,7 @@ test("cada tarjeta quedó en la sección que dice su resumen", async ()=>{
   const en=(id, titulos)=>{ const sec=cfg.slice(cfg.indexOf(`id="${id}"`)); const fin=sec.indexOf('<details class="cfg-seccion"', 20); const cuerpo=fin>0 ? sec.slice(0,fin) : sec; titulos.forEach(t=>cierto(cuerpo.includes(t), `${t} debería estar en ${id}`)); };
   en("cfg-sec-general", ["🎨 Apariencia","🔐 Seguridad","📲 Versión de la app"]);
   en("cfg-sec-copias", ["💾 Copia de seguridad (archivo)","🕑 Copias automáticas","☁️ Google: calendario","🗓 Vencimientos"]);
-  en("cfg-sec-organizar", ["💳 Cuentas","💳 Nombres de tarjetas","Categorías personalizadas","Presupuestos mensuales","📈 Inflación"]);
+  en("cfg-sec-organizar", ["cfg-sub-cuentas","cfg-sub-tarjetas","cfg-sub-categorias","cfg-sub-reglas","cfg-sub-presupuestos","cfg-sub-inflacion"]);
   en("cfg-sec-exportar", ["Exportar a Excel","📊 Exportar para BI","Tus datos"]);
   en("cfg-sec-peligro", ["Zona de peligro","⚠ Borrar todo","confirmarBorrarTodo()"]);
   cierto(cfg.indexOf("☁️ Google: calendario") < cfg.indexOf("🗓 Vencimientos"), "Google va antes de Vencimientos");
@@ -12235,43 +12235,44 @@ test("el dólar por defecto es el de tu último cambio", ()=>{
   igual(dolarDelUltimoCambio([]), null);
 });
 
-grupo("Filtros de Cuentas, tarjetas y categorías");
+grupo("Cuentas, tarjetas y categorías: bloques desplegables");
 
-test("los chips muestran de a un grupo de tarjetas y se recuerdan", async ()=>{
+test("cada bloque de la sección se despliega con su flecha y de a uno", async ()=>{
   const html=await (await fetch("index.html")).text();
   const sec=html.slice(html.indexOf('id="cfg-sec-organizar"'), html.indexOf('id="cfg-sec-exportar"'));
-  const grupos=[...sec.matchAll(/<div class="card"[^>]*data-cfg-grupo="(\w+)"/g)].map(m=>m[1]);
-  igual(grupos.length, (sec.match(/<div class="card"/g)||[]).length, "toda tarjeta de la sección tiene su grupo");
-  ["cuentas","tarjetas","categorias","reglas","presupuestos","inflacion"].forEach(g=>cierto(grupos.includes(g), "falta el grupo "+g));
-  const antes=localStorage.getItem("fcfgfiltro");
-  const cuerpo=document.createElement("div"); cuerpo.id="cfg-organizar-cuerpo"; const chips=document.createElement("div"); chips.id="cfg-organizar-filtro";
-  document.body.append(cuerpo, chips);
+  const subs=[...sec.matchAll(/<details class="cfg-sub" id="([\w-]+)"/g)].map(m=>m[1]);
+  igual(subs.join(","),"cfg-sub-cuentas,cfg-sub-tarjetas,cfg-sub-categorias,cfg-sub-reglas,cfg-sub-presupuestos,cfg-sub-inflacion");
+  cierto(!/cfg-filtro|data-filtro/.test(sec), "no quedan los chips de filtro");
+  // de a uno: abrir uno cierra el otro aunque estén en tarjetas distintas
+  const cuerpo=document.createElement("div"); cuerpo.className="cfg-cuerpo";
+  cuerpo.innerHTML='<div class="card"><details class="cfg-sub" id="xa" open><summary>A</summary></details></div><div class="card"><details class="cfg-sub" id="xb"><summary>B</summary></details></div>';
+  document.body.appendChild(cuerpo);
   try{
-    localStorage.removeItem("fcfgfiltro"); renderFiltroOrganizar();
-    igual(cuerpo.dataset.filtro,"cuentas", "arranca en Cuentas");
-    setFiltroOrganizar("reglas");
-    igual(cuerpo.dataset.filtro,"reglas"); igual(localStorage.getItem("fcfgfiltro"),"reglas");
-    cierto(chips.querySelector('button.on').textContent.includes("Reglas"));
-    setFiltroOrganizar("cualquiera"); igual(cuerpo.dataset.filtro,"reglas", "un filtro que no existe no cambia nada");
-  } finally { cuerpo.remove(); chips.remove(); if(antes===null) localStorage.removeItem("fcfgfiltro"); else localStorage.setItem("fcfgfiltro",antes); }
+    igual(cerrarHermanosDetails(cuerpo.querySelector("#xb")),1);
+    cierto(!cuerpo.querySelector("#xa").open, "se cerró el que estaba abierto");
+  } finally { cuerpo.remove(); }
 });
 
-test("las categorías se ven de a un tipo y el buscador mira todas", ()=>{
-  const ids=["cat-manager","cat-tipos","cat-buscar"];
+test("las categorías van en un desplegable por tipo y el buscador abre los que coinciden", ()=>{
+  const ids=["cat-manager","cat-buscar","cfg-sub-n-categorias"];
   const els=ids.map(id=>{ const e=document.createElement(id==="cat-buscar"?"input":"div"); e.id=id; document.body.appendChild(e); return e; });
-  const antes=localStorage.getItem("fcattipo");
+  const antes=catTipoAbierto;
   try{
-    setCatTipo("Ingreso");
+    catTipoAbierto=null; renderCatManager();
     const man=els[0];
+    igual(man.querySelectorAll("details.cat-tipo").length, CAT_TIPOS.filter(x=>Object.keys(getCats(x.t)).length).length, "un desplegable por tipo");
+    igual(man.querySelectorAll("details.cat-tipo[open]").length,0, "arrancan cerrados");
+    cierto(els[2].textContent.includes("categorías"), "el resumen dice cuántas hay");
+    catTipoAbierto="Ingreso"; renderCatManager();
+    igual(man.querySelector("details.cat-tipo[open]").dataset.tipo,"Ingreso", "al repintar sigue abierto el que estaba");
     const gasto=Object.keys(getCats("Gasto")).find(c=>!getCats("Ingreso")[c]);
-    const ing=Object.keys(getCats("Ingreso"))[0];
-    cierto(man.textContent.includes(ing), "se ve una categoría de ingresos");
-    cierto(!man.textContent.includes(gasto), "no se ven las de gastos");
-    els[2].value=gasto.toUpperCase(); renderCatManager();
-    cierto(man.textContent.includes(gasto), "buscando aparece aunque sea de otro tipo");
-    els[2].value="zzzz-nada"; renderCatManager();
+    els[1].value=gasto.toUpperCase(); renderCatManager();
+    const abiertos=[...man.querySelectorAll("details.cat-tipo[open]")].map(d=>d.dataset.tipo);
+    cierto(abiertos.includes("Gasto"), "buscando se abre el tipo que tiene la coincidencia");
+    cierto(man.textContent.includes(gasto));
+    els[1].value="zzzz-nada"; renderCatManager();
     cierto(man.textContent.includes("Ninguna categoría"), "sin resultados lo dice");
-  } finally { els.forEach(e=>e.remove()); if(antes===null) localStorage.removeItem("fcattipo"); else localStorage.setItem("fcattipo",antes); }
+  } finally { els.forEach(e=>e.remove()); catTipoAbierto=antes; }
 });
 
 grupo("Aislamiento de los tests");

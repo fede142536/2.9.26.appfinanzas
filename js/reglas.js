@@ -98,8 +98,7 @@ function aplicarReglasAImportados(items, reglas){
 // Lleva a Configuración, abre la sección de categorías y muestra las reglas (manual y novedades).
 function irAReglas(){
   showPage("config", document.querySelector('.nav-btn[onclick*="\'config\'"]'));
-  if(typeof abrirSeccionConfig==="function") abrirSeccionConfig("cfg-sec-organizar");
-  if(typeof setFiltroOrganizar==="function") setFiltroOrganizar("reglas");
+  if(typeof abrirSubConfig==="function") abrirSubConfig("cfg-sub-reglas");
   setTimeout(()=>{ const c=document.getElementById("reglas-card"); if(c) c.scrollIntoView({behavior:"smooth", block:"start"}); }, 250);
 }
 
@@ -127,7 +126,7 @@ function renderReglasManager(){
       <button type="button" class="btn-sm" onclick="crearReglaDeIdea(${i})">Crear</button></div>`).join("")}</div>` : "";
   el._ideas=ideas;
   el.innerHTML=filas+ideasHTML;
-  if(typeof renderFiltroOrganizar==="function") renderFiltroOrganizar();
+  if(typeof actualizarResumenesOrganizar==="function") actualizarResumenesOrganizar();
 }
 function crearReglaDeIdea(i){
   const el=document.getElementById("reglas-manager");
