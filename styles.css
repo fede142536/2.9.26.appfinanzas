@@ -2196,19 +2196,22 @@ body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(sa
 .pat-nota{font-size:12px;color:var(--muted);line-height:1.45;margin:4px 0 8px}
 .pat-nota a{color:var(--accent)}
 
-/* ── Filtros de Configuración › Cuentas, tarjetas y categorías ── */
-.cfg-filtro{display:flex;flex-wrap:wrap;gap:8px;padding:2px 2px 12px}
-.cfg-filtro button,.cat-tipos button{flex:0 0 auto;padding:7px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}
-.cfg-filtro button.on,.cat-tipos button.on{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
-.cfg-filtro .n,.cat-tipos .n{font-weight:500;color:var(--muted);margin-left:4px}
-.cfg-filtro button.on .n,.cat-tipos button.on .n{color:var(--accent)}
-#cfg-organizar-cuerpo:not([data-filtro="todo"]) .card[data-cfg-grupo]{display:none!important}
-#cfg-organizar-cuerpo[data-filtro="cuentas"] .card[data-cfg-grupo="cuentas"]:not([style*="none"]),
-#cfg-organizar-cuerpo[data-filtro="tarjetas"] .card[data-cfg-grupo="tarjetas"]:not([style*="none"]),
-#cfg-organizar-cuerpo[data-filtro="categorias"] .card[data-cfg-grupo="categorias"]:not([style*="none"]),
-#cfg-organizar-cuerpo[data-filtro="reglas"] .card[data-cfg-grupo="reglas"]:not([style*="none"]),
-#cfg-organizar-cuerpo[data-filtro="presupuestos"] .card[data-cfg-grupo="presupuestos"]:not([style*="none"]),
-#cfg-organizar-cuerpo[data-filtro="inflacion"] .card[data-cfg-grupo="inflacion"]:not([style*="none"]){display:block!important}
-.cat-tipos{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
-.cat-buscar{margin-bottom:6px}
+/* ── Configuración › Cuentas, tarjetas y categorías: cada bloque se despliega con su flecha, como las secciones ── */
+.cfg-sub-card{padding:0!important;overflow:hidden}
+#page-config details.cfg-sub>summary.cfg-sub-sum{display:flex;align-items:center;gap:12px;padding:14px 16px!important;min-height:var(--tap);cursor:pointer;list-style:none}
+#page-config details.cfg-sub>summary.cfg-sub-sum::before{content:none}
+#page-config details.cfg-sub>summary.cfg-sub-sum::after{content:"▸";margin-left:auto;color:var(--muted);font-size:14px;transition:transform .15s ease}
+#page-config details.cfg-sub[open]>summary.cfg-sub-sum::after{transform:rotate(90deg)}
+.cfg-sub[open]>summary.cfg-sub-sum{border-bottom:1px solid var(--border)}
+.cfg-sub-cuerpo{padding:14px 16px 16px}
+.cfg-sub-acc{display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px}
+.cat-buscar{margin-bottom:8px}
+#page-config details.cat-tipo>summary.cat-tipo-sum{display:flex;align-items:center;gap:10px;padding:10px 2px!important;border-bottom:1px solid var(--border);font-size:15px;font-weight:600}
+#page-config details.cat-tipo>summary.cat-tipo-sum::before{content:none}
+#page-config details.cat-tipo>summary.cat-tipo-sum::after{content:"▸";margin-left:8px;color:var(--muted);font-size:13px;transition:transform .15s ease}
+#page-config details.cat-tipo[open]>summary.cat-tipo-sum::after{transform:rotate(90deg)}
+.cat-tipo-ico{width:24px;text-align:center}
+.cat-tipo-txt{min-width:0}
+.cat-tipo-n{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted)}
+.cat-tipo-cuerpo{padding:4px 0 8px}
 .cat-sin-res{font-size:13px;color:var(--muted);padding:10px 0}

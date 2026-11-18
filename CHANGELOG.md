@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v270**
+**Versión actual: v271**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,12 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 18 de noviembre de 2026
 
+- **v271** · Filtros en Configuración › Cuentas, tarjetas y categorías
+  Chips arriba de la sección para ver de a un grupo (Cuentas, Tarjetas,
+  Categorías, Reglas, Presupuestos, Inflación o Todo), con la cantidad de cada uno
+  y la elección recordada. Las categorías se ven de a un tipo (Gastos, Ingresos,
+  Inversiones, Tarjeta) y tienen un buscador que encuentra por categoría o
+  subcategoría en todos los tipos.
 - **v270** · Patrimonio total
   Tarjeta «Tu patrimonio hoy» arriba del Dashboard y hoja con el detalle: cuentas
   con saldo real, fondos de ahorro (a valor actual si está cargado), inversiones

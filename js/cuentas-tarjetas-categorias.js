@@ -407,66 +407,49 @@ function guardarNuevaCat(){
     }
   }
 }
-// ── Filtros de la sección "Cuentas, tarjetas y categorías" ──
-// La sección junta siete tarjetas largas (la de categorías sola ocupa varias pantallas). Los chips de arriba muestran de a un grupo
-// (o "Todo"); la elección se recuerda. Es una preferencia de vista: localStorage llano.
-const CFG_FILTRO_KEY="fcfgfiltro";
-const CFG_FILTROS=[
-  {id:"cuentas", txt:"💳 Cuentas", n:()=>getCuentas().length},
-  {id:"tarjetas", txt:"🪪 Tarjetas", n:()=>typeof getTarjetas==="function" ? getTarjetas().length : null},
-  {id:"categorias", txt:"🏷 Categorías", n:()=>["Gasto","Ingreso","Inversion","Tarjeta"].reduce((s,t)=>s+Object.keys(getCats(t)).length,0)},
-  {id:"reglas", txt:"⚡ Reglas", n:()=>typeof reglasCat!=="undefined" ? reglasCat.length : null},
-  {id:"presupuestos", txt:"📊 Presupuestos", n:()=>Object.keys(presupuestos||{}).length},
-  {id:"inflacion", txt:"📈 Inflación", n:()=>null},
-  {id:"todo", txt:"Todo", n:()=>null}
-];
-function filtroOrganizarActual(){
-  const v=localStorage.getItem(CFG_FILTRO_KEY);
-  return CFG_FILTROS.some(f=>f.id===v) ? v : "cuentas";
+// ── Sección "Cuentas, tarjetas y categorías": cada bloque se despliega con su flecha (de a uno) ──
+// El resumen de cada bloque dice cuánto hay adentro, para no tener que abrirlo para saberlo.
+function actualizarResumenesOrganizar(){
+  const poner=(id, txt)=>{ const e=document.getElementById(id); if(e) e.textContent=txt; };
+  const pl=(n, uno, varios)=>`${n} ${n===1?uno:varios}`;
+  try{
+    poner("cfg-sub-n-cuentas", pl(getCuentas().length,"cuenta","cuentas"));
+    poner("cfg-sub-n-tarjetas", pl(getTarjetas().length,"tarjeta","tarjetas"));
+    const nCats=CAT_TIPOS.reduce((s,x)=>s+Object.keys(getCats(x.t)).length,0);
+    poner("cfg-sub-n-categorias", `${pl(nCats,"categoría","categorías")} en 4 tipos`);
+    const nR=typeof reglasCat!=="undefined" ? reglasCat.length : 0;
+    poner("cfg-sub-n-reglas", nR ? pl(nR,"regla","reglas") : "Ninguna todavía · categoría sola según la nota");
+    const nP=Object.keys(presupuestos||{}).length;
+    poner("cfg-sub-n-presupuestos", nP ? pl(nP,"presupuesto","presupuestos") : "Ninguno todavía · topes por categoría");
+  }catch(e){ /* una pantalla sin dibujar no corta nada */ }
 }
-function renderFiltroOrganizar(){
-  const cuerpo=document.getElementById("cfg-organizar-cuerpo"), el=document.getElementById("cfg-organizar-filtro");
-  if(!cuerpo || !el) return;
-  const actual=filtroOrganizarActual();
-  cuerpo.dataset.filtro=actual;
-  el.innerHTML=CFG_FILTROS.map(f=>{
-    let n=null; try{ n=f.n(); }catch(e){ n=null; }
-    const on=f.id===actual;
-    return `<button type="button" class="${on?"on":""}" aria-pressed="${on}" onclick="setFiltroOrganizar('${f.id}')">${f.txt}${n!==null?`<span class="n">${n}</span>`:""}</button>`;
-  }).join("");
-}
-function setFiltroOrganizar(id){
-  if(!CFG_FILTROS.some(f=>f.id===id)) return;
-  guardarPreferencia(CFG_FILTRO_KEY, id);
-  renderFiltroOrganizar();
+// Abre un bloque de la sección (y la sección), cerrando los demás. Para llevar al usuario a algo de adentro.
+function abrirSubConfig(id){
+  if(typeof abrirSeccionConfig==="function") abrirSeccionConfig("cfg-sec-organizar");
+  const d=document.getElementById(id);
+  if(d && !d.open){ cerrarHermanosDetails(d); d.open=true; }
 }
 
-// ── Categorías: de a un tipo, con buscador ──
-const CAT_TIPO_KEY="fcattipo";
-const CAT_TIPOS=[{t:"Gasto", txt:"Gastos"},{t:"Ingreso", txt:"Ingresos"},{t:"Inversion", txt:"Inversiones"},{t:"Tarjeta", txt:"Tarjeta"}];
-function catTipoActual(){ const v=localStorage.getItem(CAT_TIPO_KEY); return CAT_TIPOS.some(x=>x.t===v) ? v : "Gasto"; }
-function setCatTipo(t){ guardarPreferencia(CAT_TIPO_KEY, t); renderCatManager(); }
+// ── Categorías: un desplegable por tipo, con buscador ──
+const CAT_TIPOS=[{t:"Gasto", txt:"Gastos", ico:"⬆️"},{t:"Ingreso", txt:"Ingresos", ico:"⬇️"},{t:"Inversion", txt:"Inversiones", ico:"📈"},{t:"Tarjeta", txt:"Tarjeta", ico:"💳"}];
+let catTipoAbierto=null;   // el tipo desplegado: se mantiene al repintar (agregar una subcategoría no lo cierra)
+function recordarCatTipo(d){ const b=document.getElementById("cat-buscar"); if(b && String(b.value||"").trim()) return;   // buscando se abren solos: no es una elección
+  if(d.open) catTipoAbierto=d.dataset.tipo; else if(catTipoAbierto===d.dataset.tipo) catTipoAbierto=null; }
 
 function renderCatManager(){
   const el=document.getElementById("cat-manager");let html="";
-  const tipoAct=catTipoActual();
   const buscarEl=document.getElementById("cat-buscar");
   const q=typeof normalizarTexto==="function" ? normalizarTexto(buscarEl ? buscarEl.value : "") : "";
-  const tiposEl=document.getElementById("cat-tipos");
-  if(tiposEl) tiposEl.innerHTML=CAT_TIPOS.map(x=>{
-    const on=!q && x.t===tipoAct, n=Object.keys(getCats(x.t)).length;
-    return `<button type="button" class="${on?"on":""}" aria-pressed="${on}" onclick="setCatTipo('${x.t}')">${x.txt}<span class="n">${n}</span></button>`;
-  }).join("");
-  // Buscando, se mira en todos los tipos (con su título); si no, solo el tipo elegido.
-  const tipos=q ? CAT_TIPOS.map(x=>x.t) : [tipoAct];
+  // Un desplegable por tipo. Buscando, se abren solos los tipos que tienen algo que coincide.
   const coincide=(cat, subs)=>!q || normalizarTexto(cat).includes(q) || subs.some(s=>normalizarTexto(s).includes(q));
-  tipos.forEach(t=>{
+  CAT_TIPOS.forEach(({t, txt, ico})=>{
     const cats=getCats(t);
     if(!Object.keys(cats).length) return;
     const nombresOrdenados=ordenarCats(t, cats);
     const visibles=nombresOrdenados.filter(c=>coincide(c, cats[c]||[]));
     if(!visibles.length) return;
-    if(q) html+=`<p class="seccion-label txt-medium mt-14 mb-6">${(CAT_TIPOS.find(x=>x.t===t)||{}).txt||t}</p>`;
+    const abierto=q ? true : catTipoAbierto===t;
+    html+=`<details class="cat-tipo" data-tipo="${t}"${abierto?" open":""} ontoggle="recordarCatTipo(this)"><summary class="cat-tipo-sum"><span class="cat-tipo-ico">${ico}</span><span class="cat-tipo-txt">${txt}</span><span class="cat-tipo-n">${q?`${visibles.length} de ${nombresOrdenados.length}`:nombresOrdenados.length}</span></summary><div class="cat-tipo-cuerpo">`;
     nombresOrdenados.forEach((cat,idx)=>{
       if(!visibles.includes(cat)) return;
       const subs=cats[cat];
@@ -496,8 +479,9 @@ function renderCatManager(){
         <div class="cfg-chips cfg-chips-sub">${subsHtml||'<span class="txt-xs txt-muted cfg-sin-sub">Sin subcategorías</span>'}<button type="button" class="cfg-chip cfg-chip-btn" onclick="agregarSubcat('${t}',${catEsc})" aria-label="Agregar una subcategoría a ${escapeHtml(cat)}">+ Sub</button>${esDefault?'':`<button type="button" class="cfg-chip cfg-chip-btn cfg-chip-peligro" onclick="borrarCat('${t}',${catEsc})" aria-label="Eliminar la categoría ${escapeHtml(cat)}">Eliminar categoría</button>`}</div>
       </div>`;
     });
+    html+=`</div></details>`;
   });
-  if(typeof renderFiltroOrganizar==="function") renderFiltroOrganizar();   // los números de los chips
+  actualizarResumenesOrganizar();
   if(!html) html=q ? `<p class="cat-sin-res">Ninguna categoría ni subcategoría dice «${escapeHtml(buscarEl.value.trim())}».</p>` : `<p style="font-size:13px;color:var(--muted);padding:8px 0">Sin categorías</p>`;
   el.innerHTML=html;
 }
