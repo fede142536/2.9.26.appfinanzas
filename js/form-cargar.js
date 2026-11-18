@@ -846,9 +846,13 @@ async function guardarSinFreno(){
     else if(document.getElementById("inp-usa-ahorro").checked) msg="Retiro de ahorros guardado ✓";
     else msg="Gasto guardado ✓";
   }
-  showToast(msg);
+  // Un gasto suelto que ya cargaste varios meses seguidos: se ofrece volverlo frecuente en el momento.
+  const rep=(tipo==="Gasto" && !esFrec && typeof candidatoDeMovimiento==="function") ? candidatoDeMovimiento(mov) : null;
   vibrar([15,50,15]);
+  // El aviso va DESPUÉS de limpiar el formulario: al resetearlo se puede sugerir una cuenta, y ese aviso pisaba el de "guardado".
   resetForm(tipo);
+  if(rep) showToastAccion(`${msg} · «${rep.desc}» lo cargás hace ${rep.n} meses`, "Hacerlo frecuente", ()=>pasarAFrecuente(rep.clave), 9000);
+  else showToast(msg);
 }
 
 // Tras guardar, el formulario se resetea pero la página sigue scrolleada abajo, donde está el

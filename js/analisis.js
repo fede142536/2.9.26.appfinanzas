@@ -438,6 +438,16 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
     });
   }
 
+  // ── Gastos que cargás a mano todos los meses y podrían ser frecuentes (repetidos.js) ──
+  const repetidos=typeof candidatosAFrecuente==="function" ? candidatosAFrecuente(lista, tcsLista, hoyYM, typeof repetidosIgnorados==="function" ? repetidosIgnorados() : []) : [];
+  if(repetidos.length){
+    const n=repetidos.length;
+    out.push({nivel:"info", icono:"🔁",
+      titulo:`${n} ${n===1?"gasto que cargás":"gastos que cargás"} todos los meses ${n===1?"podría":"podrían"} ser frecuente${n===1?"":"s"}`,
+      detalle: repetidos.slice(0,3).map(r=>r.desc).join(" · ")+(n>3?` · y ${n-3} más`:"")+". Un frecuente aparece solo cada mes.",
+      accion:{texto:"Revisar", fn:"abrirRepetidos"}});
+  }
+
   // ── Gastos de este mes fuera de lo normal para su categoría ──
   const inusuales=inusualesDelMes(lista, hoyYM).slice(0,3);
   if(inusuales.length){

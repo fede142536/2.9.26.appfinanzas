@@ -2156,3 +2156,11 @@ body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(sa
 .regla-tipo button{padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font:inherit;font-weight:600}
 .regla-tipo button.active{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
 .sugerencia-cat.regla{background:var(--success-light);color:var(--success)}
+
+/* ── Gastos que se repiten (pasar a frecuente) ── */
+.rep-fila{padding:12px 0;border-bottom:1px solid var(--border)}
+.rep-nom{font-size:14px;font-weight:600}
+.rep-det{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.45}
+.rep-acc{display:flex;gap:8px;margin-top:8px}
+.rep-acc .btn-sm{flex:1}
+.rep-si{border-color:var(--accent);color:var(--accent)}
