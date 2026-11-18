@@ -84,9 +84,13 @@ function serieUtil(tabla){
 // Va por guardarPreferencia: si el disco está lleno, perder la serie no duele (se vuelve a
 // bajar) y lo último que se quiere es que esto tape el aviso de un guardado de datos reales.
 
+// Se lee de localStorage llano, igual que se guarda (guardarPreferencia): es un dato público, no tuyo. Antes se leía con
+// leerJSONSeguro, que con el PIN activo busca en el sobre cifrado: la serie se guardaba bien pero nunca se encontraba
+// ("Sin serie cargada" para siempre).
 function leerSerieInflacion(){
-  const guardado=leerJSONSeguro(INFLACION_KEY, "{}", "object");
-  if(!guardado || typeof guardado.tabla!=="object" || !guardado.tabla) return null;
+  let guardado=null;
+  try{ guardado=JSON.parse(localStorage.getItem(INFLACION_KEY)||"null"); }catch(e){ guardado=null; }
+  if(!guardado || typeof guardado!=="object" || typeof guardado.tabla!=="object" || !guardado.tabla) return null;
   return guardado;
 }
 
@@ -161,6 +165,40 @@ async function bajarSerieInflacion(fetchFn){
 }
 
 // ═══════════════════════════════════════════
+// ACTUALIZACIÓN SOLA, UNA VEZ POR MES
+// ═══════════════════════════════════════════
+// El INDEC publica el dato de un mes a mediados del siguiente. Al abrir la app, si a la serie le falta el mes pasado (o no
+// hay serie), se intenta bajarla sin preguntar; si no se puede (sin señal, la API no contesta, todavía no se publicó), se
+// vuelve a probar en unos días, sin avisar nada. Cuando llega un mes nuevo, un aviso corto lo cuenta.
+const INFLACION_AUTO_KEY="finflacionauto";   // fecha del último intento automático (preferencia)
+const INFLACION_AUTO_DIAS=3;
+// Pura. ¿Le falta a la serie el mes pasado?
+function inflacionDesactualizada(guardado, hoyYM){
+  return !guardado || !guardado.hasta || guardado.hasta<addMonths(hoyYM,-1);
+}
+// Devuelve qué pasó: "al-dia" | "sin-conexion" | "esperando" | "fallo" | "sin-novedad" | "actualizada".
+async function actualizarInflacionSola(fetchFn, hoyISO){
+  const hoy=hoyISO || hoyLocal();
+  const g=leerSerieInflacion();
+  if(!inflacionDesactualizada(g, hoy.slice(0,7))) return "al-dia";
+  if(!fetchFn && typeof navigator!=="undefined" && navigator.onLine===false) return "sin-conexion";
+  const ultimo=localStorage.getItem(INFLACION_AUTO_KEY);
+  if(ultimo && diasEntre(ultimo, hoy)<INFLACION_AUTO_DIAS && diasEntre(ultimo, hoy)>=0) return "esperando";
+  guardarPreferencia(INFLACION_AUTO_KEY, hoy);
+  let r;
+  try{ r=await bajarSerieInflacion(fetchFn); }catch(e){ return "fallo"; }
+  if(!r || !r.ok) return "fallo";
+  const meses=Object.keys(r.tabla).sort(), hasta=meses[meses.length-1];
+  if(g && g.hasta && hasta<=g.hasta) return "sin-novedad";
+  // Lo que ya tenías (por ejemplo, meses pegados a mano) se conserva; lo bajado manda donde se pisan.
+  guardarSerieInflacion(Object.assign({}, g ? g.tabla : {}, r.tabla), r.fuente);
+  if(typeof renderInflacion==="function") renderInflacion();
+  if(typeof marcarDatosSucios==="function") marcarDatosSucios();
+  if(typeof showToast==="function") showToast(`📈 Inflación actualizada hasta ${mesLbl(hasta).toLowerCase()}`);
+  return "actualizada";
+}
+
+// ═══════════════════════════════════════════
 // PEGAR A MANO
 // ═══════════════════════════════════════════
 // Acepta el JSON tal cual sale de la API, o líneas sueltas "2026-07  2,11" / "2026-07,2.11".
@@ -204,7 +242,7 @@ function renderInflacion(){
   if(!guardado){
     el.innerHTML=`<div class="inset">
       <div class="txt-md">Sin serie cargada. Están solo los ${compilados} meses que vienen en la app, así que la comparación contra el año pasado no se muestra.</div>
-      <div class="txt-xs txt-muted" style="margin-top:4px">Bajala de internet o pegala abajo. Después funciona sin conexión.</div>
+      <div class="txt-xs txt-muted" style="margin-top:4px">Bajala de internet o pegala abajo. Después funciona sin conexión y se actualiza sola una vez por mes.</div>
     </div>`;
     return;
   }
@@ -219,6 +257,7 @@ function renderInflacion(){
   el.innerHTML=`<div class="inset">
     <div class="txt-md txt-strong">${n} meses cargados</div>
     <div class="txt-xs txt-muted" style="margin-top:3px">De ${escapeHtml(mesLbl(guardado.desde))} a ${escapeHtml(mesLbl(guardado.hasta))} · ${escapeHtml(guardado.fuente)} · ${escapeHtml(cuando)}</div>
+    <div class="txt-xs txt-muted" style="margin-top:3px">🔄 Se actualiza sola: cuando el INDEC publica un mes nuevo, la app lo baja al abrirse.</div>
     ${atrasada?`<div class="txt-xs" style="color:var(--warning);margin-top:6px">Le ${faltan===1?"falta el último mes":`faltan los últimos ${faltan} meses`}. Hasta que estén, la comparación contra el año pasado se sigue ocultando para los meses recientes.</div>`:""}
   </div>`;
 }
