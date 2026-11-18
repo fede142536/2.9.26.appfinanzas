@@ -2172,3 +2172,26 @@ body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(sa
 .fdm-fila{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);font-size:14px}
 .fdm-monto{font-weight:600;white-space:nowrap}
 .fdm-nota{font-size:12px;color:var(--muted);line-height:1.45;margin-top:3px}
+
+/* ── Patrimonio total ── */
+.dash-patrimonio{padding:0 var(--sp-4) var(--sp-3)}
+.dash-patrimonio:empty{display:none}
+.pat-card{background:linear-gradient(135deg,var(--accent-light),var(--surface));border:1px solid var(--border);border-radius:var(--radius);padding:var(--sp-4);cursor:pointer}
+.pat-card:active{transform:scale(.99)}
+.pat-card-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.pat-card-val{font-size:28px;font-weight:700;margin:4px 0 2px;color:var(--text)}
+.pat-card-usd{font-size:15px;font-weight:600;color:var(--muted);margin-left:6px}
+.pat-card-sub{font-size:12px;color:var(--muted)}
+.pat-total{background:var(--accent-light);border-radius:var(--radius-sm);padding:14px;margin-bottom:12px}
+.pat-total-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.pat-total-val{font-size:30px;font-weight:700;color:var(--text);margin:2px 0 4px}
+.pat-dolar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.pat-dolar label{font-size:13px;color:var(--muted);white-space:nowrap}
+.pat-dolar .amount-wrap{flex:1}
+.pat-sec{border-bottom:1px solid var(--border);padding:4px 0}
+.pat-sec summary{display:flex;justify-content:space-between;gap:10px;padding:10px 0;cursor:pointer;font-size:15px;list-style:none}
+.pat-sec summary::-webkit-details-marker{display:none}
+.pat-fila{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0 6px 26px;color:var(--text)}
+.pat-tag{font-size:11px;color:var(--muted);background:var(--bg);border-radius:8px;padding:1px 6px;margin-left:4px;white-space:nowrap}
+.pat-nota{font-size:12px;color:var(--muted);line-height:1.45;margin:4px 0 8px}
+.pat-nota a{color:var(--accent)}
