@@ -6,6 +6,7 @@
 // que se ve o se usa; las que solo corrigen algo interno no hace falta anotarlas. Hay un test que pide que la versión actual tenga la suya.
 // Cada entrada: {v: número de versión, titulo, texto, ir: nombre de una de las acciones de NOVEDADES_IR (opcional)}.
 const NOVEDADES=[
+  {v:269, titulo:"¿Llego a fin de mes?", texto:"En Movimientos, la tarjeta 🔮 Fin de mes estima con cuánto terminás el mes: tu balance de hoy, lo que falta cobrar, los resúmenes por pagar y lo que solés gastar en los días que quedan.", ir:"findemes"},
   {v:268, titulo:"Gastos que se repiten", texto:"Si cargás a mano lo mismo todos los meses (Netflix, el gimnasio), la app te avisa y lo pasás a frecuente de un toque: desde ahí aparece solo cada mes.", ir:"repetidos"},
   {v:267, titulo:"Reglas automáticas", texto:"Decile a la app «si la nota dice Netflix, es Suscripciones» y lo pone sola al cargar, en la carga rápida y al importar. Te sugiere reglas según lo que ya cargaste.", ir:"reglas"},
   {v:266, titulo:"Ajustar el saldo de una cuenta", texto:"En Dashboard › Ver el año completo › Saldo por cuenta, tocá una cuenta y cargá lo que dice el banco: la app sigue el saldo y, si no coincide, registra la diferencia como ajuste.", ir:"saldoCuenta"},
@@ -38,7 +39,8 @@ const NOVEDADES_IR={
   dashboard:()=>irAPagina("dash"),
   saldoCuenta:()=>irASaldoPorCuenta(),
   reglas:()=>irAReglas(),
-  repetidos:()=>{ irAPagina("mov"); abrirRepetidos(); }
+  repetidos:()=>{ irAPagina("mov"); abrirRepetidos(); },
+  findemes:()=>{ irAPagina("mov"); abrirFinDeMes(); }
 };
 // La versión que está corriendo, del <meta name="enola-version" content="enola-v262"> (el mismo número que el caché del service worker).
 function versionActualApp(){
