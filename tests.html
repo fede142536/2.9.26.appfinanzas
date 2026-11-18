@@ -77,6 +77,7 @@
 <script src="js/editar-movimiento.js"></script>
 <script src="js/tarjetas-inversiones.js"></script>
 <script src="js/analisis.js"></script>
+<script src="js/reglas.js"></script>
 <script src="js/cambio-moneda.js"></script>
 <script src="js/traspasos.js"></script>
 <script src="js/dashboard.js"></script>
@@ -4174,7 +4175,7 @@ test("el backup incluye TODOS los datos del usuario", ()=>{
 });
 
 test("ENC_KEYS cubre todas las claves sensibles conocidas", ()=>{
-  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos","fprecios","fsplits","fsaldoscta"]){
+  for(const k of ["fmovs3","ftcs3","fcustom3","fmetas","fimphist3","fcuentas","ftarjetas","fpresup","fcatorder","ficons","fpapelera","fvalfondos","fprecios","fsplits","fsaldoscta","freglas"]){
     cierto(ENC_KEYS.includes(k), `ENC_KEYS no incluye "${k}": esos datos quedarían sin cifrar`);
   }
 });
@@ -6528,7 +6529,7 @@ function checkboxesDeAlta(html){
 test("ninguna casilla quedó con el estilo nativo del navegador", async ()=>{
   const html=await (await fetch("index.html")).text();
   const cajas=checkboxesDeAlta(html);
-  igual(cajas.length, 18, "esperaba las 18 casillas conocidas (pago-tc-ahorro, pago-tc-adm-chk, frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, inv-fondo-compra, ing-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
+  igual(cajas.length, 19, "esperaba las 19 casillas conocidas (regla-aplicar-viejos, pago-tc-ahorro, pago-tc-adm-chk, frec-ingreso, ahorro, usa-ahorro, traspaso, frecuente, recuperable, inv-mep, inv-sale-ahorro, inv-fondo-compra, ing-sale-ahorro, cal-generico, tc-frecuente, cambio-ahorro, cambio-usaahorro, fechas-tc-repetir, drive-bk-on): " +
     cajas.map(c=>c.id).join(", "));
   cajas.forEach(({id, attrs, index})=>{
     cierto(attrs.includes('class="chk-custom"'), `${id} no usa la clase nueva: ${attrs}`);
@@ -8492,7 +8493,7 @@ test("la configuración está en 6 secciones plegables (Ayuda y manual primero),
 test("ninguna tarjeta de Configuración se perdió ni quedó fuera de una sección", async ()=>{
   const cfg=await configHTML();
   TARJETAS_CONFIG.forEach(t=>cierto(cfg.includes(t), "falta la tarjeta: "+t));
-  igual((cfg.match(/<div class="card"/g)||[]).length, 20, "tienen que ser 20 tarjetas (16 + movimientos sin cuenta + ventas de ahorros + papelera + el manual)");
+  igual((cfg.match(/<div class="card"/g)||[]).length, 21, "tienen que ser 21 tarjetas (16 + movimientos sin cuenta + ventas de ahorros + papelera + el manual + reglas)");
   // toda tarjeta está adentro de alguna sección: antes del primer <details> no hay ninguna
   cierto(!cfg.slice(0, cfg.indexOf('<details class="cfg-seccion"')).includes('<div class="card"'), "quedó una tarjeta suelta antes de las secciones");
   // el contenido sigue bien cerrado: tantas aperturas como cierres
@@ -12036,6 +12037,85 @@ test("una cuenta con saldo real se ve en Saldo por cuenta aunque este año no te
     cierto(el.textContent.includes("Caja de ahorro"), "aparece la cuenta"); cierto(el.textContent.includes("12.345"), "con su saldo de hoy");
     igual(typeof irASaldoPorCuenta, "function"); igual(typeof NOVEDADES_IR.saldoCuenta, "function"); igual(typeof MANUAL_IR.saldoCuenta, "function");
   } finally { el.remove(); movs=antes; saldosCuentas=antesS; window.renderDashUSD=orig; }
+});
+
+grupo("Reglas automáticas de categoría");
+
+test("una regla se reconoce sin importar mayúsculas ni acentos y gana la más específica", ()=>{
+  const reglas=normalizarReglas([
+    {id:1,texto:"Mercado",tipo:"Gasto",cat:"Supermercado",subcat:"Almacén"},
+    {id:2,texto:"mercado pago",tipo:"Gasto",cat:"Servicios",subcat:null,cuenta:"Mercado Pago"},
+    {id:3,texto:"Sueldo",tipo:"Ingreso",cat:"Salario"},
+    {id:4,texto:"ab",tipo:"Gasto",cat:"X"},                 // muy corta: se descarta
+    {id:5,texto:"Netflix",tipo:"Otro",cat:"X"},             // tipo inválido
+    {id:6,texto:"MERCADO",tipo:"Gasto",cat:"Comida"}]);     // mismo texto y tipo que la 1: la reemplaza
+  igual(reglas.length,3);
+  igual(reglaParaNota("Compra en el Mercado","Gasto",reglas).cat,"Comida", "la última con el mismo texto manda");
+  const r=reglaParaNota("Recarga MERCADO PAGO","Gasto",reglas);
+  igual(r.cat,"Servicios"); igual(r.cuenta,"Mercado Pago"); igual(r.fuente,"regla");
+  igual(reglaParaNota("Mercado","Ingreso",reglas), null, "una regla de gastos no toca ingresos");
+  igual(reglaParaNota("Súeldo noviembre","Ingreso",reglas).cat,"Salario");
+});
+
+test("una regla tuya manda sobre el historial y sobre los comercios conocidos", ()=>{
+  const antes=reglasCat;
+  try{
+    reglasCat=normalizarReglas([{id:1,texto:"YPF",tipo:"Gasto",cat:"Viajes",subcat:"Combustible"}]);
+    const hist=[{tipo:"Gasto",nota:"YPF",cat:"Transporte",subcat:"Nafta"},{tipo:"Gasto",nota:"YPF",cat:"Transporte",subcat:"Nafta"}];
+    igual(sugerirCategoriaPara("YPF","Gasto",hist).cat,"Viajes");
+    reglasCat=[];
+    igual(sugerirCategoriaPara("YPF","Gasto",hist).cat,"Transporte", "sin regla vuelve a tu historial");
+  } finally { reglasCat=antes; }
+});
+
+test("aplicar una regla a lo ya cargado no toca ahorros, traspasos ni pagos de tarjeta", ()=>{
+  const antes=reglasCat; reglasCat=[];
+  try{
+    const r={id:9,texto:"netflix",tipo:"Gasto",cat:"Suscripciones",subcat:"Streaming",cuenta:null};
+    const lista=[
+      {id:1,tipo:"Gasto",nota:"Netflix",cat:"Otros",subcat:"Otros"},
+      {id:2,tipo:"Gasto",nota:"Netflix",cat:"Suscripciones",subcat:"Streaming"},   // ya está bien
+      {id:3,tipo:"Gasto",nota:"Netflix",cat:"Fondo",esAhorro:true},
+      {id:4,tipo:"Gasto",nota:"Netflix resumen",cat:"Tarjeta de crédito",pagoTarjeta:{ym:"2026-10"}},
+      {id:5,tipo:"Ingreso",nota:"Netflix",cat:"Otros"},
+      {id:6,tipo:"Gasto",nota:"Spotify",cat:"Otros"}];
+    igual(movsQueCambiariaLaRegla(r,lista).map(m=>m.id).join(","),"1");
+  } finally { reglasCat=antes; }
+});
+
+test("las ideas de reglas salen de notas que se repiten siempre con la misma categoría", ()=>{
+  const g=(nota,cat)=>({tipo:"Gasto",nota,cat,subcat:"Otros"});
+  const lista=[g("Carrefour","Super"),g("carrefour","Super"),g("CARREFOUR","Super"),g("Uber","Transporte"),g("Uber","Transporte"),g("Uber","Salidas"),g("Kiosco","Varios"),g("Kiosco","Varios")];
+  const ideas=ideasDeReglas(lista,[]);
+  igual(ideas.length,1, "Uber tiene dos categorías y Kiosco solo 2 veces"); igual(ideas[0].cat,"Super"); igual(ideas[0].veces,3);
+  igual(ideasDeReglas(lista,normalizarReglas([{texto:"carrefour",tipo:"Gasto",cat:"Super"}])).length,0, "si ya hay regla, no se sugiere");
+});
+
+test("al importar, lo que viene sin categoría toma la de tus reglas", ()=>{
+  const reglas=normalizarReglas([{texto:"Netflix",tipo:"Gasto",cat:"Suscripciones",subcat:"Streaming",cuenta:"Visa"}]);
+  const items=[{tipo:"Gasto",nota:"NETFLIX.COM",cat:"Otros",subcat:"Varios",cuenta:""},{tipo:"Gasto",nota:"Netflix",cat:"Ocio",subcat:"Cine",cuenta:"Galicia"}];
+  igual(aplicarReglasAImportados(items,reglas),1);
+  igual(items[0].cat,"Suscripciones"); igual(items[0].cuenta,"Visa"); igual(items[1].cat,"Ocio", "lo que ya traía categoría no se toca");
+});
+
+test("guardar una regla puede corregir lo ya cargado y se puede deshacer; viaja en la copia", ()=>{
+  const antes=movs, antesR=reglasCat;
+  const ids=["regla-texto","regla-cat","regla-subcat","regla-cuenta","regla-aplicar-viejos","regla-tipo","regla-modal-title","regla-viejos","regla-viejos-txt","modal-regla","reglas-manager"];
+  const creados=ids.filter(id=>!document.querySelector("#"+id)).map(id=>{ const tag=id==="regla-cat"||id==="regla-subcat"||id==="regla-cuenta"?"select":(id==="regla-texto"||id==="regla-aplicar-viejos"?"input":"div"); const e=document.createElement(tag); e.id=id; if(id==="regla-aplicar-viejos") e.type="checkbox"; document.body.appendChild(e); return e; });
+  const fns=["save","refrescarVistas","ofrecerDeshacerCambio"], orig=fns.map(f=>window[f]); let deshacer=null;
+  window.save=()=>{}; window.refrescarVistas=()=>{}; window.ofrecerDeshacerCambio=(msg,fn)=>{ deshacer=fn; };
+  try{
+    reglasCat=[];
+    movs=[{id:1,tipo:"Gasto",nota:"Uber a casa",cat:"Otros",subcat:"Otros",importe:100,fecha:"2026-11-01"}];
+    const cat=Object.keys(getCats("Gasto"))[0];
+    abrirModalRegla(null,{texto:"uber",tipo:"Gasto",cat});
+    document.getElementById("regla-aplicar-viejos").checked=true;
+    guardarRegla();
+    igual(reglasCat.length,1); igual(movs[0].cat,cat, "el movimiento viejo tomó la categoría");
+    igual(armarBackup().datos.reglasCat.length,1, "la regla viaja en la copia");
+    deshacer();
+    igual(reglasCat.length,0); igual(movs[0].cat,"Otros", "deshacer vuelve todo atrás");
+  } finally { creados.forEach(e=>e.remove()); movs=antes; reglasCat=antesR; fns.forEach((f,i)=>{ window[f]=orig[i]; }); }
 });
 
 grupo("Aislamiento de los tests");

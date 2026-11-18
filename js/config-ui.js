@@ -724,6 +724,7 @@ function armarBackup(){
       preciosActuales,
       splitsInv,
       saldosCuentas,
+      reglasCat,
       catOrder,
       iconsCustom,
       vencimientosTc: leerVencTc(),
@@ -885,6 +886,8 @@ function aplicarBackup(backup){
   setSensitiveRaw("fsplits", JSON.stringify(splitsInv));
   saldosCuentas=normalizarSaldosCuentas(backup.datos.saldosCuentas);
   setSensitiveRaw("fsaldoscta", JSON.stringify(saldosCuentas));
+  reglasCat=normalizarReglas(backup.datos.reglasCat);
+  setSensitiveRaw("freglas", JSON.stringify(reglasCat));
   if(backup.datos.iconsCustom && typeof backup.datos.iconsCustom==="object"){
     iconsCustom=backup.datos.iconsCustom;
     setSensitiveRaw("ficons", JSON.stringify(iconsCustom));

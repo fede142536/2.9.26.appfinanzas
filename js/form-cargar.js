@@ -314,6 +314,7 @@ function sugerirCategoria(){
   const el=document.getElementById("sugerencia-cat");
   if(!sug){
     el.style.display="none";
+    el._reglaAplicada=null; el.classList.remove("regla");
     return;
   }
   // Verificar que la categoría existe en el sistema (puede ser default o custom del usuario)
@@ -322,6 +323,21 @@ function sugerirCategoria(){
     el.style.display="none";
     return;
   }
+  // Una regla tuya no se sugiere: se aplica sola, una vez. Si después cambiás la categoría a
+  // mano, seguir escribiendo la nota no la pisa (solo se vuelve a aplicar si cambia la regla).
+  if(sug.fuente==="regla"){
+    el._sugerencia=sug;
+    el.classList.add("regla");
+    if(el._reglaAplicada!==sug.reglaId){
+      el._reglaAplicada=sug.reglaId;
+      aplicarSugerenciaCat(true);
+      if(sug.cuenta){ const sc=document.getElementById("inp-cuenta"); if(sc && Array.from(sc.options).some(o=>o.value===sug.cuenta)) sc.value=sug.cuenta; }
+    }
+    el.innerHTML=`⚡ <strong>${getIcon(sug.cat,"")} ${escapeHtml(sug.cat)}${sug.subcat?" / "+escapeHtml(sug.subcat):""}</strong>${sug.cuenta?` · ${escapeHtml(sug.cuenta)}`:""} <span class="sugerencia-cat-fuente">· por tu regla «${escapeHtml(sug.regla)}»</span>`;
+    el.style.display="block";
+    return;
+  }
+  el.classList.remove("regla"); el._reglaAplicada=null;
   // Guardar la sugerencia para aplicarla cuando se toca
   el._sugerencia=sug;
   const icon=getIcon(sug.cat,"💡");
@@ -331,7 +347,7 @@ function sugerirCategoria(){
 }
 
 // Aplica la sugerencia al selector de categoría
-function aplicarSugerenciaCat(){
+function aplicarSugerenciaCat(porRegla){
   const el=document.getElementById("sugerencia-cat");
   const sug=el._sugerencia;
   if(!sug) return;
@@ -348,6 +364,7 @@ function aplicarSugerenciaCat(){
       if(subOpt) subSel.value=sug.subcat;
     }
   }
+  if(porRegla===true) return;   // la regla se aplicó sola: el aviso queda a la vista y sin toast
   el.style.display="none";
   showToast("✓ Categoría aplicada");
 }
@@ -873,7 +890,7 @@ function resetForm(t){
     const frecDia=document.getElementById("inp-frec-dia");
     if(frecDia) frecDia.value="";
     const sugEl=document.getElementById("sugerencia-cat");
-    if(sugEl){sugEl.style.display="none";sugEl._sugerencia=null;}
+    if(sugEl){sugEl.style.display="none";sugEl._sugerencia=null;sugEl._reglaAplicada=null;sugEl.classList.remove("regla");}
     document.getElementById("inp-importe-prefix").textContent="$";
     const lblReset=document.getElementById("inp-importe-label");
     if(lblReset) lblReset.textContent="Importe (ARS)";

@@ -847,5 +847,6 @@ function sanearBackupDatos(datos){
       for(const c of Object.keys(porTipo)){ if(Array.isArray(porTipo[c])){ const subs=porTipo[c].filter(x=>typeof x==="string"); r.descartados+=porTipo[c].length-subs.length; porTipo[c]=subs.map(x=>{ const n=nombreSeguro(x); if(n!==x) r.renombrados++; return n; }); } else { porTipo[c]=[]; r.corregidos++; } }
       datos.custom[t]=porTipo; } }
   ["presupuestos","iconsCustom","catOrder","bancosTarjeta","mesesCerrados","vencimientosTc","cuentasRenombradas","valoresFondos","preciosActuales","splitsInv","saldosCuentas"].forEach(k=>{ if(datos[k]!==undefined) datos[k]=clavesSeguras(esObjetoPlano(datos[k]) ? datos[k] : {}); });
+  if(datos.reglasCat!==undefined) datos.reglasCat=typeof normalizarReglas==="function" ? normalizarReglas(datos.reglasCat) : [];
   return {...r, total:r.descartados+r.renombrados+r.corregidos};
 }

@@ -120,7 +120,9 @@ function mejorDelConteo(conteo, fuente){
 
 function sugerirCategoriaPara(texto, tipoActual, lista){
   if(normalizarTexto(texto).length<SUG_MIN_LARGO) return null;
-  return sugerirPorNotaExacta(texto, tipoActual, lista)
+  // Nivel 0: una regla tuya (js/reglas.js) manda sobre cualquier adivinanza.
+  return (typeof reglaParaNota==="function" ? reglaParaNota(texto, tipoActual, reglasCat) : null)
+      || sugerirPorNotaExacta(texto, tipoActual, lista)
       || sugerirPorPalabras(texto, tipoActual, lista)
       || sugerirPorReglas(texto, tipoActual);
 }

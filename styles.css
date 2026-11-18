@@ -2143,3 +2143,16 @@ body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(sa
 .saldo-real-acc{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .saldo-real-acc .btn-sm{flex:1;min-width:140px}
 .cuenta-hoy{font-size:12px;color:var(--text);margin:2px 0 2px}
+
+/* ── Reglas automáticas (Configuración) ── */
+.regla-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.regla-txt{min-width:0;font-size:13px;line-height:1.45}
+.regla-si{color:var(--text)}
+.regla-entonces{color:var(--text);margin-top:2px}
+.regla-ideas{margin-top:12px;padding:10px 12px;background:var(--accent-light);border-radius:var(--radius-sm)}
+.regla-ideas-tit{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px}
+.regla-idea{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;padding:5px 0}
+.regla-tipo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.regla-tipo button{padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font:inherit;font-weight:600}
+.regla-tipo button.active{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
+.sugerencia-cat.regla{background:var(--success-light);color:var(--success)}
