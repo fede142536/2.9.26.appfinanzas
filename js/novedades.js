@@ -6,6 +6,7 @@
 // que se ve o se usa; las que solo corrigen algo interno no hace falta anotarlas. Hay un test que pide que la versión actual tenga la suya.
 // Cada entrada: {v: número de versión, titulo, texto, ir: nombre de una de las acciones de NOVEDADES_IR (opcional)}.
 const NOVEDADES=[
+  {v:274, titulo:"Una app más simple", texto:"En Configuración › General › Funciones de la app ocultás lo que no usás (y lo volvés a mostrar cuando quieras). La revisión de inversiones junta todo en un lugar, Importar agrupa las herramientas en «Reparar datos» y Movimientos muestra menos tarjetas.", ir:"funciones"},
   {v:273, titulo:"La inflación se actualiza sola", texto:"Cuando el INDEC publica un mes nuevo, la app lo baja sola al abrirse. Además se arregló que, con el PIN activo, la serie se guardaba pero no se encontraba.", ir:"inflacion"},
   {v:272, titulo:"Cuentas, tarjetas y categorías, desplegables", texto:"Cada bloque (Cuentas, Tarjetas, Categorías, Reglas, Presupuestos, Inflación) se abre con su flecha, de a uno, como las demás secciones. Las categorías se despliegan por tipo y tienen buscador.", ir:"organizar"},
   {v:270, titulo:"Tu patrimonio", texto:"Arriba del Dashboard, todo lo que tenés en un número: cuentas, fondos de ahorro, inversiones y dólares, sin contar dos veces lo que está en un fondo. Tocalo para ver el detalle.", ir:"patrimonio"},
@@ -46,7 +47,8 @@ const NOVEDADES_IR={
   findemes:()=>{ irAPagina("mov"); abrirFinDeMes(); },
   patrimonio:()=>{ irAPagina("dash"); abrirPatrimonio(); },
   organizar:()=>{ irAPagina("config"); abrirSeccionConfig("cfg-sec-organizar"); },
-  inflacion:()=>{ irAPagina("config"); abrirSubConfig("cfg-sub-inflacion"); }
+  inflacion:()=>{ irAPagina("config"); abrirSubConfig("cfg-sub-inflacion"); },
+  funciones:()=>{ irAPagina("config"); abrirSeccionConfig("cfg-sec-general"); setTimeout(()=>{ const c=document.getElementById("funciones-card"); if(c) c.scrollIntoView({behavior:"smooth", block:"start"}); },250); }
 };
 // La versión que está corriendo, del <meta name="enola-version" content="enola-v262"> (el mismo número que el caché del service worker).
 function versionActualApp(){

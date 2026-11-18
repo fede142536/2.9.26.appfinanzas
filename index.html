@@ -14,7 +14,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v273">
+<meta name="enola-version" content="enola-v274">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <!-- Color de la barra del sistema = color de fondo de la app (claro #f7f6f2 / oscuro #000). Los dos primeros siguen al sistema; applyTheme() (config-ui.js)
@@ -39,9 +39,9 @@
 <!-- Chart.js y SheetJS viven en js/vendor (versiones fijas, ver js/vendor/LEEME.md): la app no baja código de ningún CDN.
      defer es IMPORTANTE, no cosmético: el HTML se parsea sin esperar estos archivos, así la pantalla nunca queda en blanco por una carga lenta
      (los gráficos y el Excel se protegen solos si todavía no están; ver renderChartMensualBI y handleXlsx). -->
-<script defer src="js/vendor/xlsx.full.min.js?v=273"></script>
-<script defer src="js/vendor/chart.umd.js?v=273"></script>
-<link rel="stylesheet" href="styles.css?v=273">
+<script defer src="js/vendor/xlsx.full.min.js?v=274"></script>
+<script defer src="js/vendor/chart.umd.js?v=274"></script>
+<link rel="stylesheet" href="styles.css?v=274">
 </head>
 <body class="con-tabbar">
 <!-- Pantalla de arranque [AAA navegacion]: hasta que el script de la app dibuja Movimientos (main.js la retira), la
@@ -656,7 +656,7 @@
     <label class="form-label" for="carga-rapida">⚡ Carga rápida</label>
     <div class="u-row">
       <input type="text" id="carga-rapida" class="form-input u-flex1" placeholder="Ej: nafta 15000 visa ayer" autocomplete="off" autocapitalize="off" aria-describedby="carga-rapida-res" onkeydown="if(event.key==='Enter'){event.preventDefault();cargaRapida();}">
-      <button type="button" id="carga-rapida-voz" class="btn-sm btn-voz" style="display:none" aria-label="Dictar por voz" aria-pressed="false" onclick="dictarCargaRapida()">🎤</button>
+      <button type="button" id="carga-rapida-voz" data-funcion="voz" class="btn-sm btn-voz" style="display:none" aria-label="Dictar por voz" aria-pressed="false" onclick="dictarCargaRapida()">🎤</button>
       <button type="button" class="btn-sm" onclick="cargaRapida()">Cargar</button>
     </div>
     <p id="carga-rapida-res" class="txt-xs" role="status" aria-live="polite" style="display:none;margin:8px 0 0;line-height:1.4"></p>
@@ -666,7 +666,7 @@
     <button class="type-btn" id="btn-ingreso" onclick="setTipo('Ingreso')">↓ Ingreso</button>
     <button class="type-btn" id="btn-inversion" onclick="setTipo('Inversion')">◈ Inv.</button>
     <button class="type-btn" id="btn-tarjeta" onclick="setTipo('Tarjeta')">▣ Tarj.</button>
-    <button class="type-btn" id="btn-cambio" onclick="setTipo('Cambio')">⇄ Cambio</button>
+    <button class="type-btn" id="btn-cambio" data-funcion="cambio" onclick="setTipo('Cambio')">⇄ Cambio</button>
   </div>
   <!-- GASTO/INGRESO -->
   <div id="campos-gi">
@@ -770,12 +770,12 @@
           <input type="number" id="inp-frec-dia" class="form-input amount-input" style="padding-left:38px;font-size:16px;font-weight:500" aria-label="Día del mes en que vence (opcional)" placeholder="Vence el… (opcional)" inputmode="numeric" min="1" max="31" step="1">
         </div>
       </div>
-      <label class="opt-row" style="--chk:var(--accent)">
+      <label class="opt-row" data-funcion="recuperable" style="--chk:var(--accent)">
         <span class="opt-icon">🤝</span>
         <span class="opt-text"><span class="opt-title">Monto recuperable</span><span class="opt-sub">Gasto compartido: te devuelven una parte</span></span>
         <input type="checkbox" id="inp-recup-switch" class="chk-custom" onchange="toggleRecuperable()">
       </label>
-      <div class="opt-amount-wrap" id="recup-monto-wrap" style="display:none">
+      <div class="opt-amount-wrap" id="recup-monto-wrap" data-funcion="recuperable" style="display:none">
         <div class="amount-wrap"><span class="amount-prefix">$</span>
           <input type="number" id="inp-recup" class="form-input amount-input" aria-label="Monto recuperable" placeholder="Te devuelven…" inputmode="decimal" step="any">
         </div>
@@ -912,7 +912,7 @@
             <input type="number" id="tc-cuotas" class="field-hidden-native" tabindex="-1" min="1" inputmode="numeric">
           </div>
           <div class="form-group"><label class="form-label" for="tc-mes-inicio">1ª cuota en</label><input type="month" id="tc-mes-inicio" class="form-input" onchange="refreshSimIfOpen()"></div>
-          <div class="sim-box">
+          <div class="sim-box" data-funcion="simulador">
             <button type="button" class="sim-toggle" onclick="toggleSimuladorInline()">
               <span>🧮</span>
               <span style="flex:1">¿Me lo banco? <span class="muted">Simular la cuota</span></span>
@@ -1061,7 +1061,7 @@
     <div id="mov-search-count" class="mov-search-count" role="status"></div>
   </div>
   <div id="mov-cierre-aviso" role="status" style="display:none"></div>
-  <div id="mov-anual-aviso" role="status" style="display:none"></div>
+  <div id="mov-anual-aviso" data-funcion="anual" role="status" style="display:none"></div>
   <div id="mov-repetidos-aviso" role="status" style="display:none"></div>
   <div class="seg-filter" id="mov-filtros"></div>
   <div class="mov-summary" id="mov-summary"></div>
@@ -1171,7 +1171,7 @@
       <div id="dash-anio-cabecera"></div>
       <div class="anio-acciones">
         <button class="btn-primary" id="anual-compartir" onclick="compartirResumenAnual()">📤 Compartir</button>
-        <button class="btn-sm" onclick="abrirInforme()">📑 Otro período</button>
+        <button class="btn-sm" data-funcion="anual" onclick="abrirInforme()">📑 Otro período</button>
       </div>
     </div>
 
@@ -1179,7 +1179,7 @@
          incluido), igual que #dash-usd-card más abajo. Antes se quedaba visible con un renglón
          "Nada para destacar" del mismo tamaño que las demás cards — la única que podía estar
          vacía y ocupar el mismo lugar que una con contenido real. -->
-    <div class="card" id="dash-alertas-card" style="display:none">
+    <div class="card" id="dash-alertas-card" data-funcion="alertas" style="display:none">
       <div class="card-title">Para tener en cuenta</div>
       <div id="dash-alertas"></div>
     </div>
@@ -1235,11 +1235,11 @@
   <div id="fondo-msg" class="ahorro-fondo-msg" style="display:none"></div>
 
   <!-- Mis metas: ahora arriba de todo (handoff: "la pantalla pasa a abrir con las metas") -->
-  <div class="metas-header">
+  <div class="metas-header" data-funcion="metas">
     <span class="metas-header-label">Mis metas</span>
     <span class="metas-header-sum" id="metas-sum"></span>
   </div>
-  <div class="metas-grid" id="metas-list"></div>
+  <div class="metas-grid" id="metas-list" data-funcion="metas"></div>
 
   <!-- Historial: selector + lectura + gráfico/ranking + línea de dólares, todo en una sola card -->
   <div class="card ahorro-hist" id="ahorro-hist-card">
@@ -1283,12 +1283,7 @@
   <div id="depositar-card" style="display:none">
     <select id="dep-meta" hidden aria-label="Meta"></select>
   </div>
-  <!-- Conciliar con el broker (versión de prueba, solo lectura). Se oculta si no hay CEDEARs de Balanz cargados. -->
-  <div class="card" id="concil-card" style="display:none">
-    <div class="card-title">🔎 Conciliar con el broker <span class="badge badge-save">PRUEBA</span></div>
-    <p class="txt-sm" id="concil-resumen" style="margin-bottom:10px"></p>
-    <button class="btn-sm" style="width:100%" onclick="abrirConciliacion()">Ver detalle</button>
-  </div>
+  <!-- Conciliar con el broker: se abre desde la Revisión de tus inversiones (Inversiones › Cartera), junto con lo demás para revisar. -->
 </div>
 
 <!-- HOJA: CONCILIAR CON EL BROKER -->
@@ -1402,6 +1397,8 @@
     </label>
   </div>
   <div class="card"><div class="card-title">Historial</div><div id="import-history"></div></div>
+  <details class="imp-reparar" id="imp-reparar" data-funcion="reparar">
+    <summary><span class="cfg-sec-ico">🧰</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Reparar datos</span><span class="cfg-sec-sub" id="imp-reparar-sub">Duplicados, montos raros, borrar por fechas</span></span></summary>
   <div class="card" id="card-traspasos" style="display:none">
     <div class="card-title">↔️ Plata que quizás no gastaste</div>
     <p class="txt-sm txt-muted mb-10">Estos salieron de tus ahorros pero la categoría dice que fueron a parar a una inversión, no a algo que consumiste. Si esa plata la seguís teniendo, marcala como traspaso y deja de contar como gasto.</p>
@@ -1421,6 +1418,7 @@
     <button class="btn-sm" style="width:100%;color:var(--warning);margin-bottom:8px" onclick="detectarDuplicados()">🔁 Buscar duplicados en movimientos</button>
     <button class="btn-sm" style="width:100%;color:var(--danger);background:var(--danger-light);font-weight:600" onclick="borrarTodosMovimientos()">💥 Borrar TODOS los movimientos</button>
   </div>
+  </details>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->
@@ -1440,7 +1438,7 @@
     </div>
   </details>
   <details class="cfg-seccion" id="cfg-sec-general">
-    <summary><span class="cfg-sec-ico">⚙️</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">General</span><span class="cfg-sec-sub">Apariencia · PIN · Versión de la app</span></span></summary>
+    <summary><span class="cfg-sec-ico">⚙️</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">General</span><span class="cfg-sec-sub">Apariencia · PIN · Funciones de la app · Versión</span></span></summary>
     <div class="cfg-cuerpo">
   <div class="card">
     <div class="card-title">🎨 Apariencia</div>
@@ -1454,6 +1452,11 @@
     <div class="card-title">🔐 Seguridad</div>
     <div id="pin-status"></div>
     <div id="huella-status"></div>
+  </div>
+  <div class="card" id="funciones-card">
+    <div class="card-title">🧩 Funciones de la app</div>
+    <p class="txt-sm txt-muted mb-10">Ocultá lo que no usás: desaparece de la pantalla, pero no se borra nada. La volvés a mostrar desde acá cuando quieras.</p>
+    <div id="funciones-lista"></div>
   </div>
   <div class="card">
     <div class="card-title">📲 Versión de la app</div>
@@ -1486,7 +1489,7 @@
     <p class="txt-sm txt-muted mb-10">Cada día que abrís la app con cambios se guarda una copia acá mismo (las últimas 14, cifradas si tenés PIN). Sirven para deshacer un error o un borrado. <strong>No te salvan si perdés el celular</strong>: para eso, la copia en Drive o un archivo de afuera.</p>
     <div id="copias-auto-lista"></div>
   </div>
-  <div class="card">
+  <div class="card" data-funcion="google">
     <div class="card-title">☁️ Google: calendario y copia en Drive</div>
     <p class="txt-sm txt-muted mb-10">Conectá tu cuenta de Google, con un solo permiso, para dos cosas: <strong>(1)</strong> que tus vencimientos se agreguen y actualicen solos en tu calendario, como eventos mensuales que se repiten sin fin (la app <strong>nunca borra</strong> eventos: si eliminás un gasto, su evento queda hasta que lo borres vos), y <strong>(2)</strong> una <strong>copia de seguridad diaria en tu Drive</strong>. Si ya importaste archivos de calendario antes, borrá esos eventos para no tenerlos duplicados.</p>
       <div class="form-group"><label class="form-label" for="gcal-cliente">ID de cliente de Google</label>
@@ -1545,11 +1548,6 @@
   <details class="cfg-seccion" id="cfg-sec-organizar">
     <summary><span class="cfg-sec-ico">🗂</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Cuentas, tarjetas y categorías</span><span class="cfg-sec-sub">Cuentas · Tarjetas · Categorías · Reglas · Presupuestos · Inflación</span></span></summary>
     <div class="cfg-cuerpo" id="cfg-organizar-cuerpo">
-  <div class="card" id="ventas-fondo-card" style="display:none">
-    <div class="card-title">💸 Ventas que salieron de ahorros</div>
-    <p class="txt-sm txt-muted mb-10" id="ventas-fondo-resumen"></p>
-    <button type="button" class="btn-sm" onclick="abrirVentasFondo()">Revisar ventas</button>
-  </div>
   <div class="card" id="sin-cuenta-card" style="display:none">
     <div class="card-title">🏦 Movimientos sin cuenta</div>
     <p class="txt-sm txt-muted mb-10" id="sin-cuenta-resumen"></p>
@@ -1647,7 +1645,7 @@
     </div>
     <button class="btn-sm" style="width:100%" onclick="exportarExcel(true)">📦 Exportar todo (sin filtro de fechas)</button>
   </div>
-  <div class="card">
+  <div class="card" data-funcion="bi">
     <div class="card-title">📊 Exportar para BI</div>
     <p class="txt-sm txt-muted mb-10">CSV desnormalizado con todo tu historial (una fila por movimiento y por cada cuota/mes de gasto frecuente), listo para abrir en Power BI, Looker Studio o pandas/Python.</p>
     <button class="btn-sm" style="width:100%" onclick="exportarDatosBI()">⬇ Exportar CSV para BI</button>
@@ -1723,49 +1721,50 @@
 </div>
 <button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento"></button>
 
-<script src="js/estado-categorias.js?v=273"></script>
-<script src="js/resultado-inversiones.js?v=273"></script>
-<script src="js/render-comun.js?v=273"></script>
-<script src="js/form-cargar.js?v=273"></script>
-<script src="js/movimientos.js?v=273"></script>
-<script src="js/editar-movimiento.js?v=273"></script>
-<script src="js/tarjetas-inversiones.js?v=273"></script>
-<script src="js/analisis.js?v=273"></script>
-<script src="js/reglas.js?v=273"></script>
-<script src="js/repetidos.js?v=273"></script>
-<script src="js/fin-de-mes.js?v=273"></script>
-<script src="js/patrimonio.js?v=273"></script>
-<script src="js/cambio-moneda.js?v=273"></script>
-<script src="js/traspasos.js?v=273"></script>
-<script src="js/dashboard.js?v=273"></script>
-<script src="js/inflacion.js?v=273"></script>
-<script src="js/ahorros.js?v=273"></script>
-<script src="js/conciliacion.js?v=273"></script>
-<script src="js/papelera.js?v=273"></script>
-<script src="js/carga-rapida.js?v=273"></script>
-<script src="js/atajos.js?v=273"></script>
-<script src="js/aumentos.js?v=273"></script>
-<script src="js/retiro-por-venta.js?v=273"></script>
-<script src="js/selector-mes.js?v=273"></script>
-<script src="js/decimales.js?v=273"></script>
-<script src="js/recuperable.js?v=273"></script>
-<script src="js/resumen-anual.js?v=273"></script>
-<script src="js/repetir.js?v=273"></script>
-<script src="js/informe-periodo.js?v=273"></script>
-<script src="js/cierre-mes.js?v=273"></script>
-<script src="js/huella.js?v=273"></script>
-<script src="js/cuentas-sugeridas.js?v=273"></script>
-<script src="js/graficos-interactivos.js?v=273"></script>
-<script src="js/importar-exportar.js?v=273"></script>
-<script src="js/cuentas-tarjetas-categorias.js?v=273"></script>
-<script src="js/config-ui.js?v=273"></script>
-<script src="js/calendario-google.js?v=273"></script>
-<script src="js/backup-drive.js?v=273"></script>
-<script src="js/presupuestos.js?v=273"></script>
-<script src="js/seguridad-pin.js?v=273"></script>
-<script src="js/novedades.js?v=273"></script>
-<script src="js/manual.js?v=273"></script>
-<script src="js/main.js?v=273"></script>
+<script src="js/estado-categorias.js?v=274"></script>
+<script src="js/resultado-inversiones.js?v=274"></script>
+<script src="js/render-comun.js?v=274"></script>
+<script src="js/form-cargar.js?v=274"></script>
+<script src="js/movimientos.js?v=274"></script>
+<script src="js/editar-movimiento.js?v=274"></script>
+<script src="js/tarjetas-inversiones.js?v=274"></script>
+<script src="js/analisis.js?v=274"></script>
+<script src="js/reglas.js?v=274"></script>
+<script src="js/repetidos.js?v=274"></script>
+<script src="js/fin-de-mes.js?v=274"></script>
+<script src="js/patrimonio.js?v=274"></script>
+<script src="js/cambio-moneda.js?v=274"></script>
+<script src="js/traspasos.js?v=274"></script>
+<script src="js/dashboard.js?v=274"></script>
+<script src="js/inflacion.js?v=274"></script>
+<script src="js/ahorros.js?v=274"></script>
+<script src="js/conciliacion.js?v=274"></script>
+<script src="js/papelera.js?v=274"></script>
+<script src="js/carga-rapida.js?v=274"></script>
+<script src="js/atajos.js?v=274"></script>
+<script src="js/aumentos.js?v=274"></script>
+<script src="js/retiro-por-venta.js?v=274"></script>
+<script src="js/selector-mes.js?v=274"></script>
+<script src="js/decimales.js?v=274"></script>
+<script src="js/recuperable.js?v=274"></script>
+<script src="js/resumen-anual.js?v=274"></script>
+<script src="js/repetir.js?v=274"></script>
+<script src="js/informe-periodo.js?v=274"></script>
+<script src="js/cierre-mes.js?v=274"></script>
+<script src="js/huella.js?v=274"></script>
+<script src="js/cuentas-sugeridas.js?v=274"></script>
+<script src="js/graficos-interactivos.js?v=274"></script>
+<script src="js/importar-exportar.js?v=274"></script>
+<script src="js/cuentas-tarjetas-categorias.js?v=274"></script>
+<script src="js/config-ui.js?v=274"></script>
+<script src="js/calendario-google.js?v=274"></script>
+<script src="js/backup-drive.js?v=274"></script>
+<script src="js/presupuestos.js?v=274"></script>
+<script src="js/seguridad-pin.js?v=274"></script>
+<script src="js/novedades.js?v=274"></script>
+<script src="js/manual.js?v=274"></script>
+<script src="js/funciones.js?v=274"></script>
+<script src="js/main.js?v=274"></script>
 
 <script>
 // ═══════════════════════════════════════════

@@ -150,6 +150,7 @@ function avisosDeAumentos(lista, tcsLista, hoyYM, dia){
 
 // El aviso para el Dashboard (lo arma alertasDelMomento). null si no hay nada que revisar. `dia` = día del mes de hoy.
 function alertaDeAumentos(lista, tcsLista, hoyYM, dia){
+  if(typeof funcionActiva==="function" && !funcionActiva("aumentos")) return null;   // ocultado en Funciones de la app
   const r=avisosDeAumentos(lista, tcsLista, hoyYM, dia);
   if(!r.sinActualizar.length && !r.habituales.length && !r.subieron.length) return null;
   const montoDe=(moneda, v)=> moneda==="USD" ? fmtMoneda(v,"USD") : fmtS(v);

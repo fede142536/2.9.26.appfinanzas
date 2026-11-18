@@ -81,6 +81,7 @@
 <script src="js/repetidos.js"></script>
 <script src="js/fin-de-mes.js"></script>
 <script src="js/patrimonio.js"></script>
+<script src="js/funciones.js"></script>
 <script src="js/cambio-moneda.js"></script>
 <script src="js/traspasos.js"></script>
 <script src="js/dashboard.js"></script>
@@ -9152,9 +9153,11 @@ test("la tarjeta de Ahorros resume el estado y se oculta si no hay CEDEARs", ()=
   } finally { movs=antes; els.forEach(e=>e.remove()); }
 });
 
-test("la pantalla de Ahorros trae la tarjeta, la hoja y el script", async ()=>{
+test("la conciliación tiene su hoja y su script, y se abre desde la revisión de inversiones", async ()=>{
   const html=await (await fetch("index.html")).text();
-  ["concil-card","concil-resumen","modal-concil","concil-detalle","js/conciliacion.js","PRUEBA"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
+  ["modal-concil","concil-detalle","js/conciliacion.js"].forEach(t=>cierto(html.includes(t), "falta "+t+" en index.html"));
+  cierto(!html.includes('id="concil-card"'), "la tarjeta suelta de Ahorros ya no va: está en la revisión");
+  cierto((await (await fetch("js/tarjetas-inversiones.js")).text()).includes("abrirConciliacion()"), "la revisión no lleva a la conciliación");
   cierto((await (await fetch("sw.js")).text()).slice(0).includes("./js/conciliacion.js"), "el service worker no cachea conciliacion.js");
   cierto((await (await fetch("js/ahorros.js")).text()).includes("renderConciliacionCard()"), "Ahorros no dibuja la tarjeta");
 });
@@ -10271,7 +10274,8 @@ test("ventas de ahorros: el editor de una venta tiene la casilla y crea, cambia 
 
 test("ventas de ahorros: tarjeta, hoja y alerta están en index y el editor las usa", async ()=>{
   const html=await (await fetch("index.html")).text(), ed=await (await fetch("js/editar-movimiento.js")).text(), an=await (await fetch("js/analisis.js")).text();
-  cierto(html.includes('id="ventas-fondo-card"') && html.includes('id="modal-ventas-fondo"') && html.includes('id="ventas-fondo-detalle"'));
+  cierto(html.includes('id="modal-ventas-fondo"') && html.includes('id="ventas-fondo-detalle"'));
+  cierto(!html.includes('id="ventas-fondo-card"'), "la tarjeta suelta de Configuración ya no va: está en la revisión");
   cierto(ed.includes("bloqueSaleDeAhorroEditor(m)") && ed.includes("aplicarSaleDeAhorroEditor(m)")); cierto(an.includes("alertaDeVentasSinRetiro"));
 });
 
@@ -12325,6 +12329,43 @@ test("la serie guardada se encuentra aunque el PIN esté activo", ()=>{
     try{ cierto(!!leerSerieInflacion(), "con el PIN activo antes no la encontraba"); }
     finally { window.isEncActive=orig; }
   });
+});
+
+grupo("Funciones de la app que se pueden ocultar");
+
+test("cada función se oculta y se vuelve a mostrar, y las avanzadas arrancan ocultas", async ()=>{
+  const antes=localStorage.getItem("ffunciones");
+  const fns=["refrescarVistas","renderDash","showToast"], orig=fns.map(f=>window[f]); fns.forEach(f=>{ window[f]=()=>{}; });
+  try{
+    localStorage.removeItem("ffunciones");
+    ["bi","voz","anual","alertas"].forEach(id=>cierto(!funcionActiva(id), id+" arranca oculta"));
+    ["reparar","recuperable","metas","aumentos","simulador","cambio"].forEach(id=>cierto(funcionActiva(id), id+" arranca visible"));
+    setFuncion("metas", false);
+    cierto(!funcionActiva("metas")); cierto(document.body.classList.contains("sin-f-metas"), "el body lleva la clase que la esconde");
+    setFuncion("metas", true);
+    cierto(funcionActiva("metas")); cierto(!document.body.classList.contains("sin-f-metas"));
+    igual(funcionActiva("no-existe"), true, "lo que no está en la lista no se oculta");
+    // cada función tiene algo marcado en la pantalla, y una regla de CSS que lo esconde
+    const html=await (await fetch("index.html")).text(), css=await (await fetch("styles.css")).text(), ed=await (await fetch("js/editar-movimiento.js")).text();
+    FUNCIONES.forEach(f=>{
+      if(f.id!=="aumentos") cierto(html.includes(`data-funcion="${f.id}"`) || ed.includes(`data-funcion="${f.id}"`), "nada marcado para "+f.id);
+      cierto(css.includes(`.sin-f-${f.id} [data-funcion="${f.id}"]`), "falta la regla de CSS de "+f.id);
+    });
+  } finally { if(antes===null) localStorage.removeItem("ffunciones"); else localStorage.setItem("ffunciones",antes); aplicarFunciones(); fns.forEach((f,i)=>{ window[f]=orig[i]; }); }
+});
+
+test("ocultar los avisos de aumentos los saca de «Para tener en cuenta»", ()=>{
+  const antes=localStorage.getItem("ffunciones");
+  try{
+    localStorage.setItem("ffunciones", JSON.stringify({aumentos:false}));
+    igual(alertaDeAumentos([{id:1,tipo:"Gasto",frecuente:true,mesInicio:"2025-01",importe:1000,moneda:"ARS",cat:"Casa",subcat:"Alquiler",fecha:"2025-01-01"}],[], "2026-11", 20), null);
+  } finally { if(antes===null) localStorage.removeItem("ffunciones"); else localStorage.setItem("ffunciones",antes); }
+});
+
+test("la revisión de inversiones suma las ventas del fondo y la conciliación con el broker", ()=>{
+  const x=revisionExtras([]);
+  igual(x.ventas,0); igual(x.broker,null, "sin CEDEARs no hay conciliación");
+  igual(cantidadParaRevisarInv([]),0);
 });
 
 grupo("Aislamiento de los tests");
