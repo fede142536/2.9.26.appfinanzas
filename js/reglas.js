@@ -99,6 +99,7 @@ function aplicarReglasAImportados(items, reglas){
 function irAReglas(){
   showPage("config", document.querySelector('.nav-btn[onclick*="\'config\'"]'));
   if(typeof abrirSeccionConfig==="function") abrirSeccionConfig("cfg-sec-organizar");
+  if(typeof setFiltroOrganizar==="function") setFiltroOrganizar("reglas");
   setTimeout(()=>{ const c=document.getElementById("reglas-card"); if(c) c.scrollIntoView({behavior:"smooth", block:"start"}); }, 250);
 }
 
@@ -126,6 +127,7 @@ function renderReglasManager(){
       <button type="button" class="btn-sm" onclick="crearReglaDeIdea(${i})">Crear</button></div>`).join("")}</div>` : "";
   el._ideas=ideas;
   el.innerHTML=filas+ideasHTML;
+  if(typeof renderFiltroOrganizar==="function") renderFiltroOrganizar();
 }
 function crearReglaDeIdea(i){
   const el=document.getElementById("reglas-manager");

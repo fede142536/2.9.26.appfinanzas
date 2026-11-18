@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v269**
+**Versión actual: v270**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,13 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 18 de noviembre de 2026
 
+- **v270** · Patrimonio total
+  Tarjeta «Tu patrimonio hoy» arriba del Dashboard y hoja con el detalle: cuentas
+  con saldo real, fondos de ahorro (a valor actual si está cargado), inversiones
+  que no son parte de un fondo (a precio de hoy con cantidad y precio; si no, el
+  capital invertido) y dólares a mano (sin lo guardado ni lo invertido), sin contar
+  dos veces lo del fondo. Los USD se pasan a pesos con el dólar del último cambio
+  o el que se escriba en la hoja.
 - **v269** · ¿llego a fin de mes?
   Tarjeta «Fin de mes» en Movimientos (mes en curso) con la estimación de cómo
   terminás el mes: balance de hoy (ya con los fijos del mes) + ingresos frecuentes
