@@ -350,7 +350,7 @@ function renderEditFormBase(m){
           <span style="color:var(--accent);font-weight:500">↔️ Es un traspaso (cambia de bolsillo, no lo gastaste)</span>
         </label>
       </div>
-      <div class="form-group">
+      <div class="form-group" data-funcion="recuperable">
         <label class="form-label" for="edit-recup">Monto recuperable (opcional)</label>
         <div class="amount-wrap"><span class="amount-prefix">$</span>
           <input type="number" id="edit-recup" class="form-input amount-input" value="${m.recuperable||0}" inputmode="decimal" step="any">

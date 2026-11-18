@@ -2215,3 +2215,17 @@ body.con-tabbar.escribiendo .save-bar{bottom:0;padding-bottom:calc(12px + env(sa
 .cat-tipo-n{margin-left:auto;font-size:12px;font-weight:500;color:var(--muted)}
 .cat-tipo-cuerpo{padding:4px 0 8px}
 .cat-sin-res{font-size:13px;color:var(--muted);padding:10px 0}
+
+/* ── Funciones de la app que se pueden ocultar (ver funciones.js) ── */
+.sin-f-google [data-funcion="google"],.sin-f-bi [data-funcion="bi"],.sin-f-voz [data-funcion="voz"],.sin-f-anual [data-funcion="anual"],
+.sin-f-alertas [data-funcion="alertas"],.sin-f-reparar [data-funcion="reparar"],.sin-f-recuperable [data-funcion="recuperable"],
+.sin-f-metas [data-funcion="metas"],.sin-f-aumentos [data-funcion="aumentos"],.sin-f-simulador [data-funcion="simulador"],
+.sin-f-cambio [data-funcion="cambio"]{display:none!important}
+/* Importar › Reparar datos: un desplegable con la forma de las secciones de Configuración */
+.imp-reparar{margin:10px 16px}
+.imp-reparar>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.imp-reparar>summary::-webkit-details-marker{display:none}
+.imp-reparar>summary::after{content:"▸";margin-left:auto;color:var(--muted);font-size:14px;transition:transform .15s ease}
+.imp-reparar[open]>summary::after{transform:rotate(90deg)}
+.imp-reparar>.card{margin-left:0;margin-right:0}
+.inv-revisar-ok{color:var(--muted)}

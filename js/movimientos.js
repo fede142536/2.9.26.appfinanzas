@@ -114,8 +114,8 @@ function showPage(id,btn){
   if(id==="tc" && !yaAlDia) renderTarjetas();
   if(id==="inv" && !yaAlDia) renderInv();
   if(id==="ahorro" && !yaAlDia) renderAhorro();
-  if(id==="import"){ renderImportHistory(); renderMigrarCambios(); renderTraspasos(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
-  if(id==="config"){initSeccionesConfig();renderExportStats();renderCatManager();renderReglasManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderSinCuentaCard();renderVentasFondoCard();renderPapeleraCard();renderTarjetasManager();renderEstadoBackup();renderVencConfig();renderInflacion();} // liviano
+  if(id==="import"){ renderImportHistory(); renderMigrarCambios(); renderTraspasos(); resumenRepararDatos(); } // liviano, y depende de importHistory (no cubierto por datosVersion)
+  if(id==="config"){initSeccionesConfig();renderExportStats();renderCatManager();renderReglasManager();renderPresupManager();renderPinStatus();mostrarVersionApp();renderCuentasManager();renderSinCuentaCard();renderFuncionesConfig();renderPapeleraCard();renderTarjetasManager();renderEstadoBackup();renderVencConfig();renderInflacion();} // liviano
   if(["mov","dash","tc","inv","ahorro"].includes(id)) paginaVersionRenderizada[id]=datosVersion;
   // Reponer el scroll AL FINAL, no antes: los render de arriba cambian el alto de la página y
   // si se hace primero el navegador recorta la posición al alto viejo (más corto) y quedás
@@ -1574,17 +1574,16 @@ function renderMovs(){
     mosTodos.push(mosaicoHTML("↓","Ingresos","var(--success)",fmtTotal(ingTotal),
       `${nMovsIngreso} ${nMovsIngreso===1?"movimiento":"movimientos"}`, null, "tab:Ingreso"));
     mosTodos.push(mosaicoHTML("↑","Gastos","var(--danger)",fmtTotal(gasTotal),pctDeIngreso(gasTotal), null, "tab:Gasto"));
-    const mosFrec=frecPorPagarMosaicoHTML(frecuentesPorPagar(mesMovs));
-    if(mosFrec) mosTodos.push(mosFrec);
-    if(!filtroFecha){ const mosCobrar=frecPorCobrarMosaicoHTML(frecuentesPorCobrar(mesActual)); if(mosCobrar) mosTodos.push(mosCobrar); }
+    // Movimientos más liviano: fijos solo Ingresos, Gastos y Fin de mes; los frecuentes aparecen cuando queda alguno por pagar o cobrar.
+    const rFrec=frecuentesPorPagar(mesMovs);
+    if(rFrec.pendientes>0) mosTodos.push(frecPorPagarMosaicoHTML(rFrec));
+    if(!filtroFecha){ const rCob=frecuentesPorCobrar(mesActual); if(rCob.pendientes>0) mosTodos.push(frecPorCobrarMosaicoHTML(rCob)); }
     // ¿Llego a fin de mes? Solo en el mes en curso (ver fin-de-mes.js).
     if(!filtroFecha && mesActual===currentYM() && typeof finDeMesMosaicoHTML==="function"){ const mosFdm=finDeMesMosaicoHTML(); if(mosFdm) mosTodos.splice(2,0,mosFdm); }
     if(guardado>0){
       mosTodos.push(mosaicoHTML("🏦","Ahorrado","var(--save)",fmtTotal(guardado),pctDeIngreso(guardado), null, "f:ahorrado"));
     }
-    if(rp.retiradoAMano>0){
-      mosTodos.push(mosaicoHTML("💸","Sacado de ahorros","var(--save)",fmtTotal(rp.retiradoAMano),"quedó a mano", null, "f:de-ahorros"));
-    }
+    // "Sacado de ahorros" ya no va aparte: lo dice el renglón de abajo del balance, y el mosaico "De ahorros" lleva al detalle.
     // Todo lo de inversiones va en UNA card (antes eran cinco o seis sueltas: invertido, resultado, neto y una por ticker). Al tocarla se abre el detalle de cada
     // instrumento: cuánto pusiste, cuánto cobraste y cómo rindió (ver abrirInvPeriodo). Los filtros por ticker de la lista siguen en esa hoja.
     const hayCobrosInv=mesMovs.some(m=>m.tipo==="Inversion"&&isInvSalida(m));

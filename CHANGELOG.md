@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v272**
+**Versión actual: v273**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,12 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 18 de noviembre de 2026
 
+- **v273** · La serie de inflación se actualiza sola
+  Al abrir la app, si a la serie le falta el mes pasado (o no hay serie) se baja
+  sola; si no se puede, se reintenta cada 3 días sin avisar, y cuando llega un mes
+  nuevo un aviso corto lo cuenta. Se conservan los meses que ya había.
+  Arreglo: con el PIN activo la serie se guardaba en localStorage pero se leía del
+  sobre cifrado, así que nunca se encontraba («Sin serie cargada» para siempre).
 - **v272** · Cuentas, tarjetas y categorías con bloques desplegables
   Reemplaza los chips de filtro por desplegables con flecha, con la misma forma
   que las secciones de Configuración: Cuentas, Nombres de tarjetas, Categorías,

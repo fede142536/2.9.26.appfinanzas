@@ -1656,12 +1656,37 @@ function abrirRevisionInversiones(){
   document.getElementById("modal-revision-inv").classList.add("open");
 }
 function cerrarRevisionInversiones(){ document.getElementById("modal-revision-inv").classList.remove("open"); }
+// La revisión junta TODO lo que revisa inversiones y fondo (antes eran cuatro lugares: esta hoja, "Conciliar con el broker" en
+// Ahorros, "Ventas que salieron de ahorros" en Configuración y "Completar cantidades"). Pura sobre la lista: lo que se suma a
+// los problemas de revisionInversiones() — {ventas: N ventas del fondo por revisar, broker: resumen de la conciliación o null}.
+function revisionExtras(lista){
+  let ventas=0, broker=null;
+  try{ if(typeof ventasPorRevisar==="function") ventas=ventasPorRevisar(lista).length; }catch(e){ ventas=0; }
+  try{ if(typeof conciliarCedears==="function"){ const r=resumenConciliacion(conciliarCedears(lista)); if(r.hayDatos) broker=r; } }catch(e){ broker=null; }
+  return {ventas, broker};
+}
+// Cuántas cosas hay para revisar en total (la cifra del aviso de Cartera).
+function cantidadParaRevisarInv(lista){
+  const x=revisionExtras(lista);
+  return revisionInversiones(lista, revisionIgnorados()).length + (x.ventas?1:0) + (x.broker && x.broker.pendientes?1:0);
+}
 function pintarRevisionInversiones(){
   const cont=document.getElementById("revision-inv-contenido"); if(!cont) return;
   const probs=revisionInversiones(movs, revisionIgnorados());
+  const x=revisionExtras(movs);
   const m$=(n,mon)=>mon==="USD" ? fmtMoneda(n,"USD") : fmtS(n);
   const ok=c=>`<button type="button" class="btn-sm" onclick="revisionEstaBien(${attrJS(c)})">Está bien así</button>`;
-  if(!probs.length){ cont.innerHTML=`<div class="empty" style="padding:24px 8px"><div class="empty-icon">✅</div>No encontré nada para revisar: tus inversiones cierran.</div>`; return; }
+  const extras=(x.ventas ? `<div class="rev-item">
+      <div class="rev-tit">💸 ${x.ventas} ${x.ventas===1?"venta salió":"ventas salieron"} de tus ahorros y el fondo no lo refleja bien</div>
+      <div class="rev-det">O el retiro está cargado dos veces. Revisalas: si ya cargaste el retiro a mano, se unen en un solo registro.</div>
+      <div class="rev-acc"><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();abrirVentasFondo()">Revisar ventas</button></div></div>` : "")
+    + (x.broker ? `<div class="rev-item">
+      <div class="rev-tit">🔎 Conciliar con el broker: ${x.broker.pendientes ? `<span style="color:var(--warning)">${x.broker.pendientes} ${x.broker.pendientes===1?"diferencia":"diferencias"}</span>` : `<span style="color:var(--save)">tu fondo coincide ✓</span>`}</div>
+      <div class="rev-det">Compara tus compras y ventas de CEDEARs con los movimientos de tu fondo (${x.broker.coinciden} ${x.broker.coinciden===1?"coincide":"coinciden"}).</div>
+      <div class="rev-acc"><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();abrirConciliacion()">Ver detalle</button></div></div>` : "");
+  if(!probs.length){ cont.innerHTML=(x.ventas || (x.broker && x.broker.pendientes))
+      ? `<p class="txt-sm" style="margin:0 0 10px">✅ Tus resultados cierran. Queda esto por mirar:</p>`+extras
+      : `<div class="empty" style="padding:24px 8px"><div class="empty-icon">✅</div>No encontré nada para revisar: tus inversiones cierran.</div>`+extras; return; }
   cont.innerHTML=`<p class="txt-xs txt-muted" style="margin:0 0 10px;line-height:1.45">Cosas que pueden estar haciendo que tus números de inversiones no sean reales. Arreglalas o marcá "Está bien así" si son correctas.</p>`+
   probs.map(p=>{
     if(p.tipo==="venta-sin-capital") return `<div class="rev-item rev-alta">
@@ -1690,7 +1715,7 @@ function pintarRevisionInversiones(){
       <div class="rev-det">Son de tickers en los que ya llevás nominales: sin ellas la posición no cierra.</div>
       <div class="rev-acc"><button type="button" class="btn-sm" onclick="cerrarRevisionInversiones();abrirCantidades()">Completar</button>${ok(p.clave)}</div></div>`;
     return "";
-  }).join("");
+  }).join("")+extras;
 }
 // Vincula cada compra con su depósito al fondo (origenInvId) e iguala el monto del depósito al de la inversión. Se puede deshacer.
 function revisionVincular(){
@@ -1826,8 +1851,10 @@ function renderInvCartera(){
   const rendTxt=["ars","usd"].filter(k=>rendTot[k].n).map(k=>{ const d=rendTot[k].act-rendTot[k].ini; return `<strong style="color:${d>=0?"var(--success)":"var(--danger)"}">${d>=0?"+":"-"}${fmtPosMonto(Math.abs(d),k==="usd")}</strong> <span class="inv-pos-meta-i">sobre ${fmtPosMonto(rendTot[k].ini,k==="usd")}</span>`; }).join(" · ");
   const chips=catsAb.length>1 ? `<div class="inv-cart-chips" role="group" aria-label="Filtrar por categoría">`+["todas",...catsAb].map(c=>`<button type="button" class="filter-chip${invCartCat===c?" active":""}" aria-pressed="${invCartCat===c}" onclick="setInvCartCat(${attrJS(c)})">${c==="todas"?"Todas":escapeHtml(c)}</button>`).join("")+`</div>` : "";
   // Un solo aviso para todo lo que hay que revisar (antes eran uno por tipo de problema): se abre la revisión con cada cosa y su arreglo.
-  const nRev=revisionInversiones(movs, revisionIgnorados()).length;
-  const avisoRevision=nRev ? `<button type="button" class="inv-cerradas-link" onclick="abrirRevisionInversiones()">🔎 ${nRev} ${nRev===1?"cosa para revisar":"cosas para revisar"} en tus inversiones · Revisar ›</button>` : "";
+  const nRev=cantidadParaRevisarInv(movs);
+  // Siempre a mano: es la puerta a la revisión, la conciliación con el broker, las ventas del fondo y las cantidades.
+  const avisoRevision=nRev ? `<button type="button" class="inv-cerradas-link" onclick="abrirRevisionInversiones()">🔎 ${nRev} ${nRev===1?"cosa para revisar":"cosas para revisar"} en tus inversiones · Revisar ›</button>`
+    : `<button type="button" class="inv-cerradas-link inv-revisar-ok" onclick="abrirRevisionInversiones()">🔎 Revisar tus inversiones · todo cierra ›</button>`;
   let html=chips+avisoRevision+`<div class="inv-cart-head">
     <span>${abiertas.length} ${abiertas.length===1?"posición":"posiciones"}</span>
     <span class="inv-cart-tot">${totArs?`<strong>${fmtS(totArs)}</strong>`:""}${totArs&&totUsd?" · ":""}${totUsd?`<strong>${fmtUsdInv(totUsd)}</strong>`:""}</span>
