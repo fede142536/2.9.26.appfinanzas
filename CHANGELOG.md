@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v268**
+**Versión actual: v269**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,12 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 18 de noviembre de 2026
 
+- **v269** · ¿llego a fin de mes?
+  Tarjeta «Fin de mes» en Movimientos (mes en curso) con la estimación de cómo
+  terminás el mes: balance de hoy (ya con los fijos del mes) + ingresos frecuentes
+  por cobrar − resúmenes de tarjeta por pagar (si se pagan con «Pagar resumen») −
+  la mediana de lo que gastaste del día siguiente a fin de mes en los últimos 6
+  meses (o el ritmo del mes si no hay historial). Al tocarla, la hoja con la cuenta.
 - **v268** · Gastos que se repiten → pasarlos a frecuente
   Detecta los gastos que cargás a mano una vez por mes (Netflix, el gimnasio) y que
   no son frecuentes, y ofrece volverlos frecuentes de un toque: al guardar el gasto

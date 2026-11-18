@@ -80,6 +80,7 @@
 <script src="js/reglas.js"></script>
 <script src="js/repetidos.js"></script>
 <script src="js/fin-de-mes.js"></script>
+<script src="js/patrimonio.js"></script>
 <script src="js/cambio-moneda.js"></script>
 <script src="js/traspasos.js"></script>
 <script src="js/dashboard.js"></script>
@@ -12193,6 +12194,45 @@ test("los resúmenes por pagar solo se restan si los pagás con «Pagar resumen�
     movs=[{id:2,tipo:"Gasto",cat:"Tarjeta de crédito",importe:20000,moneda:"ARS",fecha:addMonths(ym,-1)+"-10",pagoTarjeta:{ym:addMonths(ym,-1),tarjeta:"Visa",moneda:"ARS"}}];
     igual(tarjetaPorPagarARS(ym, movs),20000, "la cuota de este mes queda por pagar");
   } finally { tcs=antesT; movs=antesM; }
+});
+
+grupo("Patrimonio total");
+
+test("los dólares a mano no cuentan lo guardado en un fondo ni lo invertido", ()=>{
+  const u=(tipo,usd,extra)=>({tipo,moneda:"USD",importe:0,importeOrig:usd,fecha:"2026-10-01",cat:"X",...extra});
+  const lista=[u("Ingreso",1000),u("Gasto",100),u("Gasto",300,{esAhorro:true}),u("Gasto",50,{usaAhorro:true}),
+    {tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:0,importeUSD:200,fecha:"2026-10-02"},
+    {tipo:"Inversion",cat:"Bonos",subcat:"Bonos Venta",ticker:"AL30",importe:0,importeUSD:80,fecha:"2026-10-03"},
+    {tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"KO",importe:50000,importeUSD:40,fecha:"2026-10-04"}];   // en pesos: no toca los dólares
+  igual(dolaresAMano(lista), 1000-100-300-50+50-200+80);
+});
+
+test("el patrimonio suma cuentas, fondos, inversiones fuera del fondo y dólares, sin contar dos veces", ()=>{
+  const lista=[
+    // fondo de retiro en SPY: depósito ligado a la compra → SPY es del fondo
+    {id:1,tipo:"Inversion",cat:"CEDEARs",subcat:"CEDEARs Compra",ticker:"SPY",importe:100000,importeUSD:0,fecha:"2026-09-01",cantidad:5},
+    {id:2,tipo:"Gasto",cat:"Fondo de Retiro",subcat:"SPY",importe:100000,moneda:"ARS",fecha:"2026-09-01",esAhorro:true,origenInvId:1},
+    // un FCI aparte, sin cantidad: cuenta lo invertido
+    {id:3,tipo:"Inversion",cat:"FCI",subcat:"FCI Suscripción",ticker:"BCAHA",importe:300000,importeUSD:0,fecha:"2026-10-01"},
+    // una acción aparte con cantidad y precio: a precio de hoy
+    {id:4,tipo:"Inversion",cat:"Acciones",subcat:"Acciones Compra",ticker:"YPFD",importe:50000,importeUSD:0,fecha:"2026-10-02",cantidad:2},
+    {id:5,tipo:"Ingreso",cat:"Extra",moneda:"USD",importe:0,importeOrig:100,fecha:"2026-10-05"}];
+  const p=calcularPatrimonio({lista, cuentas:[{cuenta:"Galicia",saldo:250000}], sinSaldo:["MP"], vals:{"Fondo de Retiro":{ars:130000,usd:null,fecha:"2026-11-01"}},
+    precios:{YPFD:{precio:40000,fecha:"2026-11-01"}}, splits:{}, hoy:"2026-11-18", dolar:1000});
+  igual(p.partes.cuentas.ars,250000);
+  igual(p.partes.fondos.ars,130000, "el fondo a valor actual");
+  igual(p.partes.inversiones.detalle.map(i=>i.ticker+":"+i.ars).join(","),"BCAHA:300000,YPFD:80000", "SPY no se cuenta otra vez");
+  igual(p.partes.dolares.usd,100);
+  igual(p.totalARS,250000+130000+300000+80000); igual(p.totalUSD,100); igual(p.total,760000+100*1000);
+  igual(calcularPatrimonio({lista:[], cuentas:[], vals:{}, dolar:null}).total,0);
+});
+
+test("el dólar por defecto es el de tu último cambio", ()=>{
+  const patas=crearCambio({fecha:"2026-11-10", montoARS:145000, montoUSD:100, sentido:"compra", cuenta:"Galicia", idBase:500});
+  const lista=(Array.isArray(patas) ? patas : (patas && patas.patas) || []);
+  const d=dolarDelUltimoCambio(lista);
+  cierto(!!d, "encontró el cambio"); igual(d.valor,1450);
+  igual(dolarDelUltimoCambio([]), null);
 });
 
 grupo("Aislamiento de los tests");

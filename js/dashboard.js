@@ -347,6 +347,7 @@ function toggleDashInsight(i){
 }
 
 function renderDashResumen(){
+  if(typeof renderPatrimonioCard==="function") renderPatrimonioCard();
   const ym=dashMes;
   const hoyYM=currentYM();
   const year=ym.slice(0,4);
