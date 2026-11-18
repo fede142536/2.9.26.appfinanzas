@@ -121,7 +121,7 @@ function mejorDelConteo(conteo, fuente){
 function sugerirCategoriaPara(texto, tipoActual, lista){
   if(normalizarTexto(texto).length<SUG_MIN_LARGO) return null;
   // Nivel 0: una regla tuya (js/reglas.js) manda sobre cualquier adivinanza.
-  return (typeof reglaParaNota==="function" ? reglaParaNota(texto, tipoActual, reglasCat) : null)
+  return (typeof reglaParaNota==="function" ? reglaParaNota(texto, tipoActual, reglasVigentes()) : null)
       || sugerirPorNotaExacta(texto, tipoActual, lista)
       || sugerirPorPalabras(texto, tipoActual, lista)
       || sugerirPorReglas(texto, tipoActual);
@@ -439,7 +439,7 @@ function alertasDelMomento(lista, tcsLista, hoyYMD){
   }
 
   // ── Gastos que cargás a mano todos los meses y podrían ser frecuentes (repetidos.js) ──
-  const repetidos=typeof candidatosAFrecuente==="function" ? candidatosAFrecuente(lista, tcsLista, hoyYM, typeof repetidosIgnorados==="function" ? repetidosIgnorados() : []) : [];
+  const repetidos=(typeof candidatosAFrecuente==="function" && (typeof funcionActiva!=="function" || funcionActiva("repetidos"))) ? candidatosAFrecuente(lista, tcsLista, hoyYM, typeof repetidosIgnorados==="function" ? repetidosIgnorados() : []) : [];
   if(repetidos.length){
     const n=repetidos.length;
     out.push({nivel:"info", icono:"🔁",

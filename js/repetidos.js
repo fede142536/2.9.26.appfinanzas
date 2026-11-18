@@ -53,7 +53,7 @@ const candidatosActuales=()=>candidatosAFrecuente(movs, tcs, currentYM(), repeti
 
 // El candidato al que pertenece un gasto recién cargado (para ofrecerlo en el momento), o null.
 function candidatoDeMovimiento(m){
-  if(!m || m.tipo!=="Gasto" || !m.nota) return null;
+  if(!m || m.tipo!=="Gasto" || !m.nota || !(typeof funcionActiva!=="function" || funcionActiva("repetidos"))) return null;
   const clave=normalizarTexto(m.nota)+"|"+(m.moneda==="USD"?"USD":"ARS");
   return candidatosActuales().find(c=>c.clave===clave) || null;
 }
@@ -84,7 +84,7 @@ function pintarAvisoRepetidos(){
   const el=document.getElementById("mov-repetidos-aviso");
   if(!el) return;
   const ym=currentYM();
-  const lista=(filtro==="Todos" && mesActual===ym && localStorage.getItem(REP_AVISO_KEY)!==ym) ? candidatosActuales() : [];
+  const lista=(filtro==="Todos" && mesActual===ym && localStorage.getItem(REP_AVISO_KEY)!==ym && (typeof funcionActiva!=="function" || funcionActiva("repetidos"))) ? candidatosActuales() : [];
   if(!lista.length){ el.style.display="none"; el.innerHTML=""; return; }
   const n=lista.length;
   el.style.display="block";

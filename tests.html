@@ -12339,7 +12339,8 @@ test("cada función se oculta y se vuelve a mostrar, y las avanzadas arrancan oc
   try{
     localStorage.removeItem("ffunciones");
     ["bi","voz","anual","alertas"].forEach(id=>cierto(!funcionActiva(id), id+" arranca oculta"));
-    ["reparar","recuperable","metas","aumentos","simulador","cambio"].forEach(id=>cierto(funcionActiva(id), id+" arranca visible"));
+    ["reparar","recuperable","metas","aumentos","simulador","cambio","cargarapida","reglas","findemes","presupuestos","vencimientos","cierre","patrimonio","usd","repetidos","novedades","inflacion"].forEach(id=>cierto(funcionActiva(id), id+" arranca visible"));
+    igual(new Set(FUNCIONES.map(f=>f.grupo)).size<=FUNCIONES_GRUPOS.length, true); FUNCIONES.forEach(f=>cierto(FUNCIONES_GRUPOS.includes(f.grupo), f.id+" sin grupo conocido"));
     setFuncion("metas", false);
     cierto(!funcionActiva("metas")); cierto(document.body.classList.contains("sin-f-metas"), "el body lleva la clase que la esconde");
     setFuncion("metas", true);
@@ -12348,7 +12349,7 @@ test("cada función se oculta y se vuelve a mostrar, y las avanzadas arrancan oc
     // cada función tiene algo marcado en la pantalla, y una regla de CSS que lo esconde
     const html=await (await fetch("index.html")).text(), css=await (await fetch("styles.css")).text(), ed=await (await fetch("js/editar-movimiento.js")).text();
     FUNCIONES.forEach(f=>{
-      if(f.id!=="aumentos") cierto(html.includes(`data-funcion="${f.id}"`) || ed.includes(`data-funcion="${f.id}"`), "nada marcado para "+f.id);
+      if(!["aumentos","novedades","findemes"].includes(f.id)) cierto(html.includes(`data-funcion="${f.id}"`) || ed.includes(`data-funcion="${f.id}"`), "nada marcado para "+f.id);
       cierto(css.includes(`.sin-f-${f.id} [data-funcion="${f.id}"]`), "falta la regla de CSS de "+f.id);
     });
   } finally { if(antes===null) localStorage.removeItem("ffunciones"); else localStorage.setItem("ffunciones",antes); aplicarFunciones(); fns.forEach((f,i)=>{ window[f]=orig[i]; }); }
@@ -12366,6 +12367,30 @@ test("la revisión de inversiones suma las ventas del fondo y la conciliación c
   const x=revisionExtras([]);
   igual(x.ventas,0); igual(x.broker,null, "sin CEDEARs no hay conciliación");
   igual(cantidadParaRevisarInv([]),0);
+});
+
+test("ocultar reglas, fin de mes o gastos que se repiten también apaga su lógica", ()=>{
+  const antes=localStorage.getItem("ffunciones"), antesR=reglasCat;
+  try{
+    reglasCat=normalizarReglas([{id:1,texto:"netflix",tipo:"Gasto",cat:"Ocio"}]);
+    localStorage.setItem("ffunciones", JSON.stringify({reglas:false, findemes:false, repetidos:false}));
+    igual(reglasVigentes().length,0, "ocultas, las reglas no se aplican");
+    cierto(!sugerirCategoriaPara("Netflix","Gasto",[]) || sugerirCategoriaPara("Netflix","Gasto",[]).fuente!=="regla");
+    igual(finDeMesMosaicoHTML(),"", "sin tarjeta de fin de mes");
+    igual(candidatoDeMovimiento({tipo:"Gasto",nota:"Gym",moneda:"ARS"}), null, "no se ofrece pasar a frecuente");
+    localStorage.setItem("ffunciones", JSON.stringify({}));
+    igual(reglasVigentes().length,1);
+  } finally { reglasCat=antesR; if(antes===null) localStorage.removeItem("ffunciones"); else localStorage.setItem("ffunciones",antes); }
+});
+
+test("las funciones se ven agrupadas por pantalla, cada grupo desplegable", ()=>{
+  const el=document.createElement("div"); el.id="funciones-lista"; document.body.appendChild(el);
+  try{
+    renderFuncionesConfig();
+    igual(el.querySelectorAll("details.fun-grupo").length, FUNCIONES_GRUPOS.length);
+    igual(el.querySelectorAll('input[type="checkbox"]').length, FUNCIONES.length, "un interruptor por función");
+    cierto(el.textContent.includes("visibles"), "cada grupo dice cuántas se ven");
+  } finally { el.remove(); }
 });
 
 grupo("Aislamiento de los tests");

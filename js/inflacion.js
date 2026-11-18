@@ -179,6 +179,7 @@ function inflacionDesactualizada(guardado, hoyYM){
 // Devuelve qué pasó: "al-dia" | "sin-conexion" | "esperando" | "fallo" | "sin-novedad" | "actualizada".
 async function actualizarInflacionSola(fetchFn, hoyISO){
   const hoy=hoyISO || hoyLocal();
+  if(!fetchFn && !(typeof funcionActiva!=="function" || funcionActiva("inflacion"))) return "oculta";
   const g=leerSerieInflacion();
   if(!inflacionDesactualizada(g, hoy.slice(0,7))) return "al-dia";
   if(!fetchFn && typeof navigator!=="undefined" && navigator.onLine===false) return "sin-conexion";

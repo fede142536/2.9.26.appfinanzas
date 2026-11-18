@@ -71,6 +71,7 @@ function finDeMesActual(){
 
 // El mosaico de Movimientos (solo en el mes en curso).
 function finDeMesMosaicoHTML(){
+  if(!(typeof funcionActiva!=="function" || funcionActiva("findemes"))) return "";
   let p;
   try{ p=finDeMesActual(); }catch(e){ return ""; }
   if(p.metodo==="sin-datos" && !p.porCobrar && !p.tarjeta) return "";

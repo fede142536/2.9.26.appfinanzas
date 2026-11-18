@@ -130,10 +130,10 @@ async function bootApp(){
   // apenas abre la app. avisarSiFaltaBackup() decide adentro si corresponde mostrar algo.
   setTimeout(avisarSiFaltaBackup, 1300);
   // La copia automática del día va después, para no competir con el primer render.
-  setTimeout(avisarVencidosSinPagar, 2000);   // vencimientos que pasaron sin marcarse como pagados (una vez por día)
+  setTimeout(()=>{ if((typeof funcionActiva!=="function" || funcionActiva("vencimientos"))) avisarVencidosSinPagar(); }, 2000);   // vencimientos que pasaron sin marcarse como pagados (una vez por día)
   setTimeout(copiaAutomaticaSiToca, 2500);
   setTimeout(programarSyncCalendario, 3500);   // si hay un permiso vigente de Google, se ponen al día los vencimientos
-  setTimeout(()=>avisarNovedades(0), 4200);   // qué hay de nuevo en esta versión (después de los otros avisos, sin taparlos)
+  setTimeout(()=>{ if((typeof funcionActiva!=="function" || funcionActiva("novedades"))) avisarNovedades(0); }, 4200);   // qué hay de nuevo en esta versión (después de los otros avisos, sin taparlos)
   setTimeout(()=>{ if(typeof actualizarInflacionSola==="function") actualizarInflacionSola().catch(()=>{}); }, 6000);   // la serie de inflación, si le falta el mes pasado
 }
 bootApp();

@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v273**
+**Versión actual: v274**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,15 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 18 de noviembre de 2026
 
+- **v274** · Una app más simple — funciones que se pueden ocultar
+  - Configuración › General › Funciones de la app: interruptores para ocultar o
+    mostrar Google (calendario y Drive), exportar para BI, carga por voz, resumen
+    anual e informe de otro período, «Para tener en cuenta», Reparar datos, gastos
+    compartidos, metas, avisos de aumentos, simulador de cuotas y cambio de moneda.
+    No se borra nada. Las avanzadas arrancan ocultas (Google solo si no se usa).
+  - Revisión de inversiones unificada: suma las ventas que salieron de ahorros y la
+    conciliación con el broker; se quitan sus tarjetas sueltas de Ahorros y de
+    Configuración, y el acceso de Cartera queda siempre a mano. …
 - **v273** · La serie de inflación se actualiza sola
   Al abrir la app, si a la serie le falta el mes pasado (o no hay serie) se baja
   sola; si no se puede, se reintenta cada 3 días sin avisar, y cuando llega un mes

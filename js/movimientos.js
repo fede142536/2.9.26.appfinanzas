@@ -1182,7 +1182,7 @@ function pintarFranjaVencimientos(){
   if(typeof pintarAvisoRepetidos==="function") pintarAvisoRepetidos();
   const el=document.getElementById("mov-arrastre");
   if(!el) return;
-  const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();
+  const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM() && (typeof funcionActiva!=="function" || funcionActiva("vencimientos"));
   // Los vencimientos son del mes en curso (avisar de lo que vence en un mes que ya pasó no sirve), pero lo que falta COBRAR se ve en el mes que mirás:
   // un ingreso frecuente de diciembre no está en la lista hasta que llega su día, y sin esta franja no figuraba en ningún lado.
   const verCobrar=filtro==="Todos" && !filtroFecha;
