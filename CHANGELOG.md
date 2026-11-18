@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v266**
+**Versión actual: v267**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,16 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 18 de noviembre de 2026
+
+- **v267** · Reglas automáticas de categoría
+  «Si la nota dice X → categoría/subcategoría (y cuenta)». Las reglas mandan sobre
+  el historial y los comercios conocidos, se aplican solas en Cargar, en la carga
+  rápida y al importar un Excel (lo que viene sin categoría). En Configuración ›
+  Cuentas, tarjetas y categorías › Reglas automáticas: alta, edición, borrado con
+  Deshacer, ideas según las notas que se repiten y opción de corregir lo ya cargado.
+  Guardadas cifradas (freglas) y en el backup.
 
 ## 17 de noviembre de 2026
 

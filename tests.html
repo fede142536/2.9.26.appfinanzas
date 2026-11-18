@@ -78,6 +78,7 @@
 <script src="js/tarjetas-inversiones.js"></script>
 <script src="js/analisis.js"></script>
 <script src="js/reglas.js"></script>
+<script src="js/repetidos.js"></script>
 <script src="js/cambio-moneda.js"></script>
 <script src="js/traspasos.js"></script>
 <script src="js/dashboard.js"></script>
@@ -12116,6 +12117,47 @@ test("guardar una regla puede corregir lo ya cargado y se puede deshacer; viaja 
     deshacer();
     igual(reglasCat.length,0); igual(movs[0].cat,"Otros", "deshacer vuelve todo atrás");
   } finally { creados.forEach(e=>e.remove()); movs=antes; reglasCat=antesR; fns.forEach((f,i)=>{ window[f]=orig[i]; }); }
+});
+
+grupo("Gastos que se repiten → frecuente");
+
+test("se sugiere lo que cargás una vez por mes, no el súper ni lo que dejaste de pagar", ()=>{
+  const g=(id,nota,fecha,imp,extra)=>({id,tipo:"Gasto",nota,cat:"Ocio",subcat:"Otros",importe:imp,moneda:"ARS",fecha,cuenta:"Galicia",...extra});
+  const lista=[
+    g(1,"Netflix","2026-08-03",9000),g(2,"netflix","2026-09-03",9000),g(3,"Netflix","2026-10-03",9500),g(4,"Netflix","2026-11-03",9900),
+    g(5,"Carrefour","2026-09-02",50000),g(6,"Carrefour","2026-09-20",30000),g(7,"Carrefour","2026-10-02",40000),g(8,"Carrefour","2026-10-15",20000),g(9,"Carrefour","2026-11-01",45000),
+    g(10,"Gimnasio","2026-05-01",20000),g(11,"Gimnasio","2026-06-01",20000),g(12,"Gimnasio","2026-07-01",20000),           // dejó de pagarse
+    g(13,"Spotify","2026-09-05",3000),g(14,"Spotify","2026-10-05",3000),g(15,"Spotify","2026-11-05",3000),
+    g(16,"Spotify","2026-08-05",3000,{frecuente:true,mesInicio:"2026-08"}),                                                 // ya tiene frecuente
+    g(17,"Fondo","2026-09-01",1,{esAhorro:true}),g(18,"Fondo","2026-10-01",1,{esAhorro:true}),g(19,"Fondo","2026-11-01",1,{esAhorro:true})];
+  const c=candidatosAFrecuente(lista,[], "2026-11", []);
+  igual(c.map(x=>x.desc).join(","),"Netflix");
+  igual(c[0].ultimoId,4); igual(c[0].montoUltimo,9900); igual(c[0].n,4);
+  igual(candidatosAFrecuente(lista,[], "2026-11", [c[0].clave]).length,0, "lo marcado como «No es fijo» no se vuelve a sugerir");
+  igual(candidatosAFrecuente(lista,[{frecuente:true,desc:"NETFLIX"}], "2026-11", []).length,0, "un gasto fijo de tarjeta con esa nota tampoco");
+});
+
+test("pasar a frecuente lo repite desde su mes, deja ese mes pago y se puede deshacer", ()=>{
+  const antes=movs, antesT=tcs;
+  const fns=["save","refrescarVistas","ofrecerDeshacerCambio","pintarAvisoRepetidos"], orig=fns.map(f=>window[f]); let deshacer=null;
+  window.save=()=>{}; window.refrescarVistas=()=>{}; window.pintarAvisoRepetidos=()=>{}; window.ofrecerDeshacerCambio=(msg,fn)=>{ deshacer=fn; };
+  try{
+    const ym=currentYM(), p1=addMonths(ym,-2), p2=addMonths(ym,-1);
+    movs=[{id:1,tipo:"Gasto",nota:"Gym",cat:"Salud",subcat:"Otros",importe:20000,moneda:"ARS",fecha:p1+"-01"},
+          {id:2,tipo:"Gasto",nota:"Gym",cat:"Salud",subcat:"Otros",importe:20000,moneda:"ARS",fecha:p2+"-01"},
+          {id:3,tipo:"Gasto",nota:"Gym",cat:"Salud",subcat:"Otros",importe:22000,moneda:"ARS",fecha:ym+"-01"}];
+    tcs=[];
+    const cand=candidatoDeMovimiento(movs[2]);
+    cierto(!!cand, "el gasto recién cargado pertenece a un candidato");
+    pasarAFrecuente(cand.clave);
+    const m=movs.find(x=>x.id===3);
+    cierto(m.frecuente); igual(m.mesInicio,ym); igual(m.pagos[ym],true, "el de este mes ya lo pagaste");
+    const prox=getMesMov(addMonths(ym,1)).filter(x=>x.nota==="Gym");
+    igual(prox.length,1, "el mes que viene aparece solo"); igual(prox[0].importe,22000); igual(prox[0].pagado,false);
+    igual(candidatosAFrecuente(movs,[],ym,[]).length,0, "ya no se sugiere");
+    deshacer();
+    cierto(!movs.find(x=>x.id===3).frecuente, "deshacer lo deja como estaba");
+  } finally { movs=antes; tcs=antesT; fns.forEach((f,i)=>{ window[f]=orig[i]; }); }
 });
 
 grupo("Aislamiento de los tests");

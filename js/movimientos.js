@@ -1178,6 +1178,7 @@ function pintarFranjaVencimientos(){
   if(typeof pintarAvisoCalendario==="function") pintarAvisoCalendario();
   if(typeof pintarAvisoCierre==="function") pintarAvisoCierre();
   if(typeof pintarAvisoAnual==="function") pintarAvisoAnual();
+  if(typeof pintarAvisoRepetidos==="function") pintarAvisoRepetidos();
   const el=document.getElementById("mov-arrastre");
   if(!el) return;
   const aplica=filtro==="Todos" && !filtroFecha && mesActual===currentYM();
