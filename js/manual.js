@@ -22,6 +22,7 @@ const MANUAL=[
     {p:"Pagué algo compartido y me van a devolver una parte, ¿cómo lo cargo?", r:"En el gasto, activá **Monto recuperable** y poné cuánto te devuelven. Aparece en la tarjeta «A recuperar» hasta que lo cobres."},
     {p:"¿Puedo cargar más rápido?", r:"Sí: en **Carga rápida** (arriba de Cargar) escribí algo como «nafta 15000 visa ayer» o tocá el 🎤 para dictarlo. La app completa importe, categoría, cuenta o tarjeta y fecha; lo revisás antes de guardar."},
     {p:"¿Cómo repito un movimiento (por ejemplo, el mismo gasto de la semana pasada)?", r:"Deslizá la fila hacia la **derecha** y tocá **🔁 Repetir**, o abrí el editor y usá «Repetir este movimiento». Se carga con la fecha de hoy."},
+    {p:"¿Puedo hacer que la app ponga sola la categoría?", pasos:["En Configuración › **Cuentas, tarjetas y categorías** › **Reglas automáticas**, tocá **+ Nueva**.","Escribí lo que dice la nota (por ejemplo «Netflix») y elegí la categoría, la subcategoría y, si querés, la cuenta.","Desde ahí, al escribir esa nota en Cargar, la categoría se pone sola (lo ves en verde con ⚡). También vale en la carga rápida y al importar un Excel.","Si ya tenías movimientos con esa nota y otra categoría, podés cambiarlos de una vez tildando la casilla antes de guardar."], ir:"reglas"},
     {p:"Necesito una cuenta, tarjeta o categoría nueva", r:"Al lado de cada campo está **+ Nueva** (o + Cta / + Cat.). También podés crear, renombrar o quitar cuentas, tarjetas y categorías en Configuración › **Cuentas, tarjetas y categorías**."}
   ]},
   {id:"editar", icono:"🛠", titulo:"Editar, borrar y buscar", preguntas:[
@@ -78,6 +79,7 @@ const MANUAL_IR={
   tarjetas:()=>irAPagina("tc"),
   dashboard:()=>irAPagina("dash"),
   saldoCuenta:()=>irASaldoPorCuenta(),
+  reglas:()=>irAReglas(),
   importar:()=>irAPagina("import"),
   novedades:()=>verTodasLasNovedades()
 };

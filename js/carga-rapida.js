@@ -302,6 +302,8 @@ function interpretarCargaRapida(texto, ctx){
       out.cat=porNombre.cat;
       if(sug && sug.cat===porNombre.cat && sug.subcat && catsDe && (catsDe[sug.cat]||[]).includes(sug.subcat)) out.subcat=sug.subcat;
     } else if(sug && sug.cat && (!catsDe || catsDe[sug.cat])){ out.cat=sug.cat; out.subcat=(sug.subcat && catsDe && (catsDe[sug.cat]||[]).includes(sug.subcat)) ? sug.subcat : ""; }
+    // Una regla tuya con cuenta la pone si no nombraste ninguna (en tarjeta no: ahí manda la tarjeta).
+    if(sug && sug.fuente==="regla" && sug.cuenta && !out.cuenta && out.tipo!=="Tarjeta" && (ctx.cuentas||[]).includes(sug.cuenta)) out.cuenta=sug.cuenta;
   }
 
   if(!(out.importe>0)){ out.motivo="No encontré el monto. Probá con algo como: nafta 15000 visa ayer"; return out; }
@@ -330,7 +332,7 @@ const CR_RECIENTE_DIAS=150;
 function sugerirParaCargaRapida(texto, tipo){
   const corte=crSumarDias(currentYMD(), -CR_RECIENTE_DIAS);
   const recientes=(movs||[]).filter(m=>String(m.fecha||"")>=corte);
-  return sugerirPorNotaExacta(texto, tipo, recientes) || sugerirPorPalabras(texto, tipo, recientes) || sugerirPorReglas(texto, tipo) || sugerirCategoriaPara(texto, tipo, movs);
+  return (typeof reglaParaNota==="function" ? reglaParaNota(texto, tipo, reglasCat) : null) || sugerirPorNotaExacta(texto, tipo, recientes) || sugerirPorPalabras(texto, tipo, recientes) || sugerirPorReglas(texto, tipo) || sugerirCategoriaPara(texto, tipo, movs);
 }
 function contextoCargaRapida(){
   return {hoy:currentYMD(), cuentas:getCuentas(), tarjetas:getTarjetas(), tickers:tickersConocidos(movs), sugerir:sugerirParaCargaRapida, cats:tp=>getCats(tp)};

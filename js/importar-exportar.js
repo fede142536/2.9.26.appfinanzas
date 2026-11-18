@@ -321,7 +321,9 @@ function handleXlsx(input){
         setXlsxStatus("❌ 0 movimientos detectados. Revisá que el archivo tenga columnas: Fecha, Ingreso/Gasto, ARS (o Importe).","var(--danger)");
         return;
       }
-      setXlsxStatus(`✓ ${parsed.length} movimientos detectados`,"var(--success)");
+      // Lo que viene sin categoría toma la de tus reglas automáticas (js/reglas.js).
+      const conRegla=typeof aplicarReglasAImportados==="function" ? aplicarReglasAImportados(parsed, reglasCat) : 0;
+      setXlsxStatus(`✓ ${parsed.length} movimientos detectados${conRegla?` · ${conRegla} categorizados por tus reglas`:""}`,"var(--success)");
       openImportPreview(parsed,`Excel: ${file.name}`);
     }catch(err){
       setXlsxStatus("❌ Error: "+err.message,"var(--danger)");

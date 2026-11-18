@@ -14,7 +14,7 @@
      que este valor siempre llega fresco y sirve para detectar que el resto de los archivos
      —que se sirven primero desde caché— quedaron viejos.
      ⚠️ SUBIR JUNTO CON CACHE_VERSION en sw.js. Hay un test que lo verifica. -->
-<meta name="enola-version" content="enola-v266">
+<meta name="enola-version" content="enola-v267">
 <!-- PWA meta tags -->
 <link rel="manifest" href="manifest.json">
 <!-- Color de la barra del sistema = color de fondo de la app (claro #f7f6f2 / oscuro #000). Los dos primeros siguen al sistema; applyTheme() (config-ui.js)
@@ -39,9 +39,9 @@
 <!-- Chart.js y SheetJS viven en js/vendor (versiones fijas, ver js/vendor/LEEME.md): la app no baja código de ningún CDN.
      defer es IMPORTANTE, no cosmético: el HTML se parsea sin esperar estos archivos, así la pantalla nunca queda en blanco por una carga lenta
      (los gráficos y el Excel se protegen solos si todavía no están; ver renderChartMensualBI y handleXlsx). -->
-<script defer src="js/vendor/xlsx.full.min.js?v=266"></script>
-<script defer src="js/vendor/chart.umd.js?v=266"></script>
-<link rel="stylesheet" href="styles.css?v=266">
+<script defer src="js/vendor/xlsx.full.min.js?v=267"></script>
+<script defer src="js/vendor/chart.umd.js?v=267"></script>
+<link rel="stylesheet" href="styles.css?v=267">
 </head>
 <body class="con-tabbar">
 <!-- Pantalla de arranque [AAA navegacion]: hasta que el script de la app dibuja Movimientos (main.js la retira), la
@@ -223,6 +223,42 @@
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn-sm u-flex1" onclick="closePresupModal()">Cancelar</button>
       <button class="btn-primary" style="flex:2;background:var(--accent);color:var(--on-solid)" onclick="guardarPresup()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL REGLA AUTOMÁTICA (Configuración › Reglas automáticas) -->
+<div class="modal-overlay" id="modal-regla" onclick="if(event.target===this)cerrarModalRegla()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="regla-modal-title">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="regla-modal-title">Nueva regla</div>
+    <div class="form-group"><label class="form-label" for="regla-texto">Si la nota dice…</label>
+      <input type="text" id="regla-texto" class="form-input" placeholder="Ej: Netflix, Carrefour, YPF" maxlength="60" oninput="previsualizarRegla()">
+      <p class="txt-xs txt-muted" style="margin:5px 2px 0">No importan mayúsculas ni acentos, y alcanza con que la nota lo contenga.</p>
+    </div>
+    <div class="form-group"><span class="form-label">En un</span>
+      <div class="regla-tipo" id="regla-tipo" role="group" aria-label="Tipo de movimiento" data-tipo="Gasto">
+        <button type="button" data-tipo="Gasto" onclick="setTipoRegla('Gasto')">⬆️ Gasto</button>
+        <button type="button" data-tipo="Ingreso" onclick="setTipoRegla('Ingreso')">⬇️ Ingreso</button>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label" for="regla-cat">…la categoría es</label>
+      <select id="regla-cat" class="form-select" onchange="actualizarSubcatsRegla();previsualizarRegla()"></select>
+    </div>
+    <div class="form-group"><label class="form-label" for="regla-subcat">Subcategoría</label>
+      <select id="regla-subcat" class="form-select" onchange="previsualizarRegla()"></select>
+    </div>
+    <div class="form-group"><label class="form-label" for="regla-cuenta">Cuenta (opcional)</label>
+      <select id="regla-cuenta" class="form-select"></select>
+    </div>
+    <label class="opt-row" id="regla-viejos" style="--chk:var(--accent);display:none">
+      <span class="opt-icon">🧹</span>
+      <span class="opt-text"><span class="opt-title" id="regla-viejos-txt"></span><span class="opt-sub">Si no lo tildás, la regla vale solo para lo que cargues de acá en adelante.</span></span>
+      <input type="checkbox" id="regla-aplicar-viejos" class="chk-custom">
+    </label>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn-sm u-flex1" onclick="cerrarModalRegla()">Cancelar</button>
+      <button class="btn-primary" style="flex:2;background:var(--accent);color:var(--on-solid)" onclick="guardarRegla()">Guardar</button>
     </div>
   </div>
 </div>
@@ -1475,7 +1511,7 @@
     </div>
   </details>
   <details class="cfg-seccion" id="cfg-sec-organizar">
-    <summary><span class="cfg-sec-ico">🗂</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Cuentas, tarjetas y categorías</span><span class="cfg-sec-sub">Cuentas · Tarjetas · Categorías · Presupuestos · Inflación</span></span></summary>
+    <summary><span class="cfg-sec-ico">🗂</span><span class="cfg-sec-txt"><span class="cfg-sec-titulo">Cuentas, tarjetas y categorías</span><span class="cfg-sec-sub">Cuentas · Tarjetas · Categorías · Reglas · Presupuestos · Inflación</span></span></summary>
     <div class="cfg-cuerpo">
   <div class="card">
     <div class="card-title">💳 Cuentas</div>
@@ -1506,6 +1542,13 @@
       </div>
     </div>
     <div id="cat-manager"></div>
+  </div>
+  <div class="card" id="reglas-card">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>⚡ Reglas automáticas</span><button class="btn-sm" onclick="abrirModalRegla()">+ Nueva</button>
+    </div>
+    <p class="txt-sm txt-muted mb-10">Si la nota de un movimiento dice algo, la app le pone sola la categoría (y la cuenta, si querés). Ej: «Netflix» → Suscripciones. Vale al cargar, en la carga rápida y al importar un Excel.</p>
+    <div id="reglas-manager"></div>
   </div>
   <div class="card">
     <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -1627,45 +1670,46 @@
 </div>
 <button id="fab-cargar" onclick="abrirCarga()" aria-label="Cargar nuevo movimiento"></button>
 
-<script src="js/estado-categorias.js?v=266"></script>
-<script src="js/resultado-inversiones.js?v=266"></script>
-<script src="js/render-comun.js?v=266"></script>
-<script src="js/form-cargar.js?v=266"></script>
-<script src="js/movimientos.js?v=266"></script>
-<script src="js/editar-movimiento.js?v=266"></script>
-<script src="js/tarjetas-inversiones.js?v=266"></script>
-<script src="js/analisis.js?v=266"></script>
-<script src="js/cambio-moneda.js?v=266"></script>
-<script src="js/traspasos.js?v=266"></script>
-<script src="js/dashboard.js?v=266"></script>
-<script src="js/inflacion.js?v=266"></script>
-<script src="js/ahorros.js?v=266"></script>
-<script src="js/conciliacion.js?v=266"></script>
-<script src="js/papelera.js?v=266"></script>
-<script src="js/carga-rapida.js?v=266"></script>
-<script src="js/atajos.js?v=266"></script>
-<script src="js/aumentos.js?v=266"></script>
-<script src="js/retiro-por-venta.js?v=266"></script>
-<script src="js/selector-mes.js?v=266"></script>
-<script src="js/decimales.js?v=266"></script>
-<script src="js/recuperable.js?v=266"></script>
-<script src="js/resumen-anual.js?v=266"></script>
-<script src="js/repetir.js?v=266"></script>
-<script src="js/informe-periodo.js?v=266"></script>
-<script src="js/cierre-mes.js?v=266"></script>
-<script src="js/huella.js?v=266"></script>
-<script src="js/cuentas-sugeridas.js?v=266"></script>
-<script src="js/graficos-interactivos.js?v=266"></script>
-<script src="js/importar-exportar.js?v=266"></script>
-<script src="js/cuentas-tarjetas-categorias.js?v=266"></script>
-<script src="js/config-ui.js?v=266"></script>
-<script src="js/calendario-google.js?v=266"></script>
-<script src="js/backup-drive.js?v=266"></script>
-<script src="js/presupuestos.js?v=266"></script>
-<script src="js/seguridad-pin.js?v=266"></script>
-<script src="js/novedades.js?v=266"></script>
-<script src="js/manual.js?v=266"></script>
-<script src="js/main.js?v=266"></script>
+<script src="js/estado-categorias.js?v=267"></script>
+<script src="js/resultado-inversiones.js?v=267"></script>
+<script src="js/render-comun.js?v=267"></script>
+<script src="js/form-cargar.js?v=267"></script>
+<script src="js/movimientos.js?v=267"></script>
+<script src="js/editar-movimiento.js?v=267"></script>
+<script src="js/tarjetas-inversiones.js?v=267"></script>
+<script src="js/analisis.js?v=267"></script>
+<script src="js/reglas.js?v=267"></script>
+<script src="js/cambio-moneda.js?v=267"></script>
+<script src="js/traspasos.js?v=267"></script>
+<script src="js/dashboard.js?v=267"></script>
+<script src="js/inflacion.js?v=267"></script>
+<script src="js/ahorros.js?v=267"></script>
+<script src="js/conciliacion.js?v=267"></script>
+<script src="js/papelera.js?v=267"></script>
+<script src="js/carga-rapida.js?v=267"></script>
+<script src="js/atajos.js?v=267"></script>
+<script src="js/aumentos.js?v=267"></script>
+<script src="js/retiro-por-venta.js?v=267"></script>
+<script src="js/selector-mes.js?v=267"></script>
+<script src="js/decimales.js?v=267"></script>
+<script src="js/recuperable.js?v=267"></script>
+<script src="js/resumen-anual.js?v=267"></script>
+<script src="js/repetir.js?v=267"></script>
+<script src="js/informe-periodo.js?v=267"></script>
+<script src="js/cierre-mes.js?v=267"></script>
+<script src="js/huella.js?v=267"></script>
+<script src="js/cuentas-sugeridas.js?v=267"></script>
+<script src="js/graficos-interactivos.js?v=267"></script>
+<script src="js/importar-exportar.js?v=267"></script>
+<script src="js/cuentas-tarjetas-categorias.js?v=267"></script>
+<script src="js/config-ui.js?v=267"></script>
+<script src="js/calendario-google.js?v=267"></script>
+<script src="js/backup-drive.js?v=267"></script>
+<script src="js/presupuestos.js?v=267"></script>
+<script src="js/seguridad-pin.js?v=267"></script>
+<script src="js/novedades.js?v=267"></script>
+<script src="js/manual.js?v=267"></script>
+<script src="js/main.js?v=267"></script>
 
 <script>
 // ═══════════════════════════════════════════
