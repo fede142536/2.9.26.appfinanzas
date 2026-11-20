@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v275**
+**Versión actual: v276**
 
 ## Lo más importante, por etapas
 
@@ -22,6 +22,16 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 - Detector de aumentos en gastos fijos, ventas que salen de ahorros, decimales con coma en toda la app, selector de mes compacto, calendario privado y botón "Cobrar" para el monto recuperable.
 
 ---
+
+## 20 de noviembre de 2026
+
+- **v276** · Posición cerrada — el capital que no volvió se cuenta como pérdida
+  Si por las cantidades la app sabe que se vendió TODO lo de un ticker (0
+  nominales, sin operaciones sin cantidad ni ventas de más), el capital que no
+  volvió pasa a ser pérdida (o ganancia) del mes de la última operación, en vez de
+  quedar «invertido» para siempre. No toca el fondo de ahorro, las ventas con
+  retiro ligado ni los fondos con rescate y resuscripción. Los splits se tienen en
+  cuenta y se invalida el cálculo al registrarlos.
 
 ## 18 de noviembre de 2026
 

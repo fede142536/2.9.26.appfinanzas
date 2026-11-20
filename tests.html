@@ -12435,6 +12435,27 @@ test("un split se tiene en cuenta para saber si la posición cerró", ()=>{
   igual(r.capitalPorTicker.SPY.ars, 0); igual(r.gananciaPorMes["2026-07"].ars, -200);
 });
 
+grupo("Cartera: posiciones cerradas muestran el resultado");
+
+test("una posición cerrada muestra si ganaste o perdiste, y una vendida entera con pérdida no queda como abierta", ()=>{
+  const antes=movs, el=document.createElement("div"); el.id="inv-cartera"; document.body.appendChild(el);
+  const orig=window.renderInv; 
+  try{
+    const op=(id,tk,sub,m,cant,f)=>({id,tipo:"Inversion",cat:"CEDEARs",subcat:sub,ticker:tk,importe:m,importeUSD:0,fecha:f,cantidad:cant});
+    movs=[op(1,"MCD","CEDEARs Compra",54000,3,"2026-07-27"), op(2,"MCD","CEDEARs Venta",53400,3,"2026-08-10"),     // perdiste 600
+          {id:3,tipo:"Inversion",cat:"FCI",subcat:"FCI Suscripción",ticker:"INST",importe:100000,importeUSD:0,fecha:"2026-05-01"},
+          {id:4,tipo:"Inversion",cat:"FCI",subcat:"FCI Rescate capital",ticker:"INST",importe:130000,importeUSD:0,fecha:"2026-06-01"},            // ganaste 30.000
+          op(5,"NVDA","CEDEARs Compra",20000,2,"2026-11-20")];                                                                                // abierta
+    renderInvCartera();
+    const abiertas=[...el.querySelectorAll(".inv-row")].filter(r=>!r.closest(".inv-cerradas-lista")).map(r=>r.querySelector(".inv-row-ticker").textContent);
+    const cerradas=[...el.querySelectorAll(".inv-cerradas-lista .inv-row")].map(r=>[r.querySelector(".inv-row-ticker").textContent, r.querySelector(".inv-pos-val").textContent, r.querySelector(".inv-row-sub").textContent]);
+    igual(abiertas.join(","),"NVDA", "MCD vendida entera ya no figura como abierta");
+    const mcd=cerradas.find(c=>c[0]==="MCD"), inst=cerradas.find(c=>c[0]==="INST");
+    cierto(mcd && mcd[1].includes("−") && mcd[1].includes("600") && mcd[2].includes("Perdiste"), "MCD: "+JSON.stringify(mcd));
+    cierto(inst && inst[1].includes("+") && inst[1].includes("30.000") && inst[2].includes("Ganaste"), "INST: "+JSON.stringify(inst));
+  } finally { el.remove(); movs=antes; }
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

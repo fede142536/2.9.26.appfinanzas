@@ -1831,12 +1831,16 @@ function renderInvCartera(){
   });
   const posiciones=calcularPosiciones(movs, preciosActuales, hoyLocal(), splitsInv);
   const items=Object.values(porTicker).map(p=>({...p, esUsd:p.usd!==0}));
-  const todasAbiertas=items.filter(p=>(p.esUsd?p.usd:p.ars)>0);
+  // Cerrada: pusiste menos de lo que sacaste, o (por las cantidades) vendiste TODO lo que tenías aunque lo cobrado no alcance lo puesto: una posición vendida
+  // con pérdida (puesto > cobrado) figuraba como abierta, con la pérdida como si siguiera invertida.
+  const cerradaPorCantidad=p=>{ const q=posiciones[tickerClave(p.ticker)]; return !!q && q.comprado>0 && q.cartera<=1e-9 && !(q.sinCantidad>0) && !(q.vendidoDeMas>1e-9); };
+  const esCerrada=p=>(p.esUsd?p.usd:p.ars)<=0 || cerradaPorCantidad(p);
+  const todasAbiertas=items.filter(p=>!esCerrada(p));
   // Filtro por categoría (Acciones, CEDEARs, FCI…), como en el broker. Si la categoría elegida ya no existe, vuelve a "Todas".
   const catsAb=[...new Set(todasAbiertas.map(p=>p.cat||"Sin categoría"))];
   if(invCartCat!=="todas" && !catsAb.includes(invCartCat)) invCartCat="todas";
   const abiertas=todasAbiertas.filter(p=>invCartCat==="todas" || (p.cat||"Sin categoría")===invCartCat);
-  const cerradas=items.filter(p=>(p.esUsd?p.usd:p.ars)<=0);
+  const cerradas=items.filter(esCerrada);
   const usdAb=abiertas.filter(p=>p.esUsd).sort((a,b)=>b.usd-a.usd);
   const arsAb=abiertas.filter(p=>!p.esUsd).sort((a,b)=>b.ars-a.ars);
   // Sin un tipo de cambio de referencia global en la app, se listan primero las posiciones en
@@ -1882,13 +1886,16 @@ function renderInvCartera(){
   if(cerradas.length){
     html+=`<button type="button" class="inv-cerradas-link" data-cerrado="1" data-n="${cerradas.length}" aria-expanded="false" onclick="toggleInvCerradas(this)">Ver ${cerradas.length} ${cerradas.length===1?"posición cerrada":"posiciones cerradas"} ›</button>
       <div class="inv-cerradas-lista" style="display:none">`+cerradas.map(p=>{
-        const val = p.esUsd ? p.usd : p.ars;
-        const valTxt = p.esUsd?fmtUsdInv(val):fmtS(val);
+        // De una posición cerrada importa lo que quedó, no lo "invertido" (que daba negativo si ganaste y positivo si perdiste): puesto − cobrado, con el signo al revés.
+        const neto = p.esUsd ? p.usd : p.ars, res = -neto;
+        const monto = p.esUsd ? fmtUsdInv(Math.abs(res)) : fmtS(Math.abs(res));
+        const cuenta = Math.abs(res)<0.005 ? "Sin ganancia ni pérdida" : (res>0 ? "Ganaste" : "Perdiste");
+        const valTxt = Math.abs(res)<0.005 ? monto : `${res>0?"+":"−"}${monto}`;
         const abrir=`showInstrumentoDetail(${attrJS(p.ticker)})`;
-        return `<div class="inv-row inv-row-tap" role="button" tabindex="0" aria-label="${escapeHtml(`Ver el detalle de ${p.ticker} (cerrada), ${valTxt}`)}" onclick="${abrir}">
+        return `<div class="inv-row inv-row-tap" role="button" tabindex="0" aria-label="${escapeHtml(`Ver el detalle de ${p.ticker} (cerrada), ${cuenta} ${monto}`)}" onclick="${abrir}">
           <div class="inv-row-icon" aria-hidden="true">${getIcon(p.cat,"📦")}</div>
-          <div class="inv-row-mid"><span class="inv-row-ticker">${escapeHtml(p.ticker)}</span><span class="inv-row-sub">${escapeHtml(p.cat)}</span></div>
-          <span class="inv-pos-val">${valTxt}</span>
+          <div class="inv-row-mid"><span class="inv-row-ticker">${escapeHtml(p.ticker)}</span><span class="inv-row-sub">${escapeHtml(p.cat)} · ${cuenta}</span></div>
+          <span class="inv-pos-val" style="color:${Math.abs(res)<0.005?"var(--muted)":res>0?"var(--success)":"var(--danger)"}">${valTxt}</span>
         </div>`;
       }).join("")+`</div>`;
   }
