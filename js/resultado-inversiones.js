@@ -59,7 +59,7 @@ function montoInv(m, moneda){
 //   flujoPorMes     {"2026-06": {ars, usd}}   capital neto que ENTRÓ a inversiones ese mes
 //                                             (negativo = sacaste capital)
 //   eventos         lista de ganancias reconocidas, para poder auditarlas
-function calcularResultadoInv(lista){
+function calcularResultadoInv(lista, splits){
   const inv=(lista||[]).filter(m=>m && m.tipo==="Inversion").slice().sort(ordenDeOperacion);
   // Una venta cargada con "Sale de mis ahorros" lleva un retiro del fondo ligado (retiro-por-venta.js) y ESE retiro es el que suma a lo
   // disponible. Si además se contara como ganancia, la misma plata entraría dos veces: de esa venta solo se descuenta el capital.
@@ -157,6 +157,33 @@ function calcularResultadoInv(lista){
     });
   });
 
+  // POSICIÓN CERRADA: si la app sabe, por las cantidades, que vendiste TODO lo que tenías de un ticker (0 nominales, sin operaciones sin cantidad ni
+  // ventas de más), el capital que no volvió es una PÉRDIDA (o, si es negativo, una ganancia): ya no hay nada más que pueda devolverlo. Sin esto,
+  // comprar a 8.700 y vender todo a 5.700 dejaba la diferencia "invertida" para siempre y el resultado del mes no la mostraba. Se reconoce en el mes de
+  // la última operación. Solo con cantidades completas (sin ellas no se puede saber si cerraste) y fuera de lo que pasa por el fondo de ahorro, los
+  // fondos con rescate y resuscripción y las ventas con retiro ligado, que ya tienen su propia cuenta.
+  try{
+    const pos=calcularPosiciones(lista, {}, "", splits||{});
+    const opsFondo=new Set(operacionesParaPosiciones(lista).filter(o=>o.desdeFondo).map(o=>tickerClave(o.ticker)));
+    const porTicker={};
+    inv.forEach(m=>{ (porTicker[tickerClave(m.ticker)] || (porTicker[tickerClave(m.ticker)]=[])).push(m); });
+    Object.keys(porTicker).forEach(t=>{
+      const p=pos[t], ops=porTicker[t];
+      if(!p || !(p.comprado>0) || p.sinCantidad>0 || p.cartera>1e-9 || (p.vendidoDeMas||0)>1e-9 || opsFondo.has(t)) return;
+      if(ops.some(m=>conRetiro.has(m.id) || reinvertidas.has(m.id))) return;
+      const ultima=ops[ops.length-1], ym=String(ultima.fecha||"").slice(0,7);
+      if(ym.length!==7) return;
+      ["ars","usd"].forEach(k=>{
+        const sobra=Math.round(capital[t][k]*100)/100;
+        if(Math.abs(sobra)<0.01) return;
+        caja(ganancia, ym)[k]-=sobra;
+        caja(flujo, ym)[k]-=sobra;
+        capital[t][k]-=sobra;
+        eventos.push({fecha:ultima.fecha, ticker:t, moneda:k==="usd"?"USD":"ARS", ganancia:-sobra, cierre:true});
+      });
+    });
+  }catch(e){ /* sin posiciones calculables, el resultado queda como estaba */ }
+
   const redondear=o=>{ Object.keys(o).forEach(k=>{
     o[k].ars=Math.round(o[k].ars*100)/100;
     o[k].usd=Math.round(o[k].usd*100)/100;
@@ -189,7 +216,7 @@ function resultadoInv(lista){
   const fuente = lista || (typeof movs!=="undefined" ? movs : []);
   const firma=firmaDeLista(fuente);
   if(_resultadoInvCache && firma===_resultadoInvFirma) return _resultadoInvCache;
-  _resultadoInvCache=calcularResultadoInv(fuente);
+  _resultadoInvCache=calcularResultadoInv(fuente, typeof splitsInv!=="undefined" ? splitsInv : {});
   _resultadoInvFirma=firma;
   return _resultadoInvCache;
 }
