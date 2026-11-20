@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v274**
+**Versión actual: v275**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,13 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 18 de noviembre de 2026
 
+- **v275** · Más funciones para ocultar, agrupadas por pantalla
+  Funciones de la app suma interruptores para la carga rápida, las reglas (ocultas
+  dejan de aplicarse), fin de mes, presupuestos, vencimientos (franja, aviso al
+  abrir y su ajuste), cerrar el mes, tu patrimonio, dólares del año, gastos que se
+  repiten, novedades al abrir e inflación (también su actualización sola). La lista
+  va en desplegables por pantalla (Cargar, Movimientos, Dashboard y Ahorros,
+  Avisos, Configuración y herramientas), de a uno y con cuántas se ven.
 - **v274** · Una app más simple — funciones que se pueden ocultar
   - Configuración › General › Funciones de la app: interruptores para ocultar o
     mostrar Google (calendario y Drive), exportar para BI, carga por voz, resumen

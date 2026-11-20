@@ -1074,6 +1074,7 @@ function splitsDetalleHTML(ticker){
 }
 function guardarSplitsInv(){
   setSensitiveRaw("fsplits", JSON.stringify(splitsInv));
+  if(typeof invalidarResultadoInv==="function") invalidarResultadoInv();   // un split cambia los nominales, y con ellos qué posiciones están cerradas
   if(typeof marcarDatosSucios==="function") marcarDatosSucios();
 }
 function guardarSplit(ticker){
