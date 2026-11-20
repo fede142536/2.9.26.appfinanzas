@@ -12456,6 +12456,16 @@ test("una posición cerrada muestra si ganaste o perdiste, y una vendida entera 
   } finally { el.remove(); movs=antes; }
 });
 
+test("un bono comprado en pesos y vendido en dólares (MEP) no deja una pérdida falsa al cerrar la posición", ()=>{
+  const op=(id,sub,ars,usd,cant,f)=>({id,tipo:"Inversion",cat:"Bonos",subcat:sub,ticker:"AL30",importe:ars,importeUSD:usd,fecha:f,cantidad:cant});
+  const r=calcularResultadoInv([op(1,"Bonos Compra",78342.1,0,86,"2026-05-19"), op(2,"Bonos Venta",0,54.21,86,"2026-05-20")]);
+  igual(r.capitalPorTicker.AL30.ars, 78342.1, "los pesos pagados no se cierran como pérdida");
+  igual((r.gananciaPorMes["2026-05"]||{ars:0}).ars, 0);
+  // si compra y venta son en la misma moneda, sí se cierra
+  const r2=calcularResultadoInv([op(1,"Bonos Compra",1000,0,10,"2026-05-19"), op(2,"Bonos Venta",900,0,10,"2026-05-20")]);
+  igual(r2.gananciaPorMes["2026-05"].ars, -100);
+});
+
 grupo("Aislamiento de los tests");
 
 test("los datos reales de la app siguen intactos", ()=>{

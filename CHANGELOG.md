@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v276**
+**Versión actual: v277**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,12 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 20 de noviembre de 2026
 
+- **v277** · Cartera — las posiciones cerradas muestran el resultado
+  La lista de posiciones cerradas mostraba puesto − cobrado: negativo si habías
+  ganado (INSTITUA −31.548) y positivo si habías perdido (MCD 657), lo que
+  confundía. Ahora muestra «Ganaste» o «Perdiste» con el monto en verde o rojo.
+  Además, una posición que se vendió entera por las cantidades pero con pérdida
+  (cobrado < puesto) figuraba como abierta; ahora pasa a cerradas.
 - **v276** · Posición cerrada — el capital que no volvió se cuenta como pérdida
   Si por las cantidades la app sabe que se vendió TODO lo de un ticker (0
   nominales, sin operaciones sin cantidad ni ventas de más), el capital que no
