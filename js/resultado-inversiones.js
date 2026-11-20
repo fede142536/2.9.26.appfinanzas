@@ -176,6 +176,11 @@ function calcularResultadoInv(lista, splits){
       ["ars","usd"].forEach(k=>{
         const sobra=Math.round(capital[t][k]*100)/100;
         if(Math.abs(sobra)<0.01) return;
+        // Solo si en esa moneda hubo compras Y ventas. Un bono comprado en pesos y vendido en dólares (la compra de dólares MEP) deja los pesos «invertidos»
+        // sin que sean una pérdida: son los pesos que pagaste por los dólares, que se cuentan aparte.
+        const KU=k==="usd"?"USD":"ARS";
+        const hayCompra=ops.some(m=>!isInvSalida(m) && montoInv(m,KU)>0), hayVenta=ops.some(m=>isInvSalida(m) && !esPagoDeInversion(m) && montoInv(m,KU)>0);
+        if(!hayCompra || !hayVenta) return;
         caja(ganancia, ym)[k]-=sobra;
         caja(flujo, ym)[k]-=sobra;
         capital[t][k]-=sobra;

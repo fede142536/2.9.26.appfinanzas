@@ -6,6 +6,7 @@
 // que se ve o se usa; las que solo corrigen algo interno no hace falta anotarlas. Hay un test que pide que la versión actual tenga la suya.
 // Cada entrada: {v: número de versión, titulo, texto, ir: nombre de una de las acciones de NOVEDADES_IR (opcional)}.
 const NOVEDADES=[
+  {v:278, titulo:"Bonos MEP y posiciones cerradas", texto:"Un bono comprado en pesos y vendido en dólares (compra de dólares MEP) ya no cierra los pesos como una pérdida al completar sus cantidades.", ir:"cartera"},
   {v:277, titulo:"Posiciones cerradas más claras", texto:"En Inversiones › Cartera, las posiciones cerradas muestran lo que ganaste o perdiste (verde o rojo), no un «invertido» que daba negativo si ganabas. Y una posición que vendiste entera con pérdida ya no figura como abierta.", ir:"cartera"},
   {v:276, titulo:"Posiciones cerradas: la pérdida o ganancia que quedaba sin contar", texto:"Si vendiste TODO lo que tenías de un ticker (con las cantidades cargadas) y lo cobrado no cubrió lo que pusiste, la diferencia ahora cuenta como pérdida en el mes de la última venta. Antes quedaba «invertida» para siempre.", ir:"revision"},
   {v:275, titulo:"Más cosas para ocultar", texto:"En Funciones de la app ahora también podés ocultar la carga rápida, las reglas, fin de mes, presupuestos, vencimientos, cerrar el mes, tu patrimonio, los dólares del año, los avisos de gastos que se repiten, las novedades y la inflación. Están agrupadas por pantalla.", ir:"funciones"},
