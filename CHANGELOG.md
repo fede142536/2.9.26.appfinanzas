@@ -2,7 +2,7 @@
 
 Historial de cambios de la app, del más reciente al más viejo. Se genera solo desde el historial de git con `node scripts/generar-changelog.js`.
 
-**Versión actual: v277**
+**Versión actual: v278**
 
 ## Lo más importante, por etapas
 
@@ -25,6 +25,11 @@ Historial de cambios de la app, del más reciente al más viejo. Se genera solo 
 
 ## 20 de noviembre de 2026
 
+- **v278** · Bonos MEP no dejan una pérdida falsa al cerrar la posición
+  El cierre de posición (v276) solo se aplica en una moneda si hubo compras y
+  ventas en esa moneda. Un bono comprado en pesos y vendido en dólares (compra de
+  dólares MEP, como AL30) dejaba los pesos como «pérdida» al completar las
+  cantidades.
 - **v277** · Cartera — las posiciones cerradas muestran el resultado
   La lista de posiciones cerradas mostraba puesto − cobrado: negativo si habías
   ganado (INSTITUA −31.548) y positivo si habías perdido (MCD 657), lo que

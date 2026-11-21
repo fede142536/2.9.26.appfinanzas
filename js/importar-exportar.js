@@ -418,6 +418,33 @@ function renderExportStats(){
     </div>
     <p class="txt-xs txt-muted" style="margin-top:10px">Para ver ingresos, gastos y balance usá el Dashboard o Movimientos: ahí se calculan siempre con la misma regla.</p>`;
 }
+// Una fila de la hoja "Movimientos" del Excel. Los frecuentes se guardan como UN movimiento que se repite cada mes
+// (la app los muestra una vez por mes): las últimas columnas dicen cuáles son y desde/hasta qué mes, para no confundirlos con duplicados.
+function filaMovimientoExcel(m){
+  const moneda=m.moneda||"ARS";
+  let etiqueta="";
+  if(m.esAhorro) etiqueta="Ahorro";
+  else if(m.usaAhorro) etiqueta="Retiro de ahorros";
+  return {
+    Fecha: (m.fecha||"").slice(0,10),
+    Tipo: m.tipo,
+    Etiqueta: etiqueta,
+    Categoría: m.cat||"",
+    Subcategoría: m.subcat||"",
+    Nota: m.nota||"",
+    Cuenta: m.cuenta||"",
+    Moneda: moneda,
+    ARS: moneda==="ARS" ? (m.importe||0) : 0,
+    USD: moneda==="USD" ? (m.importeOrig||0) : 0,
+    Recuperable: m.recuperable||0,
+    Ticker: m.ticker||"",       // los movimientos del fondo de ahorro llevan el ticker y la cantidad de la compra o venta que los acompaña
+    Cantidad: m.cantidad>0 ? m.cantidad : "",
+    Frecuente: m.frecuente ? "Sí" : "",
+    Desde: m.frecuente ? (m.mesInicio||"") : "",
+    Hasta: m.frecuente ? (m.mesFin||"") : ""
+  };
+}
+
 function exportarExcel(rangoAbierto){
   if(!xlsxDisponible()) return;
   try {
@@ -466,31 +493,9 @@ function exportarExcel(rangoAbierto){
   // ── HOJA 1: GASTOS / INGRESOS ──
   const movsSinInv=inRange.filter(m=>m.tipo==="Gasto"||m.tipo==="Ingreso");
   if(movsSinInv.length){
-    const rows=movsSinInv.map(m=>{
-      const moneda=m.moneda||"ARS";
-      const importeARS = moneda==="ARS" ? (m.importe||0) : 0;
-      const importeUSD = moneda==="USD" ? (m.importeOrig||0) : 0;
-      let etiqueta="";
-      if(m.esAhorro) etiqueta="Ahorro";
-      else if(m.usaAhorro) etiqueta="Retiro de ahorros";
-      return {
-        Fecha: (m.fecha||"").slice(0,10),
-        Tipo: m.tipo,
-        Etiqueta: etiqueta,
-        Categoría: m.cat||"",
-        Subcategoría: m.subcat||"",
-        Nota: m.nota||"",
-        Cuenta: m.cuenta||"",
-        Moneda: moneda,
-        ARS: importeARS,
-        USD: importeUSD,
-        Recuperable: m.recuperable||0,
-        Ticker: m.ticker||"",       // los movimientos del fondo de ahorro llevan el ticker y la cantidad de la compra o venta que los acompaña
-        Cantidad: m.cantidad>0 ? m.cantidad : ""
-      };
-    });
+    const rows=movsSinInv.map(filaMovimientoExcel);
     const ws=XLSX.utils.json_to_sheet(rows);
-    ws["!cols"]=[{wch:12},{wch:9},{wch:18},{wch:22},{wch:22},{wch:28},{wch:14},{wch:8},{wch:13},{wch:11},{wch:12},{wch:10},{wch:10}];
+    ws["!cols"]=[{wch:12},{wch:9},{wch:18},{wch:22},{wch:22},{wch:28},{wch:14},{wch:8},{wch:13},{wch:11},{wch:12},{wch:10},{wch:10},{wch:10},{wch:9},{wch:9}];
     XLSX.utils.book_append_sheet(wb,ws,"Movimientos");
   }
 
