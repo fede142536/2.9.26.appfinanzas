@@ -12468,6 +12468,17 @@ test("un bono comprado en pesos y vendido en dólares (MEP) no deja una pérdida
 
 grupo("Aislamiento de los tests");
 
+test("el Excel marca los gastos e ingresos frecuentes (y desde/hasta qué mes) para no confundirlos con duplicados", ()=>{
+  const base={fecha:"2026-11-02", tipo:"Ingreso", cat:"Salario", subcat:"Salario", nota:"Salario", cuenta:"BPat", importe:1824258.02};
+  const fijo=filaMovimientoExcel({...base, frecuente:true, mesInicio:"2026-01", mesFin:null});
+  igual(fijo.Frecuente, "Sí"); igual(fijo.Desde, "2026-01"); igual(fijo.Hasta, "");
+  const suelto=filaMovimientoExcel(base);
+  igual(suelto.Frecuente, ""); igual(suelto.Desde, ""); igual(suelto.Hasta, "");
+  igual(suelto.ARS, 1824258.02); igual(suelto.Cuenta, "BPat");
+  const usd=filaMovimientoExcel({...base, moneda:"USD", importeOrig:50, importe:60000});
+  igual(usd.USD, 50); igual(usd.ARS, 0);
+  igual(filaMovimientoExcel({...base, usaAhorro:true}).Etiqueta, "Retiro de ahorros");
+});
 test("los datos reales de la app siguen intactos", ()=>{
   const ahora=(function(){
     try { return Object.keys(window.__localStorageReal).sort().join(","); } catch(e){ return "(inaccesible)"; }
